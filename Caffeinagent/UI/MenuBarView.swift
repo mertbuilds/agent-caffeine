@@ -30,11 +30,35 @@ struct MenuBarView: View {
             Text(statusLine)
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            if onBattery {
-                Label("on battery — lid close will sleep this Mac",
-                      systemImage: "battery.50")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+            batteryRow
+        }
+    }
+
+    @ViewBuilder
+    private var batteryRow: some View {
+        if PowerSource.isOnBattery() {
+            if aggregator.battery.sudoersInstalled {
+                if aggregator.battery.overrideActive {
+                    Label("on battery: pmset override active", systemImage: "battery.100.bolt")
+                        .font(.caption)
+                        .foregroundStyle(.green)
+                }
+            } else if aggregator.globalState == .active && aggregator.enabled {
+                HStack(spacing: 6) {
+                    Label("on battery: lid close will sleep this mac", systemImage: "battery.50")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                    Spacer()
+                    Button("enable override…") { aggregator.battery.install() }
+                        .buttonStyle(.borderless)
+                        .font(.caption)
+                }
+            }
+            if let err = aggregator.battery.lastError {
+                Text(err)
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                    .lineLimit(3)
             }
         }
     }
@@ -86,11 +110,6 @@ struct MenuBarView: View {
         case .waitingForInput: return "waiting for input — mac may sleep"
         case .idle: return "idle — mac may sleep"
         }
-    }
-
-    private var onBattery: Bool {
-        guard aggregator.enabled, aggregator.globalState == .active else { return false }
-        return PowerSource.isOnBattery()
     }
 
     private func color(for state: AgentState) -> Color {

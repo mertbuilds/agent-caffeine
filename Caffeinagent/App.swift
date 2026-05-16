@@ -1,12 +1,23 @@
 import SwiftUI
+import AppKit
+
+final class AppDelegate: NSObject, NSApplicationDelegate {
+    @MainActor static var onTerminate: (() -> Void)?
+
+    func applicationWillTerminate(_ notification: Notification) {
+        AppDelegate.onTerminate?()
+    }
+}
 
 @main
 struct CaffeinagentApp: App {
     @StateObject private var aggregator = StateAggregator()
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
         MenuBarExtra {
             MenuBarView(aggregator: aggregator)
+                .onAppear { wireShutdown() }
         } label: {
             MenuBarLabel(state: aggregator.globalState, enabled: aggregator.enabled, held: aggregator.assertionHeld)
         }
@@ -15,6 +26,11 @@ struct CaffeinagentApp: App {
         Settings {
             PreferencesView(aggregator: aggregator)
         }
+    }
+
+    private func wireShutdown() {
+        let agg = aggregator
+        AppDelegate.onTerminate = { agg.shutdown() }
     }
 }
 

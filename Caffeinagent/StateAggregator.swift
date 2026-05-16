@@ -15,6 +15,7 @@ final class StateAggregator: ObservableObject {
 
     let claude: ClaudeCodeWatcher
     let processes: ProcessWatcher
+    let battery: BatteryOverride
     private let power = PowerKeeper()
     private var cancellables = Set<AnyCancellable>()
     private static let enabledKey = "StateAggregator.enabled"
@@ -23,8 +24,10 @@ final class StateAggregator: ObservableObject {
     init() {
         let claude = ClaudeCodeWatcher()
         let processes = ProcessWatcher()
+        let battery = BatteryOverride()
         self.claude = claude
         self.processes = processes
+        self.battery = battery
         self.enabled = UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? true
 
         Publishers.CombineLatest(claude.$agents, processes.$agents)
@@ -47,12 +50,20 @@ final class StateAggregator: ObservableObject {
     private func updateAssertion() {
         guard enabled else {
             power.release()
+            battery.setEnabled(false)
             return
         }
         if globalState == .active {
             power.acquire(reason: "caffeinagent: agent active")
+            battery.setEnabled(PowerSource.isOnBattery())
         } else {
             power.release()
+            battery.setEnabled(false)
         }
+    }
+
+    func shutdown() {
+        battery.setEnabled(false)
+        power.release()
     }
 }
