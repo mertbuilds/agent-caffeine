@@ -1,4 +1,5 @@
 import SwiftUI
+import AppKit
 
 struct MenuBarView: View {
     @ObservedObject var aggregator: StateAggregator
@@ -94,13 +95,26 @@ struct MenuBarView: View {
 
     private var footer: some View {
         HStack {
-            Button("preferences…") { openSettings() }
+            Button("preferences…") { openPreferencesFront() }
                 .buttonStyle(.borderless)
             Spacer()
             Button("quit") { NSApp.terminate(nil) }
                 .buttonStyle(.borderless)
         }
         .font(.callout)
+    }
+
+    private func openPreferencesFront() {
+        openSettings()
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            if let window = NSApp.windows.first(where: {
+                $0.identifier?.rawValue == "com_apple_SwiftUI_Settings_window"
+            }) {
+                window.makeKeyAndOrderFront(nil)
+                window.orderFrontRegardless()
+            }
+        }
     }
 
     private var statusLine: String {
