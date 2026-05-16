@@ -40,13 +40,13 @@ xcodebuild \
   CODE_SIGN_STYLE=Automatic \
   CODE_SIGN_IDENTITY="Developer ID Application"
 
-APP="$BUILD_DIR/Build/Products/$CONFIG/$PROJECT.app"
+APP="$BUILD_DIR/Build/Products/$CONFIG/caffeinagent.app"
 
 echo "==> verify signature"
 codesign --verify --deep --strict --verbose=2 "$APP" 2>&1 | tail -3
 
 echo "==> zip for notarization"
-SUBMIT_ZIP="$BUILD_DIR/$PROJECT-submit.zip"
+SUBMIT_ZIP="$BUILD_DIR/caffeinagent-submit.zip"
 /usr/bin/ditto -c -k --keepParent "$APP" "$SUBMIT_ZIP"
 
 echo "==> submit to apple notary service (waits up to 30 min)"
@@ -60,7 +60,7 @@ xcrun stapler validate "$APP"
 
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist")
-RELEASE_ZIP="$BUILD_DIR/$PROJECT-$VERSION-$BUILD.zip"
+RELEASE_ZIP="$BUILD_DIR/caffeinagent-$VERSION-$BUILD.zip"
 
 echo "==> create release zip"
 /usr/bin/ditto -c -k --keepParent "$APP" "$RELEASE_ZIP"

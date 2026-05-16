@@ -32,8 +32,8 @@ targets:
     info:
       path: Caffeinagent/Info.plist
       properties:
-        CFBundleName: Caffeinagent
-        CFBundleDisplayName: Caffeinagent
+        CFBundleName: caffeinagent
+        CFBundleDisplayName: caffeinagent
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
@@ -46,6 +46,6 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.app
-        PRODUCT_NAME: Caffeinagent
+        PRODUCT_NAME: caffeinagent
         INFOPLIST_KEY_NSPrincipalClass: NSApplication
         CODE_SIGN_ENTITLEMENTS: Caffeinagent/Caffeinagent.entitlements

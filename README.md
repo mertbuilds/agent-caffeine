@@ -1,5 +1,11 @@
 # caffeinagent
 
+> the brand is fully lowercase: `caffeinagent`. user-visible strings,
+> file paths, and the menu bar label all read as `caffeinagent`. the
+> internal Xcode target / source folder keeps the capitalized
+> `Caffeinagent` identifier purely as a build-system convention; nothing
+> outside the toolchain sees it.
+
 macOS menu bar app that keeps your Mac awake while AI coding agents are running. Releases sleep prevention when agents are idle or waiting for your input, so the Mac can nap when it's safe to.
 
 ## What it does
@@ -21,7 +27,7 @@ Requires Xcode 16+, macOS 14+ deployment target.
 brew install xcodegen          # one-time
 xcodegen generate              # regenerate Xcode project from project.yml
 xcodebuild -project Caffeinagent.xcodeproj -scheme Caffeinagent -configuration Debug -derivedDataPath build
-open build/Build/Products/Debug/Caffeinagent.app
+open build/Build/Products/Debug/caffeinagent.app
 ```
 
 ## Roadmap

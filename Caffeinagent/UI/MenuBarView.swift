@@ -20,7 +20,7 @@ struct MenuBarView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack {
-                Text("Caffeinagent")
+                Text("caffeinagent")
                     .font(.headline)
                 Spacer()
                 Toggle("", isOn: $aggregator.enabled)
