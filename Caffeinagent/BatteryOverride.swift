@@ -21,7 +21,11 @@ final class BatteryOverride: ObservableObject {
     }
 
     func refreshSudoersStatus() {
-        let (exitCode, _) = run("/usr/bin/sudo", args: ["-n", "/usr/bin/pmset", "-g"])
+        // `sudo -n -l <cmd>` returns 0 iff <cmd> is allowed without a password.
+        // Doesn't execute the command, so there's no side effect.
+        let (exitCode, _) = run("/usr/bin/sudo", args: [
+            "-n", "-l", "/usr/bin/pmset", "-b", "disablesleep", "1"
+        ])
         sudoersInstalled = (exitCode == 0)
     }
 
