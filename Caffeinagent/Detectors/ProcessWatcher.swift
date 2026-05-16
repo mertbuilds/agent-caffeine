@@ -15,7 +15,52 @@ final class ProcessWatcher: ObservableObject {
     private let pollTimer: DispatchSourceTimer
     private let log = Logger(subsystem: "com.caffeinagent.app", category: "ProcessWatcher")
     private static let allowlistKey = "ProcessWatcher.allowlist"
-    static let defaultAllowlist = ["claude", "codex", "cursor-agent", "gemini", "aider", "amp", "opencode"]
+    // Curated from skills.sh supported-agents list (51 entries). Skipped: bob,
+    // continue, cortex, cursor (IDE), droid, github-copilot, kimi-cli, kode,
+    // mux, pi, replit, roo, universal, warp, adal — too-generic names that
+    // collide with non-agent processes the user is likely running.
+    static let defaultAllowlist = [
+        "aider", "aider-desk",
+        "amp",
+        "antigravity",
+        "augment",
+        "claude",
+        "cline",
+        "codearts-agent",
+        "codebuddy",
+        "codemaker",
+        "codestudio",
+        "codex",
+        "command-code",
+        "crush",
+        "cursor-agent",
+        "deepagents",
+        "devin",
+        "dexto",
+        "firebender",
+        "forgecode",
+        "gemini", "gemini-cli",
+        "goose",
+        "hermes-agent",
+        "iflow-cli",
+        "junie",
+        "kilo",
+        "kiro-cli",
+        "mcpjam",
+        "mistral-vibe",
+        "neovate",
+        "opencode",
+        "openclaw",
+        "openhands",
+        "pochi",
+        "qoder",
+        "qwen-code",
+        "rovodev",
+        "tabnine-cli",
+        "trae", "trae-cn",
+        "windsurf",
+        "zencoder",
+    ]
 
     init() {
         let stored = UserDefaults.standard.array(forKey: Self.allowlistKey) as? [String]
