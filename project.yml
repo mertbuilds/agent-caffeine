@@ -1,0 +1,44 @@
+name: Caffeinagent
+options:
+  bundleIdPrefix: com.caffeinagent
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  generateEmptyDirectories: true
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    DEVELOPMENT_TEAM: ""
+    CODE_SIGN_STYLE: Automatic
+    CODE_SIGN_IDENTITY: "-"
+    ENABLE_HARDENED_RUNTIME: YES
+    GENERATE_INFOPLIST_FILE: NO
+
+targets:
+  Caffeinagent:
+    type: application
+    platform: macOS
+    sources:
+      - Caffeinagent
+    info:
+      path: Caffeinagent/Info.plist
+      properties:
+        CFBundleName: Caffeinagent
+        CFBundleDisplayName: Caffeinagent
+        CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        CFBundlePackageType: APPL
+        LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
+        LSUIElement: true
+        NSHumanReadableCopyright: "Copyright © 2026"
+        NSSupportsAutomaticTermination: false
+        NSSupportsSuddenTermination: false
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.app
+        PRODUCT_NAME: Caffeinagent
+        INFOPLIST_KEY_NSPrincipalClass: NSApplication
