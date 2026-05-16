@@ -15,11 +15,16 @@ final class ProcessWatcher: ObservableObject {
     private let pollTimer: DispatchSourceTimer
     private let log = Logger(subsystem: "com.caffeinagent.app", category: "ProcessWatcher")
     private static let allowlistKey = "ProcessWatcher.allowlist"
-    static let defaultAllowlist = ["claude", "codex", "cursor-agent", "gemini", "aider", "amp"]
+    static let defaultAllowlist = ["claude", "codex", "cursor-agent", "gemini", "aider", "amp", "opencode"]
 
     init() {
         let stored = UserDefaults.standard.array(forKey: Self.allowlistKey) as? [String]
-        self.allowlist = stored ?? Self.defaultAllowlist
+        if let stored {
+            let missing = Self.defaultAllowlist.filter { !stored.contains($0) }
+            self.allowlist = stored + missing
+        } else {
+            self.allowlist = Self.defaultAllowlist
+        }
         self.pollTimer = DispatchSource.makeTimerSource(queue: .main)
         pollTimer.schedule(deadline: .now() + 1, repeating: 5.0)
         pollTimer.setEventHandler { [weak self] in self?.scan() }
