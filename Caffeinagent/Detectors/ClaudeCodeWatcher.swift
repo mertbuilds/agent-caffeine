@@ -71,20 +71,22 @@ final class ClaudeCodeWatcher: ObservableObject {
         let now = Date()
         for projectDir in projectDirs where projectDir.hasDirectoryPath {
             guard let jsonls = try? fm.contentsOfDirectory(at: projectDir, includingPropertiesForKeys: [.contentModificationDateKey]) else { continue }
-            let recent = jsonls.filter { $0.pathExtension == "jsonl" }
-            guard let latest = mostRecentlyModified(recent), let mtime = modificationDate(of: latest) else { continue }
-            let age = now.timeIntervalSince(mtime)
-            guard age <= idleWindow else { continue }
-            let lastType = lastEventType(of: latest)
-            let state = classify(age: age, lastType: lastType)
-            let label = projectLabel(projectDir.lastPathComponent)
-            found.append(DetectedAgent(
-                id: latest.lastPathComponent,
-                source: .claudeCode,
-                label: label,
-                state: state,
-                lastActivity: mtime
-            ))
+            let project = projectLabel(projectDir.lastPathComponent)
+            for url in jsonls where url.pathExtension == "jsonl" {
+                guard let mtime = modificationDate(of: url) else { continue }
+                let age = now.timeIntervalSince(mtime)
+                guard age <= idleWindow else { continue }
+                let parsed = parseTail(of: url)
+                let state = classify(age: age, lastType: parsed.lastType)
+                let label = sessionLabel(project: project, file: url, title: parsed.title)
+                found.append(DetectedAgent(
+                    id: url.lastPathComponent,
+                    source: .claudeCode,
+                    label: label,
+                    state: state,
+                    lastActivity: mtime
+                ))
+            }
         }
         agents = found.sorted { $0.lastActivity > $1.lastActivity }
     }
@@ -95,34 +97,48 @@ final class ClaudeCodeWatcher: ObservableObject {
         return .waitingForInput
     }
 
-    private func mostRecentlyModified(_ urls: [URL]) -> URL? {
-        urls.max { (modificationDate(of: $0) ?? .distantPast) < (modificationDate(of: $1) ?? .distantPast) }
-    }
-
     private func modificationDate(of url: URL) -> Date? {
         (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
     }
 
-    private func lastEventType(of url: URL) -> String? {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return nil }
+    private struct TailParse {
+        var lastType: String?
+        var title: String?
+    }
+
+    /// Reads up to the last ~16KB of a jsonl and pulls out the most recent
+    /// `type` field plus the most recent `ai-title` if either is present.
+    private func parseTail(of url: URL) -> TailParse {
+        var result = TailParse()
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return result }
         defer { try? handle.close() }
-        guard let size = try? handle.seekToEnd() else { return nil }
-        let chunk: UInt64 = 4096
+        guard let size = try? handle.seekToEnd() else { return result }
+        let chunk: UInt64 = 16384
         let offset = size > chunk ? size - chunk : 0
         try? handle.seek(toOffset: offset)
-        guard let data = try? handle.readToEnd(), !data.isEmpty else { return nil }
+        guard let data = try? handle.readToEnd(), !data.isEmpty else { return result }
         let text = String(decoding: data, as: UTF8.self)
         let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
-        guard let last = lines.last else { return nil }
-        guard let lineData = last.data(using: .utf8),
-              let obj = try? JSONSerialization.jsonObject(with: lineData) as? [String: Any],
-              let type = obj["type"] as? String
-        else { return nil }
-        return type
+        for line in lines.reversed() {
+            guard let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }
+            if result.lastType == nil, let t = obj["type"] as? String { result.lastType = t }
+            if result.title == nil, obj["type"] as? String == "ai-title", let t = obj["aiTitle"] as? String { result.title = t }
+            if result.lastType != nil && result.title != nil { break }
+        }
+        return result
     }
 
     private func projectLabel(_ dirName: String) -> String {
         let raw = dirName.replacingOccurrences(of: "-Users-", with: "")
         return raw.split(separator: "-").last.map(String.init) ?? dirName
+    }
+
+    private func sessionLabel(project: String, file: URL, title: String?) -> String {
+        if let title, !title.isEmpty {
+            return "\(project) · \(title)"
+        }
+        let stem = file.deletingPathExtension().lastPathComponent
+        let suffix = String(stem.prefix(8))
+        return "\(project) · \(suffix)"
     }
 }
