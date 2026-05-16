@@ -19,7 +19,7 @@ cd "$(dirname "$0")/.."
 
 PROJECT="Caffeinagent"
 CONFIG="Release"
-TEAM_ID="5TC37Z26XP"
+TEAM_ID="3HGP3W3TLD"
 NOTARY_PROFILE="caffeinagent-notary"
 BUILD_DIR="build/release"
 
@@ -37,8 +37,11 @@ xcodebuild \
   -derivedDataPath "$BUILD_DIR" \
   -quiet \
   DEVELOPMENT_TEAM="$TEAM_ID" \
-  CODE_SIGN_STYLE=Automatic \
-  CODE_SIGN_IDENTITY="Developer ID Application"
+  CODE_SIGN_STYLE=Manual \
+  CODE_SIGN_IDENTITY="Developer ID Application" \
+  PROVISIONING_PROFILE_SPECIFIER="" \
+  CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
+  OTHER_CODE_SIGN_FLAGS="--timestamp --options runtime"
 
 APP="$BUILD_DIR/Build/Products/$CONFIG/caffeinagent.app"
 
