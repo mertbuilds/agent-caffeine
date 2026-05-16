@@ -11,11 +11,17 @@ settings:
     SWIFT_VERSION: "5.10"
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
-    DEVELOPMENT_TEAM: ""
-    CODE_SIGN_STYLE: Automatic
-    CODE_SIGN_IDENTITY: "-"
     ENABLE_HARDENED_RUNTIME: YES
     GENERATE_INFOPLIST_FILE: NO
+  configs:
+    Debug:
+      CODE_SIGN_STYLE: Manual
+      CODE_SIGN_IDENTITY: "-"
+      DEVELOPMENT_TEAM: ""
+    Release:
+      CODE_SIGN_STYLE: Automatic
+      CODE_SIGN_IDENTITY: "Developer ID Application"
+      DEVELOPMENT_TEAM: "5TC37Z26XP"
 
 targets:
   Caffeinagent:
@@ -42,3 +48,4 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.app
         PRODUCT_NAME: Caffeinagent
         INFOPLIST_KEY_NSPrincipalClass: NSApplication
+        CODE_SIGN_ENTITLEMENTS: Caffeinagent/Caffeinagent.entitlements
