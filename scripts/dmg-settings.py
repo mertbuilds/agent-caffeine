@@ -6,9 +6,19 @@ appname = os.path.basename(app)
 files = [app]
 symlinks = {"Applications": "/Applications"}
 
+# Icons centered at y=270 in a 400px-tall window. The background image's
+# arrow + headline live above this line; labels render below it. Push the
+# DMG's own bookkeeping files (.background.tiff, .DS_Store, etc.) far off
+# the visible canvas so users with "show hidden files" enabled don't see
+# them in the install window.
 icon_locations = {
-    appname: (175, 200),
-    "Applications": (425, 200),
+    appname: (175, 270),
+    "Applications": (425, 270),
+    ".background.tiff": (5000, 5000),
+    ".DS_Store": (5000, 5000),
+    ".fseventsd": (5000, 5000),
+    ".Trashes": (5000, 5000),
+    ".VolumeIcon.icns": (5000, 5000),
 }
 
 format = "UDZO"

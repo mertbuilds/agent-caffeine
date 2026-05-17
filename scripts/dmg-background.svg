@@ -9,51 +9,35 @@
 
   <rect width="600" height="400" fill="url(#paper)"/>
 
-  <!-- subtle horizontal rule -->
-  <line x1="40" y1="80" x2="560" y2="80" stroke="#14110d" stroke-opacity="0.12" stroke-width="1"/>
-
-  <!-- masthead-style top labels -->
+  <!-- masthead row -->
   <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#34302a" letter-spacing="2.2">
-    <text x="40" y="58">CAFFEINAGENT</text>
-    <text x="560" y="58" text-anchor="end">INSTALL</text>
+    <text x="40" y="52">CAFFEINAGENT</text>
+    <text x="560" y="52" text-anchor="end">INSTALL</text>
   </g>
+  <line x1="40" y1="68" x2="560" y2="68" stroke="#14110d" stroke-opacity="0.12" stroke-width="1"/>
 
-  <!-- big serif headline -->
-  <text x="300" y="138"
+  <!-- editorial headline -->
+  <text x="300" y="124"
         font-family="Georgia, 'Times New Roman', serif"
         font-style="italic"
-        font-size="32"
+        font-size="34"
         fill="#14110d"
         text-anchor="middle">
     drag to install.
   </text>
 
-  <!-- arrow from the app icon position toward applications -->
-  <g stroke="#c4561e" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <!-- icon centers will be 175 and 425, vertical 240 -->
-    <path d="M 240 240 Q 300 200, 360 240" stroke-dasharray="0"/>
-    <!-- arrowhead at the end pointing right toward applications icon -->
-    <path d="M 360 240 L 350 232 M 360 240 L 350 248"/>
+  <!-- arrow: starts high above the cup, swoops up + over, then drops down
+       into the Applications icon. left end higher, right end lower → the
+       whole curve tilts ~30° to the left so the gesture reads as "lift
+       the coffee, drop it into Applications". -->
+  <g stroke="#b8401a" stroke-width="3.5" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M 200 200 Q 350 130, 490 250"/>
+    <!-- arrowhead drawn as an explicit triangle so the rotation is visible.
+         tip at (490,250). before rotation, the head pointed down-right; now
+         it sits ~30° ccw of that, so it reads as pointing right with a hint
+         of down. -->
+    <path d="M 490 250 L 472 261 L 477 240 Z"
+          fill="#b8401a"
+          stroke="none"/>
   </g>
-
-  <!-- small mono caption under the arrow -->
-  <text x="300" y="288"
-        font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
-        font-size="11"
-        fill="#34302a"
-        letter-spacing="1.6"
-        text-anchor="middle">
-    DROP THE COFFEE INTO APPLICATIONS
-  </text>
-
-  <!-- footer line -->
-  <text x="300" y="368"
-        font-family="Georgia, 'Times New Roman', serif"
-        font-style="italic"
-        font-size="14"
-        fill="#34302a"
-        fill-opacity="0.7"
-        text-anchor="middle">
-    keep your mac awake while ai agents work.
-  </text>
 </svg>
