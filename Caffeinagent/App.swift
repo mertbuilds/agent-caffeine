@@ -4,6 +4,10 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     @MainActor static var onTerminate: (() -> Void)?
 
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        AppRelocator.offerToMoveIfNeeded()
+    }
+
     func applicationWillTerminate(_ notification: Notification) {
         AppDelegate.onTerminate?()
     }

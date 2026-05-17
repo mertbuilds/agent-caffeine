@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 400" width="600" height="400">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f5f0e2"/>
+      <stop offset="100%" stop-color="#ebe4d0"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="600" height="400" fill="url(#paper)"/>
+
+  <!-- subtle horizontal rule -->
+  <line x1="40" y1="80" x2="560" y2="80" stroke="#14110d" stroke-opacity="0.12" stroke-width="1"/>
+
+  <!-- masthead-style top labels -->
+  <g font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="11" fill="#34302a" letter-spacing="2.2">
+    <text x="40" y="58">CAFFEINAGENT</text>
+    <text x="560" y="58" text-anchor="end">INSTALL</text>
+  </g>
+
+  <!-- big serif headline -->
+  <text x="300" y="138"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-style="italic"
+        font-size="32"
+        fill="#14110d"
+        text-anchor="middle">
+    drag to install.
+  </text>
+
+  <!-- arrow from the app icon position toward applications -->
+  <g stroke="#c4561e" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <!-- icon centers will be 175 and 425, vertical 240 -->
+    <path d="M 240 240 Q 300 200, 360 240" stroke-dasharray="0"/>
+    <!-- arrowhead at the end pointing right toward applications icon -->
+    <path d="M 360 240 L 350 232 M 360 240 L 350 248"/>
+  </g>
+
+  <!-- small mono caption under the arrow -->
+  <text x="300" y="288"
+        font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+        font-size="11"
+        fill="#34302a"
+        letter-spacing="1.6"
+        text-anchor="middle">
+    DROP THE COFFEE INTO APPLICATIONS
+  </text>
+
+  <!-- footer line -->
+  <text x="300" y="368"
+        font-family="Georgia, 'Times New Roman', serif"
+        font-style="italic"
+        font-size="14"
+        fill="#34302a"
+        fill-opacity="0.7"
+        text-anchor="middle">
+    keep your mac awake while ai agents work.
+  </text>
+</svg>

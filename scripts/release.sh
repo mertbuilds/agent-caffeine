@@ -68,9 +68,44 @@ RELEASE_ZIP="$BUILD_DIR/caffeinagent-$VERSION-$BUILD.zip"
 echo "==> create release zip"
 /usr/bin/ditto -c -k --keepParent "$APP" "$RELEASE_ZIP"
 
+echo "==> build dmg (drag-to-applications)"
+STAGING_DIR="$BUILD_DIR/dmg-staging"
+RELEASE_DMG="$BUILD_DIR/caffeinagent-$VERSION-$BUILD.dmg"
+rm -rf "$STAGING_DIR" "$RELEASE_DMG"
+mkdir -p "$STAGING_DIR"
+/usr/bin/ditto "$APP" "$STAGING_DIR/caffeinagent.app"
+
+create-dmg \
+  --volname "caffeinagent" \
+  --background scripts/dmg-background.png \
+  --window-pos 200 120 \
+  --window-size 600 400 \
+  --icon-size 100 \
+  --icon "caffeinagent.app" 175 200 \
+  --hide-extension "caffeinagent.app" \
+  --app-drop-link 425 200 \
+  --no-internet-enable \
+  "$RELEASE_DMG" \
+  "$STAGING_DIR" > /dev/null
+
+echo "==> sign dmg"
+codesign --sign "Developer ID Application: Mert Duzgun (${TEAM_ID})" --timestamp "$RELEASE_DMG"
+
+echo "==> notarize dmg"
+xcrun notarytool submit "$RELEASE_DMG" \
+  --keychain-profile "$NOTARY_PROFILE" \
+  --wait
+
+echo "==> staple dmg"
+xcrun stapler staple "$RELEASE_DMG"
+xcrun stapler validate "$RELEASE_DMG"
+
 echo ""
-echo "✓ release ready: $RELEASE_ZIP"
+echo "✓ release artifacts:"
+echo "  zip: $RELEASE_ZIP"
+echo "  dmg: $RELEASE_DMG"
 echo ""
 echo "  signed by: $(codesign -dvv "$APP" 2>&1 | grep 'Authority=' | head -1)"
-echo "  notarized: $(xcrun stapler validate "$APP" 2>&1 | tail -1)"
+echo "  notarized app: $(xcrun stapler validate "$APP" 2>&1 | tail -1)"
+echo "  notarized dmg: $(xcrun stapler validate "$RELEASE_DMG" 2>&1 | tail -1)"
 echo "  gatekeeper: $(spctl -a -t exec -vvv "$APP" 2>&1 | tail -1)"
