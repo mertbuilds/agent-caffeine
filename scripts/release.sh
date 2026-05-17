@@ -69,24 +69,18 @@ echo "==> create release zip"
 /usr/bin/ditto -c -k --keepParent "$APP" "$RELEASE_ZIP"
 
 echo "==> build dmg (drag-to-applications)"
-STAGING_DIR="$BUILD_DIR/dmg-staging"
+# dmgbuild writes the .DS_Store directly (no Finder/AppleScript dance), so
+# the layout + background survive even when the build host hasn't granted
+# Automation permissions to whatever process is calling this script.
 RELEASE_DMG="$BUILD_DIR/caffeinagent-$VERSION-$BUILD.dmg"
-rm -rf "$STAGING_DIR" "$RELEASE_DMG"
-mkdir -p "$STAGING_DIR"
-/usr/bin/ditto "$APP" "$STAGING_DIR/caffeinagent.app"
-
-create-dmg \
-  --volname "caffeinagent" \
-  --background scripts/dmg-background.png \
-  --window-pos 200 120 \
-  --window-size 600 400 \
-  --icon-size 100 \
-  --icon "caffeinagent.app" 175 200 \
-  --hide-extension "caffeinagent.app" \
-  --app-drop-link 425 200 \
-  --no-internet-enable \
-  "$RELEASE_DMG" \
-  "$STAGING_DIR" > /dev/null
+DMGBUILD="${DMGBUILD:-$HOME/Library/Python/3.14/bin/dmgbuild}"
+rm -f "$RELEASE_DMG"
+DMG_APP_PATH="$(pwd)/$APP" \
+DMG_BACKGROUND="$(pwd)/scripts/dmg-background.png" \
+  "$DMGBUILD" \
+  -s scripts/dmg-settings.py \
+  "caffeinagent" \
+  "$RELEASE_DMG"
 
 echo "==> sign dmg"
 codesign --sign "Developer ID Application: Mert Duzgun (${TEAM_ID})" --timestamp "$RELEASE_DMG"
