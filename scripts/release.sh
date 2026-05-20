@@ -63,23 +63,31 @@ xcrun stapler validate "$APP"
 
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist")
-RELEASE_ZIP="$BUILD_DIR/caffeinagent-$VERSION-$BUILD.zip"
+RELEASE_ZIP="$BUILD_DIR/agent-caffeine-$VERSION-$BUILD.zip"
 
 echo "==> create release zip"
 /usr/bin/ditto -c -k --keepParent "$APP" "$RELEASE_ZIP"
+
+# PRODUCT_NAME stays "caffeinagent" so the binary path + bundle id are
+# stable for signing/updates, but the user-facing bundle inside the dmg
+# needs to read "agent caffeine.app". Copy preserves the stapled ticket
+# and code signature (bundle name isn't part of either).
+DIST_APP="$BUILD_DIR/Build/Products/$CONFIG/agent caffeine.app"
+rm -rf "$DIST_APP"
+cp -R "$APP" "$DIST_APP"
 
 echo "==> build dmg (drag-to-applications)"
 # dmgbuild writes the .DS_Store directly (no Finder/AppleScript dance), so
 # the layout + background survive even when the build host hasn't granted
 # Automation permissions to whatever process is calling this script.
-RELEASE_DMG="$BUILD_DIR/caffeinagent-$VERSION-$BUILD.dmg"
+RELEASE_DMG="$BUILD_DIR/agent-caffeine-$VERSION-$BUILD.dmg"
 DMGBUILD="${DMGBUILD:-$HOME/Library/Python/3.14/bin/dmgbuild}"
 rm -f "$RELEASE_DMG"
-DMG_APP_PATH="$(pwd)/$APP" \
+DMG_APP_PATH="$(pwd)/$DIST_APP" \
 DMG_BACKGROUND="$(pwd)/scripts/dmg-background.png" \
   "$DMGBUILD" \
   -s scripts/dmg-settings.py \
-  "caffeinagent" \
+  "agent caffeine" \
   "$RELEASE_DMG"
 
 echo "==> sign dmg"
