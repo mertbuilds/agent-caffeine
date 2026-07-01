@@ -2,7 +2,7 @@ name: Caffeinagent
 options:
   bundleIdPrefix: com.caffeinagent
   deploymentTarget:
-    macOS: "14.0"
+    macOS: "13.0"
   createIntermediateGroups: true
   generateEmptyDirectories: true
 
