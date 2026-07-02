@@ -3,7 +3,6 @@ import AppKit
 
 struct MenuBarView: View {
     @ObservedObject var aggregator: StateAggregator
-    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -105,7 +104,9 @@ struct MenuBarView: View {
     }
 
     private func openPreferencesFront() {
-        openSettings()
+        // macOS 13+: open the SwiftUI Settings scene via the standard selector.
+        // (`openSettings()` environment action is macOS 14.0+.)
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
         DispatchQueue.main.async {
             NSApp.activate(ignoringOtherApps: true)
             if let window = NSApp.windows.first(where: {
