@@ -104,7 +104,7 @@ function Hero() {
               buy agent caffeine · $9
             </BuyCta>
             <p className="text-xs text-ink/55 font-mono">
-              macos 14+ · signed · notarized
+              macos 13+ · signed · notarized
             </p>
           </div>
         </div>
@@ -342,7 +342,7 @@ function Faq() {
     },
     {
       q: "what macos versions?",
-      a: "macos 14 sonoma or later. universal binary, runs natively on apple silicon and intel.",
+      a: "macos 13 ventura or later. universal binary, runs natively on apple silicon and intel.",
     },
     {
       q: "do i need to install a privileged helper or weird permissions?",
