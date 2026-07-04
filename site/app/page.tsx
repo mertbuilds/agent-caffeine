@@ -91,7 +91,7 @@ function Hero() {
           <h1 className="text-3xl md:text-[2.5rem] font-bold leading-[1.15] tracking-tight">
             keep your mac awake.
             <br />
-            only while your agents are working.
+            while your agents are working.
             <br />
             <span className="text-accent">even with the lid closed.</span>
           </h1>
@@ -131,7 +131,7 @@ function Hero() {
       <div className="mt-16 md:mt-20 mx-auto max-w-2xl flex flex-col items-center">
         <AppShot />
         <p className="mt-5 text-center text-sm text-ink/60 max-w-sm leading-relaxed">
-          a 1.2 MB native mac app. light as air. lives next to your wifi
+          a 581 kB native mac app. light as air. lives next to your wifi
           icon. shows what it&apos;s watching and whether it&apos;s holding
           the mac awake.
         </p>
