@@ -131,7 +131,7 @@ function Hero() {
       <div className="mt-16 md:mt-20 mx-auto max-w-2xl flex flex-col items-center">
         <AppShot />
         <p className="mt-5 text-center text-sm text-ink/60 max-w-sm leading-relaxed">
-          a 418 kB native mac app. light as air. lives next to your wifi
+          a 1.2 MB native mac app. light as air. lives next to your wifi
           icon. shows what it&apos;s watching and whether it&apos;s holding
           the mac awake.
         </p>
@@ -149,9 +149,9 @@ function AppShot() {
       </div>
       <p className="text-sm text-ink/70 mb-3">keeping mac awake</p>
       <Divider />
+      <AgentRow color="green" name="claude" sub="CLI · active" time="now" />
       <AgentRow color="green" name="opencode" sub="CLI · active" time="now" />
-      <AgentRow color="green" name="wiki · landing page" sub="Claude Code · active" time="now" />
-      <AgentRow color="yellow" name="claudemarketplaces.com" sub="Claude Code · waitingForInput" time="14s" />
+      <AgentRow color="yellow" name="wiki · landing page" sub="Claude Code · waitingForInput" time="2m" />
       <Divider />
       <div className="flex justify-between text-xs text-ink/50 pt-2">
         <span>preferences…</span>
