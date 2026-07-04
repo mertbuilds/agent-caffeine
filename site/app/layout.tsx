@@ -14,10 +14,10 @@ export const metadata: Metadata = {
     type: "website",
     images: [
       {
-        url: "/laptop-on-copier.jpg",
-        width: 1600,
-        height: 854,
-        alt: "a macbook propped open on a xerox photocopier so the lid doesn't close",
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "keep your mac awake. while your agents are working. even with the lid closed.",
       },
     ],
   },
@@ -26,7 +26,7 @@ export const metadata: Metadata = {
     title: "agent caffeine",
     description:
       "keep your mac awake while ai agents work. agent-aware sleep prevention for macos. $9 one-time.",
-    images: ["/laptop-on-copier.jpg"],
+    images: ["/og.png"],
   },
 };
 
