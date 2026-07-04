@@ -34,6 +34,7 @@ xcodebuild \
   -project "${PROJECT}.xcodeproj" \
   -scheme "${PROJECT}" \
   -configuration "$CONFIG" \
+  -destination "generic/platform=macOS" \
   -derivedDataPath "$BUILD_DIR" \
   -quiet \
   DEVELOPMENT_TEAM="$TEAM_ID" \
