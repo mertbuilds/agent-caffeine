@@ -142,7 +142,7 @@ function Hero() {
 
 function AppShot() {
   return (
-    <div className="rounded-2xl border border-ink/10 bg-gradient-to-b from-white to-cream p-5 shadow-2xl shadow-ink/10">
+    <div className="w-full max-w-[26rem] rounded-2xl border border-ink/10 bg-gradient-to-b from-white to-cream p-5 shadow-2xl shadow-ink/10">
       <div className="flex items-center justify-between mb-3">
         <span className="font-bold">agent caffeine</span>
         <Toggle />
