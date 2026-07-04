@@ -231,8 +231,8 @@ function HowItWorks() {
   const points = [
     {
       n: "01",
-      h: "watches every claude code transcript",
-      p: "tails the jsonl session files at ~/.claude/projects. distinguishes an active turn from a session waiting for your reply.",
+      h: "watches claude code",
+      p: "spots running claude sessions via the process list, plus the session files at ~/.claude/projects for per-session detail.",
     },
     {
       n: "02",
@@ -252,7 +252,7 @@ function HowItWorks() {
     {
       n: "05",
       h: "lets the mac sleep when done",
-      p: "the instant every agent goes idle or waits for your input, the assertion releases. battery saved.",
+      p: "the moment no agent is left running, the assertion releases. battery saved.",
     },
   ];
   return (
