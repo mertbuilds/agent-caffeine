@@ -94,8 +94,7 @@ struct MenuBarView: View {
 
     private var footer: some View {
         HStack {
-            Button("preferences…") { openPreferencesFront() }
-                .buttonStyle(.borderless)
+            settingsButton
             Spacer()
             Button("quit") { NSApp.terminate(nil) }
                 .buttonStyle(.borderless)
@@ -103,10 +102,23 @@ struct MenuBarView: View {
         .font(.callout)
     }
 
-    private func openPreferencesFront() {
-        // macOS 13+: open the SwiftUI Settings scene via the standard selector.
-        // (`openSettings()` environment action is macOS 14.0+.)
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+    // The `openSettings` environment action is macOS 14+; the legacy
+    // responder-chain selector still works on 13 but stopped opening the
+    // SwiftUI Settings scene on newer macOS.
+    @ViewBuilder
+    private var settingsButton: some View {
+        if #available(macOS 14.0, *) {
+            SettingsOpenButton()
+        } else {
+            Button("preferences…") {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                MenuBarView.bringSettingsFront()
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+
+    static func bringSettingsFront() {
         DispatchQueue.main.async {
             NSApp.activate(ignoringOtherApps: true)
             if let window = NSApp.windows.first(where: {
@@ -141,5 +153,18 @@ struct MenuBarView: View {
         if s < 60 { return "\(s)s" }
         if s < 3600 { return "\(s/60)m" }
         return "\(s/3600)h"
+    }
+}
+
+@available(macOS 14.0, *)
+private struct SettingsOpenButton: View {
+    @Environment(\.openSettings) private var openSettings
+
+    var body: some View {
+        Button("preferences…") {
+            openSettings()
+            MenuBarView.bringSettingsFront()
+        }
+        .buttonStyle(.borderless)
     }
 }

@@ -1,5 +1,4 @@
 import Foundation
-import Darwin
 import os
 
 @MainActor
@@ -88,22 +87,32 @@ final class ProcessWatcher: ObservableObject {
     }
 
     private func runningProcessNames() -> Set<String> {
-        var size: Int = 0
-        if sysctlbyname("kern.proc.all", nil, &size, nil, 0) != 0 { return [] }
-        let capacity = size / MemoryLayout<kinfo_proc>.stride + 16
-        var buffer = [kinfo_proc](repeating: kinfo_proc(), count: capacity)
-        var newSize = capacity * MemoryLayout<kinfo_proc>.stride
-        let result = buffer.withUnsafeMutableBufferPointer { ptr -> Int32 in
-            sysctlbyname("kern.proc.all", ptr.baseAddress, &newSize, nil, 0)
+        // sysctl's p_comm is the executed binary's basename, which for
+        // version-managed CLIs isn't the command users run — Claude Code's
+        // binary is named after its version (e.g. "2.1.199"), so it never
+        // matches the allowlist. ps resolves the accounting names users
+        // expect and behaves identically on macOS 13 through 26.
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/bin/ps")
+        task.arguments = ["-axco", "comm="]
+        let pipe = Pipe()
+        task.standardOutput = pipe
+        task.standardError = FileHandle.nullDevice
+        do {
+            try task.run()
+        } catch {
+            log.error("ps spawn failed: \(error.localizedDescription, privacy: .public)")
+            return []
         }
-        if result != 0 { return [] }
-        let count = newSize / MemoryLayout<kinfo_proc>.stride
+        let data = pipe.fileHandleForReading.readDataToEndOfFile()
+        task.waitUntilExit()
+        guard task.terminationStatus == 0 else {
+            log.error("ps exited \(task.terminationStatus)")
+            return []
+        }
         var names = Set<String>()
-        for i in 0..<count {
-            var proc = buffer[i]
-            let name = withUnsafePointer(to: &proc.kp_proc.p_comm) {
-                $0.withMemoryRebound(to: CChar.self, capacity: Int(MAXCOMLEN) + 1) { String(cString: $0) }
-            }
+        for line in String(decoding: data, as: UTF8.self).split(separator: "\n") {
+            let name = line.trimmingCharacters(in: .whitespaces)
             if !name.isEmpty { names.insert(name) }
         }
         return names
