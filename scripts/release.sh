@@ -104,13 +104,16 @@ xcrun stapler staple "$RELEASE_DMG"
 xcrun stapler validate "$RELEASE_DMG"
 
 # Publish the notarized dmg to the Polar "File Downloads" benefit (add new +
-# archive old). Opt-in: runs only when both env vars are set, so an unconfigured
-# build still succeeds. See scripts/polar-publish.mjs for the token + benefit id.
+# archive old). Credentials come from the standard per-service env file
+# (~/.config/polar/credentials.env: POLAR_ACCESS_TOKEN + POLAR_BENEFIT_ID),
+# unless already exported. Opt-in: skips cleanly if the file/vars are absent.
+POLAR_ENV="$HOME/.config/polar/credentials.env"
+if [ -f "$POLAR_ENV" ]; then set -a; . "$POLAR_ENV"; set +a; fi
 if [ -n "${POLAR_ACCESS_TOKEN:-}" ] && [ -n "${POLAR_BENEFIT_ID:-}" ]; then
   echo "==> publish dmg to Polar (add new + disable old)"
   node scripts/polar-publish.mjs "$RELEASE_DMG"
 else
-  echo "==> skip Polar publish (set POLAR_ACCESS_TOKEN + POLAR_BENEFIT_ID to enable)"
+  echo "==> skip Polar publish (no creds at $POLAR_ENV and env vars unset)"
 fi
 
 echo ""
