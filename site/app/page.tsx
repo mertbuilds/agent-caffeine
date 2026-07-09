@@ -242,7 +242,7 @@ function HowItWorks() {
     {
       n: "03",
       h: "holds the mac awake on ac power",
-      p: "uses iopmassertion preventsystemsleep. lid closes, machine stays alive, agent keeps thinking.",
+      p: "holds a preventuseridlesystemsleep assertion, the same one caffeinate -i uses, so the machine never idle-sleeps while an agent runs. adds preventsystemsleep too, to survive a lid-close on ac. the display can still sleep, the work keeps going.",
     },
     {
       n: "04",
