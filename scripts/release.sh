@@ -103,6 +103,16 @@ echo "==> staple dmg"
 xcrun stapler staple "$RELEASE_DMG"
 xcrun stapler validate "$RELEASE_DMG"
 
+# Publish the notarized dmg to the Polar "File Downloads" benefit (add new +
+# archive old). Opt-in: runs only when both env vars are set, so an unconfigured
+# build still succeeds. See scripts/polar-publish.mjs for the token + benefit id.
+if [ -n "${POLAR_ACCESS_TOKEN:-}" ] && [ -n "${POLAR_BENEFIT_ID:-}" ]; then
+  echo "==> publish dmg to Polar (add new + disable old)"
+  node scripts/polar-publish.mjs "$RELEASE_DMG"
+else
+  echo "==> skip Polar publish (set POLAR_ACCESS_TOKEN + POLAR_BENEFIT_ID to enable)"
+fi
+
 echo ""
 echo "✓ release artifacts:"
 echo "  zip: $RELEASE_ZIP"
