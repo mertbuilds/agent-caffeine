@@ -82,7 +82,7 @@ echo "==> build dmg (drag-to-applications)"
 # the layout + background survive even when the build host hasn't granted
 # Automation permissions to whatever process is calling this script.
 RELEASE_DMG="$BUILD_DIR/agent-caffeine-$VERSION-$BUILD.dmg"
-DMGBUILD="${DMGBUILD:-$HOME/Library/Python/3.14/bin/dmgbuild}"
+DMGBUILD="${DMGBUILD:-$(command -v dmgbuild || ls "$HOME"/Library/Python/*/bin/dmgbuild 2>/dev/null | sort -V | tail -1)}"
 rm -f "$RELEASE_DMG"
 DMG_APP_PATH="$(pwd)/$DIST_APP" \
 DMG_BACKGROUND="$(pwd)/scripts/dmg-background.png" \

@@ -57,7 +57,7 @@ struct PreferencesView: View {
                     .foregroundStyle(.tertiary)
             }
             Section("about") {
-                Text("holds an IOPMAssertPreventSystemSleep while an agent is active; on AC this keeps the mac awake with the lid closed. on battery, also toggles `pmset -b disablesleep` via sudo if you've installed the sudoers entry above.")
+                Text("holds a PreventUserIdleSystemSleep assertion (plus PreventSystemSleep) while an agent is active, so the mac stays awake on both battery and AC — the display may still sleep. on battery, also toggles `pmset -b disablesleep` via sudo if you've installed the sudoers entry above.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
