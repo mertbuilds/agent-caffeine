@@ -4,6 +4,7 @@ import { Analytics } from "@/components/analytics";
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://caffeinagent.com"),
+  alternates: { canonical: "/" },
   title: "agent caffeine · keep your mac awake while ai agents work",
   description:
     "agent-aware sleep prevention for macos. detects claude code, codex, opencode, and 40+ ai coding agents. sleeps when they're idle. $9 one-time.",
