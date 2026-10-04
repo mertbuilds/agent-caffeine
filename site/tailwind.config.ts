@@ -1,18 +1,28 @@
 import type { Config } from "tailwindcss";
 
 export default {
-  content: ["./app/**/*.{ts,tsx,mdx}"],
+  content: ["./app/**/*.{ts,tsx,mdx}", "./components/**/*.{ts,tsx}"],
   theme: {
     extend: {
       fontFamily: {
-        sans: ["ui-sans-serif", "system-ui", "-apple-system", "Helvetica Neue", "Arial"],
+        sans: ["var(--font-suisse)", "'Suisse Intl Fallback'", "system-ui", "sans-serif"],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "monospace"],
       },
       colors: {
-        ink: "#0a0a0a",
-        paper: "#fafaf7",
-        cream: "#f5f1e8",
-        accent: "#c4561e",
+        bg: "var(--bg)",
+        fg: "var(--fg)",
+        muted: "var(--muted)",
+        border: "var(--border)",
+        surface: "var(--surface)",
+        accent: "var(--accent)",
+      },
+      transitionDuration: {
+        quick: "var(--duration-quick)",
+        fast: "var(--duration-fast)",
+        slow: "var(--duration-slow)",
+      },
+      transitionTimingFunction: {
+        "smooth-out": "var(--ease-smooth-out)",
       },
     },
   },
