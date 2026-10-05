@@ -527,7 +527,10 @@ final class VerdictTests: XCTestCase {
             (.noActivity(minutes: 0), "No activity"),
             (.noActivity(minutes: 1), "No activity for 1 minute"),
             (.noActivity(minutes: 45), "No activity for 45 minutes"),
+            (.noActivity(minutes: 395), "No activity for 6 hours"),
+            (.noActivity(minutes: 3 * 24 * 60), "No activity for 3 days"),
             (.onlyWeakSigns(minutes: 30), "No clear sign of work for 30 minutes"),
+            (.onlyWeakSigns(minutes: 120), "No clear sign of work for 2 hours"),
             (.alwaysWorkingByRule, "Counts as working while it is open"),
             (.ignoredByRule, "Ignored by agent caffeine"),
         ]

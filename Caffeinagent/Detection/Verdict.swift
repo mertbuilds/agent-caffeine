@@ -39,7 +39,8 @@ enum VerdictReason: Equatable {
     case alwaysWorkingByRule
     case ignoredByRule
 
-    /// One line for the menu, below the agent's name.
+    /// The evidence in one line. The menu shows it when the pointer rests
+    /// on an agent.
     var text: String {
         switch self {
         case .reportsBusy: return "Working on a task"
@@ -51,19 +52,19 @@ enum VerdictReason: Equatable {
         case .cpuActivity: return "Uses the processor"
         case .asksPermission: return "Waits for your answer"
         case .atPrompt: return "Ready for your next message"
-        case .noActivity(let minutes): return minutes < 1 ? "No activity" : "No activity for \(Self.counted(minutes, "minute"))"
-        case .onlyWeakSigns(let minutes): return "No clear sign of work for \(Self.counted(minutes, "minute"))"
+        case .noActivity(let minutes): return minutes < 1 ? "No activity" : "No activity for \(HumaneDuration.text(minutes: minutes))"
+        case .onlyWeakSigns(let minutes): return "No clear sign of work for \(HumaneDuration.text(minutes: minutes))"
         case .alwaysWorkingByRule: return "Counts as working while it is open"
         case .ignoredByRule: return "Ignored by agent caffeine"
         }
     }
 
     private static func counted(_ count: Int, _ noun: String) -> String {
-        count == 1 ? "1 \(noun)" : "\(count) \(noun)s"
+        HumaneDuration.counted(count, noun)
     }
 
     private static func ago(_ seconds: Int) -> String {
-        seconds < 60 ? "a moment ago" : "\(counted(seconds / 60, "minute")) ago"
+        "\(HumaneDuration.text(seconds: TimeInterval(seconds))) ago"
     }
 }
 
