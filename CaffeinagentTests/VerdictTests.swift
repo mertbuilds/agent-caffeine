@@ -368,6 +368,20 @@ final class VerdictTests: XCTestCase {
     /// CPU use during work that the agent reports is not "only weak signs".
     /// The cap must not run out behind the report and then call the agent
     /// idle the moment its state file cannot be read.
+    /// 60 seconds of CPU use every 365 seconds: each break is a little
+    /// longer than the release time. One quiet sample started the count
+    /// again, so the cap never came.
+    func testWeakCapCountsBurstsWithBreaksJustOverTheReleaseTime() throws {
+        let story = samples(to: 4 * 3600) { t in self.opencode(cpu: t.truncatingRemainder(dividingBy: 365) < 60 ? 14.2 : 0.4) }
+        let got = run(story)
+        let working = got.filter { $0.verdict.state == .working }
+        let cap = DetectionSettings().weakEvidenceCap
+        XCTAssertGreaterThan(Double(working.count) * 5, cap / 2, "The bursts count as work up to the cap")
+        XCTAssertLessThanOrEqual(Double(working.count) * 5, cap + 365)
+        XCTAssertLessThanOrEqual(try XCTUnwrap(working.last).seconds, cap + 365)
+        XCTAssertEqual(got.last { $0.verdict.reason == .onlyWeakSigns(minutes: 30) }.map { $0.seconds > 3.9 * 3600 }, true, "The cap never lifts")
+    }
+
     func testWeakCapDoesNotCountTimeOfReportedWork() {
         var story = samples(to: 2400) { t in self.claude(.working, at: t, cpu: 14.5) }
         story += samples(from: 2405, to: 2600) { t in self.claude(nil, at: t, cpu: 14.5) }
