@@ -60,6 +60,7 @@ final class ProcessWatcher: ObservableObject {
         "forgecode",
         "gemini", "gemini-cli",
         "goose",
+        "grok",
         "hermes-agent",
         "iflow-cli",
         "junie",
@@ -83,7 +84,7 @@ final class ProcessWatcher: ObservableObject {
     ]
     // Shipped in the same release that started saving known defaults. Older
     // builds have never seen them, so they still reach existing users once.
-    nonisolated private static let addedWithKnownDefaults = ["cn", "copilot", "droid", "pi"]
+    nonisolated private static let addedWithKnownDefaults = ["cn", "copilot", "droid", "grok", "pi"]
 
     init() {
         self.allowlist = Self.loadAllowlist(from: .standard)

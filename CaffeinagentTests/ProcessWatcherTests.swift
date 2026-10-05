@@ -190,7 +190,7 @@ final class ProcessWatcherTests: XCTestCase {
     }
 
     func testUpgradeMergesNewDefaultsAcrossTwoLaunches() {
-        let added = ["cn", "copilot", "droid", "pi"]
+        let added = ["cn", "copilot", "droid", "grok", "pi"]
         // Saved by a build that did not store known defaults: the user removed
         // aider and added a custom entry.
         let saved = ProcessWatcher.defaultAllowlist.filter { !added.contains($0) && $0 != "aider" } + ["my-agent"]
@@ -208,7 +208,7 @@ final class ProcessWatcherTests: XCTestCase {
     }
 
     func testRemovedNewDefaultStaysRemoved() {
-        store.set(ProcessWatcher.defaultAllowlist.filter { !["cn", "copilot", "droid", "pi"].contains($0) }, forKey: "ProcessWatcher.allowlist")
+        store.set(ProcessWatcher.defaultAllowlist.filter { !["cn", "copilot", "droid", "grok", "pi"].contains($0) }, forKey: "ProcessWatcher.allowlist")
         var list = ProcessWatcher.loadAllowlist(from: store)
         list.removeAll { $0 == "pi" }
         store.set(list, forKey: "ProcessWatcher.allowlist")
