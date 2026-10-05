@@ -5,7 +5,7 @@ private struct RobotUnitKey: EnvironmentKey {
 }
 
 extension EnvironmentValues {
-    /// One unit of the robot's 100 x 100 drawing, in points.
+    /// A hundredth of the side of the robot's tile, in points.
     var robotUnit: CGFloat {
         get { self[RobotUnitKey.self] }
         set { self[RobotUnitKey.self] = newValue }

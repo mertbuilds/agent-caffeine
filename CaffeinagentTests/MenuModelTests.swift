@@ -130,6 +130,51 @@ final class MenuModelTests: XCTestCase {
         }
     }
 
+    func testTheRobotIsKnockedOutWhenTheHelperWasSwitchedOff() {
+        var awake = input(.alwaysOn)
+        awake.flagLeftOn = true
+        XCTAssertEqual(MenuModel.state(awake, now: now).pose, .helperOff)
+        // A safety stop comes first, as in the line below the headline.
+        var stopped = input(.safetyStop(.tooHot))
+        stopped.flagLeftOn = true
+        XCTAssertEqual(MenuModel.state(stopped, now: now).pose, .safetyStop(.heat))
+    }
+
+    func testEveryRobotLook() {
+        let awake = RobotLook(pose: .awake(wisps: 3))
+        XCTAssertEqual([awake.eyes, RobotLook(pose: .attentive).eyes, RobotLook(pose: .asleep).eyes, RobotLook(pose: .off).eyes], [.happy, .open, .closed, .dim])
+        XCTAssertEqual(awake.wisps, 3)
+        XCTAssertEqual(RobotLook(pose: .attentive).antenna, .amber)
+        XCTAssertTrue(RobotLook(pose: .asleep).snoozes)
+        XCTAssertEqual(RobotLook(pose: .off).saturation, 0)
+        // Only a robot that is awake steams, bobs and blinks.
+        for pose in [HeroPose.asleep, .off, .safetyStop(.battery), .safetyStop(.heat), .helperOff] {
+            let look = RobotLook(pose: pose)
+            XCTAssertEqual(look.wisps, 0, "\(pose)")
+            XCTAssertEqual(look.bob, 0, "\(pose)")
+            XCTAssertFalse(look.blinks, "\(pose)")
+        }
+        // The stops that knock the robot out: red crosses, a red antenna.
+        let badges: [(HeroPose, String?)] = [(.safetyStop(.battery), "battery.25"), (.safetyStop(.heat), "thermometer.high"), (.helperOff, nil)]
+        for (pose, badge) in badges {
+            let look = RobotLook(pose: pose)
+            XCTAssertEqual(look.eyes, .dead, "\(pose)")
+            XCTAssertEqual(look.antenna, .red, "\(pose)")
+            XCTAssertEqual(look.badge, badge, "\(pose)")
+        }
+    }
+
+    func testTheRobotBlinksNowAndThen() {
+        let first = RobotBlink.gaps[0]
+        XCTAssertEqual(RobotBlink.closure(at: 0), 0)
+        XCTAssertEqual(RobotBlink.closure(at: first - RobotBlink.duration / 2), 1, accuracy: 0.001)
+        XCTAssertEqual(RobotBlink.closure(at: first + 1), 0)
+        // The pattern starts again after the last gap.
+        let round = RobotBlink.gaps.reduce(0, +)
+        XCTAssertEqual(RobotBlink.closure(at: round + first - RobotBlink.duration / 2), 1, accuracy: 0.001)
+        XCTAssertTrue(RobotBlink.gaps.allSatisfy { (4...7).contains($0) })
+    }
+
     // MARK: Attention
 
     func testNothingAsksForAttentionWhenAllIsWell() {

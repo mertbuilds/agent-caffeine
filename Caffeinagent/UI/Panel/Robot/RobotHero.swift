@@ -15,7 +15,7 @@ struct RobotHero: View {
         }
         .environment(\.robotUnit, size / 100)
         .frame(width: size, height: size)
-        .contentShape(Circle())
+        .contentShape(RoundedRectangle(cornerRadius: size * RobotGeometry.corner, style: .continuous))
         .onTapGesture(perform: blinkOnce)
         .accessibilityHidden(true)
     }

@@ -23,7 +23,7 @@ enum MenuModel {
         let (title, subtitle) = headlineTexts(headline, waitingFor: waitingHoldLeft(input, now: now))
         let (rows, moreIdle) = rows(input, now: now)
         return PanelState(
-            pose: pose(for: headline),
+            pose: pose(input),
             title: title,
             subtitle: subtitle,
             attention: attention(input),
@@ -35,6 +35,14 @@ enum MenuModel {
     }
 
     // MARK: Hero
+
+    /// A safety stop comes first, like its line below the headline. Then
+    /// the helper that was switched off, whatever the headline says.
+    static func pose(_ input: PanelInput) -> HeroPose {
+        let pose = pose(for: input.decision.headline)
+        if case .safetyStop = pose { return pose }
+        return input.flagLeftOn ? .helperOff : pose
+    }
 
     static func pose(for headline: HoldHeadline) -> HeroPose {
         switch headline {

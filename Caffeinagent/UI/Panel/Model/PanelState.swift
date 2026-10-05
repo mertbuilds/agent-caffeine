@@ -16,7 +16,11 @@ enum HeroPose: Equatable {
     case asleep
     /// Switched off, or the license does not allow a hold.
     case off
+    /// Stopped to protect the Mac. The robot is knocked out.
     case safetyStop(SafetyKind)
+    /// The helper was switched off in Login Items while the sleep flag was
+    /// on. The robot is knocked out.
+    case helperOff
 }
 
 /// Something the user can do from the menu.

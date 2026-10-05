@@ -38,7 +38,7 @@ struct PanelPreview: View {
 
 #Preview("Robot poses") {
     HStack(spacing: 16) {
-        ForEach(Array([HeroPose.awake(wisps: 2), .attentive, .asleep, .off, .safetyStop(.battery), .safetyStop(.heat)].enumerated()), id: \.offset) { _, pose in
+        ForEach(Array([HeroPose.awake(wisps: 2), .attentive, .asleep, .off, .safetyStop(.battery), .safetyStop(.heat), .helperOff].enumerated()), id: \.offset) { _, pose in
             RobotHero(pose: pose)
         }
     }

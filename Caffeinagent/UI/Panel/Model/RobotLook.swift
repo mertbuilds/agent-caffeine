@@ -1,34 +1,45 @@
-import SwiftUI
+import Foundation
 
-/// The numbers one pose of the robot is drawn from. A change of pose
-/// animates from one set to the next.
+/// What one pose of the robot is drawn from. The robot itself is the
+/// picture of the app icon. Its eyes, its steam and the light of its
+/// antenna are drawn on top and change with the pose.
 struct RobotLook: Equatable {
-    enum Antenna: Equatable {
-        case glowing
-        case amber
+    enum Eyes: Equatable {
+        /// The arcs of the icon.
+        case happy
+        /// Round, they look at the user.
+        case open
+        /// Flat lines.
+        case closed
+        /// The arcs of the icon, faint.
         case dim
+        /// Two red crosses.
+        case dead
     }
 
-    /// 1 is a happy arc, 0 a flat line.
-    var eyeCurve: CGFloat = 1
-    /// Above 0 the inner ends of the eyes rise.
-    var eyeSlant: CGFloat = 0
-    /// 1 turns the eyes into round ones that look at the user.
-    var eyeRound: CGFloat = 0
-    var eyeBrightness: Double = 1
-    /// How far the cup is raised, in units of the drawing.
-    var cupLift: CGFloat = 0
-    /// Of the head, in degrees.
-    var tilt: Double = 0
-    var wisps = 0
+    enum Antenna: Equatable {
+        /// The light blue of the icon, it breathes.
+        case glowing
+        /// It breathes in amber.
+        case amber
+        case dark
+        /// Red, and still.
+        case red
+    }
+
+    var eyes = Eyes.happy
     var antenna = Antenna.glowing
+    var wisps = 0
+    /// Of the picture: 1 is the full colour, 0 is grey.
     var saturation: Double = 1
+    /// Of the picture: 0 to 1, towards black.
     var dimming: Double = 0
+    /// Of the picture: 1 is the full contrast.
+    var contrast: Double = 1
     var snoozes = false
-    /// How far the robot bobs, in units of the drawing, and how long one
-    /// bob takes.
+    var blinks = false
+    /// How far the robot bobs, in points.
     var bob: CGFloat = 0
-    var bobPeriod: TimeInterval = 3.6
     /// An SF Symbol at the lower right.
     var badge: String?
 
@@ -36,40 +47,58 @@ struct RobotLook: Equatable {
         switch pose {
         case .awake(let count):
             wisps = count
-            bob = 1.1
+            blinks = true
+            bob = 1.25
         case .attentive:
-            eyeRound = 1
-            cupLift = 2.5
-            tilt = -5
+            eyes = .open
             antenna = .amber
-            bob = 0.5
-            bobPeriod = 4.8
+            blinks = true
+            bob = 1.25
         case .asleep:
-            eyeCurve = 0
-            eyeBrightness = 0.75
-            cupLift = -3
-            antenna = .dim
-            saturation = 0.45
-            dimming = 0.1
-            snoozes = true
-            bob = 0.5
-            bobPeriod = 5.2
-        case .off:
-            eyeCurve = 0
-            eyeBrightness = 0.35
-            cupLift = -3
-            antenna = .dim
-            saturation = 0
-            dimming = 0.12
-        case .safetyStop(let kind):
-            eyeCurve = 0
-            eyeSlant = 1.7
-            eyeBrightness = 0.8
-            cupLift = -3
-            antenna = .dim
+            eyes = .closed
+            antenna = .dark
             saturation = 0.6
-            dimming = 0.06
+            dimming = 0.08
+            snoozes = true
+        case .off:
+            eyes = .dim
+            antenna = .dark
+            saturation = 0
+            dimming = 0.04
+            contrast = 0.8
+        case .safetyStop(let kind):
+            knockOut()
             badge = kind == .battery ? "battery.25" : "thermometer.high"
+        case .helperOff:
+            knockOut()
         }
+    }
+
+    private mutating func knockOut() {
+        eyes = .dead
+        antenna = .red
+        saturation = 0.5
+        dimming = 0.1
+    }
+}
+
+/// When the robot blinks while it is awake: now and then, never in a
+/// steady beat.
+enum RobotBlink {
+    /// From one blink to the next, in turn.
+    static let gaps: [TimeInterval] = [4.6, 6.3, 5.1, 6.8, 4.2, 5.7]
+    static let duration: TimeInterval = 0.12
+
+    /// 0 while the eyes are open, 1 when they are shut.
+    static func closure(at time: TimeInterval) -> CGFloat {
+        var left = time.truncatingRemainder(dividingBy: gaps.reduce(0, +))
+        for gap in gaps {
+            if left < gap {
+                let into = left - (gap - duration)
+                return into < 0 ? 0 : CGFloat(1 - abs(2 * into / duration - 1))
+            }
+            left -= gap
+        }
+        return 0
     }
 }

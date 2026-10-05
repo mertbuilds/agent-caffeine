@@ -4,7 +4,8 @@ import SwiftUI
 enum PanelMetrics {
     static let width: CGFloat = 320
     static let gutter: CGFloat = 16
-    static let robotSize: CGFloat = 92
+    /// The side of the tile the robot sits on.
+    static let robotSize: CGFloat = 96
     /// The rounded box behind an agent's mark.
     static let logoBox: CGFloat = 28
     static let logoBoxRadius: CGFloat = 8
