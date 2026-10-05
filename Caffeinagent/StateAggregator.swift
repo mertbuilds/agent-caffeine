@@ -33,7 +33,14 @@ final class StateAggregator: ObservableObject {
     /// The tab Preferences shows, so the menu can open one.
     @Published var preferencesTab = PreferencesTab.general
     @Published private(set) var decision: HoldDecision
-    @Published private(set) var agentRows: [MenuAgentRow] = []
+    /// The folder of each session that works or waits, for the menu.
+    @Published private(set) var sessionLabels: [ProcessIdentity: String] = [:]
+    /// Since when each agent is in its state, for the menu.
+    @Published private(set) var stateClock = StateClock()
+    /// The user closed the menu's hint to set up "lid closed on battery".
+    @Published var lidClosedHintDismissed: Bool {
+        didSet { UserDefaults.standard.set(lidClosedHintDismissed, forKey: Self.lidClosedHintKey) }
+    }
     @Published private(set) var entitlement: Entitlement
     /// False on a Mac without a battery, where a closed lid needs no helper.
     @Published private(set) var hasBattery = true
@@ -55,12 +62,12 @@ final class StateAggregator: ObservableObject {
     /// The helper gets no call before its version was checked at launch.
     private var helperChecked = false
     private var lastHelperRefresh = Date.distantPast
-    private var labels: [ProcessIdentity: String] = [:]
     private var napActivity: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
     private var sigtermSource: DispatchSourceSignal?
     private static let enabledKey = "StateAggregator.enabled"
     private static let modeKey = "StateAggregator.mode"
+    private static let lidClosedHintKey = "StateAggregator.lidClosedHintDismissed"
     /// System Settings tells nobody when the user allows or removes the
     /// helper, so its state is read again this often.
     private static let helperRefreshInterval: TimeInterval = 30
@@ -79,6 +86,7 @@ final class StateAggregator: ObservableObject {
         self.enabled = enabled
         self.mode = mode
         self.settings = settings
+        self.lidClosedHintDismissed = UserDefaults.standard.bool(forKey: Self.lidClosedHintKey)
         self.decision = engine.decision
         safetyMonitor.batteryFloorPercent = settings.batteryFloorPercent
 
@@ -138,8 +146,22 @@ final class StateAggregator: ObservableObject {
         }
     }
 
-    var lidClosedStatus: LidClosedStatus {
-        MenuModel.lidClosedStatus(helper: sleepFlag.helperStatus, wanted: settings.stayAwakeLidClosedOnBattery)
+    /// What the menu is worked out from.
+    var panelInput: PanelInput {
+        PanelInput(
+            decision: decision,
+            mode: mode,
+            entitlement: entitlement,
+            hasLicenseKey: license.record.key != nil,
+            labels: sessionLabels,
+            clock: stateClock,
+            settings: settings,
+            flagLeftOn: sleepFlag.flagLeftOn,
+            lidClosedNeedsSetup: MenuModel.lidClosedNeedsSetup(
+                helper: sleepFlag.helperStatus, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
+            ),
+            lidClosedHintDismissed: lidClosedHintDismissed
+        )
     }
 
     // MARK: Engine
@@ -175,14 +197,15 @@ final class StateAggregator: ObservableObject {
     /// The folder of each session that works or waits, so the menu can tell
     /// two sessions of one agent apart. It is shown only, never logged.
     private func refreshRows() {
+        let readings = decision.perAgent.map(\.reading)
         var next: [ProcessIdentity: String] = [:]
-        for reading in decision.perAgent.map(\.reading) where reading.verdict.state != .idle && reading.kind == .cli {
-            next[reading.identity] = labels[reading.identity]
+        for reading in readings where reading.verdict.state != .idle && reading.kind == .cli {
+            next[reading.identity] = sessionLabels[reading.identity]
                 ?? MenuModel.sessionLabel(workingDirectory: openFiles.workingDirectory(of: reading.identity.pid))
         }
-        labels = next
-        let rows = MenuModel.rows(for: decision.perAgent, labels: labels)
-        if agentRows != rows { agentRows = rows }
+        if sessionLabels != next { sessionLabels = next }
+        let clock = stateClock.updated(with: readings, now: Date())
+        if stateClock != clock { stateClock = clock }
     }
 
     // MARK: Helper

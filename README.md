@@ -40,7 +40,7 @@ The first launch opens a setup window once. It names the agents it found, offers
 
 ## Phone access
 
-Claude Code Remote Control lets you work with a session on this Mac from a phone or the web, and that only works while the Mac is awake. With "Stay awake on power while phone access is on" (Preferences > General, on by default), the Mac stays awake on power while Remote Control is on, also when no agent works. The menu then says "Awake: phone access is on". On battery this does not hold the Mac awake.
+Claude Code Remote Control lets you work with a session on this Mac from a phone or the web, and that only works while the Mac is awake. With "Stay awake on power while phone access is on" (Preferences > General, on by default), the Mac stays awake on power while Remote Control is on, also when no agent works. The menu then says "Phone access is on". On battery this does not hold the Mac awake.
 
 Remote Control counts as on for a `claude remote-control` server, for a session started with `--remote-control` or `--rc`, and for every interactive session when `remoteControlAtStartup` is true in `~/.claude/settings.json`. A session that turns it on later with `/remote-control` is not seen. No other tool has a detector yet (`Caffeinagent/Detection/RemoteAccessDetector.swift`).
 

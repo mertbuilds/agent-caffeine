@@ -28,7 +28,8 @@ enum HoldSubject: Equatable {
     }
 }
 
-/// The top line of the menu.
+/// What the decision comes to, in one case. The menu words it in
+/// `MenuModel`, and `text` is the line of the lab log.
 enum HoldHeadline: Equatable {
     case working(HoldSubject)
     case waitingHeld(HoldSubject)
@@ -50,8 +51,8 @@ enum HoldHeadline: Equatable {
         }
     }
 
-    /// What keeps the Mac awake, as the menu and the power assertion say
-    /// it. Nil when nothing does.
+    /// What keeps the Mac awake, as the power assertion says it. Nil when
+    /// nothing does.
     var awakeReason: String? {
         switch self {
         case .working(let subject): return Self.phrase(subject, one: "is working", many: "are working")

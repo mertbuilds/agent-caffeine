@@ -15,6 +15,15 @@ enum AwakeMode: String, CaseIterable, Identifiable {
         }
     }
 
+    /// For the bar at the bottom of the menu.
+    var shortTitle: String {
+        switch self {
+        case .always: return "Always"
+        case .agentOpen: return "While open"
+        case .agentWorking: return "While working"
+        }
+    }
+
     var explanation: String {
         switch self {
         case .always: return "Always: the Mac stays awake until you switch agent caffeine off, with or without an agent."

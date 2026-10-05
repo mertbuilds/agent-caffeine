@@ -1,0 +1,47 @@
+#if DEBUG
+import SwiftUI
+
+/// A menu over one fixed state, with controls that work.
+struct PanelPreview: View {
+    let state: PanelState
+    var startsExpanded = false
+    @State private var enabled: Bool
+    @State private var mode: AwakeMode
+
+    init(state: PanelState, startsExpanded: Bool = false, enabled: Bool = true, mode: AwakeMode = .agentWorking) {
+        self.state = state
+        self.startsExpanded = startsExpanded
+        _enabled = State(initialValue: enabled)
+        _mode = State(initialValue: mode)
+    }
+
+    var body: some View {
+        PanelView(
+            state: state, enabled: $enabled, mode: $mode, startsExpanded: startsExpanded,
+            perform: { _ in }, openPreferences: {}, quit: {}
+        )
+    }
+}
+
+#Preview("Working") { PanelPreview(state: PanelFixtures.working) }
+#Preview("Expanded idle list") { PanelPreview(state: PanelFixtures.working, startsExpanded: true) }
+#Preview("Waiting") { PanelPreview(state: PanelFixtures.waiting) }
+#Preview("All idle") { PanelPreview(state: PanelFixtures.allIdle) }
+#Preview("No agent") { PanelPreview(state: PanelFixtures.noAgent) }
+#Preview("Off") { PanelPreview(state: PanelFixtures.off, enabled: false) }
+#Preview("Safety stop") { PanelPreview(state: PanelFixtures.safetyStop) }
+#Preview("Too hot") { PanelPreview(state: PanelFixtures.tooHot) }
+#Preview("Lid closed not set up") { PanelPreview(state: PanelFixtures.lidClosedNotSetUp) }
+#Preview("Helper switched off") { PanelPreview(state: PanelFixtures.helperSwitchedOff, mode: .always) }
+#Preview("Trial ending") { PanelPreview(state: PanelFixtures.trialEnding) }
+#Preview("Trial over") { PanelPreview(state: PanelFixtures.trialOver) }
+
+#Preview("Robot poses") {
+    HStack(spacing: 16) {
+        ForEach(Array([HeroPose.awake(wisps: 2), .attentive, .asleep, .off, .safetyStop(.battery), .safetyStop(.heat)].enumerated()), id: \.offset) { _, pose in
+            RobotHero(pose: pose)
+        }
+    }
+    .padding()
+}
+#endif

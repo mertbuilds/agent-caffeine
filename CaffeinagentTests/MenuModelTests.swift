@@ -1,13 +1,17 @@
 import XCTest
 
 final class MenuModelTests: XCTestCase {
-    private func hold(_ id: String, _ name: String, pid: Int32, _ state: WorkState, _ reason: VerdictReason) -> AgentHold {
+    private let now = Date(timeIntervalSince1970: 1_000_000)
+
+    private func hold(
+        _ id: String, _ name: String, pid: Int32, _ state: WorkState, _ reason: VerdictReason, cause: HoldCause? = nil
+    ) -> AgentHold {
         AgentHold(
             reading: AgentReading(
-                agentID: id, displayName: name, level: .state, identity: ProcessIdentity(pid: pid, startTime: 5),
+                agentID: id, displayName: name, level: .state, identity: identity(pid),
                 verdict: AgentVerdict(state: state, confidence: .reported, reason: reason)
             ),
-            cause: nil
+            cause: cause
         )
     }
 
@@ -15,44 +19,320 @@ final class MenuModelTests: XCTestCase {
         hold("claude", "Claude Code", pid: pid, state, reason)
     }
 
-    func testNoAgentsGiveNoRows() {
-        XCTAssertEqual(MenuModel.rows(for: []), [])
+    private func identity(_ pid: Int32) -> ProcessIdentity {
+        ProcessIdentity(pid: pid, startTime: 5)
     }
 
-    func testManyIdleSessionsShareOneLine() {
-        let idle = (1...9).map { claude(pid: $0, .idle) }
-        let rows = MenuModel.rows(for: idle + [hold("codex", "Codex", pid: 20, .idle, .atPrompt)])
-        XCTAssertEqual(rows, [
-            MenuAgentRow(id: "idle:claude", title: "Claude Code", state: .idle, detail: "9 idle sessions"),
-            MenuAgentRow(id: "idle:codex", title: "Codex", state: .idle, detail: "Idle · Ready for your next message"),
-        ])
+    private func input(_ headline: HoldHeadline, _ perAgent: [AgentHold] = []) -> PanelInput {
+        PanelInput(decision: HoldDecision(hold: headline.keepsAwake, lidClosedFlag: false, headline: headline, perAgent: perAgent))
     }
 
-    func testWorkingAndWaitingSessionsKeepTheirOwnLines() {
+    /// Each hold in its state since the given number of seconds.
+    private func clock(_ perAgent: [AgentHold], secondsAgo: [Int32: TimeInterval]) -> StateClock {
+        var clock = StateClock()
+        for seconds in Set(secondsAgo.values).sorted(by: >) {
+            let seen = perAgent.map(\.reading).filter { (secondsAgo[$0.identity.pid] ?? 0) >= seconds }
+            clock = clock.updated(with: seen, now: now.addingTimeInterval(-seconds))
+        }
+        return clock.updated(with: perAgent.map(\.reading), now: now)
+    }
+
+    // MARK: Hero
+
+    func testHeadlinePairs() {
+        let awake = "Your Mac stays awake"
+        let canSleep = "Your Mac can sleep"
+        let cases: [(HoldHeadline, String, String)] = [
+            (.working(.one("Claude Code")), awake, "Claude Code is working"),
+            (.working(.many(2)), awake, "2 agents are working"),
+            (.waitingHeld(.one("Codex")), awake, "Codex waits for you"),
+            (.waitingHeld(.many(2)), awake, "2 agents wait for you"),
+            (.finishedRecently(.one("Claude Code")), awake, "Claude Code finished a moment ago"),
+            (.finishedRecently(.many(3)), awake, "3 agents finished a moment ago"),
+            (.open(.one("opencode")), awake, "opencode is open"),
+            (.open(.many(4)), awake, "4 agents are open"),
+            (.alwaysOn, awake, "Until you switch it off"),
+            (.remoteAccess, awake, "Phone access is on"),
+            (.idle(.one("Codex")), canSleep, "Codex is idle"),
+            (.idle(.many(5)), canSleep, "All agents are idle"),
+            (.waitingReleased(.one("Codex")), canSleep, "Codex waits for your answer"),
+            (.waitingReleased(.many(2)), canSleep, "2 agents wait for your answer"),
+            (.noAgents, canSleep, "No agent is open"),
+            (.safetyStop(.batteryLow(percent: 20)), canSleep, "Battery at 20 percent"),
+            (.safetyStop(.tooHot), canSleep, "It got too hot"),
+            (.switchedOff, "agent caffeine is off", "Your Mac sleeps as usual"),
+            (.notEntitled(.trialOver), canSleep, "The trial ended"),
+            (.notEntitled(.unverified), canSleep, "License not checked for 30 days"),
+            (.notEntitled(.activationRemoved), canSleep, "This Mac is no longer activated"),
+        ]
+        for (headline, title, subtitle) in cases {
+            let state = MenuModel.state(input(headline), now: now)
+            XCTAssertEqual(state.title, title, "\(headline)")
+            XCTAssertEqual(state.subtitle, subtitle, "\(headline)")
+            XCTAssertEqual(state.title == awake, headline.keepsAwake, "\(headline)")
+            for text in [state.title, state.subtitle] {
+                XCTAssertFalse(text.hasSuffix("."), text)
+                XCTAssertFalse(text.contains("\u{2014}"), text)
+            }
+        }
+        XCTAssertEqual(MenuModel.state(input(.working(.many(2))), now: now).headlineAccessibilityLabel, "Your Mac stays awake, 2 agents are working")
+    }
+
+    func testWaitingHeadlineCountsTheHoldDown() {
+        let codex = hold("codex", "Codex", pid: 1, .waitingForUser, .asksPermission, cause: .waitingForUser)
+        var input = input(.waitingHeld(.one("Codex")), [codex])
+        input.settings.waitingHold = 300
+        let cases: [(TimeInterval, String)] = [
+            (0, "Codex waits for you, for 5 more minutes"),
+            (61, "Codex waits for you, for 4 more minutes"),
+            (120, "Codex waits for you, for 3 more minutes"),
+            (241, "Codex waits for you, for 1 more minute"),
+            (299, "Codex waits for you, for 1 more minute"),
+        ]
+        for (waited, subtitle) in cases {
+            input.clock = clock([codex], secondsAgo: [1: waited])
+            XCTAssertEqual(MenuModel.state(input, now: now).subtitle, subtitle, "after \(waited) s")
+        }
+    }
+
+    func testTheLongestWaitingHoldCounts() {
+        let perAgent = [
+            hold("codex", "Codex", pid: 1, .waitingForUser, .asksPermission, cause: .waitingForUser),
+            claude(pid: 2, .waitingForUser, .asksPermission),
+            hold("claude", "Claude Code", pid: 3, .waitingForUser, .asksPermission, cause: .waitingForUser),
+        ]
+        var input = input(.waitingHeld(.many(2)), perAgent)
+        // The second one waits since a moment ago, and its hold has run out.
+        input.clock = clock(perAgent, secondsAgo: [1: 200, 2: 0, 3: 30])
+        XCTAssertEqual(MenuModel.state(input, now: now).subtitle, "2 agents wait for you, for 5 more minutes")
+    }
+
+    func testEveryHeroPose() {
+        let cases: [(HoldHeadline, HeroPose)] = [
+            (.working(.one("Claude Code")), .awake(wisps: 1)),
+            (.working(.many(2)), .awake(wisps: 2)),
+            (.working(.many(7)), .awake(wisps: 3)),
+            (.finishedRecently(.one("Claude Code")), .awake(wisps: 1)),
+            (.open(.many(4)), .awake(wisps: 1)),
+            (.alwaysOn, .awake(wisps: 1)),
+            (.remoteAccess, .awake(wisps: 1)),
+            (.waitingHeld(.one("Codex")), .attentive),
+            (.idle(.many(3)), .asleep),
+            (.waitingReleased(.one("Codex")), .asleep),
+            (.noAgents, .asleep),
+            (.switchedOff, .off),
+            (.notEntitled(.trialOver), .off),
+            (.safetyStop(.batteryLow(percent: 12)), .safetyStop(.battery)),
+            (.safetyStop(.tooHot), .safetyStop(.heat)),
+        ]
+        for (headline, pose) in cases {
+            XCTAssertEqual(MenuModel.state(input(headline), now: now).pose, pose, "\(headline)")
+        }
+    }
+
+    // MARK: Attention
+
+    func testNothingAsksForAttentionWhenAllIsWell() {
+        var input = input(.working(.one("Claude Code")))
+        XCTAssertNil(MenuModel.attention(input))
+        input.entitlement = .trial(daysLeft: 3)
+        XCTAssertNil(MenuModel.attention(input), "The trial is named in Preferences until 2 days are left")
+        input.lidClosedNeedsSetup = true
+        input.lidClosedHintDismissed = true
+        XCTAssertNil(MenuModel.attention(input))
+    }
+
+    func testAttentionTexts() {
+        var battery = input(.safetyStop(.batteryLow(percent: 18)))
+        battery.settings.batteryFloorPercent = 20
+        XCTAssertEqual(MenuModel.attention(battery), PanelAttention(kind: .safetyStop, text: "Starts again when the battery is at 25 percent"))
+        XCTAssertEqual(MenuModel.attention(input(.safetyStop(.tooHot))), PanelAttention(kind: .safetyStop, text: "Starts again when your Mac has cooled down"))
+
+        var helper = input(.alwaysOn)
+        helper.flagLeftOn = true
+        XCTAssertEqual(MenuModel.attention(helper), PanelAttention(
+            kind: .helperSwitchedOff,
+            text: "agent caffeine was switched off in Login Items. Your Mac may not sleep until you allow it again",
+            actions: [.openLoginItems]
+        ))
+
+        var lid = input(.noAgents)
+        lid.lidClosedNeedsSetup = true
+        XCTAssertEqual(MenuModel.attention(lid), PanelAttention(
+            kind: .lidClosedNotSetUp, text: "Lid closed on battery is not set up", actions: [.setUpLidClosed, .dismissLidClosedHint]
+        ))
+    }
+
+    func testLicenseAttention() {
+        let cases: [(Entitlement, Bool, String, [PanelAction])] = [
+            (.trial(daysLeft: 2), false, "The trial ends in 2 days", [.buy]),
+            (.trial(daysLeft: 1), false, "The trial ends in 1 day", [.buy]),
+            (.trial(daysLeft: 1), true, "The trial ends in 1 day", [.enterKey]),
+            (.expired(.trialOver), false, "Buy a key to keep your Mac awake", [.buy, .enterKey]),
+            (.expired(.unverified), true, "Connect to the internet, then check again", [.checkLicense]),
+            (.expired(.activationRemoved), true, "Activate this Mac again to keep it awake", [.activateAgain, .enterKey]),
+        ]
+        for (entitlement, hasKey, text, actions) in cases {
+            var input = input(.noAgents)
+            input.entitlement = entitlement
+            input.hasLicenseKey = hasKey
+            XCTAssertEqual(MenuModel.attention(input), PanelAttention(kind: .license, text: text, actions: actions), "\(entitlement)")
+        }
+    }
+
+    func testTheMostUrgentAttentionWins() {
+        var input = input(.safetyStop(.tooHot))
+        input.flagLeftOn = true
+        input.entitlement = .expired(.trialOver)
+        input.lidClosedNeedsSetup = true
+        XCTAssertEqual(MenuModel.attention(input)?.kind, .safetyStop)
+        input.decision.headline = .notEntitled(.trialOver)
+        XCTAssertEqual(MenuModel.attention(input)?.kind, .helperSwitchedOff)
+        input.flagLeftOn = false
+        XCTAssertEqual(MenuModel.attention(input)?.kind, .license)
+        input.entitlement = .trial(daysLeft: 6)
+        XCTAssertEqual(MenuModel.attention(input)?.kind, .lidClosedNotSetUp)
+    }
+
+    func testLidClosedNeedsSetupOnlyWhereItCanMatter() {
+        for helper in [HelperStatus.notRegistered, .requiresApproval, .notFound] {
+            XCTAssertTrue(MenuModel.lidClosedNeedsSetup(helper: helper, wanted: true, hasBattery: true))
+            XCTAssertFalse(MenuModel.lidClosedNeedsSetup(helper: helper, wanted: false, hasBattery: true), "The user switched it off")
+            XCTAssertFalse(MenuModel.lidClosedNeedsSetup(helper: helper, wanted: true, hasBattery: false), "No battery")
+        }
+        XCTAssertFalse(MenuModel.lidClosedNeedsSetup(helper: .enabled, wanted: true, hasBattery: true))
+    }
+
+    func testLicenseItemsOfTheGearMenu() {
+        var input = input(.noAgents)
+        XCTAssertEqual(MenuModel.state(input, now: now).licenseActions, [])
+        input.entitlement = .trial(daysLeft: 6)
+        XCTAssertEqual(MenuModel.state(input, now: now).licenseActions, [.buy, .enterKey])
+        input.entitlement = .expired(.activationRemoved)
+        input.hasLicenseKey = true
+        XCTAssertEqual(MenuModel.state(input, now: now).licenseActions, [.enterKey])
+    }
+
+    func testActionTitles() {
+        let titles: [(PanelAction, String)] = [
+            (.openLoginItems, "Open System Settings"), (.buy, "Buy for $9"), (.enterKey, "Enter key…"),
+            (.checkLicense, "Check now"), (.activateAgain, "Activate again"), (.setUpLidClosed, "Set up…"),
+            (.dismissLidClosedHint, "Dismiss"),
+        ]
+        for (action, title) in titles { XCTAssertEqual(action.title, title) }
+    }
+
+    // MARK: Rows
+
+    func testNoAgentsGiveTheEmptyLine() {
+        let state = MenuModel.state(input(.noAgents), now: now)
+        XCTAssertEqual(state.rows, [])
+        XCTAssertEqual(state.emptyText, "Start an agent and agent caffeine keeps your Mac awake while it works")
+        XCTAssertNil(MenuModel.state(input(.idle(.one("Codex")), [hold("codex", "Codex", pid: 1, .idle, .atPrompt)]), now: now).emptyText)
+        var always = input(.alwaysOn)
+        always.mode = .always
+        XCTAssertEqual(MenuModel.state(always, now: now).emptyText, "No agent is open")
+    }
+
+    func testModeTitles() {
+        XCTAssertEqual(AwakeMode.allCases.map(\.title), ["Always", "While an agent is open", "While an agent is working"])
+        XCTAssertEqual(AwakeMode.allCases.map(\.shortTitle), ["Always", "While open", "While working"])
+    }
+
+    func testWorkingComesFirstTheLongestOnTopThenWaitingThenIdle() {
         let perAgent = [
             claude(pid: 1, .idle),
             claude(pid: 2, .waitingForUser, .asksPermission),
-            claude(pid: 3, .working, .runningCommand(2)),
+            claude(pid: 3, .working, .runningCommand(3)),
             claude(pid: 4, .idle),
             claude(pid: 5, .working, .reportsBusy),
+            hold("codex", "Codex", pid: 6, .working, .backgroundJob(1)),
+            hold("opencode", "opencode", pid: 7, .working, .cpuActivity),
         ]
-        let labels = [ProcessIdentity(pid: 3, startTime: 5): "website", ProcessIdentity(pid: 2, startTime: 5): "wiki"]
-        let rows = MenuModel.rows(for: perAgent, labels: labels)
-        XCTAssertEqual(rows.map(\.title), ["Claude Code · website", "Claude Code", "Claude Code · wiki", "Claude Code"])
-        XCTAssertEqual(rows.map(\.state), [.working, .working, .waiting, .idle])
+        var input = input(.working(.many(4)), perAgent)
+        input.labels = [identity(3): "site", identity(5): "wiki", identity(2): "notes"]
+        input.clock = clock(perAgent, secondsAgo: [3: 3 * 60, 5: 12 * 60, 6: 20, 2: 3 * 60, 7: 95 * 60])
+        let (rows, more) = MenuModel.rows(input, now: now)
+        XCTAssertEqual(more, [])
+        XCTAssertEqual(rows.map(\.title), ["opencode", "Claude Code · wiki", "Claude Code · site", "Codex", "Claude Code · notes", "Claude Code"])
+        XCTAssertEqual(rows.map(\.state), [.working, .working, .working, .working, .waiting, .idle])
         XCTAssertEqual(rows.map(\.detail), [
-            "Working · Running 2 commands", "Working · Working on a task", "Waits for you · Waits for your answer", "2 idle sessions",
+            "Working · 1 hour", "Working · 12 minutes", "Running 3 commands · 3 minutes", "Running 1 background task · a moment",
+            "Waits for your answer · 3 minutes", "2 idle sessions",
         ])
+        XCTAssertEqual(rows.map(\.accessibilityLabel), [
+            "opencode, working, 1 hour", "Claude Code, wiki, working, 12 minutes", "Claude Code, site, running 3 commands, 3 minutes",
+            "Codex, running 1 background task, a moment", "Claude Code, notes, waits for your answer, 3 minutes", "Claude Code, 2 idle sessions",
+        ])
+        XCTAssertEqual(rows[2].hint, "Running 3 commands")
         XCTAssertEqual(Set(rows.map(\.id)).count, rows.count)
     }
 
+    func testAnAgentWithNoKnownStartHasNoDuration() {
+        let state = MenuModel.state(input(.working(.one("Claude Code")), [claude(pid: 1, .working, .reportsBusy)]), now: now)
+        XCTAssertEqual(state.rows.map(\.detail), ["Working"])
+    }
+
+    func testRulesAreNamedQuietly() {
+        let perAgent = [
+            hold("goose", "Goose", pid: 1, .working, .alwaysWorkingByRule),
+            hold("amp", "Amp", pid: 2, .idle, .ignoredByRule),
+            hold("codex", "Codex", pid: 3, .idle, .atPrompt),
+        ]
+        var input = input(.working(.one("Goose")), perAgent)
+        input.clock = clock(perAgent, secondsAgo: [1: 600, 2: 600, 3: 7200])
+        let rows = MenuModel.rows(input, now: now).inView
+        XCTAssertEqual(rows.map(\.title), ["Goose", "Codex", "Amp"], "An ignored agent is last")
+        XCTAssertEqual(rows.map(\.detail), ["Counts as working while it is open", "Idle 2 hours", "Ignored"])
+    }
+
+    func testIdleTimeComesFromTheVerdictWhenItKnowsMore() {
+        let perAgent = [
+            hold("opencode", "opencode", pid: 1, .idle, .noActivity(minutes: 395)),
+            hold("codex", "Codex", pid: 2, .idle, .atPrompt),
+            hold("amp", "Amp", pid: 3, .idle, .noActivity(minutes: 0)),
+        ]
+        var input = input(.idle(.many(3)), perAgent)
+        input.clock = clock(perAgent, secondsAgo: [1: 30, 2: 30, 3: 30])
+        let rows = MenuModel.rows(input, now: now).inView
+        XCTAssertEqual(rows.map(\.title), ["Codex", "Amp", "opencode"], "The one that was active last is on top")
+        XCTAssertEqual(rows.map(\.detail), ["Idle", "Idle", "Idle 6 hours"])
+        XCTAssertEqual(rows[2].hint, "No activity for 6 hours")
+        XCTAssertEqual(rows[2].accessibilityLabel, "opencode, idle, 6 hours")
+    }
+
+    func testManyIdleSessionsShareOneLineAndTheRestGoesBehindMoreIdle() {
+        let names = [("codex", "Codex"), ("opencode", "opencode"), ("amp", "Amp"), ("goose", "Goose"), ("pi", "Pi"), ("grok", "Grok")]
+        var perAgent = (1...8).map { claude(pid: $0, .idle) }
+        perAgent += names.enumerated().map { hold($1.0, $1.1, pid: Int32(20 + $0), .idle, .atPrompt) }
+        var input = input(.idle(.many(14)), perAgent)
+        // Claude Code went idle last, then the others in their order.
+        var ages = Dictionary(uniqueKeysWithValues: (20...25).map { (Int32($0), TimeInterval($0) * 600) })
+        ages[4] = 120
+        input.clock = clock(perAgent, secondsAgo: ages)
+        let state = MenuModel.state(input, now: now)
+        XCTAssertEqual(state.rows.map(\.title), ["Claude Code", "Codex", "opencode"])
+        XCTAssertEqual(state.rows.map(\.detail), ["8 idle sessions", "Idle 3 hours", "Idle 3 hours"])
+        XCTAssertEqual(state.moreIdle.map(\.title), ["Amp", "Goose", "Pi", "Grok"])
+        XCTAssertEqual(state.moreIdleTitle, "4 more idle")
+        XCTAssertEqual(Set((state.rows + state.moreIdle).map(\.id)).count, 7)
+    }
+
+    func testOneMoreIdleAgentIsShownInsteadOfHidden() {
+        let names = [("codex", "Codex"), ("opencode", "opencode"), ("amp", "Amp"), ("goose", "Goose")]
+        let perAgent = names.enumerated().map { hold($1.0, $1.1, pid: Int32($0), .idle, .atPrompt) }
+        let state = MenuModel.state(input(.idle(.many(4)), perAgent), now: now)
+        XCTAssertEqual(state.rows.count, 4)
+        XCTAssertNil(state.moreIdleTitle)
+    }
+
     func testAgentsWithTheSameNameStayApart() {
-        let rows = MenuModel.rows(for: [
+        let rows = MenuModel.rows(input(.idle(.many(3)), [
             hold("codex", "Codex", pid: 1, .idle, .atPrompt),
             hold("codex-desktop", "Codex", pid: 2, .idle, .atPrompt),
             hold("codex", "Codex", pid: 3, .idle, .atPrompt),
-        ])
-        XCTAssertEqual(rows.map(\.detail), ["2 idle sessions", "Idle · Ready for your next message"])
+        ]), now: now).inView
+        XCTAssertEqual(rows.map(\.detail), ["2 idle sessions", "Idle"])
     }
 
     func testSessionLabelIsTheFolderName() {
@@ -62,13 +342,19 @@ final class MenuModelTests: XCTestCase {
         XCTAssertNil(MenuModel.sessionLabel(workingDirectory: nil))
     }
 
-    func testLidClosedStatus() {
-        XCTAssertEqual(MenuModel.lidClosedStatus(helper: .enabled, wanted: true), .on)
-        XCTAssertEqual(MenuModel.lidClosedStatus(helper: .enabled, wanted: false), .off)
-        for helper in [HelperStatus.notRegistered, .requiresApproval, .notFound] {
-            XCTAssertEqual(MenuModel.lidClosedStatus(helper: helper, wanted: true), .notSetUp)
-            XCTAssertEqual(MenuModel.lidClosedStatus(helper: helper, wanted: false), .notSetUp)
-        }
-        XCTAssertEqual(LidClosedStatus.notSetUp.text, "Lid closed on battery: not set up")
+    // MARK: Clock
+
+    func testTheClockCountsFromTheChangeOfState() {
+        let working = claude(pid: 1, .working, .reportsBusy).reading
+        let commands = claude(pid: 1, .working, .runningCommand(2)).reading
+        let idle = claude(pid: 1, .idle).reading
+        let start = now.addingTimeInterval(-600)
+        var clock = StateClock().updated(with: [working], now: start)
+        clock = clock.updated(with: [commands], now: start.addingTimeInterval(60))
+        XCTAssertEqual(clock.since(identity(1)), start, "Another reason is the same state")
+        clock = clock.updated(with: [idle], now: start.addingTimeInterval(120))
+        XCTAssertEqual(clock.since(identity(1)), start.addingTimeInterval(120))
+        clock = clock.updated(with: [], now: now)
+        XCTAssertNil(clock.since(identity(1)), "An instance that is gone is forgotten")
     }
 }

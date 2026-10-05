@@ -202,7 +202,8 @@ targets:
         excludes:
           - SleepFlagSystem.swift
           - SafetyInputsReader.swift
-      - Caffeinagent/UI/MenuModel.swift
+      # The menu's model, the agent marks and the path reader. No SwiftUI.
+      - Caffeinagent/UI/Panel/Model
       - Caffeinagent/UI/OnboardingModel.swift
       - Caffeinagent/UI/HookPreferences.swift
       - CaffeinagentHelper/HelperCore.swift
