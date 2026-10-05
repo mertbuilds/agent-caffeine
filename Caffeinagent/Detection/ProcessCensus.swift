@@ -106,6 +106,13 @@ enum ProcessCensus {
         TimeInterval(nanoseconds(machTicks: ticks, numer: numer, denom: denom)) / 1_000_000_000
     }
 
+    /// False for a zombie: a process that ended and that its parent has
+    /// not reaped. The kernel still lists it and still answers for its
+    /// usage, and it does no work any more. `status` is `p_stat`.
+    static func isRunning(status: Int8) -> Bool {
+        Int32(status) != SZOMB
+    }
+
     /// Children by parent pid. The kernel task is its own parent and is left out.
     static func childrenIndex(of rows: [ProcessInfoRow]) -> [Int32: [ProcessInfoRow]] {
         Dictionary(grouping: rows.filter { $0.pid != $0.ppid }, by: \.ppid)
@@ -198,7 +205,7 @@ final class SystemProcessCensus: ProcessCensusing {
         var argumentBuffer: [UInt8] = []
         for entry in table {
             let pid = entry.kp_proc.p_pid
-            guard pid > 0, entry.kp_eproc.e_ucred.cr_uid == uid else { continue }
+            guard pid > 0, entry.kp_eproc.e_ucred.cr_uid == uid, ProcessCensus.isRunning(status: entry.kp_proc.p_stat) else { continue }
             // A process that exited since the table was read fails here and is skipped.
             guard let usage = Self.resourceUsage(of: pid) else { continue }
             let start = entry.kp_proc.p_un.__p_starttime
@@ -240,13 +247,14 @@ final class SystemProcessCensus: ProcessCensusing {
     }
 
     /// One process, for a caller that walks up from a pid. The usage
-    /// counters are left at zero. Nil when the process is gone or belongs to
-    /// another user.
+    /// counters are left at zero. Nil when the process is gone, is a zombie
+    /// or belongs to another user.
     static func row(of pid: Int32) -> ProcessInfoRow? {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
         var entry = kinfo_proc()
         var size = MemoryLayout<kinfo_proc>.stride
-        guard sysctl(&mib, 4, &entry, &size, nil, 0) == 0, size > 0, entry.kp_proc.p_pid == pid else { return nil }
+        guard sysctl(&mib, 4, &entry, &size, nil, 0) == 0, size > 0, entry.kp_proc.p_pid == pid,
+              ProcessCensus.isRunning(status: entry.kp_proc.p_stat) else { return nil }
         var pathBuffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
         guard let path = executablePath(of: pid, buffer: &pathBuffer) else { return nil }
         var argumentBuffer = [UInt8](repeating: 0, count: argumentBufferSize)
@@ -346,7 +354,7 @@ final class SystemProcessCensus: ProcessCensusing {
         return String(cString: buffer)
     }
 
-    /// Empty for a zombie, which has no arguments left to read.
+    /// Empty when the arguments cannot be read.
     private static func arguments(of pid: Int32, buffer: inout [UInt8]) -> [String] {
         var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
         var size = buffer.count

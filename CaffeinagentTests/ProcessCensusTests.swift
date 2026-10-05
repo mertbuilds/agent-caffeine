@@ -231,6 +231,49 @@ final class ProcessCensusTests: XCTestCase {
         XCTAssertEqual(Set(rows.map(\.identity)).count, rows.count)
     }
 
+    func testZombieStatusIsNotRunning() {
+        XCTAssertFalse(ProcessCensus.isRunning(status: Int8(SZOMB)))
+        for status in [SIDL, SRUN, SSLEEP, SSTOP] {
+            XCTAssertTrue(ProcessCensus.isRunning(status: Int8(status)), "\(status)")
+        }
+    }
+
+    /// A killed child that nobody reaped stays in the process table, and
+    /// the census has its path from before. It must not stay in the census.
+    func testLiveSnapshotLeavesOutAZombie() throws {
+        var pid: pid_t = 0
+        let arguments: [UnsafeMutablePointer<CChar>?] = [strdup("sleep"), strdup("60"), nil]
+        defer { arguments.forEach { free($0) } }
+        XCTAssertEqual(posix_spawn(&pid, "/bin/sleep", nil, nil, arguments, nil), 0)
+        defer {
+            kill(pid, SIGKILL)
+            var status: Int32 = 0
+            waitpid(pid, &status, 0)
+        }
+        func status() -> Int32? {
+            var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+            var entry = kinfo_proc()
+            var size = MemoryLayout<kinfo_proc>.stride
+            guard sysctl(&mib, 4, &entry, &size, nil, 0) == 0, size > 0 else { return nil }
+            return Int32(entry.kp_proc.p_stat)
+        }
+        func wait(for condition: () -> Bool) -> Bool {
+            for _ in 0..<500 where !condition() { usleep(10_000) }
+            return condition()
+        }
+
+        let census = SystemProcessCensus()
+        // The spawn returns before the exec is done.
+        XCTAssertTrue(wait { census.snapshot().contains { $0.pid == pid && $0.executablePath == "/bin/sleep" } })
+        XCTAssertNotNil(SystemProcessCensus.row(of: pid))
+
+        kill(pid, SIGKILL)
+        XCTAssertTrue(wait { status() == SZOMB }, "The child is a zombie until it is reaped")
+        XCTAssertFalse(census.snapshot().contains { $0.pid == pid })
+        XCTAssertNil(SystemProcessCensus.row(of: pid))
+        XCTAssertEqual(status(), SZOMB, "Still not reaped after the snapshot")
+    }
+
     func testLiveSnapshotIsFast() {
         func time(_ body: () -> Int) -> (count: Int, seconds: TimeInterval) {
             let start = DispatchTime.now().uptimeNanoseconds
