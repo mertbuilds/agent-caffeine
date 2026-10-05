@@ -356,7 +356,6 @@ export function AgentsPanel({ enabled, mode, view, onEnabled, onMode, onOverride
       <div className="h-px bg-border" />
       <div aria-hidden="true" className="flex gap-2 text-[12px] leading-[15px]">
         <span>Preferences…</span>
-        <span>Check for updates…</span>
         <span className="ml-auto">Quit</span>
       </div>
     </div>
