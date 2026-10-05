@@ -10,18 +10,25 @@ macOS menu bar app that keeps your Mac awake while AI coding agents work. By def
 
 ## What it does
 
-- Watches `~/.claude/projects/*.jsonl` to detect Claude Code session activity (active turn vs. waiting for input vs. idle).
-- Watches a user-editable CLI allowlist (`codex`, `cursor-agent`, `gemini`, …). A matched process counts as working while it and its child processes use at least 3% of one core, plus a two-minute grace period; otherwise it is waiting for input.
+- Finds the agents that run on the Mac from the process table and a built-in catalog (Claude Code, Codex, opencode, Antigravity and about 45 more). Preferences has one rule per agent (automatic, always counts as working while open, ignore) and a list for process names of tools that are not in the catalog.
+- Reads what each agent says about itself where it can: Claude Code's session state files and Codex's session logs give working, waiting for you, or idle. Other agents are judged by signs of work: a running command, a background task, a power assertion of their own, writes to their session files and, as weak evidence, processor use.
 - Three modes, picked in the menu or in Preferences:
   - Always: keeps the Mac awake until you switch it off, agents or not.
   - While an agent is open: keeps the Mac awake while any agent is detected, working or idle.
-  - While an agent is working (default): keeps the Mac awake only while an agent is working.
-- While keeping the Mac awake it holds `PreventUserIdleSystemSleep` and `PreventSystemSleep` assertions, and releases them as soon as the mode no longer calls for them.
-- Surfaces state in the menu bar with a robot-head icon: solid and smiling when keeping the Mac awake, outlined with closed eyes when not.
+  - While an agent is working (default): keeps the Mac awake while an agent works, for a short time after it finishes (2 minutes by default), and for a while when it waits for you (5 minutes by default).
+- While keeping the Mac awake it holds `PreventUserIdleSystemSleep` and `PreventSystemSleep` assertions, and releases them as soon as the mode no longer calls for them. The assertions carry a 2 minute timeout that every decision renews, so a hung app cannot keep the Mac awake.
+- Lets the Mac sleep when the battery is low (20 percent by default) or the Mac gets too hot, and says so in a notification.
+- Surfaces state in the menu bar with a robot-head icon: solid and smiling when keeping the Mac awake, outlined with closed eyes when not. The menu names what keeps the Mac awake and lists each agent with its state and the reason.
 
-## macOS limit
+The detection code is in `Caffeinagent/Detection/`, and the research behind it in `docs/research/`. `caffeinagent --lab-record <label>` records what the engine sees without starting the app (see `Caffeinagent/LabCommand.swift`).
 
-`kIOPMAssertionTypePreventSystemSleep` keeps the Mac awake with the **lid closed only on AC power**. On battery, macOS clamshell-sleeps regardless, and an assertion alone can't override that. The optional battery override works around it: install the sudoers entry from Preferences, and while the app keeps the Mac awake on battery it runs `sudo pmset -b disablesleep 1`, then `0` when it stops or quits. On Apple silicon this does not always prevent clamshell sleep.
+## Lid closed on battery
+
+`kIOPMAssertionTypePreventSystemSleep` keeps the Mac awake with the **lid closed only on AC power**. On battery, macOS sleeps on lid close regardless, and an assertion alone cannot override that. Only the system-wide `SleepDisabled` setting does, and it needs root.
+
+The app sets it through a small root helper (`CaffeinagentHelper/`), registered with `SMAppService` from Preferences > Lid closed and approved once in System Settings > General > Login Items. The helper is offered only when the app runs from `/Applications`. It takes two booleans over XPC from the signed app and nothing else. The app sets the flag together with the power assertions, also on AC, so unplugging with the lid closed does not race it, and sends a heartbeat. The helper clears the flag when the heartbeats stop, at its own start, and never clears a flag it did not set. `SleepDisabled` also blocks the kernel's low-battery and thermal sleep, which is why the app watches both itself.
+
+Builds before the helper used a sudoers entry for `pmset -b disablesleep`. The app clears a flag such a build left on at first launch, and Preferences offers to remove the entry.
 
 ## Build
 
@@ -53,4 +60,5 @@ The app runs fully for 7 days from its first launch. After that it keeps the Mac
 
 - [x] Phase 1: AC-only sleep prevention + Claude Code jsonl detector + CLI process detector + menu bar UI + preferences
 - [x] Phase 2: battery override through a sudoers entry for `pmset -b disablesleep`
-- [ ] Phase 3: launch-at-login, history log of awake periods, notification on state change
+- [x] Phase 3: detection engine with an agent catalog, root helper for the lid-closed flag, battery and heat safety stops
+- [ ] Phase 4: onboarding window, agent hooks, remote access detection, launch-at-login
