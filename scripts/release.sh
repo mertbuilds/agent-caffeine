@@ -276,6 +276,37 @@ case " $HELPER_ARCHS " in
 esac
 echo "    $HELPER_ID: $HELPER_ARCHS, hardened runtime, team $TEAM_ID"
 
+# The command the agents' hooks run. The hook entries the app writes point at
+# this path, and a hook has to answer with nothing and exit 0.
+echo "==> verify the hook command"
+HOOK_ID="com.caffeinagent.app.hook"
+HOOK="$APP/Contents/MacOS/CaffeinagentHook"
+if [ ! -x "$HOOK" ]; then
+  echo "error: the hook command is missing from the app: $HOOK" >&2
+  exit 1
+fi
+codesign --verify --strict -R="$(signed_by_team "$HOOK_ID")" "$HOOK"
+if ! codesign -dv "$HOOK" 2>&1 | grep -qE '^CodeDirectory .*flags=[^ ]*runtime'; then
+  echo "error: the hook command is not signed with the hardened runtime." >&2
+  exit 1
+fi
+HOOK_ARCHS=$(/usr/bin/lipo -archs "$HOOK")
+for ARCH in arm64 x86_64; do
+  case " $HOOK_ARCHS " in
+    *" $ARCH "*) ;;
+    *) echo "error: the hook command has no $ARCH slice: $HOOK_ARCHS" >&2; exit 1 ;;
+  esac
+done
+HOOK_OUTPUT=$(CAFFEINAGENT_HOOKS_DIR="$(mktemp -d)" "$HOOK" claude Stop < /dev/null 2>&1) || {
+  echo "error: the hook command did not exit 0." >&2
+  exit 1
+}
+if [ -n "$HOOK_OUTPUT" ]; then
+  echo "error: the hook command printed something: $HOOK_OUTPUT" >&2
+  exit 1
+fi
+echo "    $HOOK_ID: $HOOK_ARCHS, hardened runtime, silent"
+
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist")
 echo "==> check the built app's build number"
