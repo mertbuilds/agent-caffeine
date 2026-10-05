@@ -15,7 +15,7 @@ struct CaffeinagentApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarView(aggregator: aggregator, updater: updater)
+            MenuBarView(aggregator: aggregator)
         } label: {
             MenuBarLabel(held: aggregator.assertionHeld)
         }

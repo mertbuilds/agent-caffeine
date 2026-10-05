@@ -38,7 +38,7 @@ Run the unit tests with `xcodebuild test -project Caffeinagent.xcodeproj -scheme
 
 ## Releases and updates
 
-The app updates itself with [Sparkle](https://sparkle-project.org). It reads the feed at `https://caffeinagent.com/mac/appcast.xml` once a day, and from "Check for updates…" in the menu and in Preferences. Debug builds never check.
+The app updates itself with [Sparkle](https://sparkle-project.org). It reads the feed at `https://caffeinagent.com/mac/appcast.xml` once a day, and from "Check for updates…" in Preferences. Debug builds never check.
 
 - `scripts/release.sh` is the only way to publish a release. It builds, signs, notarizes, writes the dmg, signs it for Sparkle, adds it to the appcast, uploads the dmg, `appcast.xml` and `latest.json` to `mac/` in the private R2 bucket the site serves (named in `~/.config/agent-caffeine/release.env`), and publishes the dmg to Polar. `--dry-run` does everything local and uploads, notarizes and publishes nothing. The header of the script lists the one-time setup.
 - Updates are signed with the EdDSA key in the login keychain under the account `agent-caffeine`. Its public half is `SUPublicEDKey` in `project.yml`. Every Sparkle tool call passes `--account agent-caffeine`.

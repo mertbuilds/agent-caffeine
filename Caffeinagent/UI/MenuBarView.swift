@@ -3,7 +3,6 @@ import AppKit
 
 struct MenuBarView: View {
     @ObservedObject var aggregator: StateAggregator
-    @ObservedObject var updater: Updater
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -161,9 +160,6 @@ struct MenuBarView: View {
         HStack {
             settingsButton("Preferences…")
                 .buttonStyle(.borderless)
-            Button("Check for updates…") { updater.checkForUpdates() }
-                .buttonStyle(.borderless)
-                .disabled(!updater.canCheckForUpdates)
             Spacer()
             Button("Quit") { NSApp.terminate(nil) }
                 .buttonStyle(.borderless)
