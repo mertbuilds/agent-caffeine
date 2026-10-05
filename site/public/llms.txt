@@ -1,0 +1,14 @@
+# agent caffeine
+
+> agent caffeine is a macOS menu bar app that keeps a Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are idle. It costs $9 once and runs on macOS 13 or later (Apple silicon and Intel).
+
+- Detects more than 40 coding agents (Claude Code, Codex, opencode, Gemini CLI, Cursor and others) by process name, plus Claude Code session files.
+- Three modes: always, while an agent is open, or while an agent is working (the default).
+- A closed lid on power works out of the box. On battery it needs a one-time admin prompt that installs a sudoers entry, and it turns on `pmset disablesleep` only while it holds the Mac awake.
+- No network calls and no telemetry.
+
+## Links
+
+- [Home](https://caffeinagent.com/): product, how it works, price, questions
+- [The caffeinate command on Mac: every option, with examples](https://caffeinagent.com/blog/caffeinate-mac)
+- [How to stop a Mac from sleeping, also with the lid closed](https://caffeinagent.com/blog/stop-mac-from-sleeping)

@@ -10,17 +10,39 @@ export const easing = {
 } as const;
 
 /**
- * The drawings, in seconds, kept together so they can be slowed or quickened
- * at once. Each plays over its own length, stands finished for `rest`, winds
- * back over `back` and plays again.
+ * The looping drawings, in seconds. Every loop winds back over `back` before it
+ * plays again. The timeline plays over `timeline` and stands finished for
+ * `timelineRest`.
  */
 export const drawing = {
-  hero: 7,
-  without: 5,
-  rest: 2,
   back: 0.4,
-  stepSees: 3.2,
-  stepHolds: 3.4,
-  stepSleeps: 3,
-  stepRest: 1.8,
+  timeline: 7,
+  timelineRest: 2.5,
+} as const;
+
+/**
+ * The hero laptop, in seconds into its loop: the prompt is typed and sent,
+ * tool calls come in, the lid closes while the agent works on, and the lid
+ * opens on the finished work.
+ */
+export const laptop = {
+  loop: 11,
+  rest: 2.5,
+  welcome: [0, 0.3],
+  type: [0.15, 0.95],
+  sent: [1.05, 1.3],
+  steps: [
+    [1.5, 1.8],
+    [1.9, 2.2],
+    [2.6, 2.9],
+    [3.0, 3.3],
+    [3.7, 4.0],
+    [4.0, 4.3],
+  ],
+  work: [1.05, 5.7],
+  close: [4.6, 5.7],
+  pillIn: [5.9, 6.3],
+  race: [6.0, 8.6],
+  pillOut: [8.45, 8.8],
+  open: [8.9, 10.0],
 } as const;

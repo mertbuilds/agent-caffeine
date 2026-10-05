@@ -4,8 +4,38 @@ import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
 import { Hero } from "@/components/hero";
 import { HowItWorks } from "@/components/how-it-works";
+import { JsonLd } from "@/components/json-ld";
+import { MenuBarSection } from "@/components/menu-bar-section";
 import { Pricing } from "@/components/pricing";
-import { WithoutSection } from "@/components/without-section";
+import { agentsMoreThan } from "@/lib/agents";
+import { answerText, faqItems } from "@/lib/faq";
+import { ORGANIZATION, SITE_URL } from "@/lib/site";
+
+const structuredData = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "SoftwareApplication",
+      name: "agent caffeine",
+      operatingSystem: "macOS 13 or later",
+      applicationCategory: "UtilitiesApplication",
+      url: SITE_URL,
+      image: `${SITE_URL}/icon.png`,
+      description: `A macOS menu bar app that keeps the Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are idle. Detects Claude Code, Codex, OpenCode and more than ${agentsMoreThan} AI coding agents.`,
+      offers: { "@type": "Offer", price: "9", priceCurrency: "USD" },
+    },
+    {
+      "@type": "FAQPage",
+      mainEntity: faqItems.map((item) => ({
+        "@type": "Question",
+        name: item.question,
+        acceptedAnswer: { "@type": "Answer", text: answerText(item.answer) },
+      })),
+    },
+    ORGANIZATION,
+    { "@type": "WebSite", name: "agent caffeine", url: SITE_URL },
+  ],
+};
 
 export default function Home() {
   return (
@@ -14,22 +44,13 @@ export default function Home() {
         <Header />
         <Hero />
       </div>
-      <WithoutSection />
-      <section className="mx-auto flex w-full max-w-[960px] flex-col gap-12">
-        <div className="mx-auto flex max-w-[640px] flex-col gap-4 text-center">
-          <h2 className="text-balance text-[1.75rem] font-medium leading-[1.2] tracking-[-0.01em]">
-            How it works
-          </h2>
-          <p className="text-pretty leading-relaxed text-muted">
-            It watches your agents, so you do not have to remember
-          </p>
-        </div>
-        <HowItWorks />
-      </section>
       <AgentsSection />
+      <HowItWorks />
+      <MenuBarSection />
       <Pricing />
       <Faq />
       <Footer />
+      <JsonLd data={structuredData} />
     </main>
   );
 }

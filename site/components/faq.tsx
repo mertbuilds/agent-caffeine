@@ -2,61 +2,7 @@
 
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
-
-const ITEMS: { question: string; answer: ReactNode }[] = [
-  {
-    question: "Does it work with the lid closed on battery?",
-    answer: (
-      <>
-        Yes. With the lid closed on power it works from the start. On battery it works after you
-        allow one admin prompt. That installs a small sudoers entry, and Agent Caffeine then turns
-        on <code>pmset disablesleep</code> only while an agent runs.
-      </>
-    ),
-  },
-  {
-    question: "How does it keep the Mac awake?",
-    answer: (
-      <>
-        It holds a <code>PreventUserIdleSystemSleep</code> assertion, the same one{" "}
-        <code>caffeinate -i</code> uses, and <code>PreventSystemSleep</code> for a closed lid on
-        power. The display can still sleep. The work keeps going.
-      </>
-    ),
-  },
-  {
-    question: "How does it find my agents?",
-    answer: (
-      <>
-        It reads the process list every 5 seconds and compares it with a list of agent names that
-        you can edit. For Claude Code it also reads the session files in{" "}
-        <code>~/.claude/projects</code> to show each session.
-      </>
-    ),
-  },
-  {
-    question: "What about privacy?",
-    answer: (
-      <>
-        No network calls and no telemetry. It reads files in <code>~/.claude/projects</code> and
-        process names on your own Mac. Nothing leaves it.
-      </>
-    ),
-  },
-  {
-    question: "Which macOS versions?",
-    answer: "macOS 13 Ventura or later. A universal binary for Apple silicon and Intel.",
-  },
-  {
-    question: "Do I need a helper or special permissions?",
-    answer:
-      "Only for the battery option. Without it there are no daemons and no helpers, only a menu bar app.",
-  },
-  {
-    question: "What if my agent is not on the list?",
-    answer: "Open Preferences and type the process name. The list is yours to change.",
-  },
-];
+import { faqItems } from "@/lib/faq";
 
 function Question({ question, answer }: { question: string; answer: ReactNode }) {
   const id = useId();
@@ -118,7 +64,7 @@ export function Faq() {
         Questions
       </h2>
       <div>
-        {ITEMS.map((item) => (
+        {faqItems.map((item) => (
           <Question key={item.question} question={item.question} answer={item.answer} />
         ))}
       </div>

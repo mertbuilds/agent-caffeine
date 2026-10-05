@@ -2,6 +2,8 @@ import "./globals.css";
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Analytics } from "@/components/analytics";
+import { DevKnobs } from "@/components/dev-knobs";
+import { agentsMoreThan } from "@/lib/agents";
 
 const suisse = localFont({
   src: [
@@ -16,14 +18,15 @@ const suisse = localFont({
 export const metadata: Metadata = {
   metadataBase: new URL("https://caffeinagent.com"),
   alternates: { canonical: "/" },
-  title: "Agent Caffeine · Keep your Mac awake while AI agents work",
+  title: "agent caffeine · Keep your Mac awake while AI agents work",
   description:
-    "Agent-aware sleep prevention for macOS. Detects Claude Code, Codex, OpenCode and more than 40 AI coding agents. Lets the Mac sleep when they are idle. $9 once.",
+    `Agent-aware sleep prevention for macOS. Detects Claude Code, Codex, OpenCode and more than ${agentsMoreThan} AI coding agents. Lets the Mac sleep when they are idle. $9 once.`,
   openGraph: {
-    title: "Agent Caffeine",
+    title: "agent caffeine",
     description:
       "Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. $9 once.",
     type: "website",
+    url: "/",
     images: [
       {
         url: "/og.png",
@@ -35,7 +38,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: "Agent Caffeine",
+    title: "agent caffeine",
     description:
       "Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. $9 once.",
     images: ["/og.png"],
@@ -48,6 +51,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-bg font-sans text-fg antialiased">
         {children}
         <Analytics />
+        <DevKnobs />
       </body>
     </html>
   );

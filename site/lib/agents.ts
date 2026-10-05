@@ -1,9 +1,58 @@
-export const detectedAgents = [
-  "Claude Code", "Codex", "Opencode", "Cursor agent", "Gemini CLI", "Aider",
-  "Amp", "Crush", "Goose", "Cline", "Windsurf", "Openhands", "Forgecode",
-  "Junie", "Roo Code", "Tabnine CLI", "Zencoder", "Trae", "Qwen Code",
-  "Qoder", "Continue", "Codebuddy", "Codestudio", "Codemaker",
-  "Antigravity", "Mistral Vibe", "Devin", "Droid", "Augment", "Firebender",
-  "Hermes", "Iflow", "Kilo", "Kiro CLI", "Mcpjam", "Pochi", "Rovodev",
-  "Deepagents", "Neovate", "Command Code", "and your own",
+import type { AgentIconName } from "@/components/agent-icons";
+
+type Agent = { name: string; icon?: AgentIconName };
+
+/** Every agent agent caffeine knows, those with a mark first. */
+export const agents: readonly Agent[] = [
+  { name: "Claude Code", icon: "claudecode" },
+  { name: "Codex", icon: "codex" },
+  { name: "opencode", icon: "opencode" },
+  { name: "pi", icon: "pi" },
+  { name: "Gemini CLI", icon: "geminicli" },
+  { name: "Cursor", icon: "cursor" },
+  { name: "Amp", icon: "amp" },
+  { name: "Goose", icon: "goose" },
+  { name: "Cline", icon: "cline" },
+  { name: "Windsurf", icon: "windsurf" },
+  { name: "OpenHands", icon: "openhands" },
+  { name: "Junie", icon: "junie" },
+  { name: "Zencoder", icon: "zencoder" },
+  { name: "Trae", icon: "trae" },
+  { name: "Qwen Code", icon: "qwen" },
+  { name: "Qoder", icon: "qoder" },
+  { name: "CodeBuddy", icon: "codebuddy" },
+  { name: "Antigravity", icon: "antigravity" },
+  { name: "Mistral Vibe", icon: "mistral" },
+  { name: "Devin", icon: "devin" },
+  { name: "Kilo Code", icon: "kilocode" },
+  { name: "Kiro", icon: "kiro" },
+  { name: "Hermes", icon: "hermesagent" },
+  { name: "Command Code", icon: "commandcode" },
+  { name: "GitHub Copilot", icon: "githubcopilot" },
+  { name: "Aider" },
+  { name: "Crush" },
+  { name: "Tabnine CLI" },
+  { name: "Continue" },
+  { name: "Droid" },
+  { name: "Augment" },
+  { name: "Firebender" },
+  { name: "Forgecode" },
+  { name: "iFlow" },
+  { name: "Pochi" },
+  { name: "Rovo Dev" },
+  { name: "Deep Agents" },
+  { name: "Neovate" },
+  { name: "MCPJam" },
+  { name: "Codestudio" },
+  { name: "Codemaker" },
+  { name: "OpenClaw" },
+  { name: "Dexto" },
 ];
+
+/** The largest round ten below the number of agents, for copy that says "more than". */
+export const agentsMoreThan = Math.floor((agents.length - 1) / 10) * 10;
+
+/** The agents with a mark, to show where only a mark will do. */
+export const markedAgents = agents.filter(
+  (agent): agent is Required<Agent> => agent.icon !== undefined,
+);

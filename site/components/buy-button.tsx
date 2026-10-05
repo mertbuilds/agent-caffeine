@@ -12,7 +12,7 @@ export function BuyButton({
   size = "large",
   children,
 }: {
-  placement: "header" | "hero" | "pricing";
+  placement: "header" | "hero" | "pricing" | "blog";
   size?: keyof typeof SIZES;
   children: ReactNode;
 }) {

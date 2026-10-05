@@ -16,7 +16,7 @@ export function BuyCta({
   children,
 }: {
   href: string;
-  placement: "header" | "hero" | "pricing";
+  placement: "header" | "hero" | "pricing" | "blog";
   className?: string;
   children: ReactNode;
 }) {
