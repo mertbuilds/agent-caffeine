@@ -183,6 +183,91 @@ final class VerdictTests: XCTestCase {
         }
     }
 
+    // MARK: Hook wait
+
+    private func codexHook(_ hook: ReportedState, hookAt: TimeInterval, rollout: ReportedState?, at seconds: TimeInterval, writeAt: TimeInterval = -5, busy: Int = 0) -> AgentEvidence {
+        let reported = rollout.map { StateReport(state: $0, since: self.at(-10), observedAt: self.at(seconds), source: .codexRollout, detail: nil) }
+        return evidence("codex", "Codex", .state, cpu: 0.4, reported: reported, commands: busy, busy: busy, fileAt: at(writeAt), hook: hook, hookAt: at(hookAt))
+    }
+
+    /// The verdicts and what the policy makes of them, as the engine does.
+    private func runHeld(_ samples: [Sample], settings: DetectionSettings = DetectionSettings()) -> [(seconds: TimeInterval, verdict: AgentVerdict, hold: Bool)] {
+        var memory = AgentMemory()
+        var policy = PolicyMemory()
+        return samples.map { sample in
+            let now = at(sample.seconds)
+            let (verdict, next) = VerdictRules.verdict(for: sample.evidence, memory: memory, settings: settings, now: now)
+            memory = next
+            let (decision, nextPolicy) = HoldPolicy.decide(
+                readings: [AgentReading(evidence: sample.evidence, verdict: verdict)], memory: policy, mode: .agentWorking, enabled: true,
+                entitlement: .licensed, safety: nil, settings: settings, context: FrameContext(), now: now
+            )
+            policy = nextPolicy
+            return (sample.seconds, verdict, decision.hold)
+        }
+    }
+
+    /// Codex asked for permission and nobody answers. The rollout says "in
+    /// a turn" all the time, and the hook's wait is older than a minute.
+    func testHookWaitDoesNotAgeOutAndItsHoldEnds() {
+        let story = samples(to: 900) { t in self.codexHook(.waitingForUser, hookAt: 0, rollout: .working, at: t) }
+        for got in runHeld(story) {
+            XCTAssertEqual(got.verdict, verdict(.waitingForUser, .reported, .asksPermission), "at \(got.seconds) s")
+            XCTAssertEqual(got.hold, got.seconds < 300, "at \(got.seconds) s")
+        }
+    }
+
+    /// The user approved, and Codex sends no event until the tool is done.
+    func testHookWaitEndsOnARolloutWrite() {
+        let story = samples(to: 600) { t in self.codexHook(.waitingForUser, hookAt: 0, rollout: .working, at: t, writeAt: t >= 10 ? 10 : 1) }
+        for got in runHeld(story) {
+            let want = got.seconds < 10 ? verdict(.waitingForUser, .reported, .asksPermission) : verdict(.working, .reported, .reportsBusy)
+            XCTAssertEqual(got.verdict, want, "at \(got.seconds) s")
+            XCTAssertTrue(got.hold, "at \(got.seconds) s")
+        }
+    }
+
+    func testHookWaitEndsOnSignsOfWorkOnly() {
+        // A write within the margin is the write of the tool call that asks.
+        let near = samples(to: 120) { t in self.codexHook(.waitingForUser, hookAt: 0, rollout: .working, at: t, writeAt: 2) }
+        XCTAssertTrue(run(near).allSatisfy { $0.verdict.state == .waitingForUser })
+        // A write with no reported working is no sign: the turn may be over.
+        let idle = samples(to: 120) { t in self.codexHook(.waitingForUser, hookAt: 0, rollout: .idle, at: t, writeAt: 30) }
+        XCTAssertTrue(run(idle).allSatisfy { $0.verdict.state == .waitingForUser })
+        // A command that ran once ends the wait, also after it went quiet.
+        let command = samples(to: 600) { t in self.codexHook(.waitingForUser, hookAt: 0, rollout: .working, at: t, busy: (20...40).contains(t) ? 1 : 0) }
+        for (seconds, got) in run(command) {
+            XCTAssertEqual(got.state, seconds < 20 ? .waitingForUser : .working, "at \(seconds) s")
+        }
+        // A new wait of the same session is a new wait.
+        let again = samples(to: 120) { t in
+            self.codexHook(.waitingForUser, hookAt: t < 60 ? 0 : 60, rollout: .working, at: t, writeAt: t >= 10 ? 10 : 1)
+        }
+        for (seconds, got) in run(again) {
+            XCTAssertEqual(got.state, (10..<60).contains(seconds) ? .working : .waitingForUser, "at \(seconds) s")
+        }
+        // The state file of Claude Code turns to busy when the tool starts.
+        let claude = samples(to: 120) { t in
+            let report = StateReport(state: .working, since: self.at(t < 30 ? -10 : 30), observedAt: self.at(t), source: .claudeSessionFile, detail: nil)
+            return self.evidence("claude", "Claude Code", .state, reported: report, hook: .waitingForUser, hookAt: self.at(0))
+        }
+        for (seconds, got) in run(claude) {
+            XCTAssertEqual(got.state, seconds < 30 ? .waitingForUser : .working, "at \(seconds) s")
+        }
+    }
+
+    /// Droid and opencode have no state of their own. The wait of their
+    /// hooks holds for the whole waiting time, not for a minute.
+    func testHookWaitOfAnActivityAgentHoldsTheWholeWaitingTime() {
+        for (id, level) in [("droid", AgentDefinition.Level.activity), ("opencode", .activity)] {
+            let story = samples(to: 600) { t in self.evidence(id, id, level, cpu: 0.4, hook: .waitingForUser, hookAt: self.at(0)) }
+            for got in runHeld(story) {
+                XCTAssertEqual(got.verdict, verdict(.waitingForUser, .reported, .asksPermission), "\(id) at \(got.seconds) s")
+                XCTAssertEqual(got.hold, got.seconds < 300, "\(id) at \(got.seconds) s")
+            }
+        }
+    }
+
     // MARK: Inferred state
 
     /// False negative 4: opencode writes its database around a tool call and

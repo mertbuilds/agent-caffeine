@@ -45,6 +45,7 @@ final class HookCommandTests: XCTestCase {
             ("claude", "SubagentStop", nil, false, .ignore),
             ("claude", "SessionEnd", nil, false, .end),
             ("claude", "SessionEnd", nil, true, .ignore),
+            ("codex", "PreToolUse", nil, false, .set(.working)),
             ("codex", "PermissionRequest", nil, false, .set(.waitingForUser)),
             ("codex", "Interrupt", nil, false, .set(.idle)),
             ("codex", "Stop", nil, false, .set(.idle)),
@@ -162,6 +163,17 @@ final class HookCommandTests: XCTestCase {
         // With nothing fresh it is the newest, with its real time.
         XCTAssertEqual(file.summary(now: now.addingTimeInterval(500), freshness: 60)?.at, now.addingTimeInterval(7))
         XCTAssertNil(HookStateFile(agent: "codex", pid: 1, start: 0).summary(now: now, freshness: 60))
+    }
+
+    func testAWaitDoesNotAgeOut() {
+        var file = HookStateFile(agent: "codex", pid: 1, start: 0)
+        file.apply(.set(.waitingForUser), session: "a", event: "PermissionRequest", at: now)
+        file.apply(.set(.idle), session: "b", event: "Stop", at: now.addingTimeInterval(3000))
+        let later = file.summary(now: now.addingTimeInterval(3010), freshness: 60)
+        XCTAssertEqual(later?.state, .waitingForUser, "An old wait counts before a fresh idle of another session")
+        XCTAssertEqual(later?.at, now)
+        file.apply(.set(.working), session: "a", event: "PostToolUse", at: now.addingTimeInterval(3020))
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(3021), freshness: 60)?.state, .working, "The next event of the session ends the wait")
     }
 
     func testAnOlderEventDoesNotReplaceANewerOne() {

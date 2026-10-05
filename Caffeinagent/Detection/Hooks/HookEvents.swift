@@ -46,6 +46,8 @@ enum HookEvents {
         ],
         "codex": [
             Rule(event: "UserPromptSubmit", action: .set(.working)),
+            // In Codex's `HookEventName` (docs/research/03-codex-remote.md).
+            Rule(event: "PreToolUse", action: .set(.working)),
             Rule(event: "PermissionRequest", action: .set(.waitingForUser)),
             Rule(event: "PostToolUse", action: .set(.working)),
             Rule(event: "Stop", action: .set(.idle)),

@@ -89,14 +89,15 @@ struct HookStateFile: Codable, Equatable {
 
     /// One state for the process. Among the sessions that reported within
     /// `freshness`, working wins over waiting and waiting over idle, so a
-    /// session that never sent its last event cannot hide a live one. With
-    /// no fresh session it is the newest one, which the verdict then finds
-    /// too old to use.
+    /// session that never sent its last event cannot hide a live one. A
+    /// session that waits for the user counts at any age: the wait ends
+    /// with its next event, not with time. With no such session it is the
+    /// newest one, which the verdict then finds too old to use.
     func summary(now: Date, freshness: TimeInterval) -> (state: ReportedState, at: Date)? {
         let known = sessions.values.compactMap { session in
             Self.state(named: session.state).map { (state: $0, at: Date(timeIntervalSince1970: session.at)) }
         }
-        let fresh = known.filter { now.timeIntervalSince($0.at) <= freshness }
+        let fresh = known.filter { $0.state == .waitingForUser || now.timeIntervalSince($0.at) <= freshness }
         for state in [ReportedState.working, .waitingForUser, .idle] {
             if let newest = fresh.filter({ $0.state == state }).max(by: { $0.at < $1.at }) { return newest }
         }

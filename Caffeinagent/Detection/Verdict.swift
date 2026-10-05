@@ -89,6 +89,9 @@ struct AgentMemory: Equatable {
     var weakCapped = false
     var lastReport: StateReport?
     var lastReportSeenAt: Date?
+    /// The time of the hook wait that ended on a sign of new work. That
+    /// wait is not read again.
+    var endedHookWaitAt: Date?
     /// The samples of the last `cpuWindow * cpuWindowCount` seconds.
     var cpuSamples: [CPUSample] = []
 
@@ -128,7 +131,7 @@ struct AgentReading: Equatable {
 /// passes the time.
 ///
 /// The sources, most trusted first:
-/// 1. a fresh hook state,
+/// 1. a fresh hook state, or a hook wait of any age that has not ended,
 /// 2. the reported state (state file or session log),
 /// 3. strong signs: a busy command, a working background job, a sleep
 ///    assertion of the agent's own, a session-file write,
@@ -168,8 +171,14 @@ enum VerdictRules {
     /// stays good for this long, then the state is unknown.
     static let reportMemory: TimeInterval = 10
 
-    /// A hook state older than this no longer beats the reported state.
+    /// A hook working or idle older than this no longer beats the reported
+    /// state. A hook wait has no such age: see `noteHookWait`.
     static let hookFreshness: TimeInterval = 60
+
+    /// A write or a new working this much after the hook's wait is work
+    /// that started again. The hook and the write of the tool call that
+    /// asks can be a moment apart.
+    static let hookWaitMargin: TimeInterval = 2
 
     /// Whether one child command counts as busy: its own subtree's CPU
     /// seconds over the collector's recent window.
@@ -221,6 +230,7 @@ enum VerdictRules {
             memory.lastReport = report
             memory.lastReportSeenAt = now
         }
+        noteHookWait(evidence, in: &memory, settings: settings, now: now)
         noteCPU(evidence, in: &memory, now: now)
         let statesWork = statedState(of: evidence, memory: memory, settings: settings, now: now) == .working
         noteWeakOnly(in: &memory, statesWork: statesWork, settings: settings, now: now)
@@ -238,6 +248,29 @@ enum VerdictRules {
 
     private static func stateReport(of evidence: AgentEvidence) -> StateReport? {
         evidence.reported.flatMap { $0.source == .fileActivity ? nil : $0 }
+    }
+
+    /// A hook wait does not age out: nobody answers a permission question
+    /// on a timer, and the rollout of a Codex that asks says "in a turn"
+    /// all the time. The wait ends with the next hook event of its session
+    /// and with the process. It also ends here, on a sign that the work
+    /// started again without an event: a busy command, a working
+    /// background job, or the agent's own working together with a session
+    /// write or a state change after the wait began. An approved tool call
+    /// sends its next event only when it is done.
+    private static func noteHookWait(_ evidence: AgentEvidence, in memory: inout AgentMemory, settings: DetectionSettings, now: Date) {
+        guard evidence.hookState == .waitingForUser, let at = evidence.hookStateAt else {
+            memory.endedHookWaitAt = nil
+            return
+        }
+        guard memory.endedHookWaitAt != at else { return }
+        var resumed = evidence.busyChildCommands > 0 || evidence.backgroundJobsWorking > 0
+        if !resumed, reportedState(memory: memory, settings: settings, now: now) == .working {
+            let after = at.addingTimeInterval(hookWaitMargin)
+            let signs = [evidence.fileActivityAt, memory.lastReport?.since].compactMap { $0 }
+            resumed = signs.contains { $0 > after }
+        }
+        memory.endedHookWaitAt = resumed ? at : nil
     }
 
     private static func noteCPU(_ evidence: AgentEvidence, in memory: inout AgentMemory, now: Date) {
@@ -294,9 +327,18 @@ enum VerdictRules {
 
     /// The state the agent gives itself, nil when it gives none.
     private static func statedState(of evidence: AgentEvidence, memory: AgentMemory, settings: DetectionSettings, now: Date) -> WorkState? {
-        if let hook = evidence.hookState, let at = evidence.hookStateAt, now.timeIntervalSince(at) <= hookFreshness {
-            return hook
+        if let hook = evidence.hookState, let at = evidence.hookStateAt {
+            if hook == .waitingForUser {
+                if memory.endedHookWaitAt != at { return hook }
+            } else if now.timeIntervalSince(at) <= hookFreshness {
+                return hook
+            }
         }
+        return reportedState(memory: memory, settings: settings, now: now)
+    }
+
+    /// The state of the agent's own state file or session log.
+    private static func reportedState(memory: AgentMemory, settings: DetectionSettings, now: Date) -> WorkState? {
         guard let report = memory.lastReport, let seen = memory.lastReportSeenAt,
               now.timeIntervalSince(seen) <= reportMemory else { return nil }
         if isLapsed(report, settings: settings, now: now) { return nil }
