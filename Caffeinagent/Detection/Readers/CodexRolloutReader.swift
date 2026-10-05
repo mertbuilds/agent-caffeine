@@ -1,6 +1,6 @@
 import Foundation
 
-/// What the tail of a Codex rollout file says about the newest turn.
+/// What a Codex rollout file says about its newest turn.
 struct CodexTurnState: Equatable {
     enum Marker: String, Equatable {
         case started = "task_started"
@@ -8,7 +8,7 @@ struct CodexTurnState: Equatable {
         case aborted = "turn_aborted"
     }
 
-    /// The newest turn marker in the tail. Nil when the tail has none.
+    /// The newest turn marker. Nil when none was found.
     var lastMarker: Marker?
     var turnInProgress = false
     /// When the newest turn started or ended.
@@ -20,6 +20,16 @@ struct CodexTurnState: Equatable {
     var state: ReportedState? {
         guard lastMarker != nil else { return nil }
         return turnInProgress ? .working : .idle
+    }
+
+    /// Takes the next marker in file order. The end of an older turn does
+    /// not close the turn that runs.
+    mutating func note(_ marker: Marker, turnID id: String?, at: Date?) {
+        if marker != .started, turnInProgress, let id, let open = turnID, id != open { return }
+        lastMarker = marker
+        turnID = id
+        markerAt = at
+        turnInProgress = marker == .started
     }
 }
 
@@ -109,21 +119,11 @@ struct CodexRolloutReader {
         return UUID(uuidString: id) == nil ? nil : id
     }
 
-    /// Reads the last 64KB. One long record, such as a big tool output, can
-    /// fill that window, so without a turn marker in it the last 1MB is read.
+    /// The newest turn of the whole file, however long the turn is. For one
+    /// read with no memory; the collector keeps a `CodexRolloutTracker`.
     nonisolated static func parseTail(of url: URL) -> CodexTurnState {
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return CodexTurnState() }
-        defer { try? handle.close() }
-        guard let size = try? handle.seekToEnd() else { return CodexTurnState() }
-        var result = CodexTurnState()
-        for chunk: UInt64 in [65_536, 1_048_576] {
-            let offset = size > chunk ? size - chunk : 0
-            try? handle.seek(toOffset: offset)
-            guard let data = try? handle.readToEnd(), !data.isEmpty else { return CodexTurnState() }
-            result = parseTail(String(decoding: data, as: UTF8.self))
-            if result.lastMarker != nil || offset == 0 { break }
-        }
-        return result
+        var tracker = CodexRolloutTracker(searchBudget: .max)
+        return tracker.read(path: url.path)?.turn ?? CodexTurnState()
     }
 
     /// Each line is `{timestamp, type, payload}`. Turn markers are `event_msg`
@@ -132,28 +132,29 @@ struct CodexRolloutReader {
     /// end marker carries its `turn_id`, or carries none. An end marker of an
     /// older turn, as when a new turn replaces a running one, does not close it.
     nonisolated static func parseTail(_ text: String) -> CodexTurnState {
+        parseTail(lines: text.split(separator: "\n", omittingEmptySubsequences: true).map { Data($0.utf8) })
+    }
+
+    /// The lines are in file order and are read from the newest back.
+    nonisolated static func parseTail<Lines: BidirectionalCollection>(lines: Lines) -> CodexTurnState where Lines.Element == Data {
         var result = CodexTurnState()
         var endedTurns: Set<String> = []
         var endedWithoutID = false
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
         for line in lines.reversed() {
-            guard let record = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
-                  let type = record["type"] as? String,
-                  let payload = record["payload"] as? [String: Any] else { continue }
-            if type == "turn_context" {
-                if result.cwd == nil { result.cwd = payload["cwd"] as? String }
-                continue
-            }
-            guard type == "event_msg",
-                  let marker = (payload["type"] as? String).flatMap(CodexTurnState.Marker.init(rawValue:)) else { continue }
-            let turnID = payload["turn_id"] as? String
-            if result.lastMarker == nil {
-                result.lastMarker = marker
-                result.turnID = turnID
-                let own = marker == .started ? payload["started_at"] : payload["completed_at"]
-                result.markerAt = ReportedTime.date(own) ?? ReportedTime.date(record["timestamp"])
-            }
-            if marker == .started {
+            guard let record = record(in: line) else { continue }
+            switch record {
+            case .context(let cwd):
+                if result.cwd == nil { result.cwd = cwd }
+            case .marker(let marker, let turnID, let at):
+                if result.lastMarker == nil {
+                    result.lastMarker = marker
+                    result.turnID = turnID
+                    result.markerAt = at
+                }
+                guard marker == .started else {
+                    if let turnID { endedTurns.insert(turnID) } else { endedWithoutID = true }
+                    continue
+                }
                 if let turnID {
                     result.turnInProgress = !endedWithoutID && !endedTurns.contains(turnID)
                 } else {
@@ -162,13 +163,35 @@ struct CodexRolloutReader {
                 if result.turnInProgress, result.lastMarker != .started {
                     result.lastMarker = .started
                     result.turnID = turnID
-                    result.markerAt = ReportedTime.date(payload["started_at"]) ?? ReportedTime.date(record["timestamp"])
+                    result.markerAt = at
                 }
-                break
+                return result
             }
-            if let turnID { endedTurns.insert(turnID) } else { endedWithoutID = true }
         }
         return result
+    }
+
+    enum Record {
+        case marker(CodexTurnState.Marker, turnID: String?, at: Date?)
+        case context(cwd: String?)
+    }
+
+    private static let eventNeedle = Data("event_msg".utf8)
+    private static let contextNeedle = Data("turn_context".utf8)
+
+    /// Nil for a line that is no turn marker and no `turn_context`. Most
+    /// lines are neither, and some are megabytes of tool output, so a line
+    /// is parsed only when it holds one of the two type names.
+    nonisolated static func record(in line: Data) -> Record? {
+        guard line.range(of: eventNeedle) != nil || line.range(of: contextNeedle) != nil,
+              let record = try? JSONSerialization.jsonObject(with: line) as? [String: Any],
+              let type = record["type"] as? String,
+              let payload = record["payload"] as? [String: Any] else { return nil }
+        if type == "turn_context" { return .context(cwd: payload["cwd"] as? String) }
+        guard type == "event_msg",
+              let marker = (payload["type"] as? String).flatMap(CodexTurnState.Marker.init(rawValue:)) else { return nil }
+        let own = marker == .started ? payload["started_at"] : payload["completed_at"]
+        return .marker(marker, turnID: payload["turn_id"] as? String, at: ReportedTime.date(own) ?? ReportedTime.date(record["timestamp"]))
     }
 
     /// The `cwd` of the `session_meta` record, the first line of the file.
@@ -192,5 +215,193 @@ struct CodexRolloutReader {
         guard let record = try? JSONSerialization.jsonObject(with: firstLine) as? [String: Any],
               record["type"] as? String == "session_meta" else { return nil }
         return (record["payload"] as? [String: Any])?["cwd"] as? String
+    }
+}
+
+/// Follows rollout files from one sample to the next, so a turn of any
+/// length keeps its state: one turn can write many megabytes after its
+/// `task_started`, and then no tail of a fixed size holds a marker.
+///
+/// A file that is new to the tracker is searched from its end backwards
+/// until a turn marker or the start of the file. After that only the bytes
+/// that were appended are parsed. The backward search of one sample is
+/// bounded, and a file whose search is not done reads as not resolved:
+/// the caller must not take that for idle.
+struct CodexRolloutTracker {
+    struct Reading: Equatable {
+        var turn: CodexTurnState
+        /// False while the search for the newest marker is under way, or the
+        /// file could not be read. The turn is unknown then.
+        var resolved: Bool
+        var signature: FileSignature
+    }
+
+    /// A file that ends in a marker resolves in this first read.
+    static let firstChunk: UInt64 = 65_536
+    static let chunk: UInt64 = 1_048_576
+    /// Bytes of backward search per sample, over all files, after the first
+    /// read of each. About 10 ms of work on the test Mac.
+    static let defaultSearchBudget: UInt64 = 8 * 1_048_576
+    /// More than this appended between two samples is searched from the end again.
+    static let longestAppend: UInt64 = 8 * 1_048_576
+    /// No marker line is this long. A longer line is not kept in memory.
+    static let longestKeptLine = 4 * 1_048_576
+    private static let anchorLength = 64
+    private static let newline = UInt8(ascii: "\n")
+
+    private struct Entry {
+        var signature: FileSignature
+        var turn = CodexTurnState()
+        var resolved = false
+        /// The end of the last whole line that was parsed.
+        var offset: UInt64
+        /// The bytes before `offset`. When they change, the file was written anew.
+        var anchor = Data()
+        /// Where the backward search stands. Nil before its first read.
+        var searchedFrom: UInt64?
+        /// The start of the search area up to its first line end: the tail
+        /// of a line that begins further back.
+        var carry = Data()
+        var carryDropped = false
+    }
+
+    var searchBudget: UInt64
+    private var budgetLeft: UInt64
+    private var entries: [String: Entry] = [:]
+    private var used: Set<String> = []
+
+    init(searchBudget: UInt64 = CodexRolloutTracker.defaultSearchBudget) {
+        self.searchBudget = searchBudget
+        budgetLeft = searchBudget
+    }
+
+    /// Nil when the file is missing.
+    mutating func read(path: String) -> Reading? {
+        guard let signature = FileSignature(path: path) else {
+            entries[path] = nil
+            return nil
+        }
+        used.insert(path)
+        if let entry = entries[path], entry.resolved, entry.signature == signature {
+            return Reading(turn: entry.turn, resolved: true, signature: signature)
+        }
+        guard let handle = FileHandle(forReadingAtPath: path) else {
+            entries[path] = nil
+            return Reading(turn: CodexTurnState(), resolved: false, signature: signature)
+        }
+        defer { try? handle.close() }
+
+        var entry = entries[path].flatMap { Self.appended(to: $0, signature: signature, handle: handle) }
+            ?? Entry(signature: signature, offset: signature.size)
+        entry.signature = signature
+        search(&entry, handle: handle)
+        entries[path] = entry
+        return Reading(turn: entry.turn, resolved: entry.resolved, signature: signature)
+    }
+
+    /// Drops the files no read asked for and opens the next sample's budget.
+    mutating func endSample() {
+        if entries.count != used.count { entries = entries.filter { used.contains($0.key) } }
+        used.removeAll(keepingCapacity: true)
+        budgetLeft = searchBudget
+    }
+
+    /// The entry with the new whole lines applied. Nil when the file is not
+    /// the one the entry knows: another inode, shorter, other bytes before
+    /// the offset, or far longer.
+    private static func appended(to known: Entry, signature: FileSignature, handle: FileHandle) -> Entry? {
+        guard known.signature.inode == signature.inode, signature.size >= known.offset,
+              signature.size - known.offset <= longestAppend else { return nil }
+        var entry = known
+        guard signature.size > entry.offset else { return entry }
+        let start = entry.offset - UInt64(entry.anchor.count)
+        guard let data = read(handle, from: start, to: signature.size), data.prefix(entry.anchor.count) == entry.anchor else { return nil }
+        guard let end = data.lastIndex(of: newline), end >= data.startIndex + entry.anchor.count else { return entry }
+        let whole = data[..<(end + 1)]
+        for line in whole.dropFirst(entry.anchor.count).split(separator: newline) {
+            switch CodexRolloutReader.record(in: Data(line)) {
+            case .context(let cwd)?:
+                entry.turn.cwd = cwd ?? entry.turn.cwd
+            case .marker(let marker, let turnID, let at)?:
+                // A marker settles the state, also when the search behind it is not done.
+                entry.turn.note(marker, turnID: turnID, at: at)
+                entry.resolved = true
+                entry.carry = Data()
+            case nil:
+                break
+            }
+        }
+        entry.offset = start + UInt64(whole.count)
+        entry.anchor = Data(whole.suffix(anchorLength))
+        return entry
+    }
+
+    private mutating func search(_ entry: inout Entry, handle: FileHandle) {
+        while !entry.resolved {
+            let first = entry.searchedFrom == nil
+            guard first || budgetLeft > 0 else { return }
+            let upper = entry.searchedFrom ?? entry.signature.size
+            let step = first ? Self.firstChunk : Self.chunk
+            let from = upper > step ? upper - step : 0
+            guard var data = Self.read(handle, from: from, to: upper) else { return }
+            if !first { budgetLeft -= min(budgetLeft, UInt64(data.count)) }
+            if first {
+                if let end = data.lastIndex(of: Self.newline) {
+                    // A last line that is still being written is left for the next read.
+                    data = data[..<(end + 1)]
+                    entry.offset = from + UInt64(data.count)
+                    entry.anchor = Data(data.suffix(Self.anchorLength))
+                } else if from == 0 {
+                    data = Data()
+                    entry.offset = 0
+                } else {
+                    entry.anchor = Data(data.suffix(Self.anchorLength))
+                }
+            }
+            if entry.carryDropped {
+                // What follows the last line end here is the start of the dropped line.
+                if let end = data.lastIndex(of: Self.newline) {
+                    data = data[..<(end + 1)]
+                    entry.carryDropped = false
+                } else {
+                    data = Data()
+                }
+            } else {
+                data.append(entry.carry)
+            }
+            entry.carry = Data()
+            var lines = data[...]
+            if from > 0 {
+                if let end = data.firstIndex(of: Self.newline) {
+                    entry.carry = Data(data[..<end])
+                    lines = data[(end + 1)...]
+                } else {
+                    entry.carry = Data(data)
+                    lines = Data()[...]
+                }
+                if entry.carry.count > Self.longestKeptLine {
+                    entry.carry = Data()
+                    entry.carryDropped = true
+                }
+            }
+            let found = CodexRolloutReader.parseTail(lines: lines.split(separator: Self.newline).map { Data($0) })
+            let cwd = entry.turn.cwd ?? found.cwd
+            if found.lastMarker != nil { entry.turn = found }
+            entry.turn.cwd = cwd
+            entry.searchedFrom = from
+            if found.lastMarker != nil || from == 0 {
+                entry.resolved = true
+                entry.carry = Data()
+            }
+        }
+    }
+
+    /// Nil unless every byte of the range was read.
+    private static func read(_ handle: FileHandle, from: UInt64, to: UInt64) -> Data? {
+        guard to >= from else { return nil }
+        if to == from { return Data() }
+        guard (try? handle.seek(toOffset: from)) != nil,
+              let data = try? handle.read(upToCount: Int(to - from)), data.count == Int(to - from) else { return nil }
+        return data
     }
 }

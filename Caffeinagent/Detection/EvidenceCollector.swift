@@ -81,6 +81,8 @@ final class EvidenceCollector: EvidenceCollecting {
         /// writes no session file.
         var claudeProjects = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude/projects")
         var codexRollouts = CodexRolloutReader()
+        /// Bytes of a rollout that one sample searches for a turn marker.
+        var rolloutSearchBudget = CodexRolloutTracker.defaultSearchBudget
         /// Session stores of the agents that are judged by activity, by
         /// `AgentDefinition.id`.
         var fileActivityTargets: [String: FileActivityReader.Target] = [
@@ -141,7 +143,7 @@ final class EvidenceCollector: EvidenceCollecting {
     private var sessionFiles = FileCache<ClaudeSessionState>()
     private var jobFiles = FileCache<ClaudeJobState>()
     private var transcripts = FileCache<ClaudeTranscriptReader.TailParse>()
-    private var rolloutTails = FileCache<CodexTurnState>()
+    private var rolloutTails: CodexRolloutTracker
     private var rolloutCwds: [String: String] = [:]
     private var rolloutListing: (at: Date, files: [CodexRolloutFile])?
     private var transcriptChoices: [ProcessIdentity: (at: Date, path: String?)] = [:]
@@ -151,6 +153,7 @@ final class EvidenceCollector: EvidenceCollecting {
 
     init(sources: Sources = .system()) {
         self.sources = sources
+        rolloutTails = CodexRolloutTracker(searchBudget: sources.rolloutSearchBudget)
         hookReader = sources.hookDirectory.map(HookStateReader.init(directory:))
         hookReader?.prepare()
     }
@@ -402,11 +405,18 @@ final class EvidenceCollector: EvidenceCollecting {
         var newestMarker: Date?
         var newestWrite: Date?
         var sawMarker = false
+        var unknown = false
         for path in paths {
-            let url = URL(fileURLWithPath: path)
-            guard let hit = rolloutTails.value(at: path, read: { CodexRolloutReader.parseTail(of: url) }), let turn = hit.value else { continue }
+            guard let hit = rolloutTails.read(path: path) else { continue }
             watched.insert(path)
             newestWrite = max(newestWrite ?? hit.signature.modifiedAt, hit.signature.modifiedAt)
+            // The newest marker of this file is not found yet, so the file
+            // may hold a turn in progress.
+            guard hit.resolved else {
+                unknown = true
+                continue
+            }
+            let turn = hit.turn
             guard turn.lastMarker != nil else { continue }
             sawMarker = true
             if let at = turn.markerAt { newestMarker = max(newestMarker ?? at, at) }
@@ -420,6 +430,8 @@ final class EvidenceCollector: EvidenceCollecting {
         evidence.fileActivityAt = newestWrite
         if working {
             evidence.reported = StateReport(state: .working, since: workingSince, observedAt: now, source: .codexRollout, detail: "in a turn")
+        } else if unknown {
+            // No state: idle is said only when every file was read to a marker.
         } else if sawMarker || instance.role == .engine {
             // An engine with no thread in a turn is idle, also with no thread loaded.
             evidence.reported = StateReport(state: .idle, since: newestMarker, observedAt: now, source: .codexRollout, detail: nil)

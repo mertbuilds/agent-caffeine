@@ -320,6 +320,23 @@ final class EvidenceCollectorTests: XCTestCase {
         XCTAssertNil(sample(at: 6).frame.agents.first?.reported, "The descriptors could not be read")
     }
 
+    func testCodexTurnLongerThanOneMegabyteIsNeverIdle() throws {
+        census.rows = [Row.fixture(25445, start: processStart, path: codexDesktopBinary, args: ["codex", "app-server"])]
+        let output = #"{"type":"response_item","payload":{"type":"custom_tool_call_output","output":""# + String(repeating: "x", count: 100_000) + #""}}"#
+        let long = try write(rollout([turnStarted] + Array(repeating: output, count: 25)), to: "codex/2026/10/05/rollout-2026-10-05T11-00-00-01a10000-aaaa-7000-8000-00000000c782.jsonl")
+        openFiles.files[25445] = [long]
+        XCTAssertEqual(sample(at: 0).frame.agents.first?.reported?.state, .working)
+
+        // A search that takes more than one sample gives no state until it is done.
+        sources.rolloutSearchBudget = 1_048_576
+        collector = EvidenceCollector(sources: sources)
+        let searching = try XCTUnwrap(sample(at: 2).frame.agents.first)
+        XCTAssertNil(searching.reported, "Unknown, not idle")
+        XCTAssertNotNil(searching.fileActivityAt)
+        XCTAssertNil(sample(at: 4).frame.agents.first?.reported)
+        XCTAssertEqual(sample(at: 6).frame.agents.first?.reported?.state, .working)
+    }
+
     func testCodexSessionMatchesItsRolloutByWorkingDirectory() throws {
         census.rows = [.fixture(300, start: processStart, path: "/Users/me/.codex/bin/codex", args: ["codex", "exec", "do it"])]
         openFiles.directories[300] = "/Users/me/code/demo"

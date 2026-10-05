@@ -163,6 +163,164 @@ final class CodexRolloutReaderTests: XCTestCase {
         XCTAssertTrue(CodexRolloutReader(sessionsDirectory: directory.appendingPathComponent("missing")).rollouts(now: now).isEmpty)
     }
 
+    private func output(bytes: Int) -> String {
+        #"{"timestamp":"2026-10-05T12:00:06.000Z","type":"response_item","payload":{"type":"custom_tool_call_output","output":""# + String(repeating: "x", count: bytes) + #""}}"#
+    }
+
+    private func append(_ text: String, to url: URL) throws {
+        let handle = try FileHandle(forWritingTo: url)
+        defer { try? handle.close() }
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data(text.utf8))
+    }
+
+    private func makeRollout(_ text: String) throws -> URL {
+        let directory = try makeDirectory()
+        addTeardownBlock { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("rollout-2026-10-05T15-00-00-01a10000-aaaa-7000-8000-00000000c78f.jsonl")
+        try Data(text.utf8).write(to: url)
+        return url
+    }
+
+    func testMarkersInFileOrder() {
+        typealias Step = (CodexTurnState.Marker, String?)
+        let cases: [(name: String, steps: [Step], working: Bool, marker: CodexTurnState.Marker, turn: String?)] = [
+            ("start", [(.started, turnA)], true, .started, turnA),
+            ("start, end", [(.started, turnA), (.completed, turnA)], false, .completed, turnA),
+            ("end of an older turn", [(.started, turnA), (.started, turnB), (.aborted, turnA)], true, .started, turnB),
+            ("end without id", [(.started, turnA), (.completed, nil)], false, .completed, nil),
+            ("start without id", [(.started, nil), (.aborted, turnA)], false, .aborted, turnA),
+            ("end with nothing open", [(.completed, turnA)], false, .completed, turnA),
+            ("second turn", [(.started, turnA), (.completed, turnA), (.started, turnB)], true, .started, turnB),
+        ]
+        for (name, steps, working, marker, turn) in cases {
+            var state = CodexTurnState()
+            for step in steps { state.note(step.0, turnID: step.1, at: nil) }
+            XCTAssertEqual(state.turnInProgress, working, name)
+            XCTAssertEqual(state.lastMarker, marker, name)
+            XCTAssertEqual(state.turnID, turn, name)
+        }
+    }
+
+    func testTurnThatWroteMoreThanOneMegabyte() throws {
+        let filler = Array(repeating: output(bytes: 100_000), count: 30)
+        let url = try makeRollout(lines([meta, started(turnA), context(cwd: "/tmp/long")] + filler))
+        XCTAssertEqual(CodexRolloutReader.parseTail(of: url).state, .working)
+        XCTAssertEqual(CodexRolloutReader.parseTail(of: url).cwd, "/tmp/long")
+
+        var tracker = CodexRolloutTracker()
+        let reading = try XCTUnwrap(tracker.read(path: url.path))
+        XCTAssertTrue(reading.resolved)
+        XCTAssertEqual(reading.turn.state, .working)
+        XCTAssertEqual(reading.turn.turnID, turnA)
+
+        // One line that is longer than the tracker keeps in memory.
+        let long = try makeRollout(lines([started(turnB), output(bytes: 5_000_000), output(bytes: 2_000_000)]))
+        XCTAssertEqual(CodexRolloutReader.parseTail(of: long).turnID, turnB)
+        XCTAssertEqual(CodexRolloutReader.parseTail(of: long).state, .working)
+    }
+
+    func testLongSearchIsSpreadOverSamplesAndIsUnknownMeanwhile() throws {
+        let filler = Array(repeating: output(bytes: 100_000), count: 35)
+        let url = try makeRollout(lines([started(turnA)] + filler))
+        var tracker = CodexRolloutTracker(searchBudget: 1_048_576)
+        var reads = 0
+        var reading = try XCTUnwrap(tracker.read(path: url.path))
+        while !reading.resolved, reads < 10 {
+            XCTAssertNil(reading.turn.state, "No state before the marker is found")
+            tracker.endSample()
+            reads += 1
+            reading = try XCTUnwrap(tracker.read(path: url.path))
+        }
+        XCTAssertEqual(reads, 3, "About one megabyte per sample")
+        XCTAssertEqual(reading.turn.state, .working)
+
+        // A marker that is appended during the search settles the state at once.
+        let other = try makeRollout(lines([started(turnA)] + filler))
+        tracker = CodexRolloutTracker(searchBudget: 1_048_576)
+        XCTAssertFalse(try XCTUnwrap(tracker.read(path: other.path)).resolved)
+        tracker.endSample()
+        try append(lines([complete(turnA)]), to: other)
+        let settled = try XCTUnwrap(tracker.read(path: other.path))
+        XCTAssertTrue(settled.resolved)
+        XCTAssertEqual(settled.turn.state, .idle)
+    }
+
+    func testOnlyAppendedBytesAreParsed() throws {
+        let url = try makeRollout(lines([meta, started(turnA)] + Array(repeating: output(bytes: 100_000), count: 20)))
+        var tracker = CodexRolloutTracker()
+        XCTAssertEqual(tracker.read(path: url.path)?.turn.state, .working)
+        // With no budget left, only the forward read can give these answers.
+        tracker.searchBudget = 0
+        tracker.endSample()
+
+        try append(lines([output(bytes: 2_000_000), message]), to: url)
+        XCTAssertEqual(tracker.read(path: url.path)?.turn.state, .working)
+        tracker.endSample()
+
+        let end = complete(turnA) + "\n"
+        try append(String(end.prefix(60)), to: url)
+        let partial = try XCTUnwrap(tracker.read(path: url.path))
+        XCTAssertEqual(partial.turn.state, .working, "A last line that is still being written")
+        XCTAssertTrue(partial.resolved)
+        tracker.endSample()
+
+        try append(String(end.dropFirst(60)), to: url)
+        let closed = try XCTUnwrap(tracker.read(path: url.path))
+        XCTAssertEqual(closed.turn.state, .idle)
+        XCTAssertEqual(closed.turn.markerAt, Date(timeIntervalSince1970: 1_791_201_660))
+        tracker.endSample()
+
+        try append(lines([started(turnB, at: 1_791_201_700), context(cwd: "/tmp/next"), aborted(turnA, reason: "replaced")]), to: url)
+        let next = try XCTUnwrap(tracker.read(path: url.path))
+        XCTAssertEqual(next.turn.state, .working)
+        XCTAssertEqual(next.turn.turnID, turnB)
+        XCTAssertEqual(next.turn.cwd, "/tmp/next")
+    }
+
+    func testPartialLastLineOnFirstRead() throws {
+        let url = try makeRollout(lines([started(turnA), message]) + String(complete(turnA).prefix(60)))
+        var tracker = CodexRolloutTracker()
+        XCTAssertEqual(tracker.read(path: url.path)?.turn.state, .working)
+        tracker.endSample()
+        try append(String(complete(turnA).dropFirst(60)) + "\n", to: url)
+        XCTAssertEqual(tracker.read(path: url.path)?.turn.state, .idle)
+    }
+
+    func testTruncatedOrReplacedFileIsReadAgain() throws {
+        let url = try makeRollout(lines([started(turnA), message, message]))
+        var tracker = CodexRolloutTracker()
+        XCTAssertEqual(tracker.read(path: url.path)?.turn.state, .working)
+        tracker.endSample()
+
+        // Shorter, same inode.
+        try Data(lines([complete(turnB)]).utf8).write(to: url)
+        XCTAssertEqual(tracker.read(path: url.path)?.turn.turnID, turnB)
+        XCTAssertEqual(tracker.read(path: url.path)?.turn.state, .idle)
+        tracker.endSample()
+
+        // Longer, same inode, other content.
+        try Data(lines([message, message, started(turnA), message, message]).utf8).write(to: url)
+        XCTAssertEqual(tracker.read(path: url.path)?.turn.state, .working)
+        tracker.endSample()
+
+        // Another file under the same name.
+        try Data(lines([started(turnA), message, message, message, message, complete(turnA)]).utf8).write(to: url, options: .atomic)
+        XCTAssertEqual(tracker.read(path: url.path)?.turn.state, .idle)
+        tracker.endSample()
+
+        try FileManager.default.removeItem(at: url)
+        XCTAssertNil(tracker.read(path: url.path))
+    }
+
+    func testFileWithNoMarkerIsResolvedWithNoState() throws {
+        let url = try makeRollout(lines([meta, message]))
+        var tracker = CodexRolloutTracker()
+        let reading = try XCTUnwrap(tracker.read(path: url.path))
+        XCTAssertTrue(reading.resolved)
+        XCTAssertNil(reading.turn.state)
+    }
+
     private func makeDirectory() throws -> URL {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent("caffeinagent-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
