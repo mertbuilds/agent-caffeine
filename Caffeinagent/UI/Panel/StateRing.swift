@@ -11,7 +11,7 @@ struct StateRing: View {
     let state: PanelRow.State
 
     var body: some View {
-        MotionClock { time in
+        MotionClock(runs: state != .idle) { time in
             ZStack {
                 switch state {
                 case .working:

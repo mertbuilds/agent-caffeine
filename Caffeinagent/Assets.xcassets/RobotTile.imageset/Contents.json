@@ -2,12 +2,12 @@
   "images": [
     {
       "idiom": "universal",
-      "filename": "robot-base.png",
+      "filename": "robot-tile.png",
       "scale": "1x"
     },
     {
       "idiom": "universal",
-      "filename": "robot-base@2x.png",
+      "filename": "robot-tile@2x.png",
       "scale": "2x"
     }
   ],

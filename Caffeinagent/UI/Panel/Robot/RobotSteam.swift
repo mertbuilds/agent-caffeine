@@ -1,7 +1,7 @@
 import SwiftUI
 
-/// The steam over the cup: the two wisps of the icon, and a third for a
-/// third agent. Each wisp grows out of the coffee, stretches and fades,
+/// The steam over the cup: the two wisps of the icon, and a third when
+/// three or more agents work. Each wisp grows out of the coffee, stretches and fades,
 /// in a loop of its own phase. Without a time the wisps stand as the icon
 /// has them.
 struct RobotSteam: View {
@@ -10,7 +10,7 @@ struct RobotSteam: View {
     let wisps: Int
     let time: TimeInterval?
 
-    /// The large wisp of the icon comes first: one agent, one wisp.
+    /// The two wisps of the icon come first.
     private static let all: [(rows: [RobotGeometry.WispRow], mirrored: Bool, lag: Double)] = [
         (RobotGeometry.largeWisp, false, 0),
         (RobotGeometry.smallWisp, false, 0.37),

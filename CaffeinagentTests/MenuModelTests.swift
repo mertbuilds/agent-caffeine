@@ -109,13 +109,14 @@ final class MenuModelTests: XCTestCase {
 
     func testEveryHeroPose() {
         let cases: [(HoldHeadline, HeroPose)] = [
-            (.working(.one("Claude Code")), .awake(wisps: 1)),
+            (.working(.one("Claude Code")), .awake(wisps: 2)),
             (.working(.many(2)), .awake(wisps: 2)),
+            (.working(.many(3)), .awake(wisps: 3)),
             (.working(.many(7)), .awake(wisps: 3)),
-            (.finishedRecently(.one("Claude Code")), .awake(wisps: 1)),
-            (.open(.many(4)), .awake(wisps: 1)),
-            (.alwaysOn, .awake(wisps: 1)),
-            (.remoteAccess, .awake(wisps: 1)),
+            (.finishedRecently(.one("Claude Code")), .awake(wisps: 2)),
+            (.open(.many(4)), .awake(wisps: 2)),
+            (.alwaysOn, .awake(wisps: 2)),
+            (.remoteAccess, .awake(wisps: 2)),
             (.waitingHeld(.one("Codex")), .attentive),
             (.idle(.many(3)), .asleep),
             (.waitingReleased(.one("Codex")), .asleep),
@@ -140,6 +141,21 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(MenuModel.state(stopped, now: now).pose, .safetyStop(.heat))
     }
 
+    func testTheHeadlineSaysThatTheMacMayNotSleepWhenTheHelperWasSwitchedOff() {
+        for headline in [HoldHeadline.alwaysOn, .working(.one("Claude Code")), .noAgents, .switchedOff] {
+            var input = input(headline)
+            input.flagLeftOn = true
+            let state = MenuModel.state(input, now: now)
+            XCTAssertEqual(state.title, "Your Mac may not sleep", "\(headline)")
+            XCTAssertEqual(state.subtitle, "agent caffeine was switched off in Login Items", "\(headline)")
+            XCTAssertEqual(state.attention?.actions.map(\.title), ["Open System Settings"], "\(headline)")
+        }
+        // A safety stop keeps its own headline, as it keeps its robot.
+        var stopped = input(.safetyStop(.tooHot))
+        stopped.flagLeftOn = true
+        XCTAssertEqual(MenuModel.state(stopped, now: now).title, "Your Mac can sleep")
+    }
+
     func testEveryRobotLook() {
         let awake = RobotLook(pose: .awake(wisps: 3))
         XCTAssertEqual([awake.eyes, RobotLook(pose: .attentive).eyes, RobotLook(pose: .asleep).eyes, RobotLook(pose: .off).eyes], [.happy, .open, .closed, .dim])
@@ -162,6 +178,44 @@ final class MenuModelTests: XCTestCase {
             XCTAssertEqual(look.antenna, .red, "\(pose)")
             XCTAssertEqual(look.badge, badge, "\(pose)")
         }
+    }
+
+    func testTheRobotFloatsOnlyInAnOpenMenu() {
+        let travel = RobotLook(pose: .awake(wisps: 2)).bob
+        XCTAssertTrue(RobotFloat.runs(travel: travel, isOpen: true, reduceMotion: false, frozen: false))
+        XCTAssertFalse(RobotFloat.runs(travel: travel, isOpen: false, reduceMotion: false, frozen: false), "A closed menu animates nothing")
+        XCTAssertFalse(RobotFloat.runs(travel: travel, isOpen: true, reduceMotion: true, frozen: false))
+        XCTAssertFalse(RobotFloat.runs(travel: travel, isOpen: true, reduceMotion: false, frozen: true))
+        XCTAssertFalse(RobotFloat.runs(travel: RobotLook(pose: .asleep).bob, isOpen: true, reduceMotion: false, frozen: false))
+    }
+
+    /// The float as a 120 Hz display shows it, over one loop.
+    func testTheFloatMovesWithoutStepsOrStops() {
+        let rate = 120.0
+        let count = Int(RobotFloat.period * rate)
+        let heights = (0...count).map { RobotFloat.travel * RobotFloat.rise(at: Double($0) / rate) }
+        XCTAssertEqual(heights[0], 0, accuracy: 0.0001, "It starts on the tile")
+        XCTAssertEqual(heights[count / 2], RobotFloat.travel, accuracy: 0.0001)
+        XCTAssertEqual(heights[count], 0, accuracy: 0.0001, "The loop closes")
+        XCTAssertTrue((2...2.5).contains(RobotFloat.travel))
+
+        let steps = zip(heights.dropFirst(), heights).map { $0 - $1 }
+        XCTAssertLessThan(steps.map(abs).max() ?? 1, 0.05, "No step that shows")
+        // Up for the first half, down for the second, never back.
+        XCTAssertTrue(steps.prefix(count / 2).allSatisfy { $0 >= 0 })
+        XCTAssertTrue(steps.suffix(count / 2).allSatisfy { $0 <= 0 })
+        // It only slows at the bottom and at the top. Anywhere else no
+        // more than 3 frames in a row stand still.
+        let still = 0.1 * RobotFloat.travel / Double(count / 2)
+        var run = 0
+        for (index, step) in steps.enumerated() {
+            let turn = Double(index) / Double(count / 2)
+            let nearTurn = abs(turn - turn.rounded()) < 0.15
+            run = abs(step) < still && !nearTurn ? run + 1 : 0
+            XCTAssertLessThanOrEqual(run, 3, "A stop at \(Double(index) / rate) s")
+        }
+        // The two ways mirror each other.
+        XCTAssertEqual(RobotFloat.rise(at: 0.7), RobotFloat.rise(at: RobotFloat.period - 0.7), accuracy: 0.0001)
     }
 
     func testTheRobotBlinksNowAndThen() {
@@ -197,7 +251,7 @@ final class MenuModelTests: XCTestCase {
         helper.flagLeftOn = true
         XCTAssertEqual(MenuModel.attention(helper), PanelAttention(
             kind: .helperSwitchedOff,
-            text: "agent caffeine was switched off in Login Items. Your Mac may not sleep until you allow it again",
+            text: "Allow it again and your Mac sleeps as usual",
             actions: [.openLoginItems]
         ))
 

@@ -7,8 +7,8 @@ enum HeroPose: Equatable {
         case heat
     }
 
-    /// Keeps the Mac awake. One wisp of steam for each agent that works, up
-    /// to three, and one when no agent is the reason.
+    /// Keeps the Mac awake. Two wisps of steam, as the icon has them, and
+    /// three when three or more agents work.
     case awake(wisps: Int)
     /// Keeps the Mac awake for an agent that waits for the user.
     case attentive

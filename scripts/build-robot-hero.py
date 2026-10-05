@@ -7,12 +7,17 @@ Run from the repo root:
 
 The menu shows the robot of the app icon and moves its eyes and its steam.
 So the picture in the menu is the master (assets/AppIcon-4096.png) without
-the eyes and without the steam, and the app draws both on top. This script
-writes:
+the eyes and without the steam, and the app draws both on top. The robot
+floats over the tile, which stays still, so the picture is two layers. This
+script writes:
 
-- Caffeinagent/Assets.xcassets/RobotBase.imageset: a square of the tile round
-  the robot, at 1x and 2x (a Mac has no 3x). The inside of the visor is filled with its
-  own gradient, the steam with what lies to its left and right.
+- Caffeinagent/Assets.xcassets/RobotTile.imageset: a square of the tile round
+  the robot, at 1x and 2x (a Mac has no 3x), with the tile filled in where
+  the robot was.
+- Caffeinagent/Assets.xcassets/RobotBody.imageset: the robot alone, of the
+  same size and clear everywhere else. The inside of the visor is filled
+  with its own gradient, the steam with what lies to its left and right.
+  Over the tile it gives the picture back.
 - Caffeinagent/Assets.xcassets/RobotEyes.imageset: the inside of the visor
   as the icon has it, with the eyes and their glow, of the same size and
   clear everywhere else.
@@ -50,6 +55,15 @@ SHOWN_SCALE = 100 / 96
 BOB_ROOM = 0.02
 # The corner radius of that square, as a share of its side.
 CORNER = 0.225
+# The robot is lighter than this in red, and the tile round it is not.
+ROBOT_RED = 110
+# The glow round the robot is this wide. It goes with the robot. The light
+# of the antenna glows further, as a share of its radius.
+GLOW = 24
+BALL_GLOW = 2.2
+# The tile behind the robot is worked out at a third of the size: it is
+# smooth, and the solve is quick.
+TILE_SHRINK = 3
 # The visor ends at this row where the steam crosses it, and is lighter
 # this far to the left and right of the steam.
 VISOR_FOOT = 1092
@@ -364,12 +378,64 @@ def cut(image):
     return np.clip(image[top:top + CROP, left:left + CROP], 0, 255).round().astype(np.uint8)
 
 
-crop = Image.fromarray(cut(rgb))
+# MARK: Layers
+
+whole = rgb[top:top + CROP, left:left + CROP]
+robot = ndimage.binary_fill_holes(largest(whole[..., 0] > ROBOT_RED))
+behind = ndimage.binary_dilation(robot, iterations=GLOW)
+crop_y, crop_x = np.mgrid[0:CROP, 0:CROP] + 0.5
+behind |= np.hypot(crop_x - (ball_x - left), crop_y - (ball_y - top)) < BALL_GLOW * ball_radius
+
+# The tile behind the robot: its own colour and slope, carried in from the
+# pixels round the robot without a step. Only a thin band of it ever shows,
+# next to the robot as it floats.
+small_side = CROP // TILE_SHRINK
+small = whole.reshape(small_side, TILE_SHRINK, small_side, TILE_SHRINK, 3).mean(axis=(1, 3))
+small_hole = behind.reshape(small_side, TILE_SHRINK, small_side, TILE_SHRINK).any(axis=(1, 3))
+small_hole = ndimage.binary_dilation(small_hole)
+small_ring = ndimage.binary_dilation(small_hole, iterations=8) & ~small_hole
+filled = poisson_fill(small, small_hole, small_ring)
+filled = ndimage.zoom(filled, (TILE_SHRINK, TILE_SHRINK, 1), order=3, mode="nearest", grid_mode=True)
+blend = ndimage.gaussian_filter(ndimage.binary_dilation(behind, iterations=6).astype(np.float32), 2)[..., None]
+tile = whole * (1 - blend) + filled * blend
+
+# How much of each pixel is robot. Inside it is all robot. At its edge and
+# in its glow, a pixel is the tile mixed with the colour of the robot next
+# to it, and the share of the robot follows from the two.
+inside = ndimage.binary_erosion(robot, iterations=2)
+deep = ndimage.binary_erosion(robot, iterations=6)
+_, nearest = ndimage.distance_transform_edt(~deep, return_indices=True)
+near_colour = ndimage.gaussian_filter(whole, (3, 3, 0))[nearest[0], nearest[1]]
+away = near_colour - tile
+share = ((whole - tile) * away).sum(axis=2) / np.maximum((away ** 2).sum(axis=2), 1)
+# Where the robot shades the tile, between a hand and the cup, the pixel
+# is darker than the tile: the least share of a dark layer that gives it.
+shade = 1 - (whole / np.maximum(tile, 1)).min(axis=2)
+share = np.where(inside, 1, np.clip(np.maximum(share, shade), 0, 1)) * behind
+# The colour of the robot alone, free of the blue of the tile, so that the
+# layer over the tile gives the picture back.
+body_rgb = np.clip(tile + (whole - tile) / np.maximum(share, 0.1)[..., None], 0, 255)
+body_rgb[inside] = whole[inside]
+
+to_bytes = lambda image: np.clip(image, 0, 255).round().astype(np.uint8)
+crop = Image.fromarray(to_bytes(tile))
+body_crop = Image.fromarray(np.dstack([to_bytes(body_rgb), to_bytes(share * 255)]), "RGBA")
+together = crop.convert("RGBA")
+together.alpha_composite(body_crop)
+miss = np.abs(np.asarray(together.convert("RGB")).astype(np.float32) - whole)
+print(f"the two layers against the one picture, of 255: mean {miss.mean():.3f}, largest {miss.max():.0f}")
+
 eyes_crop = Image.fromarray(np.dstack([cut(steam_free), cut(eyes_alpha * 255)]), "RGBA")
 contents = lambda value: json.dumps(value, indent=2) + "\n"
 CATALOG.mkdir(parents=True, exist_ok=True)
 (CATALOG / "Contents.json").write_text(contents({"info": {"author": "xcode", "version": 1}}))
-for set_name, file_name, picture in (("RobotBase", "robot-base", crop), ("RobotEyes", "robot-eyes", eyes_crop)):
+stale = CATALOG / "RobotBase.imageset"
+if stale.exists():
+    for file in stale.iterdir():
+        file.unlink()
+    stale.rmdir()
+layers = (("RobotTile", "robot-tile", crop), ("RobotBody", "robot-body", body_crop), ("RobotEyes", "robot-eyes", eyes_crop))
+for set_name, file_name, picture in layers:
     folder = CATALOG / f"{set_name}.imageset"
     folder.mkdir(exist_ok=True)
     images = []
@@ -402,7 +468,8 @@ GEOMETRY.write_text(f"""import CoreGraphics
 // Written by scripts/build-robot-hero.py from assets/AppIcon-4096.png.
 // Run the script again to change it.
 
-/// Where the parts of the robot are in the picture RobotBase, from 0 to 1.
+/// Where the parts of the robot are in the pictures RobotTile and RobotBody,
+/// from 0 to 1.
 enum RobotGeometry {{
     /// One eye of the icon: an arc with round ends.
     struct Eye {{
@@ -450,9 +517,11 @@ print("crop in the 4096 master:", [left * 2, top * 2, CROP * 2])
 
 if args.debug:
     args.debug.mkdir(parents=True, exist_ok=True)
-    crop.save(args.debug / "base.png")
+    Image.fromarray(to_bytes(whole)).save(args.debug / "base.png")
+    crop.save(args.debug / "tile.png")
+    body_crop.save(args.debug / "body.png")
     eyes_crop.save(args.debug / "eyes.png")
-    both = crop.convert("RGBA")
+    both = together.copy()
     both.alpha_composite(eyes_crop)
     both.save(args.debug / "base-with-eyes.png")
     Image.fromarray(original[top:top + CROP, left:left + CROP].round().astype(np.uint8)).save(args.debug / "original.png")

@@ -11,6 +11,8 @@ enum MenuModel {
     static let awakeTitle = "Your Mac stays awake"
     static let canSleepTitle = "Your Mac can sleep"
     static let offTitle = "agent caffeine is off"
+    static let helperOffTitle = "Your Mac may not sleep"
+    static let helperOffReason = "agent caffeine was switched off in Login Items"
 
     /// In place of the list when no agent is open. In the mode "always"
     /// the Mac stays awake without one.
@@ -19,11 +21,15 @@ enum MenuModel {
     }
 
     static func state(_ input: PanelInput, now: Date) -> PanelState {
-        let headline = input.decision.headline
-        let (title, subtitle) = headlineTexts(headline, waitingFor: waitingHoldLeft(input, now: now))
+        let pose = pose(input)
+        // The sleep flag is on with no helper to clear it, whatever the
+        // decision says.
+        let (title, subtitle) = pose == .helperOff
+            ? (helperOffTitle, helperOffReason)
+            : headlineTexts(input.decision.headline, waitingFor: waitingHoldLeft(input, now: now))
         let (rows, moreIdle) = rows(input, now: now)
         return PanelState(
-            pose: pose(input),
+            pose: pose,
             title: title,
             subtitle: subtitle,
             attention: attention(input),
@@ -46,9 +52,8 @@ enum MenuModel {
 
     static func pose(for headline: HoldHeadline) -> HeroPose {
         switch headline {
-        case .working(.one): return .awake(wisps: 1)
-        case .working(.many(let count)): return .awake(wisps: min(max(count, 1), 3))
-        case .finishedRecently, .open, .alwaysOn, .remoteAccess: return .awake(wisps: 1)
+        case .working(.many(let count)) where count >= 3: return .awake(wisps: 3)
+        case .working, .finishedRecently, .open, .alwaysOn, .remoteAccess: return .awake(wisps: 2)
         case .waitingHeld: return .attentive
         case .idle, .waitingReleased, .noAgents: return .asleep
         case .safetyStop(.batteryLow): return .safetyStop(.battery)
@@ -133,7 +138,7 @@ enum MenuModel {
         if input.flagLeftOn {
             return PanelAttention(
                 kind: .helperSwitchedOff,
-                text: "agent caffeine was switched off in Login Items. Your Mac may not sleep until you allow it again",
+                text: "Allow it again and your Mac sleeps as usual",
                 actions: [.openLoginItems]
             )
         }

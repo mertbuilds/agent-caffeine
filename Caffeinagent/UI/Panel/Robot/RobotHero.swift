@@ -9,15 +9,13 @@ struct RobotHero: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        MotionClock { time in
-            RobotFigure(look: RobotLook(pose: pose), time: time, blink: blink)
-                .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: pose)
-        }
-        .environment(\.robotUnit, size / 100)
-        .frame(width: size, height: size)
-        .contentShape(RoundedRectangle(cornerRadius: size * RobotGeometry.corner, style: .continuous))
-        .onTapGesture(perform: blinkOnce)
-        .accessibilityHidden(true)
+        RobotFigure(look: RobotLook(pose: pose), blink: blink)
+            .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: pose)
+            .environment(\.robotUnit, size / 100)
+            .frame(width: size, height: size)
+            .contentShape(RoundedRectangle(cornerRadius: size * RobotGeometry.corner, style: .continuous))
+            .onTapGesture(perform: blinkOnce)
+            .accessibilityHidden(true)
     }
 
     private func blinkOnce() {

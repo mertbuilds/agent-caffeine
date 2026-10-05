@@ -38,7 +38,8 @@ struct RobotLook: Equatable {
     var contrast: Double = 1
     var snoozes = false
     var blinks = false
-    /// How far the robot bobs, in points.
+    /// How far the robot floats up from its tile, in hundredths of the
+    /// tile's side.
     var bob: CGFloat = 0
     /// An SF Symbol at the lower right.
     var badge: String?
@@ -48,12 +49,12 @@ struct RobotLook: Equatable {
         case .awake(let count):
             wisps = count
             blinks = true
-            bob = 1.25
+            bob = RobotFloat.travel
         case .attentive:
             eyes = .open
             antenna = .amber
             blinks = true
-            bob = 1.25
+            bob = RobotFloat.travel
         case .asleep:
             eyes = .closed
             antenna = .dark
@@ -79,6 +80,46 @@ struct RobotLook: Equatable {
         antenna = .red
         saturation = 0.5
         dimming = 0.1
+    }
+}
+
+/// How the robot floats over its tile: up and down again, slow at both
+/// ends. The menu runs it as an animation, so it moves at the rate of the
+/// display. The same curve gives a still picture of any moment.
+enum RobotFloat {
+    /// From the tile to the top, in hundredths of the tile's side.
+    static let travel: CGFloat = 2.25
+    /// The robot is this much larger at the top.
+    static let growth: CGFloat = 0.008
+    /// Up and down again, in seconds.
+    static let period: TimeInterval = 3.2
+    /// The curve of each way, close to half a sine wave.
+    static let ease: (x1: Double, y1: Double, x2: Double, y2: Double) = (0.37, 0, 0.63, 1)
+
+    /// A robot that does not float, a closed menu, Reduce Motion and a
+    /// still picture all leave the robot without the loop.
+    static func runs(travel: CGFloat, isOpen: Bool, reduceMotion: Bool, frozen: Bool) -> Bool {
+        travel > 0 && isOpen && !reduceMotion && !frozen
+    }
+
+    /// 0 on the tile, 1 at the top.
+    static func rise(at time: TimeInterval) -> CGFloat {
+        let turn = time / period - (time / period).rounded(.down)
+        return CGFloat(eased(turn < 0.5 ? 2 * turn : 2 - 2 * turn))
+    }
+
+    /// The curve as an animation runs it: the height of the point of the
+    /// curve whose x is `share`.
+    static func eased(_ share: Double) -> Double {
+        func along(_ a: Double, _ b: Double, _ t: Double) -> Double {
+            3 * a * t * (1 - t) * (1 - t) + 3 * b * t * t * (1 - t) + t * t * t
+        }
+        var (low, high) = (0.0, 1.0)
+        for _ in 0..<40 {
+            let middle = (low + high) / 2
+            if along(ease.x1, ease.x2, middle) < share { low = middle } else { high = middle }
+        }
+        return along(ease.y1, ease.y2, (low + high) / 2)
     }
 }
 

@@ -4,10 +4,11 @@ import SwiftUI
 /// are drawn the way the icon draws its own: a light core with a glow.
 struct RobotEyes: View {
     let eyes: RobotLook.Eyes
-    /// 1 while the eyes are shut for a blink.
+    /// 1 while the eyes are shut for a blink. Only the eyes change: the
+    /// glass of the visor stays as it is.
     var shut: CGFloat = 0
 
-    /// The eyes shut towards this height.
+    /// The round eyes shut towards this height.
     static let anchor = UnitPoint(x: 0.5, y: RobotGeometry.leftEye.top + 0.6 * RobotGeometry.leftEye.sagitta)
 
     private static let light = Color(red: RobotGeometry.eyeColor.red, green: RobotGeometry.eyeColor.green, blue: RobotGeometry.eyeColor.blue)
@@ -27,12 +28,21 @@ struct RobotEyes: View {
                 RobotShutEyes()
                     .stroke(Self.light.opacity(0.85), style: StrokeStyle(lineWidth: side * 0.022, lineCap: .round))
                     .modifier(Glow(color: Self.glow.opacity(0.7), side: side))
-                    .opacity(eyes == .closed ? 1 : 0)
+                    .opacity(shutEyes)
                 RobotDeadEyes()
                     .stroke(Self.red, style: StrokeStyle(lineWidth: side * 0.024, lineCap: .round))
                     .modifier(Glow(color: Self.redGlow, side: side))
                     .opacity(eyes == .dead ? 1 : 0)
             }
+        }
+    }
+
+    /// The arcs of the icon fade to the shut eyes for a blink.
+    private var shutEyes: Double {
+        switch eyes {
+        case .closed: return 1
+        case .happy: return Double(shut)
+        case .open, .dim, .dead: return 0
         }
     }
 

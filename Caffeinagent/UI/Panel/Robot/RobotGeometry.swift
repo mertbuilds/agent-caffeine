@@ -3,7 +3,8 @@ import CoreGraphics
 // Written by scripts/build-robot-hero.py from assets/AppIcon-4096.png.
 // Run the script again to change it.
 
-/// Where the parts of the robot are in the picture RobotBase, from 0 to 1.
+/// Where the parts of the robot are in the pictures RobotTile and RobotBody,
+/// from 0 to 1.
 enum RobotGeometry {
     /// One eye of the icon: an arc with round ends.
     struct Eye {
