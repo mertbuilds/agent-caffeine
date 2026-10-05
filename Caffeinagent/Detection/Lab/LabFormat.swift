@@ -118,6 +118,16 @@ enum LabFormat {
         return frame
     }
 
+    /// The header's free text: the label, and the agent names the user
+    /// added, which are also the keys of their rules.
+    static func scrubbed(_ header: LabHeader) -> LabHeader {
+        var header = header
+        header.label = withoutPath(header.label)
+        header.settings.userAgentNames = header.settings.userAgentNames.map(withoutPath)
+        header.settings.agentRules = Dictionary(header.settings.agentRules.map { (withoutPath($0.key), $0.value) }, uniquingKeysWith: { first, _ in first })
+        return header
+    }
+
     static func withoutPath(_ text: String) -> String {
         guard let slash = text.lastIndex(of: "/") else { return text }
         let prefix = text.hasPrefix("user:") ? "user:" : ""
@@ -179,7 +189,7 @@ enum LabError: Error, Equatable, CustomStringConvertible {
     var description: String {
         switch self {
         case .unreadableLine(let number): return "Line \(number) of the recording cannot be read."
-        case .noRecording: return "There is no recording in the lab folder."
+        case .noRecording: return "No recording is running. Start one with --lab-record."
         case .cannotWrite(let path): return "Cannot write to \(path)."
         }
     }

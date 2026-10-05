@@ -6,7 +6,7 @@ import Foundation
 /// checks the license.
 ///
 ///     caffeinagent --lab-record <label>                 record until SIGINT or SIGTERM
-///     caffeinagent --lab-mark <agent> <truth> [note]    mark the newest recording
+///     caffeinagent --lab-mark <agent> <truth> [note]    mark the running recording
 ///     caffeinagent --lab-score <file>                   replay a recording and score it
 ///
 /// `<agent>` is an agent id from the catalog (`claude`, `codex-desktop`),
@@ -144,7 +144,7 @@ enum LabCommand {
     // MARK: Mark and score
 
     private static func mark(agent: String, truth: LabTruth, note: String?) -> Never {
-        guard let url = LabRecorder.newestRecording() else { fail("\(LabError.noRecording)") }
+        guard let url = LabRecorder.runningRecording() else { fail("\(LabError.noRecording)") }
         do {
             try LabRecorder.appendMark(LabMark(at: Date(), agent: agent, truth: truth, note: note), to: url)
         } catch {

@@ -157,6 +157,37 @@ final class LabRecorderTests: XCTestCase {
         XCTAssertThrowsError(try LabRecorder.appendMark(mark, to: directory.appendingPathComponent("missing.jsonl")))
     }
 
+    /// `--lab-mark` must not write into a recording that has ended.
+    func testOnlyARunningRecordingTakesAMarkFromAnotherProcess() throws {
+        let now = Date()
+        XCTAssertNil(LabRecorder.runningRecording(in: directory, now: now))
+        let url = try recorder.start(label: "run", header: header("run"))
+        XCTAssertEqual(LabRecorder.runningRecording(in: directory, now: now.addingTimeInterval(1))?.lastPathComponent, url.lastPathComponent)
+        XCTAssertEqual(LabRecorder.runningRecording(in: directory, now: now.addingTimeInterval(10))?.lastPathComponent, url.lastPathComponent)
+        recorder.stop()
+        XCTAssertNil(LabRecorder.runningRecording(in: directory, now: now.addingTimeInterval(60)), "Finished a minute ago")
+        try FileManager.default.setAttributes([.modificationDate: now.addingTimeInterval(-3600)], ofItemAtPath: url.path)
+        XCTAssertNil(LabRecorder.runningRecording(in: directory, now: now))
+        XCTAssertNotNil(LabRecorder.newestRecording(in: directory))
+    }
+
+    func testHeaderHoldsNoPaths() throws {
+        var settings = DetectionSettings()
+        settings.userAgentNames = ["/Users/me/bin/myagent", "plain"]
+        settings.agentRules = ["user:/Users/me/bin/myagent": .ignore, "grok": .alwaysWorkingWhileOpen]
+        let written = LabHeader(label: "/Users/me/Desktop/run 1", startedAt: at(0), app: "Version 0.2.3 (13)", os: "Version 26.7.1 (Build 25G241)",
+                                model: "Mac16,1", mode: AwakeMode.agentWorking.rawValue, settings: settings)
+        let url = try recorder.start(label: written.label, header: written)
+        recorder.stop()
+        let text = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(text.contains("/Users"), text)
+        XCTAssertFalse(text.contains("Desktop"), text)
+        let header = try XCTUnwrap(LabFormat.recording(at: url).header)
+        XCTAssertEqual(header.label, "run 1")
+        XCTAssertEqual(header.settings.userAgentNames, ["myagent", "plain"])
+        XCTAssertEqual(header.settings.agentRules, ["user:myagent": .ignore, "grok": .alwaysWorkingWhileOpen])
+    }
+
     func testCutOffLastLineIsLeftOutAndABadLineIsAnError() throws {
         let url = try recorder.start(label: "cut", header: header())
         let frame = fullFrame(at: 0)

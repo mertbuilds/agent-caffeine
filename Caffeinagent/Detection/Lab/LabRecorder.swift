@@ -55,7 +55,7 @@ final class LabRecorder {
         descriptor = opened
         self.url = url
         lock.unlock()
-        write(LabLine(header: header))
+        write(LabLine(header: LabFormat.scrubbed(header)))
         return url
     }
 
@@ -119,6 +119,19 @@ final class LabRecorder {
             if newest.map({ at > $0.at }) ?? true { newest = (url, at) }
         }
         return newest?.url
+    }
+
+    /// A recorder writes a sample every 2 or 5 seconds, so a file that was
+    /// written longer ago than this belongs to a recording that has ended.
+    static let runningAge: TimeInterval = 15
+
+    /// The recording that a recorder still writes, for a mark from another
+    /// process. A mark in a finished recording would change its score.
+    static func runningRecording(in directory: URL = LabRecorder.labDirectory(), now: Date = Date()) -> URL? {
+        guard let url = newestRecording(in: directory),
+              let written = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
+              now.timeIntervalSince(written) <= runningAge else { return nil }
+        return url
     }
 
     /// Adds a mark to a recording that another process may be writing.
