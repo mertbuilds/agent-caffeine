@@ -61,7 +61,7 @@ struct MenuBarView: View {
             .font(.caption)
         case .expired(.trialOver):
             HStack(spacing: 8) {
-                Button("Buy agent caffeine · $9") { NSWorkspace.shared.open(license.config.checkoutURL) }
+                Button("Buy agent caffeine for $9") { NSWorkspace.shared.open(license.config.checkoutURL) }
                     .buttonStyle(.borderedProminent)
                 settingsButton("Enter key…")
                     .buttonStyle(.bordered)
