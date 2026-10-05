@@ -286,7 +286,10 @@ if [ ! -x "$HOOK" ]; then
   exit 1
 fi
 codesign --verify --strict -R="$(signed_by_team "$HOOK_ID")" "$HOOK"
-if ! codesign -dv "$HOOK" 2>&1 | grep -qE '^CodeDirectory .*flags=[^ ]*runtime'; then
+# Read into a variable first: with pipefail, grep -q closes the pipe at its
+# match and codesign then fails the pipeline.
+HOOK_SIGNATURE=$(codesign -dv "$HOOK" 2>&1)
+if ! grep -qE '^CodeDirectory .*flags=[^ ]*runtime' <<< "$HOOK_SIGNATURE"; then
   echo "error: the hook command is not signed with the hardened runtime." >&2
   exit 1
 fi
