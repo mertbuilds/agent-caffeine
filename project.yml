@@ -62,7 +62,12 @@ targets:
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         CFBundlePackageType: APPL
+        # The icon is Caffeinagent/AppIcon.icon, an Icon Composer file. Xcode
+        # compiles it into Assets.car, which macOS 26 reads through
+        # CFBundleIconName, and writes AppIcon.icns next to it for macOS 13
+        # to 15, which read CFBundleIconFile.
         CFBundleIconFile: AppIcon
+        CFBundleIconName: AppIcon
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         LSUIElement: true
         NSHumanReadableCopyright: "Copyright © 2026"
@@ -80,6 +85,7 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.app
         PRODUCT_NAME: caffeinagent
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_KEY_NSPrincipalClass: NSApplication
         CODE_SIGN_ENTITLEMENTS: Caffeinagent/Caffeinagent.entitlements
     postBuildScripts:
