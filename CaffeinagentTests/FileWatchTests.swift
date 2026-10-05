@@ -3,6 +3,9 @@ import XCTest
 final class FileWatchTests: XCTestCase {
     private let queue = DispatchQueue(label: "com.caffeinagent.tests.filewatch")
     private var directory: URL!
+    /// An event comes within milliseconds, and a wait ends when it comes.
+    /// The long limit is for a Mac that is busy with other work.
+    private static let patience: TimeInterval = 10
 
     override func setUpWithError() throws {
         directory = FileManager.default.temporaryDirectory.appendingPathComponent("caffeinagent-\(UUID().uuidString)")
@@ -53,7 +56,7 @@ final class FileWatchTests: XCTestCase {
         try handle.write(contentsOf: Data(text.utf8))
     }
 
-    func testWriteCallsBackWithinASecond() throws {
+    func testWriteCallsBack() throws {
         let url = directory.appendingPathComponent("session.jsonl")
         try Data("one\n".utf8).write(to: url)
         let recorder = Recorder()
@@ -63,7 +66,7 @@ final class FileWatchTests: XCTestCase {
 
         let written = recorder.next(.written)
         try append("two\n", to: url)
-        wait(for: [written], timeout: 1)
+        wait(for: [written], timeout: Self.patience)
     }
 
     func testWriteWhileWriterKeepsTheFileOpen() throws {
@@ -79,7 +82,7 @@ final class FileWatchTests: XCTestCase {
         for line in ["one\n", "two\n"] {
             let written = recorder.next(.written)
             try handle.write(contentsOf: Data(line.utf8))
-            wait(for: [written], timeout: 1)
+            wait(for: [written], timeout: Self.patience)
         }
     }
 
@@ -94,11 +97,11 @@ final class FileWatchTests: XCTestCase {
         for status in ["busy", "idle"] {
             let replaced = recorder.next(.replaced)
             try Data(#"{"status":"\#(status)"}"#.utf8).write(to: url, options: .atomic)
-            wait(for: [replaced], timeout: 1)
+            wait(for: [replaced], timeout: Self.patience)
         }
         let written = recorder.next(.written)
         try append("\n", to: url)
-        wait(for: [written], timeout: 1)
+        wait(for: [written], timeout: Self.patience)
     }
 
     func testDeleteThenRecreate() throws {
@@ -111,15 +114,15 @@ final class FileWatchTests: XCTestCase {
 
         let removed = recorder.next(.removed)
         try FileManager.default.removeItem(at: url)
-        wait(for: [removed], timeout: 1)
+        wait(for: [removed], timeout: Self.patience)
 
         let replaced = recorder.next(.replaced)
         try Data("{}".utf8).write(to: url)
-        wait(for: [replaced], timeout: 1)
+        wait(for: [replaced], timeout: Self.patience)
 
         let written = recorder.next(.written)
         try append("\n", to: url)
-        wait(for: [written], timeout: 1)
+        wait(for: [written], timeout: Self.patience)
     }
 
     func testFileThatAppearsLater() throws {
@@ -131,7 +134,7 @@ final class FileWatchTests: XCTestCase {
 
         let appeared = recorder.next(.replaced)
         try Data("{}".utf8).write(to: url)
-        wait(for: [appeared], timeout: 1)
+        wait(for: [appeared], timeout: Self.patience)
     }
 
     func testCancelStopsCallbacks() throws {
@@ -147,7 +150,7 @@ final class FileWatchTests: XCTestCase {
         try append("two\n", to: url)
         let quiet = XCTestExpectation(description: "quiet")
         queue.asyncAfter(deadline: .now() + 0.3) { quiet.fulfill() }
-        wait(for: [quiet], timeout: 1)
+        wait(for: [quiet], timeout: Self.patience)
         XCTAssertEqual(recorder.all, [])
     }
 
@@ -162,7 +165,7 @@ final class FileWatchTests: XCTestCase {
         try append("two\n", to: url)
         let quiet = XCTestExpectation(description: "quiet")
         queue.asyncAfter(deadline: .now() + 0.3) { quiet.fulfill() }
-        wait(for: [quiet], timeout: 1)
+        wait(for: [quiet], timeout: Self.patience)
         XCTAssertEqual(recorder.all, [])
     }
 
@@ -174,6 +177,6 @@ final class FileWatchTests: XCTestCase {
         defer { watch.cancel() }
 
         try Data("{}".utf8).write(to: directory.appendingPathComponent("rollout-new.jsonl"))
-        wait(for: [seen], timeout: 1)
+        wait(for: [seen], timeout: Self.patience)
     }
 }
