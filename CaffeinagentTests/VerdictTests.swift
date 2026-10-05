@@ -263,6 +263,17 @@ final class VerdictTests: XCTestCase {
         XCTAssertTrue(bursts.filter { $0.seconds >= 1810 }.allSatisfy { $0.verdict.state == .idle })
     }
 
+    /// CPU use during work that the agent reports is not "only weak signs".
+    /// The cap must not run out behind the report and then call the agent
+    /// idle the moment its state file cannot be read.
+    func testWeakCapDoesNotCountTimeOfReportedWork() {
+        var story = samples(to: 2400) { t in self.claude(.working, at: t, cpu: 14.5) }
+        story += samples(from: 2405, to: 2600) { t in self.claude(nil, at: t, cpu: 14.5) }
+        let got = run(story)
+        XCTAssertTrue(got.filter { $0.seconds <= 2410 }.allSatisfy { $0.verdict == self.verdict(.working, .reported, .reportsBusy) })
+        XCTAssertTrue(got.filter { $0.seconds > 2415 }.allSatisfy { $0.verdict == self.verdict(.working, .inferredWeak, .cpuActivity) })
+    }
+
     /// Weak evidence that stops before the cap releases after the release time.
     func testWeakEvidenceReleases() {
         var story = samples(to: 60) { _ in self.opencode(cpu: 14.5) }
