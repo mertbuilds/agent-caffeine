@@ -67,19 +67,19 @@ enum HookConfigEditor {
 
     /// The text with our entries, each at the end of its event's list, so
     /// the position of every other entry stays the same. Codex stores its
-    /// trust of a hook by that position.
-    static func installing(into text: [UInt8], entry: HookCatalogEntry, appPath: String) throws -> [UInt8] {
+    /// trust of a hook by that position. `keeping` is for the entries of an
+    /// older build that are taken out first: see `uninstalling`.
+    static func installing(into text: [UInt8], entry: HookCatalogEntry, appPath: String, keeping: Set<[String]> = []) throws -> [UInt8] {
         guard case .jsonHookGroups(let keyPath) = entry.format else { return Array(HookCatalog.pluginSource(appPath: appPath).utf8) }
         if status(text: text, entry: entry, appPath: appPath) == .installed(version: HookCatalog.version) { return text }
-        let original = isBlank(text) ? Array("{}\n".utf8) : text
-        let cleared = try uninstalling(from: original, entry: entry)
+        let cleared = try clearedForInstall(text, entry: entry, keeping: keeping)
         var source = JSONSourceText(cleared)
         for handler in expectedHandlers(for: entry, appPath: appPath) {
             var path: [String] = []
             for (index, key) in (keyPath + [handler.event]).enumerated() {
                 let container = try node(at: path, in: source)
                 guard container.members != nil else { throw HookInstallError.unexpectedShape }
-                if container.member(key) == nil {
+                if try uniqueMember(key, of: container) == nil {
                     let empty = index == keyPath.count ? "[]" : "{}"
                     source.append(to: container) { _ in "\(JSONSourceText.literal(key)): \(empty)" }
                 }
@@ -100,42 +100,74 @@ enum HookConfigEditor {
         return source.bytes
     }
 
+    /// The text that `installing` adds our entries to: the document
+    /// without entries of an older build, `{}` for a blank file.
+    static func clearedForInstall(_ text: [UInt8], entry: HookCatalogEntry, keeping: Set<[String]> = []) throws -> [UInt8] {
+        try uninstalling(from: isBlank(text) ? Array("{}\n".utf8) : text, entry: entry, keeping: keeping)
+    }
+
+    /// The empty hooks object and the empty event lists of a document, by
+    /// their key paths. They are the user's, and `uninstalling` is told to
+    /// keep them.
+    static func emptyContainers(in text: [UInt8], entry: HookCatalogEntry) -> Set<[String]> {
+        guard case .jsonHookGroups(let keyPath) = entry.format, !isBlank(text),
+              let root = try? validated(text), let hooks = try? hooksObject(in: root, keyPath: keyPath), let members = hooks.members else { return [] }
+        var found: Set<[String]> = members.isEmpty ? [keyPath] : []
+        for member in members where member.value.elements?.isEmpty ?? false { found.insert(keyPath + [member.key]) }
+        return found
+    }
+
     private static func node(at path: [String], in source: JSONSourceText) throws -> JSONSourceNode {
         var current = try validated(source.bytes)
         for key in path {
-            guard let next = current.member(key)?.value else { throw HookInstallError.unexpectedShape }
+            guard let next = try uniqueMember(key, of: current)?.value else { throw HookInstallError.unexpectedShape }
             current = next
         }
         return current
     }
 
-    /// The text without our entries. An event list that we empty is removed
-    /// with its key, and so is the hooks object when nothing is left in it.
-    static func uninstalling(from text: [UInt8], entry: HookCatalogEntry) throws -> [UInt8] {
+    /// A key that is there twice is a form we do not know: a JSON reader
+    /// takes one of the two, and nobody can say which.
+    private static func uniqueMember(_ key: String, of node: JSONSourceNode) throws -> JSONSourceNode.Member? {
+        let found = (node.members ?? []).filter { $0.key == key }
+        guard found.count <= 1 else { throw HookInstallError.unexpectedShape }
+        return found.first
+    }
+
+    /// The text without our entries. An event list is removed with its key
+    /// only when this run took its last entry out, and so is the hooks
+    /// object when this run took its last list out. A list or an object
+    /// that was empty before is the user's and stays. `keeping` names the
+    /// lists and the object that were empty before our entries went in
+    /// (`emptyContainers`), so they stay too.
+    static func uninstalling(from text: [UInt8], entry: HookCatalogEntry, keeping: Set<[String]> = []) throws -> [UInt8] {
         guard case .jsonHookGroups(let keyPath) = entry.format else { return [] }
         if isBlank(text) { return text }
         var source = JSONSourceText(text)
-        var emptied = false
+        var emptied: Set<String> = []
         while true {
             let root = try validated(source.bytes)
             guard let hooks = try hooksObject(in: root, keyPath: keyPath) else { break }
             guard let target = firstOurs(in: hooks) else { break }
             source.removeChild(at: target.index, of: target.container)
-            emptied = true
+            if target.wholeGroup { emptied.insert(target.event) }
         }
-        guard emptied else { return text }
-        // Lists and objects that held nothing but our entries.
-        while true {
+        guard source.bytes != text else { return text }
+        // The lists that held nothing but our entries, then the object.
+        var tookList = false
+        for event in emptied where !keeping.contains(keyPath + [event]) {
             let root = try validated(source.bytes)
             guard let hooks = try hooksObject(in: root, keyPath: keyPath), let members = hooks.members else { break }
-            if let index = members.firstIndex(where: { $0.value.elements?.isEmpty ?? false }) {
-                source.removeChild(at: index, of: hooks)
-            } else if members.isEmpty, let parent = try parentOfHooks(in: root, keyPath: keyPath),
-                      let index = parent.members?.firstIndex(where: { $0.key == keyPath.last }) {
+            guard let index = members.firstIndex(where: { $0.key == event && ($0.value.elements?.isEmpty ?? false) }) else { continue }
+            source.removeChild(at: index, of: hooks)
+            tookList = true
+        }
+        if tookList, !keeping.contains(keyPath) {
+            let root = try validated(source.bytes)
+            if let hooks = try hooksObject(in: root, keyPath: keyPath), hooks.members?.isEmpty ?? false,
+               let parent = try parentOfHooks(in: root, keyPath: keyPath),
+               let index = parent.members?.firstIndex(where: { $0.key == keyPath.last }) {
                 source.removeChild(at: index, of: parent)
-                break
-            } else {
-                break
             }
         }
         _ = try validated(source.bytes)
@@ -157,11 +189,12 @@ enum HookConfigEditor {
     }
 
     /// Nil when the key path is not there. A key on the path that holds
-    /// something other than an object is a form we do not know.
+    /// something other than an object, or that is there twice, is a form
+    /// we do not know.
     private static func hooksObject(in root: JSONSourceNode, keyPath: [String]) throws -> JSONSourceNode? {
         var current = root
         for key in keyPath {
-            guard let next = current.member(key)?.value else { return nil }
+            guard let next = try uniqueMember(key, of: current)?.value else { return nil }
             guard next.members != nil else { throw HookInstallError.unexpectedShape }
             current = next
         }
@@ -196,14 +229,14 @@ enum HookConfigEditor {
 
     /// The first thing to remove: a whole group when all its handlers are
     /// ours, else the one handler inside a group that another tool shares.
-    private static func firstOurs(in hooks: JSONSourceNode) -> (container: JSONSourceNode, index: Int)? {
+    private static func firstOurs(in hooks: JSONSourceNode) -> (container: JSONSourceNode, index: Int, event: String, wholeGroup: Bool)? {
         for member in hooks.members ?? [] {
             guard let groups = member.value.elements else { continue }
             for (groupIndex, group) in groups.enumerated() {
                 guard let list = group.member("hooks")?.value, let handlers = list.elements,
                       let handlerIndex = handlers.firstIndex(where: isOurs) else { continue }
-                if handlers.allSatisfy(isOurs) { return (member.value, groupIndex) }
-                return (list, handlerIndex)
+                if handlers.allSatisfy(isOurs) { return (member.value, groupIndex, member.key, true) }
+                return (list, handlerIndex, member.key, false)
             }
         }
         return nil
@@ -261,6 +294,16 @@ enum HookConfigEditor {
     }
 }
 
+/// What the installer has to know about one agent's config from "on" to
+/// "off". It is kept in our own Application Support folder, never in the
+/// user's file. Without it "off" still takes out our entries, and only
+/// what it emptied itself.
+struct HookInstallRecord: Codable, Equatable {
+    /// The key paths of the hooks object and of the event lists that were
+    /// in the file and empty before our entries went in.
+    var emptyBefore: [[String]] = []
+}
+
 /// The thin shell around `HookConfigEditor`: it reads the file, writes a
 /// backup next to it, and replaces the file in one step.
 struct HookInstaller {
@@ -273,6 +316,32 @@ struct HookInstaller {
 
     func configURL(for entry: HookCatalogEntry) -> URL {
         home.appendingPathComponent(entry.configPath)
+    }
+
+    /// Next to the hook state files, and not among them: the reader of
+    /// that folder removes what it does not know.
+    var recordsDirectory: URL {
+        home.appendingPathComponent("Library/Application Support/\(HookEvents.bundleID)/hook-installs", isDirectory: true)
+    }
+
+    private func recordURL(for entry: HookCatalogEntry) -> URL {
+        recordsDirectory.appendingPathComponent("\(entry.id).json")
+    }
+
+    func record(for entry: HookCatalogEntry) -> HookInstallRecord? {
+        guard let data = try? Data(contentsOf: recordURL(for: entry)) else { return nil }
+        return try? JSONDecoder().decode(HookInstallRecord.self, from: data)
+    }
+
+    /// A record that cannot be written is no reason to fail: see `HookInstallRecord`.
+    private func save(_ record: HookInstallRecord, for entry: HookCatalogEntry) {
+        try? FileManager.default.createDirectory(at: recordsDirectory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])
+        guard let data = try? JSONEncoder().encode(record) else { return }
+        try? data.write(to: recordURL(for: entry), options: .atomic)
+    }
+
+    private func forgetRecord(for entry: HookCatalogEntry) {
+        try? FileManager.default.removeItem(at: recordURL(for: entry))
     }
 
     /// The path with `~`, as it is shown.
@@ -315,8 +384,18 @@ struct HookInstaller {
         if case .pluginFile = entry.format, let old, !old.isEmpty, HookConfigEditor.status(text: old, entry: entry, appPath: appPath) == .unreadable {
             throw HookInstallError.notOurFile
         }
-        let new = try HookConfigEditor.installing(into: old ?? [], entry: entry, appPath: appPath)
-        try write(new, to: url, replacing: old, backup: entry.format != .pluginFile)
+        guard case .jsonHookGroups = entry.format else {
+            let new = try HookConfigEditor.installing(into: old ?? [], entry: entry, appPath: appPath)
+            return try write(new, to: url, replacing: old, backup: false)
+        }
+        let keeping = Set(record(for: entry)?.emptyBefore ?? [])
+        let new = try HookConfigEditor.installing(into: old ?? [], entry: entry, appPath: appPath, keeping: keeping)
+        // Already there: the record of the first time stands.
+        guard new != old else { return }
+        let cleared = try HookConfigEditor.clearedForInstall(old ?? [], entry: entry, keeping: keeping)
+        let empty = HookConfigEditor.emptyContainers(in: cleared, entry: entry)
+        try write(new, to: url, replacing: old, backup: true)
+        save(HookInstallRecord(emptyBefore: empty.sorted { $0.lexicographicallyPrecedes($1) }), for: entry)
     }
 
     func uninstall(_ entry: HookCatalogEntry) throws {
@@ -327,8 +406,10 @@ struct HookInstaller {
             guard HookConfigEditor.status(text: old, entry: entry, appPath: appPath) != .unreadable else { throw HookInstallError.notOurFile }
             guard (try? FileManager.default.removeItem(at: url)) != nil else { throw HookInstallError.writeFailed }
         case .jsonHookGroups:
-            let new = try HookConfigEditor.uninstalling(from: old, entry: entry)
+            let keeping = Set(record(for: entry)?.emptyBefore ?? [])
+            let new = try HookConfigEditor.uninstalling(from: old, entry: entry, keeping: keeping)
             try write(new, to: url, replacing: old, backup: true)
+            forgetRecord(for: entry)
         }
     }
 

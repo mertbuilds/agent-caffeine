@@ -206,6 +206,11 @@ final class HookInstallerTests: XCTestCase {
             (claude, foreignClaude), (codex, foreignCodex), (droid, foreignDroid),
             (claude, "{}"), (claude, "{}\n"), (claude, "{\"model\": \"m\"}"), (claude, "{\n    \"model\": \"m\"\n}\n"),
             (claude, "{\r\n  \"hooks\": {\r\n    \"Stop\": [\r\n      {\"hooks\": [{\"type\": \"command\", \"command\": \"other\"}]}\r\n    ]\r\n  }\r\n}\r\n"),
+            // An empty hooks object and empty lists that were there before are the user's.
+            (claude, "{\"hooks\": {}}"), (claude, "{\"hooks\": {\"Stop\": []}}"),
+            (codex, "{\"hooks\": {\"Stop\": [], \"PreCompact\": []}}\n"),
+            (droid, "{\n  \"hooks\": {},\n  \"model\": \"m\"\n}\n"),
+            (claude, "{\n  \"hooks\": {\n    \"Stop\": [],\n    \"SessionEnd\": []\n  }\n}\n"),
         ]
         for (entry, original) in cases {
             try write(original, for: entry)
@@ -304,6 +309,71 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(installer.status(of: claude), .outdated)
         try installer.uninstall(claude)
         XCTAssertEqual(try text(of: claude), "{\"hooks\": {\"Stop\": [{\"hooks\": [{\"type\": \"command\", \"command\": \"other-tool\"}]}]}}")
+    }
+
+    /// Entries of a build that kept no record, or a record that is gone:
+    /// only the lists that this run emptied go.
+    func testUninstallWithoutARecordRemovesOnlyWhatItEmptied() throws {
+        let ours = JSONSourceText.literal(HookCatalog.command(agent: "claude", event: "Stop", appPath: appPath))
+        let group = "{\"hooks\": [{\"type\": \"command\", \"command\": \(ours)}]}"
+        let cases: [(before: String, after: String)] = [
+            ("{\"hooks\": {\"PreCompact\": [], \"Stop\": [\(group)]}}", "{\"hooks\": {\"PreCompact\": []}}"),
+            ("{\"hooks\": {\"Stop\": [\(group)]}, \"model\": \"m\"}", "{\"model\": \"m\"}"),
+            ("{\"hooks\": {\"Stop\": [\(group)], \"enabled\": true}}", "{\"hooks\": {\"enabled\": true}}"),
+            ("{\"hooks\": {\"Stop\": [{\"hooks\": [{\"command\": \"other\"}]}, \(group)], \"PreCompact\": []}}", "{\"hooks\": {\"Stop\": [{\"hooks\": [{\"command\": \"other\"}]}], \"PreCompact\": []}}"),
+        ]
+        for c in cases {
+            try write(c.before, for: claude)
+            XCTAssertNil(installer.record(for: claude))
+            try installer.uninstall(claude)
+            XCTAssertEqual(try text(of: claude), c.after)
+        }
+        // With nothing of ours in it, nothing is touched.
+        for untouched in ["{\"hooks\": {}}", "{\"hooks\": {\"Stop\": []}}"] {
+            XCTAssertEqual(try HookConfigEditor.uninstalling(from: Array(untouched.utf8), entry: claude), Array(untouched.utf8))
+        }
+    }
+
+    /// The record is in our own folder, and the user's file says nothing of it.
+    func testTheRecordIsKeptFromOnToOff() throws {
+        try write("{\"hooks\": {\"Stop\": []}}", for: claude)
+        try installer.install(claude)
+        XCTAssertEqual(installer.record(for: claude)?.emptyBefore, [["hooks", "Stop"]])
+        XCTAssertTrue(installer.recordsDirectory.path.hasPrefix(home.appendingPathComponent("Library/Application Support/com.caffeinagent.app/").path))
+        // On again changes nothing, and the record of the first time stands.
+        try installer.install(claude)
+        XCTAssertEqual(installer.record(for: claude)?.emptyBefore, [["hooks", "Stop"]])
+        // An update of entries from another path keeps the user's empty list too.
+        try HookInstaller(home: home, appPath: "/Users/me/Downloads/agent caffeine.app").install(claude)
+        XCTAssertEqual(installer.status(of: claude), .outdated)
+        try installer.install(claude)
+        XCTAssertEqual(installer.record(for: claude)?.emptyBefore, [["hooks", "Stop"]])
+        try installer.uninstall(claude)
+        XCTAssertEqual(try text(of: claude), "{\"hooks\": {\"Stop\": []}}")
+        XCTAssertNil(installer.record(for: claude))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: installer.recordsDirectory.path), [])
+    }
+
+    /// A reader takes one of two keys with the same name, and our entries
+    /// went into the first.
+    func testAKeyThatIsThereTwiceIsRefused() throws {
+        let ours = JSONSourceText.literal(HookCatalog.command(agent: "claude", event: "Stop", appPath: appPath))
+        let cases = [
+            "{\"hooks\": {}, \"hooks\": {\"Stop\": []}}",
+            "{\"hooks\": {\"Stop\": [], \"Stop\": []}}",
+            "{\"hooks\": {\"Stop\": [{\"hooks\": [{\"command\": \(ours)}]}]}, \"hooks\": {}}",
+        ]
+        for twice in cases {
+            try write(twice, for: claude)
+            XCTAssertThrowsError(try installer.install(claude), twice) { XCTAssertEqual($0 as? HookInstallError, .unexpectedShape, twice) }
+            XCTAssertEqual(try text(of: claude), twice)
+            XCTAssertEqual(backups(of: claude), [])
+        }
+        try write(cases[0], for: claude)
+        XCTAssertEqual(installer.status(of: claude), .unreadable)
+        try write(cases[2], for: claude)
+        XCTAssertThrowsError(try installer.uninstall(claude)) { XCTAssertEqual($0 as? HookInstallError, .unexpectedShape) }
+        XCTAssertEqual(try text(of: claude), cases[2])
     }
 
     func testUninstallWithNothingOfOursWritesNothing() throws {
