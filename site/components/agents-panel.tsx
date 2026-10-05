@@ -32,7 +32,8 @@ function Chevrons() {
   );
 }
 
-function ModePicker({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => void }) {
+/** `shown` opens the menu for the demo, with that mode highlighted, without taking focus. */
+function ModePicker({ mode, onChange, shown }: { mode: Mode; onChange: (mode: Mode) => void; shown: Mode | null }) {
   const id = useId();
   const lessMotion = useLessMotion();
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -40,6 +41,8 @@ function ModePicker({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => 
   const selected = Math.max(0, MODES.findIndex((entry) => entry.mode === mode));
   const [active, setActive] = useState(selected);
   const [open, setOpen] = useState(false);
+  const opened = open || shown !== null;
+  const highlighted = shown === null ? active : MODES.findIndex((entry) => entry.mode === shown);
 
   useEffect(() => {
     if (open) {
@@ -99,10 +102,11 @@ function ModePicker({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => 
         <button
           ref={buttonRef}
           aria-describedby={`${id}-explanation`}
-          aria-expanded={open}
+          aria-expanded={opened}
           aria-haspopup="listbox"
           aria-labelledby={`${id}-label ${id}-button`}
           className="flex h-[18px] items-center gap-1.5 rounded-[5px] border border-border bg-bg pl-2 pr-px text-[11px] leading-[13px] shadow-[0_1px_1px_var(--shadow)]"
+          data-demo="mode"
           id={`${id}-button`}
           onClick={() => (open ? setOpen(false) : show())}
           onKeyDown={onButtonKey}
@@ -112,12 +116,12 @@ function ModePicker({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => 
           <Chevrons />
         </button>
         <AnimatePresence>
-          {open && (
+          {opened && (
             <motion.ul
               key="menu"
               ref={listRef}
               animate={{ opacity: 1, scale: 1 }}
-              aria-activedescendant={`${id}-option-${active}`}
+              aria-activedescendant={`${id}-option-${highlighted}`}
               aria-labelledby={`${id}-label`}
               className="absolute z-10 whitespace-nowrap rounded-[6px] border border-border bg-bg p-1 text-[12px] leading-[15px] shadow-[0_8px_24px_var(--shadow)] outline-none"
               exit={{ opacity: 0, scale: 0.97, transition: { duration: lessMotion ? 0 : duration.quick, ease: easing.smoothOut } }}
@@ -142,7 +146,8 @@ function ModePicker({ mode, onChange }: { mode: Mode; onChange: (mode: Mode) => 
                 <li
                   key={entry.mode}
                   aria-selected={index === selected}
-                  className={`flex h-5 cursor-default items-center rounded-[2px] pl-1 pr-3 ${index === active ? "bg-accent text-white" : ""}`}
+                  className={`flex h-5 cursor-default items-center rounded-[2px] pl-1 pr-3 ${index === highlighted ? "bg-accent text-white" : ""}`}
+                  data-demo={`mode-${entry.mode}`}
                   id={`${id}-option-${index}`}
                   onClick={() => choose(index)}
                   onMouseMove={() => setActive(index)}
@@ -222,7 +227,7 @@ function BatteryRow({ battery, onOverride }: { battery: View["battery"]; onOverr
           </span>
           On battery: closing the lid will sleep this Mac
         </p>
-        <button className="shrink-0 text-accent" onClick={onOverride} type="button">
+        <button className="shrink-0 text-accent" data-demo="override" onClick={onOverride} type="button">
           Turn on override…
         </button>
       </div>
@@ -237,10 +242,10 @@ function Fade({ children, id, lessMotion }: { children: string; id: string; less
       <AnimatePresence initial={false}>
         <motion.span
           key={id}
-          animate={{ opacity: 1 }}
+          animate={{ opacity: 1, y: 0 }}
           className="[grid-area:1/1]"
-          exit={{ opacity: 0 }}
-          initial={lessMotion ? false : { opacity: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          initial={lessMotion ? false : { opacity: 0, y: 4 }}
           transition={{ duration: lessMotion ? 0 : duration.quick, ease: easing.smoothOut }}
         >
           {children}
@@ -281,12 +286,14 @@ type AgentsPanelProps = {
   enabled: boolean;
   mode: Mode;
   view: View;
+  /** The mode picker opened by the demo, with the mode it highlights. */
+  menu: Mode | null;
   onEnabled: (enabled: boolean) => void;
   onMode: (mode: Mode) => void;
   onOverride: () => void;
 };
 
-export function AgentsPanel({ enabled, mode, view, onEnabled, onMode, onOverride }: AgentsPanelProps) {
+export function AgentsPanel({ enabled, mode, view, menu, onEnabled, onMode, onOverride }: AgentsPanelProps) {
   const lessMotion = useLessMotion();
   const move = { duration: lessMotion ? 0 : duration.fast, ease: easing.smoothOut };
 
@@ -306,7 +313,7 @@ export function AgentsPanel({ enabled, mode, view, onEnabled, onMode, onOverride
             {view.status}
           </Fade>
         </p>
-        <ModePicker mode={mode} onChange={onMode} />
+        <ModePicker mode={mode} onChange={onMode} shown={menu} />
         <AutoHeight lessMotion={lessMotion}>
           <BatteryRow battery={view.battery} onOverride={onOverride} />
         </AutoHeight>

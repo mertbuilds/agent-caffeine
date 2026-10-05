@@ -103,6 +103,101 @@
   }
 }
 
+/*
+ * The how it works demo (components/menu-bar-simulator.tsx): the pointer comes
+ * in, a ring goes out where it presses, the demo tag fills up to the next step
+ * and its dot breathes, and a change on the right pulses once. The demo never
+ * plays with less motion, and these do nothing there.
+ */
+@keyframes demo-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes demo-ring {
+  from {
+    opacity: 0.8;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes demo-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes demo-live {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes demo-pulse {
+  from {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.9, 2.4);
+  }
+}
+
+@keyframes demo-sweep {
+  from {
+    opacity: 1;
+    transform: translateX(-100%);
+  }
+  to {
+    opacity: 0.6;
+    transform: translateX(100%);
+  }
+}
+
+.demo-in {
+  animation: demo-in var(--duration-fast) var(--ease-smooth-out);
+}
+
+.demo-ring {
+  animation: demo-ring 600ms var(--ease-smooth-out) both;
+}
+
+.demo-fill {
+  animation: demo-fill linear both;
+}
+
+.demo-live {
+  animation: demo-live 1.6s ease-in-out infinite;
+}
+
+.demo-pulse {
+  animation: demo-pulse 600ms var(--ease-smooth-out) both;
+}
+
+.demo-sweep {
+  animation: demo-sweep 700ms var(--ease-smooth-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-in,
+  .demo-ring,
+  .demo-fill,
+  .demo-live,
+  .demo-pulse,
+  .demo-sweep {
+    animation: none;
+  }
+}
+
 @layer base {
   html,
   body {

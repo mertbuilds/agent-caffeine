@@ -76,7 +76,7 @@ export const PRESETS: readonly { id: PresetId; title: string }[] = [
   { id: "battery", title: "On battery" },
 ];
 
-export const INITIAL: SimState = preset({ enabled: true, mode: "agentWorking", power: "adapter", overrideInstalled: false, runs: [], now: 0 }, "working");
+export const INITIAL: SimState = preset({ enabled: true, mode: "agentWorking", power: "adapter", overrideInstalled: false, runs: [], now: 0 }, "nothing");
 
 /** Sets the whole state to a situation, keeping the clock. */
 export function preset(state: SimState, id: PresetId): SimState {
@@ -103,22 +103,124 @@ export function preset(state: SimState, id: PresetId): SimState {
   }
 }
 
+/** One control of the simulator, as the reader would use it. */
+export type DemoAction =
+  | { use: "preset"; id: PresetId }
+  | { use: "start"; agent: AgentId }
+  | { use: "working"; agent: AgentId; working: boolean }
+  | { use: "mode"; mode: Mode }
+  | { use: "power"; power: Power }
+  | { use: "override" };
+
 /**
- * The examples that play until the reader first touches the simulator, each
- * held for `hold` real milliseconds. A step either sets a situation or lets an
- * agent go idle, so the grace period runs out on screen.
+ * The examples that play until the reader first touches the simulator. Each
+ * step is a control being used, then what it changed is held for `hold` real
+ * milliseconds. The loop starts and ends with nothing running, as `INITIAL`.
  */
-export const DEMO: readonly { preset: PresetId; idle?: AgentId; hold: number }[] = [
-  { preset: "working", hold: 4000 },
-  { preset: "working", idle: "claude", hold: 9000 },
-  { preset: "waiting", hold: 4000 },
-  { preset: "nothing", hold: 4000 },
-  { preset: "always", hold: 4000 },
-  { preset: "battery", hold: 4000 },
+export const DEMO: readonly { action: DemoAction; hold: number }[] = [
+  { action: { use: "preset", id: "nothing" }, hold: 2500 },
+  { action: { use: "start", agent: "claude" }, hold: 2500 },
+  // Long enough for the grace period to run out and the outcome to be read.
+  { action: { use: "working", agent: "claude", working: false }, hold: 7500 },
+  { action: { use: "mode", mode: "agentOpen" }, hold: 2500 },
+  { action: { use: "power", power: "battery" }, hold: 2500 },
+  { action: { use: "override" }, hold: 2500 },
 ];
 
-export function demo(state: SimState, step: (typeof DEMO)[number]): SimState {
-  return step.idle === undefined ? preset(state, step.preset) : setWorking(state, step.idle, false);
+/** Before the first step, in real milliseconds. */
+const DEMO_LEAD = 700;
+/** The pointer going to a control, and pressing it, in real milliseconds. */
+export const DEMO_MOVE = 600;
+export const DEMO_PRESS = 150;
+
+/** The `data-demo` names of the controls an action uses, in order: the mode picker opens before its option is chosen. */
+export function targets(action: DemoAction): readonly string[] {
+  switch (action.use) {
+    case "preset":
+      return [`preset-${action.id}`];
+    case "start":
+      return [`run-${action.agent}`];
+    case "working":
+      return [`${action.working ? "working" : "idle"}-${action.agent}`];
+    case "mode":
+      return ["mode", `mode-${action.mode}`];
+    case "power":
+      return [`power-${action.power}`];
+    case "override":
+      return ["override"];
+  }
+}
+
+export function demo(state: SimState, action: DemoAction): SimState {
+  switch (action.use) {
+    case "preset":
+      return preset(state, action.id);
+    case "start":
+      return start(state, action.agent);
+    case "working":
+      return setWorking(state, action.agent, action.working);
+    case "mode":
+      return setMode(state, action.mode);
+    case "power":
+      return setPower(state, action.power);
+    case "override":
+      return installOverride(state);
+  }
+}
+
+/**
+ * Where the demo is: holding what `DEMO[step]` changed (or waiting to begin),
+ * or moving to and pressing the `target`th control of the step after it.
+ */
+export type Cue = { step: number; phase: "lead" | "hold" | "move" | "press"; target: number };
+
+export const DEMO_START: Cue = { step: 0, phase: "lead", target: 0 };
+
+/** The step being played out while the pointer moves and presses. */
+export function upcoming(cue: Cue): DemoAction {
+  return DEMO[(cue.step + 1) % DEMO.length].action;
+}
+
+/** How long a cue lasts, in real milliseconds. */
+export function cueTime(cue: Cue): number {
+  switch (cue.phase) {
+    case "lead":
+      return DEMO_LEAD;
+    case "hold":
+      return DEMO[cue.step].hold;
+    case "move":
+      return DEMO_MOVE;
+    case "press":
+      return DEMO_PRESS;
+  }
+}
+
+/** The cue after this one; a new `step` means its action is to be applied. */
+export function nextCue(cue: Cue): Cue {
+  switch (cue.phase) {
+    case "lead":
+    case "hold":
+      return { ...cue, phase: "move", target: 0 };
+    case "move":
+      return { ...cue, phase: "press" };
+    case "press":
+      return cue.target + 1 < targets(upcoming(cue)).length
+        ? { ...cue, phase: "move", target: cue.target + 1 }
+        : { step: (cue.step + 1) % DEMO.length, phase: "hold", target: 0 };
+  }
+}
+
+/** The control the pointer is at or going to, or null before the first step. */
+export function cueTarget(cue: Cue): string | null {
+  switch (cue.phase) {
+    case "lead":
+      return null;
+    case "hold":
+      return targets(DEMO[cue.step].action).at(-1) ?? null;
+    case "move":
+    case "press":
+      return targets(upcoming(cue))[cue.target];
+  }
 }
 
 export function start(state: SimState, id: AgentId): SimState {
@@ -140,6 +242,22 @@ export function setWorking(state: SimState, id: AgentId, working: boolean): SimS
       run.id !== id || run.working === working ? run : { id, working, lastWork: state.now },
     ),
   };
+}
+
+export function setMode(state: SimState, mode: Mode): SimState {
+  return { ...state, mode };
+}
+
+export function setPower(state: SimState, power: Power): SimState {
+  return { ...state, power };
+}
+
+export function setEnabled(state: SimState, enabled: boolean): SimState {
+  return { ...state, enabled };
+}
+
+export function installOverride(state: SimState): SimState {
+  return { ...state, overrideInstalled: true };
 }
 
 export function advance(state: SimState, ms: number): SimState {
