@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BuyButton } from "@/components/buy-button";
+import { DownloadButton } from "@/components/download-button";
 import { Footer } from "@/components/footer";
 import { Header } from "@/components/header";
 import { JsonLd } from "@/components/json-ld";
 import { formatDate, getPost, getPosts } from "@/lib/blog";
+import { getLatestRelease } from "@/lib/release";
 import { AUTHOR, ORGANIZATION, SITE_URL } from "@/lib/site";
 
 type Props = { params: Promise<{ slug: string }> };
@@ -47,6 +49,7 @@ export default async function BlogPost({ params }: Props) {
   const post = getPost((await params).slug);
   if (post === undefined) notFound();
 
+  const release = await getLatestRelease();
   const url = `${SITE_URL}/blog/${post.slug}`;
   const structuredData = {
     "@context": "https://schema.org",
@@ -114,11 +117,25 @@ export default async function BlogPost({ params }: Props) {
         <aside className="flex flex-col items-start gap-5 rounded-lg border border-border bg-surface px-6 py-8 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-pretty leading-relaxed">
             We built agent caffeine to keep a Mac awake while coding agents work, also with
-            the lid closed. $9 once, macOS 13 or later.
+            the lid closed.{" "}
+            {release === null
+              ? "$9 once, macOS 13 or later."
+              : "7 day free trial, then $9 once per Mac. macOS 13 or later."}
           </p>
-          <BuyButton placement="blog" size="small">
-            Buy · $9
-          </BuyButton>
+          {release === null ? (
+            <BuyButton placement="blog" size="small">
+              Buy · $9
+            </BuyButton>
+          ) : (
+            <div className="flex shrink-0 items-center gap-4">
+              <BuyButton placement="blog" variant="text">
+                Buy · $9
+              </BuyButton>
+              <DownloadButton release={release} placement="blog" size="small">
+                Download
+              </DownloadButton>
+            </div>
+          )}
         </aside>
       </article>
       <Footer />

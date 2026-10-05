@@ -50,8 +50,35 @@ export const faqItems: { question: string; answer: ReactNode }[] = [
     question: "What about privacy?",
     answer: (
       <>
-        No network calls and no telemetry. It reads files in <code>~/.claude/projects</code> and
-        the process list on your own Mac. Nothing leaves it.
+        No telemetry and no analytics. agent caffeine reads the process list and the Claude Code
+        session files in <code>~/.claude/projects</code>{" "}
+        on your own Mac. It makes two kinds of network calls: it checks caffeinagent.com for
+        updates, and it checks your license key with Polar, sending the key and your Mac&apos;s
+        model. Nothing about you or your agents leaves the Mac.
+      </>
+    ),
+  },
+  {
+    question: "Is there a free trial?",
+    answer:
+      "Yes. You get 7 days with every feature and no card. After that agent caffeine stops keeping the Mac awake until you enter a license key.",
+  },
+  {
+    question: "Can I use one key on two Macs?",
+    answer:
+      "One key works on one Mac at a time. To move it, deactivate this Mac in Preferences or in your Polar purchases, then activate the key on the other Mac.",
+  },
+  {
+    question: "How do updates work?",
+    answer:
+      "The app checks for updates itself and installs them when you agree. You can also choose “Check for updates…” in the menu.",
+  },
+  {
+    question: "I bought agent caffeine before license keys existed. Do I need to pay again?",
+    answer: (
+      <>
+        No. Your key is in your{" "}
+        <a href="https://polar.sh/mertbuilds/portal">Polar purchases</a>, under agent caffeine.
       </>
     ),
   },

@@ -1,11 +1,14 @@
 # agent caffeine
 
-> agent caffeine is a macOS menu bar app that keeps a Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are idle. It costs $9 once and runs on macOS 13 or later (Apple silicon and Intel).
+> agent caffeine is a macOS menu bar app that keeps a Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are idle. It has a 7 day free trial, then costs $9 once per Mac, and runs on macOS 13 or later (Apple silicon and Intel).
 
 - Detects more than 40 coding agents (Claude Code, Codex, opencode, Gemini CLI, Cursor and others) by process name, plus Claude Code session files.
 - Three modes: always, while an agent is open, or while an agent is working (the default).
 - A closed lid on power works out of the box. On battery it needs a one-time admin prompt that installs a sudoers entry, and it turns on `pmset disablesleep` only while it holds the Mac awake.
-- No network calls and no telemetry.
+- Free 7 day trial with every feature and no card. After the trial it stops keeping the Mac awake until a license key is entered.
+- A $9 license key is a one-time purchase with lifetime updates and no subscription. It works on one Mac at a time; deactivate a Mac in the app or in your Polar purchases to move the key to another.
+- The app updates itself: it checks caffeinagent.com for updates and installs them when you agree.
+- No telemetry and no analytics. It reads the process list and the Claude Code session files in `~/.claude/projects` on your own Mac. Its only network calls are the update check to caffeinagent.com and the license key check with Polar, which sends the key and the Mac's model. Nothing about you or your agents leaves the Mac.
 
 ## Links
 

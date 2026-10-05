@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "agent caffeine",
     description:
-      "Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. $9 once.",
+      "Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. 7 day free trial, then $9 once.",
     type: "website",
     url: "/",
     images: [
@@ -40,7 +40,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "agent caffeine",
     description:
-      "Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. $9 once.",
+      "Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. 7 day free trial, then $9 once.",
     images: ["/og.png"],
   },
 };

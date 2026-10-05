@@ -45,7 +45,7 @@ export function MenuBarSection() {
         </div>
       </div>
       <p className="max-w-[26rem] text-balance text-center text-sm leading-normal text-muted">
-        A 581 kilobyte native Mac app. No daemons, no network calls
+        A small native Mac app. No daemons, no telemetry
       </p>
     </section>
   );

@@ -1,13 +1,16 @@
 import { AgentIcon } from "@/components/agent-icons";
 import { BuyButton } from "@/components/buy-button";
+import { DownloadButton } from "@/components/download-button";
 import { GridTexture } from "@/components/grid-texture";
 import { LaptopScene } from "@/components/laptop-scene";
 import { agents, markedAgents } from "@/lib/agents";
+import { getLatestRelease, releaseDetails } from "@/lib/release";
 
 const SHOWN = markedAgents.slice(0, 7);
 const MORE = agents.length - SHOWN.length;
 
-export function Hero() {
+export async function Hero() {
+  const release = await getLatestRelease();
   return (
     <section className="relative isolate mx-auto grid w-full max-w-[1120px] items-center gap-10 py-12 text-center md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-6 md:py-20 md:text-left">
       <GridTexture />
@@ -37,10 +40,27 @@ export function Hero() {
           </ul>
           <span>and {MORE} more</span>
         </div>
-        <div className="flex flex-col items-center gap-3 md:items-start">
-          <BuyButton placement="hero">Buy agent caffeine · $9</BuyButton>
-          <p className="text-sm text-muted">Pay once. No subscription · macOS 13 or later</p>
-        </div>
+        {release === null ? (
+          <div className="flex flex-col items-center gap-3 md:items-start">
+            <BuyButton placement="hero">Buy agent caffeine · $9</BuyButton>
+            <p className="text-sm text-muted">Pay once. No subscription · macOS 13 or later</p>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-3 md:items-start">
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <DownloadButton release={release} placement="hero">
+                Download free trial
+              </DownloadButton>
+              <BuyButton placement="hero" variant="outline">
+                Buy a key · $9
+              </BuyButton>
+            </div>
+            <div className="flex flex-col gap-1 text-sm text-muted">
+              <p>7 day free trial. Then $9 once, no subscription</p>
+              <p>{releaseDetails(release)}</p>
+            </div>
+          </div>
+        )}
       </div>
       <LaptopScene />
     </section>

@@ -3,6 +3,8 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+type Placement = "header" | "hero" | "pricing" | "blog";
+
 function fire(event: string, props?: Record<string, unknown>) {
   if (typeof window === "undefined") return;
   if (typeof window.op !== "function") return;
@@ -16,7 +18,7 @@ export function BuyCta({
   children,
 }: {
   href: string;
-  placement: "header" | "hero" | "pricing" | "blog";
+  placement: Placement;
   className?: string;
   children: ReactNode;
 }) {
@@ -28,5 +30,30 @@ export function BuyCta({
     >
       {children}
     </Link>
+  );
+}
+
+export function DownloadCta({
+  href,
+  filename,
+  placement,
+  className,
+  children,
+}: {
+  href: string;
+  filename: string;
+  placement: Placement;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <a
+      href={href}
+      download={filename}
+      onClick={() => fire("download_clicked", { placement })}
+      className={className}
+    >
+      {children}
+    </a>
   );
 }

@@ -18,7 +18,13 @@ const ROUND = 2.1;
 const RIM = 0.25;
 const HINGE = 0.8;
 
-const cq = (size: number) => `${size}cqw`;
+/**
+ * A computed number cut to 4 decimals, and -0 to 0, so a style reads the same
+ * from the server's HTML as from the client: the browser keeps 6 significant
+ * digits of a CSS number, and every size here is under 100.
+ */
+const fixed = (value: number) => Math.round(value * 1e4) / 1e4 || 0;
+const cq = (size: number) => `${fixed(size)}cqw`;
 
 // Key widths in units; every row adds up to 14.5 with the arrow keys.
 const ROWS: readonly (readonly number[])[] = [
@@ -111,7 +117,7 @@ function Walls({ front, toward, thickness }: { front: number; toward: 1 | -1; th
             width: `calc(${cq(length)} + 0.5px)`,
             height: cq(thickness),
             transformOrigin: "0 0",
-            transform: `rotateZ(${turn}rad) rotateX(-90deg)`,
+            transform: `rotateZ(${fixed(turn)}rad) rotateX(-90deg)`,
           }}
         />
       ))}
@@ -314,8 +320,8 @@ export function Laptop({ closed, display, children }: LaptopProps) {
                 className="h-full"
                 style={{
                   background: "linear-gradient(var(--shadow) 75%, transparent)",
-                  opacity: closed,
-                  transform: `translateY(${(reach - 0.85) * 100}%)`,
+                  opacity: fixed(closed),
+                  transform: `translateY(${fixed((reach - 0.85) * 100)}%)`,
                 }}
               />
             </div>
@@ -328,11 +334,11 @@ export function Laptop({ closed, display, children }: LaptopProps) {
             width: cq(WIDTH),
             height: cq(DEPTH),
             transformOrigin: "bottom",
-            transform: `translateZ(0.15cqw) rotateX(${angle}deg)`,
+            transform: `translateZ(0.15cqw) rotateX(${fixed(angle)}deg)`,
           }}
         >
           <Display>
-            <div className="h-full" style={{ opacity: display }}>
+            <div className="h-full" style={{ opacity: fixed(display) }}>
               {children}
             </div>
           </Display>
