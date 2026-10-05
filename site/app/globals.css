@@ -57,11 +57,59 @@
   color-scheme: dark;
 }
 
+/* Jumps down the page are eased, for everyone who has not asked for less motion. */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/*
+ * The header gathers into its pill and opens back out as a view transition
+ * (lib/morph.ts). The page takes no part in it: it keeps drawing and
+ * scrolling under the moving items, and the pointer goes through to it.
+ */
+:root {
+  view-transition-name: none;
+}
+
+::view-transition {
+  pointer-events: none;
+}
+
+/* Opening back out, the browser's ease per keyframe goes, so the items keep to the ground growing under them. */
+:root:active-view-transition-type(morph-spreading)::view-transition-group(*),
+:root:active-view-transition-type(morph-spreading)::view-transition-old(*),
+:root:active-view-transition-type(morph-spreading)::view-transition-new(*) {
+  animation-timing-function: linear;
+}
+
+/* An item of the header's menu coming in: a short rise out of a blur. */
+@keyframes menu-item-in {
+  from {
+    filter: blur(2px);
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.menu-item-in {
+  animation: menu-item-in var(--duration-fast) var(--ease-smooth-out) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-item-in {
+    animation: none;
+  }
+}
+
 @layer base {
   html,
   body {
     background: var(--bg);
     color: var(--fg);
+    /* No rubber-band pull past the top or the foot of the page. */
+    overscroll-behavior-y: none;
   }
 
   a {

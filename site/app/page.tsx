@@ -1,7 +1,6 @@
 import { AgentsSection } from "@/components/agents-section";
 import { Faq } from "@/components/faq";
 import { Footer } from "@/components/footer";
-import { Header } from "@/components/header";
 import { Hero } from "@/components/hero";
 import { HowItWorks } from "@/components/how-it-works";
 import { JsonLd } from "@/components/json-ld";
@@ -38,11 +37,8 @@ const structuredData = {
 
 export default function Home() {
   return (
-    <main className="relative isolate flex min-h-screen flex-col gap-24 overflow-x-clip px-4 md:px-6">
-      <div className="flex flex-col">
-        <Header />
-        <Hero />
-      </div>
+    <main className="relative isolate flex min-h-screen flex-col gap-24 overflow-x-clip px-4 pt-14 md:px-6">
+      <Hero />
       <HowItWorks />
       <AgentsSection />
       <Pricing />

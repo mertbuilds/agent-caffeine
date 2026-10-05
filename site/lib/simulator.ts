@@ -11,7 +11,7 @@ import type { AgentIconName } from "@/components/agent-icons";
 
 export type Mode = "always" | "agentOpen" | "agentWorking";
 export type Power = "adapter" | "battery";
-export type AgentId = "claude" | "codex" | "opencode" | "pi";
+export type AgentId = "claude" | "codex" | "opencode";
 export type AgentState = "active" | "waitingForInput";
 
 export type Run = { id: AgentId; working: boolean; lastWork: number };
@@ -35,7 +35,6 @@ export const AGENTS: readonly { id: AgentId; name: string; process: string; icon
   { id: "claude", name: "Claude Code", process: "claude", icon: "claudecode" },
   { id: "codex", name: "Codex", process: "codex", icon: "codex" },
   { id: "opencode", name: "opencode", process: "opencode", icon: "opencode" },
-  { id: "pi", name: "pi", process: "pi", icon: "pi" },
 ];
 
 /** `ProcessWatcher.workGracePeriod`. */
@@ -70,10 +69,10 @@ export type View = {
 export type PresetId = "working" | "waiting" | "nothing" | "always" | "battery";
 
 export const PRESETS: readonly { id: PresetId; title: string }[] = [
-  { id: "working", title: "An agent is working" },
-  { id: "waiting", title: "Agents wait at their prompt" },
-  { id: "nothing", title: "Nothing is running" },
+  { id: "working", title: "Agent working" },
+  { id: "waiting", title: "Agents idle" },
   { id: "always", title: "Always on" },
+  { id: "nothing", title: "Nothing running" },
   { id: "battery", title: "On battery" },
 ];
 

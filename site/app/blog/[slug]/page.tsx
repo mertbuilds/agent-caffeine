@@ -4,7 +4,6 @@ import { notFound } from "next/navigation";
 import { BuyButton } from "@/components/buy-button";
 import { DownloadButton } from "@/components/download-button";
 import { Footer } from "@/components/footer";
-import { Header } from "@/components/header";
 import { JsonLd } from "@/components/json-ld";
 import { formatDate, getPost, getPosts } from "@/lib/blog";
 import { getLatestRelease } from "@/lib/release";
@@ -82,8 +81,7 @@ export default async function BlogPost({ params }: Props) {
   };
 
   return (
-    <main className="relative isolate flex min-h-screen flex-col gap-12 overflow-x-clip px-4 md:px-6">
-      <Header />
+    <main className="relative isolate flex min-h-screen flex-col gap-12 overflow-x-clip px-4 pt-[6.5rem] md:px-6">
       <article className="mx-auto flex w-full min-w-0 max-w-[680px] flex-col gap-10">
         <header className="flex flex-col gap-4">
           <Link href="/blog" className="text-sm text-muted no-underline hover:text-fg">

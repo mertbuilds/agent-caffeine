@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Analytics } from "@/components/analytics";
 import { DevKnobs } from "@/components/dev-knobs";
+import { Header } from "@/components/header";
 import { agentsMoreThan } from "@/lib/agents";
 import { THEME_SCRIPT } from "@/lib/theme";
 
@@ -49,11 +50,13 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     // The head's script sets `data-theme` before hydration; that one attribute may differ.
-    <html lang="en" className={suisse.variable} suppressHydrationWarning>
+    // `data-scroll-behavior` lets Next jump, not glide, to the top of a new page.
+    <html lang="en" className={suisse.variable} data-scroll-behavior="smooth" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body className="bg-bg font-sans text-fg antialiased">
+        <Header />
         {children}
         <Analytics />
         <DevKnobs />

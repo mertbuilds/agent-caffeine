@@ -8,7 +8,7 @@ const GRID_LINE = "rgba(255, 255, 255, 0.07)";
 export async function Pricing() {
   const release = await getLatestRelease();
   return (
-    <section id="pricing" className="mx-auto w-full max-w-[1120px] scroll-mt-8">
+    <section id="pricing" className="mx-auto w-full max-w-[1120px] scroll-mt-20">
       <div className="relative mx-auto mt-14 max-w-[880px] rounded-[20px] bg-gradient-to-br from-brand-light to-brand-deep text-white shadow-[0_32px_64px_-32px_rgba(27,85,194,0.55)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.16)] md:mt-10">
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
           <div

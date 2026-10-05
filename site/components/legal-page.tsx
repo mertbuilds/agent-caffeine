@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { Footer } from "@/components/footer";
-import { Header } from "@/components/header";
 import { formatDate } from "@/lib/blog";
 
 export function legalMetadata(title: string, description: string, path: string): Metadata {
@@ -17,8 +16,7 @@ export function legalMetadata(title: string, description: string, path: string):
 
 export function LegalPage({ title, updated, children }: { title: string; updated: string; children: ReactNode }) {
   return (
-    <main className="relative isolate flex min-h-screen flex-col gap-12 overflow-x-clip px-4 md:px-6">
-      <Header />
+    <main className="relative isolate flex min-h-screen flex-col gap-12 overflow-x-clip px-4 pt-[6.5rem] md:px-6">
       <article className="mx-auto flex w-full min-w-0 max-w-[680px] flex-1 flex-col gap-10">
         <header className="flex flex-col gap-4">
           <h1 className="text-balance text-[2rem] font-medium leading-[1.15] tracking-[-0.01em] md:text-[2.5rem]">

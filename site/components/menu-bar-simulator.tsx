@@ -52,19 +52,33 @@ function HeldIcon({ className, held }: { className: string; held: boolean }) {
   );
 }
 
-function Playing({ onPause, ref }: { onPause: () => void; ref: RefObject<HTMLDivElement | null> }) {
+function Playing({
+  on,
+  onToggle,
+  ref,
+}: {
+  on: boolean;
+  onToggle: () => void;
+  ref: RefObject<HTMLDivElement | null>;
+}) {
   return (
     <div ref={ref} className="flex items-center gap-2 text-sm text-muted">
-      Playing examples
+      {on ? "Playing examples" : "Play examples"}
       <button
-        aria-label="Pause the examples"
+        aria-label={on ? "Pause the examples" : "Play the examples"}
         className="flex size-6 items-center justify-center rounded-full border border-border text-fg transition-colors duration-fast ease-smooth-out hover:border-fg motion-reduce:transition-none"
-        onClick={onPause}
+        onClick={onToggle}
         type="button"
       >
         <svg aria-hidden="true" className="size-2.5" fill="currentColor" viewBox="0 0 10 10">
-          <rect height="8" rx="0.75" width="3" x="1.5" y="1" />
-          <rect height="8" rx="0.75" width="3" x="5.5" y="1" />
+          {on ? (
+            <>
+              <rect height="8" rx="0.75" width="3" x="1.5" y="1" />
+              <rect height="8" rx="0.75" width="3" x="5.5" y="1" />
+            </>
+          ) : (
+            <path d="M2.5 1.2v7.6a.5.5 0 0 0 .76.43l6.1-3.8a.5.5 0 0 0 0-.86l-6.1-3.8a.5.5 0 0 0-.76.43z" />
+          )}
         </svg>
       </button>
     </div>
@@ -98,7 +112,6 @@ function Grace({ left }: { left: number }) {
 
 export function MenuBarSimulator() {
   const ref = useRef<HTMLDivElement>(null);
-  const chipsRef = useRef<HTMLDivElement>(null);
   const pauseRef = useRef<HTMLDivElement>(null);
   const seen = useSeen(ref, 0.2);
   const hidden = useTabHidden();
@@ -169,17 +182,23 @@ export function MenuBarSimulator() {
         <div className="flex flex-col gap-3">
           <div className="flex min-h-6 items-center justify-between gap-4">
             <h3 className="text-sm text-muted">Try a situation</h3>
-            {demoing && (
+            {!lessMotion && (
               <Playing
+                on={demoing}
                 ref={pauseRef}
-                onPause={() => {
-                  stopDemo();
-                  chipsRef.current?.querySelector("button")?.focus();
+                onToggle={() => {
+                  if (demoing) {
+                    stopDemo();
+                    return;
+                  }
+                  setSim((state) => demo(state, DEMO[0]));
+                  setStep(0);
+                  setAutoplay(true);
                 }}
               />
             )}
           </div>
-          <div ref={chipsRef} className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2">
             {PRESETS.map((entry) => (
               <button
                 key={entry.id}

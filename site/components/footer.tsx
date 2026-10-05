@@ -30,13 +30,6 @@ export async function Footer() {
             <span>agent caffeine</span>
           </Link>
           <p className="text-pretty text-muted">Keeps your Mac awake while your agents work</p>
-          <p className="text-muted">
-            a{" "}
-            <a href="https://mertbuilds.com/?utm_source=caffeinagent.com&utm_medium=referral&utm_campaign=footer">
-              mertbuilds.com
-            </a>{" "}
-            utility
-          </p>
         </div>
         <Column title="Product">
           <li>
@@ -104,7 +97,13 @@ export async function Footer() {
         </Column>
       </div>
       <div className="flex items-center justify-between gap-4">
-        <p className="text-muted">© 2026 Mert Duzgun</p>
+        <p className="text-muted">
+          a{" "}
+          <a href="https://mertbuilds.com/?utm_source=caffeinagent.com&utm_medium=referral&utm_campaign=footer">
+            mertbuilds.com
+          </a>{" "}
+          utility
+        </p>
         <ThemeSwitch />
       </div>
     </footer>

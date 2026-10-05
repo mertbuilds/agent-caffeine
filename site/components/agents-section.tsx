@@ -26,7 +26,7 @@ export function AgentsSection() {
   const seen = useSeen(ref, 0);
 
   return (
-    <section className="flex flex-col gap-10">
+    <section id="agents" className="flex scroll-mt-20 flex-col gap-10">
       <SectionHeading
         lead={`More than ${agentsMoreThan} agents, and you can add your own`}
         title="It knows your agents"

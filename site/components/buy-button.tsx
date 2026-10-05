@@ -3,6 +3,7 @@ import { BuyCta } from "@/components/track";
 import { BUY_URL } from "@/lib/buy";
 
 export const SIZES = {
+  compact: "h-7 px-3.5 text-[0.8rem] leading-7",
   small: "px-4 py-1.5 text-sm",
   large: "px-6 py-3 text-base",
 };
