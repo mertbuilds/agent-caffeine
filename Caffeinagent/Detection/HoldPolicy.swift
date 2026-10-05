@@ -188,7 +188,7 @@ enum HoldPolicy {
         if let waiting = subject(.waitingForUser) { return .waitingHeld(waiting) }
         if let finished = subject(.finishedRecently) { return .finishedRecently(finished) }
         if let open = subject(.open) { return .open(open) }
-        if context.remoteAccessDetected && !context.onBattery { return .remoteAccess }
+        if settings.stayAwakeForRemoteAccess && context.remoteAccessDetected && !context.onBattery { return .remoteAccess }
         let counted = perAgent.map(\.reading).filter { settings.rule(for: $0.agentID) != .ignore }
         if let waiting = HoldSubject(names: counted.filter { $0.verdict.state == .waitingForUser }.map(\.displayName)) {
             return .waitingReleased(waiting)

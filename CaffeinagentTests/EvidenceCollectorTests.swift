@@ -38,6 +38,7 @@ final class EvidenceCollectorTests: XCTestCase {
     private var openFiles: FakeOpenFiles!
     private var seconds: TimeInterval = 0
     private var collector: EvidenceCollector!
+    private var sources: EvidenceCollector.Sources!
 
     override func setUpWithError() throws {
         root = FileManager.default.temporaryDirectory.appendingPathComponent("collector-\(UUID().uuidString)")
@@ -56,7 +57,17 @@ final class EvidenceCollectorTests: XCTestCase {
         sources.codexRollouts = CodexRolloutReader(sessionsDirectory: root.appendingPathComponent("codex"))
         sources.fileActivityTargets = ["opencode": .paths([root.appendingPathComponent("store/opencode.db-wal")])]
         sources.now = { [unowned self] in self.base.addingTimeInterval(self.seconds) }
+        self.sources = sources
         collector = EvidenceCollector(sources: sources)
+    }
+
+    /// A collector that also reads hook states and Claude Code's settings.
+    private func collectWithHooks() -> URL {
+        let hooks = root.appendingPathComponent("hooks")
+        sources.hookDirectory = hooks
+        sources.claudeSettings = root.appendingPathComponent("claude-settings.json")
+        collector = EvidenceCollector(sources: sources)
+        return hooks
     }
 
     override func tearDownWithError() throws {
@@ -127,6 +138,66 @@ final class EvidenceCollectorTests: XCTestCase {
         XCTAssertFalse(sample(at: 0).frame.context.remoteAccessDetected)
         collector.remoteAccessProbe = { true }
         XCTAssertTrue(sample(at: 2).frame.context.remoteAccessDetected)
+    }
+
+    func testRemoteAccessFromClaudeRemoteControl() throws {
+        _ = collectWithHooks()
+        census.rows = [claude(100)]
+        XCTAssertFalse(sample(at: 0).frame.context.remoteAccessDetected)
+        census.rows = [claude(100), claude(200, args: ["claude", "remote-control"])]
+        XCTAssertTrue(sample(at: 2).frame.context.remoteAccessDetected)
+        census.rows = [claude(100)]
+        try Data(#"{"remoteControlAtStartup": true}"#.utf8).write(to: root.appendingPathComponent("claude-settings.json"))
+        XCTAssertTrue(sample(at: 4).frame.context.remoteAccessDetected)
+        census.rows = []
+        XCTAssertFalse(sample(at: 6).frame.context.remoteAccessDetected, "No session is open")
+    }
+
+    func testHookStateReachesTheInstanceOfItsProcess() throws {
+        let hooks = collectWithHooks()
+        census.rows = [claude(100), claude(200)]
+        var file = HookStateFile(agent: "claude", pid: 100, start: processStart)
+        file.apply(.set(.waitingForUser), session: "a", event: "Notification", at: at(1))
+        let path = hooks.appendingPathComponent(HookStateFile.fileName(agent: "claude", pid: 100))
+        try JSONEncoder().encode(file).write(to: path)
+
+        let sample = sample(at: 2)
+        let first = try XCTUnwrap(sample.frame.agents.first { $0.pid == 100 })
+        XCTAssertEqual(first.hookState, .waitingForUser)
+        XCTAssertEqual(try XCTUnwrap(first.hookStateAt).timeIntervalSince(at(1)), 0, accuracy: 0.001)
+        XCTAssertNil(sample.frame.agents.first { $0.pid == 200 }?.hookState)
+        XCTAssertTrue(sample.watchedFiles.contains(hooks.path), "A new state file is a new entry in the folder")
+        XCTAssertTrue(sample.watchedFiles.contains(path.path))
+    }
+
+    func testHookFileOfAnotherAgentOrAnotherProcessIsNotUsed() throws {
+        let hooks = collectWithHooks()
+        census.rows = [claude(100)]
+        var wrongAgent = HookStateFile(agent: "codex", pid: 100, start: processStart)
+        wrongAgent.apply(.set(.working), session: "a", event: "UserPromptSubmit", at: at(1))
+        try JSONEncoder().encode(wrongAgent).write(to: hooks.appendingPathComponent("codex-100.json"))
+        XCTAssertNil(sample(at: 2).frame.agents.first?.hookState)
+
+        // The pid was used again by a process that started later.
+        var reused = HookStateFile(agent: "claude", pid: 100, start: processStart - 50)
+        reused.apply(.set(.working), session: "a", event: "UserPromptSubmit", at: at(1))
+        let path = hooks.appendingPathComponent("claude-100.json")
+        try JSONEncoder().encode(reused).write(to: path)
+        XCTAssertNil(sample(at: 4).frame.agents.first?.hookState)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path.path), "A young file is kept")
+    }
+
+    func testHookFileOfADeadProcessIsRemovedOnceItIsOld() throws {
+        let hooks = collectWithHooks()
+        var file = HookStateFile(agent: "claude", pid: 100, start: processStart)
+        file.apply(.set(.working), session: "a", event: "UserPromptSubmit", at: at(0))
+        let path = hooks.appendingPathComponent("claude-100.json")
+        try JSONEncoder().encode(file).write(to: path)
+        census.rows = []
+        _ = sample(at: 1)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: path.path))
+        _ = sample(at: HookStateReader.removalAge + 5)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: path.path))
     }
 
     /// The daemon family as it runs on a Mac: argv[0] is the whole title.

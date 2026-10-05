@@ -250,6 +250,14 @@ final class HoldPolicyTests: XCTestCase {
         XCTAssertFalse(step(120, .idle, safety: nil))
     }
 
+    func testRemoteAccessHoldCanBeSwitchedOff() {
+        var settings = DetectionSettings()
+        settings.stayAwakeForRemoteAccess = false
+        let decision = decide([], settings: settings, context: FrameContext(onBattery: false, remoteAccessDetected: true))
+        XCTAssertFalse(decision.hold)
+        XCTAssertEqual(decision.headline.text, "Mac can sleep: no agent is open")
+    }
+
     func testRemoteAccess() {
         let onPower = FrameContext(onBattery: false, remoteAccessDetected: true)
         let onBattery = FrameContext(onBattery: true, batteryPercent: 80, remoteAccessDetected: true)

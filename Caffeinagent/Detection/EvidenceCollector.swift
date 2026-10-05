@@ -88,10 +88,17 @@ final class EvidenceCollector: EvidenceCollecting {
             "antigravity-desktop": FileActivityReader.antigravity,
             "antigravity": FileActivityReader.antigravity,
         ]
+        /// The folder the hook command writes into. Nil reads no hook state.
+        var hookDirectory: URL?
+        /// `~/.claude/settings.json`, for the Remote Control switch. Nil reads none.
+        var claudeSettings: URL?
         var now: () -> Date = Date.init
 
         static func system() -> Sources {
-            Sources(census: SystemProcessCensus(), assertions: SystemPowerAssertions(), power: SystemPowerContext(), openFiles: SystemOpenFiles())
+            var sources = Sources(census: SystemProcessCensus(), assertions: SystemPowerAssertions(), power: SystemPowerContext(), openFiles: SystemOpenFiles())
+            sources.hookDirectory = HookStateFile.directory()
+            sources.claudeSettings = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude/settings.json")
+            return sources
         }
     }
 
@@ -107,8 +114,8 @@ final class EvidenceCollector: EvidenceCollecting {
     static let listingAge: TimeInterval = 5
     static let codexIDs: Set<String> = ["codex", "codex-desktop"]
 
-    /// The hook for remote access (SSH, screen sharing). Nothing detects it
-    /// yet, so the frame says false until a later chunk sets this.
+    /// One more way to say that remote access is on, next to what
+    /// `RemoteAccessDetector` finds. Nothing detects SSH or screen sharing yet.
     var remoteAccessProbe: () -> Bool = { false }
 
     private var sources: Sources
@@ -139,9 +146,13 @@ final class EvidenceCollector: EvidenceCollecting {
     private var rolloutListing: (at: Date, files: [CodexRolloutFile])?
     private var transcriptChoices: [ProcessIdentity: (at: Date, path: String?)] = [:]
     private var activityReaders: [String: FileActivityReader] = [:]
+    private var hookReader: HookStateReader?
+    private var claudeSettingsFiles = FileCache<RemoteAccessDetector.ClaudeSettings>()
 
     init(sources: Sources = .system()) {
         self.sources = sources
+        hookReader = sources.hookDirectory.map(HookStateReader.init(directory:))
+        hookReader?.prepare()
     }
 
     func collect(userNames: [String] = []) -> EvidenceSample {
@@ -153,7 +164,10 @@ final class EvidenceCollector: EvidenceCollecting {
         let asserting = instances.isEmpty ? [] : sources.assertions.assertingPIDs()
         let interval = previousAt.map { now.timeIntervalSince($0) } ?? 0
 
-        var sample = EvidenceSample(frame: EvidenceFrame(at: now, agents: [], context: context()))
+        var sample = EvidenceSample(frame: EvidenceFrame(at: now, agents: [], context: context(snapshot: snapshot, matches: matches)))
+        let hookStates = hookReader?.states(snapshot: snapshot, now: now) ?? [:]
+        // A new state file is a new entry in the folder.
+        if let hookReader { sample.watchedFiles.insert(hookReader.directory.path) }
         var activities: [String: FileActivity] = [:]
         var rows: [ProcessIdentity: ProcessInfoRow] = [:]
         var liveUnits: Set<ProcessIdentity> = []
@@ -162,6 +176,7 @@ final class EvidenceCollector: EvidenceCollecting {
             guard var evidence = agentEvidence(for: instance, matches: matches, now: now, activities: &activities, watched: &sample.watchedFiles) else { continue }
             noteUse(of: instance, matches: matches, interval: interval, now: now, in: &evidence, liveUnits: &liveUnits)
             evidence.ownsSleepAssertion = instance.rows.contains { asserting.contains($0.pid) }
+            noteHooks(of: instance, matches: matches, states: hookStates, in: &evidence, watched: &sample.watchedFiles)
             sample.frame.agents.append(evidence)
             sample.roots.insert(instance.identity)
         }
@@ -175,14 +190,46 @@ final class EvidenceCollector: EvidenceCollecting {
         jobFiles.endSample()
         transcripts.endSample()
         rolloutTails.endSample()
+        claudeSettingsFiles.endSample()
         sample.cost = TimeInterval(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
         return sample
     }
 
-    private func context() -> FrameContext {
+    private func context(snapshot: [ProcessInfoRow], matches: [Int32: AgentMatch]) -> FrameContext {
         var context = sources.power.context()
-        context.remoteAccessDetected = remoteAccessProbe()
+        context.remoteAccessDetected = remoteAccessProbe() || claudeRemoteControl(snapshot: snapshot, matches: matches)
         return context
+    }
+
+    private func claudeRemoteControl(snapshot: [ProcessInfoRow], matches: [Int32: AgentMatch]) -> Bool {
+        let sessions = snapshot.filter { matches[$0.pid].map { $0.definition.id == "claude" && $0.role == .session } ?? false }
+        guard !sessions.isEmpty else { return false }
+        var settings = RemoteAccessDetector.ClaudeSettings()
+        if let url = sources.claudeSettings,
+           let hit = claudeSettingsFiles.value(at: url.path, read: { (try? Data(contentsOf: url)).map(RemoteAccessDetector.ClaudeSettings.init(json:)) }),
+           let read = hit.value {
+            settings = read
+        }
+        return RemoteAccessDetector.claudeRemoteControl(sessions: sessions.map { AgentCatalog.command(of: $0).arguments }, settings: settings)
+    }
+
+    /// The state the agent's hooks left for one of the instance's own
+    /// processes. A launcher and the binary it starts are one instance, and
+    /// the hook runs below either.
+    private func noteHooks(
+        of instance: AgentInstance, matches: [Int32: AgentMatch], states: [Int32: HookStateReader.State],
+        in evidence: inout AgentEvidence, watched: inout Set<String>
+    ) {
+        guard !states.isEmpty, let hookAgent = HookEvents.hookAgent(forDefinition: instance.definition.id) else { return }
+        let own = instance.rows.compactMap { row -> HookStateReader.State? in
+            guard let state = states[row.pid], state.agent == hookAgent,
+                  let match = matches[row.pid], match.definition.id == instance.definition.id, match.role != .helper else { return nil }
+            return state
+        }
+        guard let newest = own.max(by: { $0.at < $1.at }) else { return }
+        evidence.hookState = newest.state
+        evidence.hookStateAt = newest.at
+        own.forEach { watched.insert($0.path) }
     }
 
     // MARK: Matching
