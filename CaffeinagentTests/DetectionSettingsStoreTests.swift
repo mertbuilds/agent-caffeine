@@ -36,6 +36,43 @@ final class DetectionSettingsStoreTests: XCTestCase {
         XCTAssertEqual(DetectionSettingsStore.load(from: defaults), want)
     }
 
+    func testNumbersOutOfRangeAreNotTaken() throws {
+        func decode(_ json: String) throws -> DetectionSettings {
+            try JSONDecoder().decode(DetectionSettings.self, from: Data(json.utf8))
+        }
+        let defaults = DetectionSettings()
+        let bad = try decode(#"{"releaseAfterState":0,"releaseAfterActivity":-30,"waitingHold":0.5,"weakEvidenceCap":-1,"batteryFloorPercent":0}"#)
+        XCTAssertEqual(bad.releaseAfterState, defaults.releaseAfterState)
+        XCTAssertEqual(bad.releaseAfterActivity, defaults.releaseAfterActivity)
+        XCTAssertEqual(bad.waitingHold, defaults.waitingHold)
+        XCTAssertEqual(bad.weakEvidenceCap, defaults.weakEvidenceCap)
+        XCTAssertEqual(bad.batteryFloorPercent, 5)
+
+        let huge = try decode(#"{"releaseAfterState":1e300,"releaseAfterActivity":90000,"waitingHold":86400,"weakEvidenceCap":1e12,"batteryFloorPercent":100}"#)
+        XCTAssertEqual(huge.releaseAfterState, 86_400)
+        XCTAssertEqual(huge.releaseAfterActivity, 86_400)
+        XCTAssertEqual(huge.waitingHold, 86_400)
+        XCTAssertEqual(huge.weakEvidenceCap, 86_400)
+        XCTAssertEqual(huge.batteryFloorPercent, 50)
+        XCTAssertEqual(try decode(#"{"batteryFloorPercent":-7}"#).batteryFloorPercent, 5)
+
+        let decoder = JSONDecoder()
+        decoder.nonConformingFloatDecodingStrategy = .convertFromString(positiveInfinity: "inf", negativeInfinity: "-inf", nan: "nan")
+        let odd = try decoder.decode(DetectionSettings.self, from: Data(#"{"releaseAfterState":"nan","waitingHold":"inf","weakEvidenceCap":"-inf"}"#.utf8))
+        XCTAssertEqual(odd, defaults)
+
+        let fine = try decode(#"{"releaseAfterState":1,"releaseAfterActivity":45,"waitingHold":3600,"batteryFloorPercent":35}"#)
+        XCTAssertEqual(fine.releaseAfterState, 1)
+        XCTAssertEqual(fine.releaseAfterActivity, 45)
+        XCTAssertEqual(fine.waitingHold, 3600)
+        XCTAssertEqual(fine.batteryFloorPercent, 35)
+
+        self.defaults.set(Data(#"{"releaseAfterState":0,"batteryFloorPercent":99}"#.utf8), forKey: DetectionSettingsStore.key)
+        let loaded = DetectionSettingsStore.load(from: self.defaults)
+        XCTAssertEqual(loaded.releaseAfterState, defaults.releaseAfterState)
+        XCTAssertEqual(loaded.batteryFloorPercent, 50)
+    }
+
     func testUnreadableSettingsGiveDefaults() {
         defaults.set(Data("not json".utf8), forKey: DetectionSettingsStore.key)
         XCTAssertEqual(DetectionSettingsStore.load(from: defaults), DetectionSettings())

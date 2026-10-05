@@ -43,16 +43,30 @@ struct DetectionSettings: Codable, Equatable {
         case batteryFloorPercent, stayAwakeLidClosedOnBattery, stayAwakeForRemoteAccess, agentRules, userAgentNames
     }
 
+    /// No time is shorter than a second or longer than a day.
+    static let timeRange: ClosedRange<TimeInterval> = 1...86_400
+    static let batteryFloorRange = 5...50
+
     /// A key that is missing keeps its default, so settings saved by an
-    /// older build still load.
+    /// older build still load. The numbers are not trusted: a time that is
+    /// no time (below a second, or not finite) falls back to its default,
+    /// one that is too long is cut, and the battery floor stays in the
+    /// range the Preferences offer. A zero release time would drop the hold
+    /// between two tool calls, and a floor of 0 would never stop.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let defaults = DetectionSettings()
-        releaseAfterState = try container.decodeIfPresent(TimeInterval.self, forKey: .releaseAfterState) ?? defaults.releaseAfterState
-        releaseAfterActivity = try container.decodeIfPresent(TimeInterval.self, forKey: .releaseAfterActivity) ?? defaults.releaseAfterActivity
-        waitingHold = try container.decodeIfPresent(TimeInterval.self, forKey: .waitingHold) ?? defaults.waitingHold
-        weakEvidenceCap = try container.decodeIfPresent(TimeInterval.self, forKey: .weakEvidenceCap) ?? defaults.weakEvidenceCap
-        batteryFloorPercent = try container.decodeIfPresent(Int.self, forKey: .batteryFloorPercent) ?? defaults.batteryFloorPercent
+        func time(_ key: CodingKeys, _ fallback: TimeInterval) throws -> TimeInterval {
+            guard let value = try container.decodeIfPresent(TimeInterval.self, forKey: key),
+                  value.isFinite, value >= Self.timeRange.lowerBound else { return fallback }
+            return min(value, Self.timeRange.upperBound)
+        }
+        releaseAfterState = try time(.releaseAfterState, defaults.releaseAfterState)
+        releaseAfterActivity = try time(.releaseAfterActivity, defaults.releaseAfterActivity)
+        waitingHold = try time(.waitingHold, defaults.waitingHold)
+        weakEvidenceCap = try time(.weakEvidenceCap, defaults.weakEvidenceCap)
+        let floor = try container.decodeIfPresent(Int.self, forKey: .batteryFloorPercent) ?? defaults.batteryFloorPercent
+        batteryFloorPercent = min(max(floor, Self.batteryFloorRange.lowerBound), Self.batteryFloorRange.upperBound)
         stayAwakeLidClosedOnBattery = try container.decodeIfPresent(Bool.self, forKey: .stayAwakeLidClosedOnBattery) ?? defaults.stayAwakeLidClosedOnBattery
         stayAwakeForRemoteAccess = try container.decodeIfPresent(Bool.self, forKey: .stayAwakeForRemoteAccess) ?? defaults.stayAwakeForRemoteAccess
         agentRules = try container.decodeIfPresent([String: AgentRule].self, forKey: .agentRules) ?? defaults.agentRules
