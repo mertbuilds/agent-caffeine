@@ -2,10 +2,16 @@ import SwiftUI
 
 struct PreferencesView: View {
     @ObservedObject var aggregator: StateAggregator
+    @ObservedObject var updater: Updater
     @State private var newEntry: String = ""
+    @State private var licenseKey: String = ""
+    @State private var confirmingDeactivate = false
+
+    private var license: LicenseManager { aggregator.license }
 
     var body: some View {
         Form {
+            licenseSection
             Section("Keep the Mac awake") {
                 Picker("Keep the Mac awake", selection: $aggregator.mode) {
                     ForEach(AwakeMode.allCases) { Text($0.title).tag($0) }
@@ -69,7 +75,16 @@ struct PreferencesView: View {
                     .foregroundStyle(.tertiary)
             }
             Section("About") {
+                HStack {
+                    Text(AppVersion.current)
+                    Spacer()
+                    Button("Check for updates…") { updater.checkForUpdates() }
+                        .disabled(!updater.canCheckForUpdates)
+                }
                 Text("While it keeps the Mac awake, agent caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. On battery, it also turns on `pmset -b disablesleep` through sudo if you installed the sudoers entry above.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Text("agent caffeine checks caffeinagent.com for updates. It checks your license key with Polar. It sends the key and your Mac's model, and nothing about you or your agents.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 4) {
@@ -81,8 +96,111 @@ struct PreferencesView: View {
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440, height: 600)
+        .frame(width: 440, height: 680)
         .tint(.brand)
+    }
+
+    private var licenseSection: some View {
+        Section("License") {
+            if aggregator.entitlement == .licensed {
+                Label("Licensed", systemImage: "checkmark.seal.fill")
+                    .foregroundStyle(.green)
+                if let key = license.record.key {
+                    Text("Key ending in \(String(key.suffix(6)))")
+                        .font(.system(.callout, design: .monospaced))
+                        .foregroundStyle(.secondary)
+                }
+                if let lastValidated = license.record.lastValidated {
+                    Text("Last checked \(lastValidated.formatted(.relative(presentation: .named)))")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                HStack {
+                    Button("Deactivate this Mac") { confirmingDeactivate = true }
+                        .disabled(license.busy)
+                    if license.busy {
+                        ProgressView().controlSize(.small)
+                    }
+                    Spacer()
+                    Button("Manage in Polar") { NSWorkspace.shared.open(license.config.customerPortalURL) }
+                }
+                .confirmationDialog(
+                    "Deactivate agent caffeine on this Mac?",
+                    isPresented: $confirmingDeactivate
+                ) {
+                    Button("Deactivate", role: .destructive) {
+                        Task { await license.deactivate() }
+                    }
+                } message: {
+                    Text("The key becomes free for another Mac. agent caffeine stops keeping this Mac awake until a key is activated again.")
+                }
+            } else if aggregator.entitlement == .expired(.unverified) {
+                Text(ExpiredReason.unverified.text)
+                    .foregroundStyle(.orange)
+                HStack {
+                    Button("Check now") { Task { await license.checkNow() } }
+                        .disabled(license.busy)
+                    if license.busy {
+                        ProgressView().controlSize(.small)
+                    }
+                    Spacer()
+                    Button("Manage in Polar") { NSWorkspace.shared.open(license.config.customerPortalURL) }
+                }
+            } else {
+                Text(licenseStatus)
+                    .foregroundStyle(aggregator.entitlement.allowsHolding ? AnyShapeStyle(.secondary) : AnyShapeStyle(.orange))
+                TextField("License key", text: $licenseKey, prompt: Text("AGENTCAF-…"))
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.body, design: .monospaced))
+                    .onSubmit(activate)
+                HStack {
+                    Button("Activate", action: activate)
+                        .disabled(LicenseClient.cleaned(licenseKey).isEmpty || license.busy)
+                    if license.busy {
+                        ProgressView().controlSize(.small)
+                    }
+                    Spacer()
+                    // Whoever has a key already bought one.
+                    if license.record.key == nil {
+                        Button("Buy a key") { NSWorkspace.shared.open(license.config.checkoutURL) }
+                    }
+                }
+            }
+            if let message = license.message {
+                Text(message.text)
+                    .font(.callout)
+                    .foregroundStyle(.red)
+                if message == .limitReached {
+                    Link("Manage in Polar", destination: license.config.customerPortalURL)
+                        .font(.callout)
+                }
+            }
+            if let error = license.storageError {
+                Text("\(error) agent caffeine keeps your trial and your last license check in its preferences until it can read the Keychain again.")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+        }
+        .onAppear {
+            if licenseKey.isEmpty, let key = license.record.key { licenseKey = key }
+        }
+    }
+
+    private var licenseStatus: String {
+        switch aggregator.entitlement {
+        case .trial(let daysLeft):
+            return "Trial: \(daysLeft) \(daysLeft == 1 ? "day" : "days") left"
+        case .expired(let reason):
+            return reason.text
+        case .licensed:
+            return ExpiredReason.trialOver.text
+        }
+    }
+
+    private func activate() {
+        let key = licenseKey
+        guard !LicenseClient.cleaned(key).isEmpty, !license.busy else { return }
+        Task { await license.activate(key: key) }
     }
 
     private static let builderURL = URL(

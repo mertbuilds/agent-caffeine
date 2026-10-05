@@ -10,18 +10,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 @main
 struct CaffeinagentApp: App {
     @StateObject private var aggregator = StateAggregator()
+    @StateObject private var updater = Updater()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
         MenuBarExtra {
-            MenuBarView(aggregator: aggregator)
+            MenuBarView(aggregator: aggregator, updater: updater)
         } label: {
             MenuBarLabel(held: aggregator.assertionHeld)
         }
         .menuBarExtraStyle(.window)
 
         Settings {
-            PreferencesView(aggregator: aggregator)
+            PreferencesView(aggregator: aggregator, updater: updater)
         }
     }
 }

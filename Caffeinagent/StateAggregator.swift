@@ -19,10 +19,12 @@ final class StateAggregator: ObservableObject {
         }
     }
     @Published private(set) var assertionHeld = false
+    @Published private(set) var entitlement: Entitlement
 
     let claude: ClaudeCodeWatcher
     let processes: ProcessWatcher
     let battery: BatteryOverride
+    let license: LicenseManager
     private let power = PowerKeeper()
     private var cancellables = Set<AnyCancellable>()
     private var sigtermSource: DispatchSourceSignal?
@@ -34,9 +36,12 @@ final class StateAggregator: ObservableObject {
         let claude = ClaudeCodeWatcher()
         let processes = ProcessWatcher()
         let battery = BatteryOverride()
+        let license = LicenseManager(client: LicenseClient(), store: KeychainLicenseStore())
         self.claude = claude
         self.processes = processes
         self.battery = battery
+        self.license = license
+        self.entitlement = license.entitlement
         self.enabled = UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? true
         self.mode = UserDefaults.standard.string(forKey: Self.modeKey).flatMap(AwakeMode.init(rawValue:)) ?? .agentWorking
 
@@ -47,12 +52,26 @@ final class StateAggregator: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // The menu reads battery state, and Preferences the allowlist, through
-        // this object.
+        // An expired trial goes through the same release path as switching off,
+        // so the assertions and the battery override both end.
+        license.$entitlement
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] entitlement in
+                self?.entitlement = entitlement
+                self?.updateAssertion()
+            }
+            .store(in: &cancellables)
+
+        // The menu reads battery state, and Preferences the allowlist and the
+        // license, through this object.
         battery.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
         processes.objectWillChange
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        license.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
 
@@ -68,9 +87,11 @@ final class StateAggregator: ObservableObject {
         }
         sigterm.resume()
         sigtermSource = sigterm
+
+        license.start()
     }
 
-    var shouldHold: Bool { mode.shouldHold(enabled: enabled, agents: allAgents) }
+    var shouldHold: Bool { mode.shouldHold(enabled: enabled, agents: allAgents, entitlement: entitlement) }
 
     private func recompute(claude: [DetectedAgent], processes: [DetectedAgent]) {
         let sorted = (claude + processes).sorted { $0.lastActivity > $1.lastActivity }

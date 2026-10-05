@@ -32,5 +32,13 @@
 	<false/>
 	<key>NSSupportsSuddenTermination</key>
 	<false/>
+	<key>SUEnableAutomaticChecks</key>
+	<true/>
+	<key>SUFeedURL</key>
+	<string>https://caffeinagent.com/mac/appcast.xml</string>
+	<key>SUPublicEDKey</key>
+	<string>5Q7Ek65kUpr2mdD+E8nQibAj7cYGf2/gK9ImD3PqVLY=</string>
+	<key>SUScheduledCheckInterval</key>
+	<integer>86400</integer>
 </dict>
 </plist>

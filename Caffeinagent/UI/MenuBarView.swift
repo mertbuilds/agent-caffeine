@@ -3,6 +3,7 @@ import AppKit
 
 struct MenuBarView: View {
     @ObservedObject var aggregator: StateAggregator
+    @ObservedObject var updater: Updater
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -31,6 +32,7 @@ struct MenuBarView: View {
             Text(statusLine)
                 .font(.callout)
                 .foregroundStyle(.secondary)
+            licenseRow
             Picker("Keep the Mac awake", selection: $aggregator.mode) {
                 ForEach(AwakeMode.allCases) { Text($0.title).tag($0) }
             }
@@ -41,6 +43,52 @@ struct MenuBarView: View {
             batteryRow
         }
     }
+
+    @ViewBuilder
+    private var licenseRow: some View {
+        switch aggregator.entitlement {
+        case .licensed:
+            EmptyView()
+        case .trial(let daysLeft):
+            HStack(spacing: 6) {
+                Text("Trial: \(daysLeft) \(daysLeft == 1 ? "day" : "days") left")
+                    .foregroundStyle(daysLeft <= 2 ? AnyShapeStyle(.orange) : AnyShapeStyle(.secondary))
+                // Whoever has a key already bought one.
+                if license.record.key == nil {
+                    Button("Buy") { NSWorkspace.shared.open(license.config.checkoutURL) }
+                        .buttonStyle(.borderless)
+                }
+            }
+            .font(.caption)
+        case .expired(.trialOver):
+            HStack(spacing: 8) {
+                Button("Buy agent caffeine · $9") { NSWorkspace.shared.open(license.config.checkoutURL) }
+                    .buttonStyle(.borderedProminent)
+                settingsButton("Enter key…")
+                    .buttonStyle(.bordered)
+            }
+            .controlSize(.small)
+        case .expired(.unverified):
+            Button("Check now") { Task { await license.checkNow() } }
+                .buttonStyle(.borderedProminent)
+                .disabled(license.busy)
+                .controlSize(.small)
+        case .expired(.activationRemoved):
+            HStack(spacing: 8) {
+                Button("Activate again") {
+                    guard let key = license.record.key else { return }
+                    Task { await license.activate(key: key) }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(license.busy)
+                settingsButton("Enter key…")
+                    .buttonStyle(.bordered)
+            }
+            .controlSize(.small)
+        }
+    }
+
+    private var license: LicenseManager { aggregator.license }
 
     @ViewBuilder
     private var batteryRow: some View {
@@ -111,7 +159,11 @@ struct MenuBarView: View {
 
     private var footer: some View {
         HStack {
-            settingsButton
+            settingsButton("Preferences…")
+                .buttonStyle(.borderless)
+            Button("Check for updates…") { updater.checkForUpdates() }
+                .buttonStyle(.borderless)
+                .disabled(!updater.canCheckForUpdates)
             Spacer()
             Button("Quit") { NSApp.terminate(nil) }
                 .buttonStyle(.borderless)
@@ -123,15 +175,14 @@ struct MenuBarView: View {
     // responder-chain selector still works on 13 but stopped opening the
     // SwiftUI Settings scene on newer macOS.
     @ViewBuilder
-    private var settingsButton: some View {
+    private func settingsButton(_ title: String) -> some View {
         if #available(macOS 14.0, *) {
-            SettingsOpenButton()
+            SettingsOpenButton(title: title)
         } else {
-            Button("Preferences…") {
+            Button(title) {
                 NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
                 MenuBarView.bringSettingsFront()
             }
-            .buttonStyle(.borderless)
         }
     }
 
@@ -148,6 +199,7 @@ struct MenuBarView: View {
     }
 
     private var statusLine: String {
+        if case .expired(let reason) = aggregator.entitlement { return reason.text }
         if !aggregator.enabled { return "Paused" }
         if aggregator.assertionHeld { return "Keeping the Mac awake" }
         if aggregator.shouldHold { return "Active, but the Mac may sleep" }
@@ -178,13 +230,13 @@ extension Color {
 
 @available(macOS 14.0, *)
 private struct SettingsOpenButton: View {
+    let title: String
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        Button("Preferences…") {
+        Button(title) {
             openSettings()
             MenuBarView.bringSettingsFront()
         }
-        .buttonStyle(.borderless)
     }
 }

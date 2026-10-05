@@ -49,8 +49,8 @@ enum AwakeMode: String, CaseIterable, Identifiable {
         }
     }
 
-    func shouldHold(enabled: Bool, agents: [DetectedAgent]) -> Bool {
-        guard enabled else { return false }
+    func shouldHold(enabled: Bool, agents: [DetectedAgent], entitlement: Entitlement) -> Bool {
+        guard enabled, entitlement.allowsHolding else { return false }
         switch self {
         case .always: return true
         case .agentOpen: return !agents.isEmpty
