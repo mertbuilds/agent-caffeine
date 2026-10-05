@@ -16,6 +16,12 @@ struct HookRowModel: Equatable, Identifiable {
         }
     }
 
+    /// Turning on needs the hook command in the Applications folder.
+    /// Turning off needs nothing but a file that can be read.
+    static func toggleDisabled(_ row: HookRowModel, available: Bool) -> Bool {
+        row.status == .unreadable || (!available && !row.isOn)
+    }
+
     /// The rows of the agents that are set up on this Mac.
     static func rows(statuses: [String: HookStatus], errors: [String: String] = [:]) -> [HookRowModel] {
         HookCatalog.entries.compactMap { entry in
@@ -59,7 +65,8 @@ struct HookRow: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Toggle(row.entry.displayName, isOn: Binding(get: { row.isOn }, set: set))
-                .disabled(!available || row.status == .unreadable)
+                // Off is always possible: it only takes our lines out.
+                .disabled(HookRowModel.toggleDisabled(row, available: available))
             Text(row.entry.benefit)
                 .font(.callout)
                 .foregroundStyle(.secondary)

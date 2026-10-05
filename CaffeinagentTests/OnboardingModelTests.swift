@@ -20,4 +20,24 @@ final class OnboardingModelTests: XCTestCase {
             )
         }
     }
+
+    /// Outside the Applications folder the hooks cannot be turned on. Off
+    /// was blocked too, so the lines of an earlier install could not go.
+    func testHookToggleCanAlwaysBeTurnedOff() throws {
+        let entry = try XCTUnwrap(HookCatalog.entry(id: "claude"))
+        let cases: [(status: HookStatus, available: Bool, disabled: Bool)] = [
+            (.notInstalled, true, false),
+            (.installed(version: 1), true, false),
+            (.outdated, true, false),
+            (.unreadable, true, true),
+            (.notInstalled, false, true),
+            (.installed(version: 1), false, false),
+            (.outdated, false, false),
+            (.unreadable, false, true),
+        ]
+        for c in cases {
+            let row = HookRowModel(entry: entry, status: c.status)
+            XCTAssertEqual(HookRowModel.toggleDisabled(row, available: c.available), c.disabled, "\(c.status), available \(c.available)")
+        }
+    }
 }
