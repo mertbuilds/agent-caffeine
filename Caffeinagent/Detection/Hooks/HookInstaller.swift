@@ -176,6 +176,11 @@ enum HookConfigEditor {
 
     // MARK: Reading
 
+    /// `{}` and nothing else: a file with no setting in it.
+    static func isEmptyDocument(_ text: [UInt8]) -> Bool {
+        ((try? JSONSerialization.jsonObject(with: Data(text))) as? NSDictionary)?.count == 0
+    }
+
     static func isBlank(_ text: [UInt8]) -> Bool {
         text.allSatisfy { $0 == 0x20 || $0 == 0x09 || $0 == 0x0a || $0 == 0x0d }
     }
@@ -302,6 +307,9 @@ struct HookInstallRecord: Codable, Equatable {
     /// The key paths of the hooks object and of the event lists that were
     /// in the file and empty before our entries went in.
     var emptyBefore: [[String]] = []
+    /// The config file was not there, and "on" made it. "Off" removes it
+    /// again when nothing but our entries is in it.
+    var createdFile = false
 }
 
 /// The thin shell around `HookConfigEditor`: it reads the file, writes a
@@ -395,7 +403,8 @@ struct HookInstaller {
         let cleared = try HookConfigEditor.clearedForInstall(old ?? [], entry: entry, keeping: keeping)
         let empty = HookConfigEditor.emptyContainers(in: cleared, entry: entry)
         try write(new, to: url, replacing: old, backup: true)
-        save(HookInstallRecord(emptyBefore: empty.sorted { $0.lexicographicallyPrecedes($1) }), for: entry)
+        let created = old == nil || (record(for: entry)?.createdFile ?? false)
+        save(HookInstallRecord(emptyBefore: empty.sorted { $0.lexicographicallyPrecedes($1) }, createdFile: created), for: entry)
     }
 
     func uninstall(_ entry: HookCatalogEntry) throws {
@@ -406,9 +415,13 @@ struct HookInstaller {
             guard HookConfigEditor.status(text: old, entry: entry, appPath: appPath) != .unreadable else { throw HookInstallError.notOurFile }
             guard (try? FileManager.default.removeItem(at: url)) != nil else { throw HookInstallError.writeFailed }
         case .jsonHookGroups:
-            let keeping = Set(record(for: entry)?.emptyBefore ?? [])
-            let new = try HookConfigEditor.uninstalling(from: old, entry: entry, keeping: keeping)
-            try write(new, to: url, replacing: old, backup: true)
+            let known = record(for: entry)
+            let new = try HookConfigEditor.uninstalling(from: old, entry: entry, keeping: Set(known?.emptyBefore ?? []))
+            if known?.createdFile == true, new != old, HookConfigEditor.isEmptyDocument(new) {
+                try remove(url, holding: old)
+            } else {
+                try write(new, to: url, replacing: old, backup: true)
+            }
             forgetRecord(for: entry)
         }
     }
@@ -432,6 +445,24 @@ struct HookInstaller {
             }
             try Data(new).write(to: target, options: .atomic)
             if let permissions { try? manager.setAttributes([.posixPermissions: permissions], ofItemAtPath: target.path) }
+        } catch {
+            throw HookInstallError.writeFailed
+        }
+    }
+
+    /// Removes a file that we made and that holds nothing any more. The
+    /// backup is written first and stays. A link is the user's: the file
+    /// behind it is emptied, not removed.
+    private func remove(_ url: URL, holding old: [UInt8]) throws {
+        let target = url.resolvingSymlinksInPath()
+        guard target.path == url.standardizedFileURL.path else {
+            return try write(Array("{}\n".utf8), to: url, replacing: old, backup: true)
+        }
+        guard try read(url) == old else { throw HookInstallError.changedWhileEditing }
+        do {
+            try Data(old).write(to: backupURL(for: target), options: .atomic)
+            pruneBackups(of: target)
+            try FileManager.default.removeItem(at: target)
         } catch {
             throw HookInstallError.writeFailed
         }

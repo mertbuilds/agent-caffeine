@@ -376,6 +376,67 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(try text(of: claude), cases[2])
     }
 
+    // MARK: A file that we made
+
+    /// The agent had no hooks file. On made it, so off removes it again
+    /// and leaves no empty file behind. The backup stays.
+    func testOffRemovesAFileThatOnCreated() throws {
+        let url = installer.configURL(for: codex)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        try installer.install(codex)
+        XCTAssertEqual(installer.record(for: codex)?.createdFile, true)
+        let installed = try text(of: codex)
+        try installer.uninstall(codex)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertEqual(backups(of: codex).count, 1)
+        XCTAssertEqual(try String(contentsOf: url.deletingLastPathComponent().appendingPathComponent(backups(of: codex)[0]), encoding: .utf8), installed)
+        XCTAssertNil(installer.record(for: codex))
+        XCTAssertEqual(installer.status(of: codex), .notInstalled)
+    }
+
+    func testOffRemovesAFileThatOnCreatedAlsoAfterAnUpdate() throws {
+        try HookInstaller(home: home, appPath: "/Users/me/Downloads/agent caffeine.app").install(codex)
+        try installer.install(codex)
+        XCTAssertEqual(installer.record(for: codex)?.createdFile, true)
+        try installer.uninstall(codex)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: installer.configURL(for: codex).path))
+    }
+
+    func testOffKeepsAFileThatHoldsSomethingElse() throws {
+        // We made it, and the user or the agent wrote into it later.
+        try installer.install(codex)
+        var source = JSONSourceText(Array(try text(of: codex).utf8))
+        source.append(to: try source.parsed()) { _ in "\"model\": \"m\"" }
+        try Data(source.bytes).write(to: installer.configURL(for: codex))
+        try installer.uninstall(codex)
+        XCTAssertEqual(try json(of: codex) as NSDictionary, ["model": "m"])
+        XCTAssertNil(installer.record(for: codex))
+    }
+
+    func testOffKeepsAFileThatWasThereBefore() throws {
+        for original in ["{}", "{}\n", "{\"hooks\": {}}"] {
+            try write(original, for: codex)
+            try installer.install(codex)
+            XCTAssertEqual(installer.record(for: codex)?.createdFile, false, original)
+            try installer.uninstall(codex)
+            XCTAssertEqual(try text(of: codex), original)
+        }
+        // Without the record nobody knows who made the file, so it stays.
+        try FileManager.default.removeItem(at: installer.configURL(for: codex))
+        try installer.install(codex)
+        try FileManager.default.removeItem(at: installer.recordsDirectory)
+        try installer.uninstall(codex)
+        XCTAssertEqual(try text(of: codex), "{}\n")
+    }
+
+    /// Off again with nothing of ours in the file: the file is not ours to remove.
+    func testOffWithNothingOfOursKeepsAnEmptyFile() throws {
+        try installer.install(codex)
+        try write("{}", for: codex)
+        try installer.uninstall(codex)
+        XCTAssertEqual(try text(of: codex), "{}")
+    }
+
     func testUninstallWithNothingOfOursWritesNothing() throws {
         try write(foreignCodex, for: codex)
         try installer.uninstall(codex)

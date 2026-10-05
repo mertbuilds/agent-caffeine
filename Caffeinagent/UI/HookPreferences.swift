@@ -116,7 +116,7 @@ struct HookRow: View {
         case .pluginFile:
             return "agent caffeine writes this file: \(path). Off removes the file."
         case .jsonHookGroups:
-            return "agent caffeine adds these lines to \(path) and saves a copy of the file next to it first. Off removes the lines and nothing else."
+            return "agent caffeine adds these lines to \(path) and saves a copy of the file next to it first. Off removes the lines and nothing else. When agent caffeine made the file and nothing else is in it, off removes the file too."
         }
     }
 }
