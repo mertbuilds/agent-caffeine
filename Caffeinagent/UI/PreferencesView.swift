@@ -75,9 +75,11 @@ struct PreferencesView: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
             HStack(spacing: 4) {
-                Text("Built by")
+                Text("a")
                     .foregroundStyle(.secondary)
                 Link("mertbuilds.com", destination: Self.builderURL)
+                Text("utility")
+                    .foregroundStyle(.secondary)
             }
             .font(.callout)
             Button("Show setup again") { OnboardingWindow.show(aggregator: aggregator) }
