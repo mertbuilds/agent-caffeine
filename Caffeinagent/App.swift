@@ -4,17 +4,11 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppRelocator.offerToMoveIfNeeded()
-        // The onboarding window opens here while `Onboarding.isPending`.
+        // After the first sample, so the window can name the agents it found.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+            if Onboarding.isPending { OnboardingWindow.show(aggregator: .shared) }
+        }
     }
-}
-
-/// The seam for the onboarding window, which is not built yet. It is the
-/// place to set up the lid-closed helper and to ask for notifications, and
-/// it sets `completedKey` when the user is done.
-enum Onboarding {
-    static let completedKey = "Onboarding.completed"
-
-    static var isPending: Bool { !UserDefaults.standard.bool(forKey: completedKey) }
 }
 
 @main
@@ -28,7 +22,7 @@ enum Main {
 }
 
 struct CaffeinagentApp: App {
-    @StateObject private var aggregator = StateAggregator()
+    @ObservedObject private var aggregator = StateAggregator.shared
     @StateObject private var updater = Updater()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 

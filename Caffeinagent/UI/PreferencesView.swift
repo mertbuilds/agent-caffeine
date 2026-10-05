@@ -80,6 +80,7 @@ struct PreferencesView: View {
                 Link("mertbuilds.com", destination: Self.builderURL)
             }
             .font(.callout)
+            Button("Show setup again") { OnboardingWindow.show(aggregator: aggregator) }
         }
     }
 

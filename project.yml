@@ -197,6 +197,7 @@ targets:
           - SleepFlagSystem.swift
           - SafetyInputsReader.swift
       - Caffeinagent/UI/MenuModel.swift
+      - Caffeinagent/UI/OnboardingModel.swift
       - CaffeinagentHelper/HelperCore.swift
       - CaffeinagentHelper/SleepFlagWatchdog.swift
     settings:

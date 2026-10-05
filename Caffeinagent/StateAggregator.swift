@@ -7,6 +7,9 @@ import os
 /// state the menu and Preferences show.
 @MainActor
 final class StateAggregator: ObservableObject {
+    /// One for the app: the scenes and the setup window share it.
+    static let shared = StateAggregator()
+
     @Published var enabled: Bool {
         didSet {
             UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
