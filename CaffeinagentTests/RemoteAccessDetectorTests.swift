@@ -4,18 +4,32 @@ final class RemoteAccessDetectorTests: XCTestCase {
     typealias Settings = RemoteAccessDetector.ClaudeSettings
 
     func testClaudeRemoteControl() {
-        let cases: [(name: String, sessions: [[String]], settings: Settings, expected: Bool)] = [
+        typealias Session = RemoteAccessDetector.ClaudeSession
+        func terminal(_ arguments: [String]) -> Session { Session(arguments: arguments, hasTerminal: true) }
+        func noTerminal(_ arguments: [String]) -> Session { Session(arguments: arguments, hasTerminal: false) }
+        let cases: [(name: String, sessions: [Session], settings: Settings, expected: Bool)] = [
             ("no session", [], Settings(atStartup: true), false),
-            ("plain session", [["--dangerously-skip-permissions"]], Settings(), false),
-            ("server mode", [["remote-control"]], Settings(), true),
-            ("server mode with options", [["remote-control", "--spawn", "worktree"]], Settings(), true),
-            ("long flag", [["--remote-control", "My Project"]], Settings(), true),
-            ("short flag", [["--model", "x", "--rc"]], Settings(), true),
-            ("on for all sessions", [[]], Settings(atStartup: true), true),
-            ("on for all sessions, headless run", [["-p", "x"]], Settings(atStartup: true), false),
-            ("on for all sessions, print flag", [["--print"]], Settings(atStartup: true), false),
-            ("one of two sessions", [["-p"], ["--rc"]], Settings(), true),
-            ("switched off for good", [["remote-control"], []], Settings(atStartup: true, disabled: true), false),
+            ("plain session", [terminal(["--dangerously-skip-permissions"])], Settings(), false),
+            ("server mode", [terminal(["remote-control"])], Settings(), true),
+            ("server mode with options", [terminal(["remote-control", "--spawn", "worktree"])], Settings(), true),
+            ("server mode without a terminal", [noTerminal(["remote-control"])], Settings(), true),
+            ("long flag", [terminal(["--remote-control", "My Project"])], Settings(), true),
+            ("short flag", [terminal(["--model", "x", "--rc"])], Settings(), true),
+            ("on for all sessions", [terminal([])], Settings(atStartup: true), true),
+            ("on for all sessions, headless run", [terminal(["-p", "x"])], Settings(atStartup: true), false),
+            ("on for all sessions, print flag", [terminal(["--print"])], Settings(atStartup: true), false),
+            ("one of two sessions", [terminal(["-p"]), terminal(["--rc"])], Settings(), true),
+            ("switched off for good", [terminal(["remote-control"]), terminal([])], Settings(atStartup: true, disabled: true), false),
+            // Only a session that a person sits at.
+            ("SDK session of another app", [noTerminal(["--output-format", "stream-json", "--input-format", "stream-json", "--verbose"])], Settings(atStartup: true), false),
+            ("SDK session in a terminal", [terminal(["--input-format", "stream-json"])], Settings(atStartup: true), false),
+            ("SDK session, joined flag", [terminal(["--input-format=stream-json"])], Settings(atStartup: true), false),
+            ("session without a terminal", [noTerminal([])], Settings(atStartup: true), false),
+            ("mcp server", [noTerminal(["mcp", "serve"])], Settings(atStartup: true), false),
+            ("mcp command in a terminal", [terminal(["mcp", "list"])], Settings(atStartup: true), false),
+            ("flag on a headless run", [terminal(["-p", "x", "--rc"])], Settings(), false),
+            ("flag without a terminal", [noTerminal(["--rc"])], Settings(), false),
+            ("an SDK session next to a real one", [noTerminal(["--input-format", "stream-json"]), terminal(["--resume", "a56c"])], Settings(atStartup: true), true),
         ]
         for c in cases {
             XCTAssertEqual(RemoteAccessDetector.claudeRemoteControl(sessions: c.sessions, settings: c.settings), c.expected, c.name)

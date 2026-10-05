@@ -143,12 +143,16 @@ final class EvidenceCollectorTests: XCTestCase {
 
     func testRemoteAccessFromClaudeRemoteControl() throws {
         _ = collectWithHooks()
-        census.rows = [claude(100)]
+        let inTerminal: Row = .fixture(100, start: processStart, path: claudeBinary, args: ["claude"], tty: 0x1000_0009)
+        census.rows = [inTerminal]
         XCTAssertFalse(sample(at: 0).frame.context.remoteAccessDetected)
-        census.rows = [claude(100), claude(200, args: ["claude", "remote-control"])]
+        census.rows = [inTerminal, claude(200, args: ["claude", "remote-control"])]
         XCTAssertTrue(sample(at: 2).frame.context.remoteAccessDetected)
-        census.rows = [claude(100)]
         try Data(#"{"remoteControlAtStartup": true}"#.utf8).write(to: root.appendingPathComponent("claude-settings.json"))
+        // An SDK session and an MCP server have no terminal, and nobody sits at them.
+        census.rows = [claude(100, args: ["claude", "--input-format", "stream-json"]), claude(300, args: ["claude", "mcp", "serve"])]
+        XCTAssertFalse(sample(at: 3).frame.context.remoteAccessDetected)
+        census.rows = [inTerminal]
         XCTAssertTrue(sample(at: 4).frame.context.remoteAccessDetected)
         census.rows = []
         XCTAssertFalse(sample(at: 6).frame.context.remoteAccessDetected, "No session is open")

@@ -264,7 +264,8 @@ final class EvidenceCollector: EvidenceCollecting {
            let read = hit.value {
             settings = read
         }
-        return RemoteAccessDetector.claudeRemoteControl(sessions: sessions.map { AgentCatalog.command(of: $0).arguments }, settings: settings)
+        let claudeSessions = sessions.map { RemoteAccessDetector.ClaudeSession(arguments: AgentCatalog.command(of: $0).arguments, hasTerminal: $0.hasTTY) }
+        return RemoteAccessDetector.claudeRemoteControl(sessions: claudeSessions, settings: settings)
     }
 
     /// The state the agent's hooks left for one of the instance's own
