@@ -24,7 +24,7 @@ protocol MarkerStoring {
 final class HelperCore {
     private let flag: SleepFlagAccessing
     private let marker: MarkerStoring
-    private let now: () -> Date
+    private let now: () -> TimeInterval
     private var watchdog: SleepFlagWatchdog
     // How many more ticks have to find the flag off before the marker of an
     // earlier run is dropped. Zero when there was no such marker.
@@ -38,12 +38,22 @@ final class HelperCore {
     var setByHelper: Bool { watchdog.setByHelper }
     var sleepDisabled: Bool { flag.read() ?? false }
 
-    init(flag: SleepFlagAccessing, marker: MarkerStoring, timeout: TimeInterval = 60, now: @escaping () -> Date = Date.init) {
+    init(flag: SleepFlagAccessing, marker: MarkerStoring, timeout: TimeInterval = 60, now: @escaping () -> TimeInterval = HelperCore.awakeSeconds) {
         self.flag = flag
         self.marker = marker
         self.now = now
         self.watchdog = SleepFlagWatchdog(markerExists: marker.exists, timeout: timeout)
         self.recoveryChecksLeft = watchdog.setByHelper ? Self.recoveryChecks : 0
+    }
+
+    // Seconds the Mac was awake since boot. CLOCK_UPTIME_RAW stands still
+    // while the Mac sleeps, and that is wanted: no heartbeat arrives during
+    // sleep, so a clock that counts sleep (CLOCK_MONOTONIC and
+    // CLOCK_MONOTONIC_RAW both do) would clear the flag right after wake,
+    // before the app had its turn. The date is no use at all: a time sync or
+    // a manual change moves it.
+    static func awakeSeconds() -> TimeInterval {
+        TimeInterval(clock_gettime_nsec_np(CLOCK_UPTIME_RAW)) / 1_000_000_000
     }
 
     func setSleepDisabled(_ on: Bool) -> Bool {

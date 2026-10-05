@@ -1,7 +1,9 @@
 import Foundation
 
 // Decides when the helper clears SleepDisabled on its own. Pure: the caller
-// passes the time in and carries the actions out.
+// passes the time in and carries the actions out. The time is seconds on a
+// clock that only moves forward, not the date: a change of the wall clock
+// must neither clear the flag early nor keep it for longer.
 struct SleepFlagWatchdog {
     enum Action: Equatable {
         case none
@@ -12,7 +14,7 @@ struct SleepFlagWatchdog {
     // True from just before the helper sets the flag until a clear is
     // confirmed. Mirrors the marker file.
     private(set) var setByHelper: Bool
-    private var deadline: Date?
+    private var deadline: TimeInterval?
 
     // A marker left by an earlier run means the flag outlived the helper
     // (reboot, crash), so the first tick clears it.
@@ -22,9 +24,9 @@ struct SleepFlagWatchdog {
         self.deadline = nil
     }
 
-    mutating func willSet(now: Date) {
+    mutating func willSet(now: TimeInterval) {
         setByHelper = true
-        deadline = now.addingTimeInterval(timeout)
+        deadline = now + timeout
     }
 
     mutating func didClear() {
@@ -32,14 +34,14 @@ struct SleepFlagWatchdog {
         deadline = nil
     }
 
-    mutating func heartbeat(now: Date) {
+    mutating func heartbeat(now: TimeInterval) {
         guard setByHelper else { return }
-        deadline = now.addingTimeInterval(timeout)
+        deadline = now + timeout
     }
 
     // A lost connection needs no event of its own: the heartbeats stop with
     // it, and one from a new connection within the timeout keeps the flag.
-    func tick(now: Date) -> Action {
+    func tick(now: TimeInterval) -> Action {
         guard setByHelper else { return .none }
         guard let deadline else { return .clearFlag }
         return now >= deadline ? .clearFlag : .none

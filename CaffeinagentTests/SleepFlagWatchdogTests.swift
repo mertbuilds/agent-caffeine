@@ -39,13 +39,13 @@ private final class FakeMarker: MarkerStoring {
 }
 
 final class SleepFlagWatchdogTests: XCTestCase {
-    private let start = Date(timeIntervalSince1970: 1_000_000)
+    private let start: TimeInterval = 1_000
 
     func testHeartbeatKeepsFlag() {
         var watchdog = SleepFlagWatchdog(markerExists: false)
         watchdog.willSet(now: start)
         for step in 1...20 {
-            let now = start.addingTimeInterval(Double(step) * 15)
+            let now = start + Double(step) * 15
             XCTAssertEqual(watchdog.tick(now: now), .none)
             watchdog.heartbeat(now: now)
         }
@@ -55,20 +55,20 @@ final class SleepFlagWatchdogTests: XCTestCase {
     func testLostHeartbeatClearsAfterTimeout() {
         var watchdog = SleepFlagWatchdog(markerExists: false)
         watchdog.willSet(now: start)
-        watchdog.heartbeat(now: start.addingTimeInterval(15))
-        XCTAssertEqual(watchdog.tick(now: start.addingTimeInterval(74)), .none)
-        XCTAssertEqual(watchdog.tick(now: start.addingTimeInterval(75)), .clearFlag)
+        watchdog.heartbeat(now: start + 15)
+        XCTAssertEqual(watchdog.tick(now: start + 74), .none)
+        XCTAssertEqual(watchdog.tick(now: start + 75), .clearFlag)
         // Still due until the caller confirms the clear.
-        XCTAssertEqual(watchdog.tick(now: start.addingTimeInterval(80)), .clearFlag)
+        XCTAssertEqual(watchdog.tick(now: start + 80), .clearFlag)
         watchdog.didClear()
-        XCTAssertEqual(watchdog.tick(now: start.addingTimeInterval(85)), .none)
+        XCTAssertEqual(watchdog.tick(now: start + 85), .none)
     }
 
     func testFlagNotSetByHelperIsNeverCleared() {
         var watchdog = SleepFlagWatchdog(markerExists: false)
         watchdog.heartbeat(now: start)
         XCTAssertEqual(watchdog.tick(now: start), .none)
-        XCTAssertEqual(watchdog.tick(now: start.addingTimeInterval(100_000)), .none)
+        XCTAssertEqual(watchdog.tick(now: start + 100_000), .none)
     }
 
     func testRestartWithMarkerClears() {
@@ -79,13 +79,23 @@ final class SleepFlagWatchdogTests: XCTestCase {
     func testReconnectWithinTimeoutKeepsFlag() {
         var watchdog = SleepFlagWatchdog(markerExists: false)
         watchdog.willSet(now: start)
-        watchdog.heartbeat(now: start.addingTimeInterval(59))
-        XCTAssertEqual(watchdog.tick(now: start.addingTimeInterval(100)), .none)
+        watchdog.heartbeat(now: start + 59)
+        XCTAssertEqual(watchdog.tick(now: start + 100), .none)
+    }
+}
+
+final class HelperClockTests: XCTestCase {
+    func testClockMovesForwardAndIsNotTheDate() {
+        let first = HelperCore.awakeSeconds()
+        let second = HelperCore.awakeSeconds()
+        XCTAssertGreaterThanOrEqual(second, first)
+        XCTAssertGreaterThan(first, 0)
+        XCTAssertLessThan(first, Date().timeIntervalSince1970 / 2, "Seconds since boot, not since 1970")
     }
 }
 
 final class HelperCoreTests: XCTestCase {
-    private var now = Date(timeIntervalSince1970: 1_000_000)
+    private var now: TimeInterval = 1_000
 
     private func makeCore(flag: FakeFlag, marker: FakeMarker) -> HelperCore {
         HelperCore(flag: flag, marker: marker, timeout: 60, now: { self.now })
