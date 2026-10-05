@@ -1,10 +1,10 @@
-# caffeinagent
+# agent caffeine
 
-> the brand is fully lowercase: `caffeinagent`. user-visible strings,
-> file paths, and the menu bar label all read as `caffeinagent`. the
-> internal Xcode target / source folder keeps the capitalized
-> `Caffeinagent` identifier purely as a build-system convention; nothing
-> outside the toolchain sees it.
+> The brand is `agent caffeine`, always lowercase, also at the start of
+> a sentence. Every user-visible string uses it: the app, the dmg and the
+> site. `caffeinagent` is the name of the repo, the binary, the bundle id
+> and the domain (caffeinagent.com), and the Xcode target and source
+> folder are `Caffeinagent`. Users never see those names as the brand.
 
 macOS menu bar app that keeps your Mac awake while AI coding agents work. By default it releases sleep prevention when agents are idle or waiting for your input, so the Mac can nap when it's safe to.
 
