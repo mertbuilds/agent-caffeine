@@ -2,6 +2,14 @@ import type { Config } from "tailwindcss";
 
 export default {
   content: ["./app/**/*.{ts,tsx,mdx}", "./components/**/*.{ts,tsx}"],
+  // The system's scheme unless `data-theme` forces one (lib/theme.ts).
+  darkMode: [
+    "variant",
+    [
+      "@media (prefers-color-scheme: dark) { &:not([data-theme=light] *) }",
+      "&:is([data-theme=dark] *)",
+    ],
+  ],
   theme: {
     extend: {
       fontFamily: {
@@ -15,6 +23,10 @@ export default {
         border: "var(--border)",
         surface: "var(--surface)",
         accent: "var(--accent)",
+        brand: {
+          light: "var(--brand-light)",
+          deep: "var(--brand-deep)",
+        },
       },
       transitionDuration: {
         quick: "var(--duration-quick)",

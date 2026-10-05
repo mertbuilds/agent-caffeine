@@ -6,7 +6,7 @@ import { faqItems } from "@/lib/faq";
 
 function Question({ question, answer }: { question: string; answer: ReactNode }) {
   const id = useId();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(true);
   const questionId = `${id}-question`;
   const answerId = `${id}-answer`;
 

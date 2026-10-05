@@ -1,11 +1,11 @@
+import NumberFlow, { NumberFlowGroup } from "@number-flow/react";
+import { MenuIcon } from "@/components/menu-icon";
 import { CLAUDE } from "./terminal";
 
-/** Minutes and seconds at a fixed width, so the digits tick in place. */
-function clock(seconds: number) {
-  const whole = Math.floor(seconds);
-  const minutes = String(Math.floor(whole / 60)).padStart(2, "\u2007");
-  return `${minutes}m ${String(whole % 60).padStart(2, "0")}s`;
-}
+const TWO_DIGITS = { minimumIntegerDigits: 2 };
+// A little longer than the timer's 100 ms step, so the rolls run into each other like fast counting.
+const ROLL = { duration: 160, easing: "ease-out" };
+const FADE = { duration: 80, easing: "ease-out" };
 
 function ClaudeCodeIcon() {
   return (
@@ -19,24 +19,11 @@ function ClaudeCodeIcon() {
   );
 }
 
-function Cup() {
-  return (
-    <svg viewBox="0 0 24 24" className="h-[1.1em] w-[1.1em] shrink-0" aria-hidden="true">
-      <path fill="var(--accent)" d="M4 8h13v6a6 6 0 0 1-6 6h-1a6 6 0 0 1-6-6V8z" />
-      <path
-        fill="none"
-        stroke="var(--accent)"
-        strokeWidth="2"
-        d="M17 10h1.5a2.5 2.5 0 0 1 0 5H16.5"
-      />
-    </svg>
-  );
-}
-
 type PillProps = {
   /** How far the pill has come in, from 0 to 1. */
   shown: number;
   spinner: string;
+  /** Whole seconds of work, stepped a few times a second. */
   seconds: number;
 };
 
@@ -59,8 +46,28 @@ export function Pill({ shown, spinner, seconds }: PillProps) {
         {spinner}
       </span>
       <span>Still working</span>
-      <span className="tabular-nums text-muted">{clock(seconds)}</span>
-      <Cup />
+      <span aria-hidden="true" className="tabular-nums text-muted">
+        <NumberFlowGroup>
+          <span className="inline-block w-[2ch] text-right">
+            <NumberFlow
+              value={Math.floor(seconds / 60)}
+              transformTiming={ROLL}
+              spinTiming={ROLL}
+              opacityTiming={FADE}
+            />
+          </span>
+          m{" "}
+          <NumberFlow
+            value={seconds % 60}
+            format={TWO_DIGITS}
+            transformTiming={ROLL}
+            spinTiming={ROLL}
+            opacityTiming={FADE}
+          />
+          s
+        </NumberFlowGroup>
+      </span>
+      <MenuIcon className="h-[1.1em] w-[1.1em] shrink-0 text-[var(--accent)]" held />
     </div>
   );
 }

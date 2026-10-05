@@ -4,6 +4,7 @@ import localFont from "next/font/local";
 import { Analytics } from "@/components/analytics";
 import { DevKnobs } from "@/components/dev-knobs";
 import { agentsMoreThan } from "@/lib/agents";
+import { THEME_SCRIPT } from "@/lib/theme";
 
 const suisse = localFont({
   src: [
@@ -47,7 +48,11 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en" className={suisse.variable}>
+    // The head's script sets `data-theme` before hydration; that one attribute may differ.
+    <html lang="en" className={suisse.variable} suppressHydrationWarning>
+      <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
+      </head>
       <body className="bg-bg font-sans text-fg antialiased">
         {children}
         <Analytics />

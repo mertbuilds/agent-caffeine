@@ -5,7 +5,6 @@ import { Header } from "@/components/header";
 import { Hero } from "@/components/hero";
 import { HowItWorks } from "@/components/how-it-works";
 import { JsonLd } from "@/components/json-ld";
-import { MenuBarSection } from "@/components/menu-bar-section";
 import { Pricing } from "@/components/pricing";
 import { agentsMoreThan } from "@/lib/agents";
 import { answerText, faqItems } from "@/lib/faq";
@@ -44,9 +43,8 @@ export default function Home() {
         <Header />
         <Hero />
       </div>
-      <AgentsSection />
       <HowItWorks />
-      <MenuBarSection />
+      <AgentsSection />
       <Pricing />
       <Faq />
       <Footer />

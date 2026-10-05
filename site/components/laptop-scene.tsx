@@ -18,6 +18,9 @@ const linear = (share: number) => share;
 const AT_CLOSE = 140;
 const AT_DONE = 842;
 
+/** How many times a second the pill's timer steps, so each roll has time to read. */
+const PILL_TICKS = 10;
+
 export function LaptopScene() {
   const ref = useRef<HTMLDivElement>(null);
   const seen = useSeen(ref, 0.4);
@@ -39,7 +42,10 @@ export function LaptopScene() {
 
   const closed = span(laptop.close, easeInOut) - span(laptop.open, easeInOut);
   const done = time >= laptop.race[0];
-  const seconds = AT_CLOSE * span(laptop.work, linear) + (AT_DONE - AT_CLOSE) * span(laptop.race, easeInOut);
+  const workedAt = (at: number) =>
+    AT_CLOSE * stretch(at, ...laptop.work, linear) +
+    (AT_DONE - AT_CLOSE) * stretch(at, ...laptop.race, easeInOut);
+  const seconds = workedAt(time);
   const spinner = spinnerAt(time);
 
   return (
@@ -64,7 +70,11 @@ export function LaptopScene() {
             }}
           />
         </Laptop>
-        <Pill shown={span(laptop.pillIn) - span(laptop.pillOut)} spinner={spinner} seconds={seconds} />
+        <Pill
+          shown={span(laptop.pillIn) - span(laptop.pillOut)}
+          spinner={spinner}
+          seconds={Math.floor(workedAt(Math.floor(time * PILL_TICKS) / PILL_TICKS))}
+        />
       </div>
     </div>
   );

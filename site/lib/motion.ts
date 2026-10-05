@@ -9,15 +9,9 @@ export const easing = {
   smoothOut: [0.22, 1, 0.36, 1],
 } as const;
 
-/**
- * The looping drawings, in seconds. Every loop winds back over `back` before it
- * plays again. The timeline plays over `timeline` and stands finished for
- * `timelineRest`.
- */
+/** The looping drawings, in seconds. Every loop winds back over `back` before it plays again. */
 export const drawing = {
   back: 0.4,
-  timeline: 7,
-  timelineRest: 2.5,
 } as const;
 
 /**

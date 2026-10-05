@@ -119,8 +119,8 @@ export default async function BlogPost({ params }: Props) {
             We built agent caffeine to keep a Mac awake while coding agents work, also with
             the lid closed.{" "}
             {release === null
-              ? "$9 once, macOS 13 or later."
-              : "7 day free trial, then $9 once per Mac. macOS 13 or later."}
+              ? "$9 once. macOS 13 or later, Apple silicon and Intel."
+              : "7 day free trial, then $9 once per Mac. macOS 13 or later, Apple silicon and Intel."}
           </p>
           {release === null ? (
             <BuyButton placement="blog" size="small">

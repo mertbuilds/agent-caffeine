@@ -48,5 +48,5 @@ function formatSize(bytes: number): string {
 }
 
 export function releaseDetails(release: Release): string {
-  return `Version ${release.version} · ${formatSize(release.size)} · macOS 13 or later`;
+  return `Version ${release.version} · ${formatSize(release.size)} · macOS 13 or later, Apple silicon and Intel`;
 }

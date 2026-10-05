@@ -1,33 +1,59 @@
+import Image from "next/image";
 import { BuyButton } from "@/components/buy-button";
 import { DownloadButton } from "@/components/download-button";
 import { getLatestRelease, releaseDetails } from "@/lib/release";
 
+const GRID_LINE = "rgba(255, 255, 255, 0.07)";
+
 export async function Pricing() {
   const release = await getLatestRelease();
   return (
-    <section className="mx-auto w-full max-w-[1120px]">
-      <div className="mx-auto flex max-w-[640px] flex-col items-center gap-6 rounded-lg border border-border bg-surface px-6 py-12 text-center md:py-16">
-        <div className="flex flex-col gap-3">
-          <p className="text-7xl font-medium tabular-nums leading-none tracking-[-0.02em]">$9</p>
-          <p className="text-muted">Once per Mac. Lifetime updates. No subscription</p>
-          {release === null ? null : <p className="text-muted">Try it free for 7 days first</p>}
+    <section id="pricing" className="mx-auto w-full max-w-[1120px] scroll-mt-8">
+      <div className="relative mx-auto mt-14 max-w-[880px] rounded-[20px] bg-gradient-to-br from-brand-light to-brand-deep text-white shadow-[0_32px_64px_-32px_rgba(27,85,194,0.55)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.16)] md:mt-10">
+        <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+          <div
+            className="absolute inset-0 [mask-image:radial-gradient(ellipse_90%_45%_at_50%_0%,black_10%,transparent_75%)] md:[mask-image:radial-gradient(ellipse_60%_90%_at_82%_40%,black_10%,transparent_70%)]"
+            style={{
+              backgroundImage: `linear-gradient(${GRID_LINE} 1px, transparent 1px), linear-gradient(90deg, ${GRID_LINE} 1px, transparent 1px)`,
+              backgroundSize: "32px 32px",
+            }}
+          />
+          <div className="absolute left-1/2 top-0 size-[320px] -translate-x-1/2 -translate-y-1/3 bg-[radial-gradient(closest-side,rgba(160,205,255,0.5),transparent)] md:left-auto md:right-[-60px] md:top-0 md:size-[380px] lg:right-[-40px] lg:size-[520px] md:translate-x-0 md:-translate-y-[20%]" />
         </div>
-        {release === null ? (
-          <BuyButton placement="pricing">Buy agent caffeine</BuyButton>
-        ) : (
-          <div className="flex flex-col items-center gap-3">
-            <div className="flex flex-wrap items-center justify-center gap-3">
-              <DownloadButton release={release} placement="pricing">
-                Download free trial
-              </DownloadButton>
-              <BuyButton placement="pricing" variant="outline">
-                Buy a key
-              </BuyButton>
-            </div>
-            <p className="text-balance text-sm text-muted">{releaseDetails(release)}</p>
+        <div className="relative grid justify-items-center gap-8 px-6 pb-10 text-center md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:justify-items-start md:gap-10 md:py-14 md:pl-14 md:pr-12 md:text-left">
+          <div className="relative -mt-14 md:order-last md:-mt-24 md:self-start">
+            <Image
+              src="/icon-512.png"
+              alt=""
+              width={512}
+              height={512}
+              sizes="(min-width: 1024px) 260px, (min-width: 768px) 200px, 120px"
+              className="relative size-[120px] rotate-[5deg] drop-shadow-[0_18px_22px_rgba(6,24,74,0.5)] md:size-[200px] lg:size-[260px]"
+            />
           </div>
-        )}
-        <p className="text-sm text-muted">Signed, notarized and Gatekeeper clean</p>
+          <div className="flex flex-col items-center gap-8 md:items-start">
+            <div className="flex flex-col gap-3">
+              <p className="text-7xl font-medium tabular-nums leading-none tracking-[-0.02em] md:text-8xl">$9</p>
+              <p className="text-balance text-lg">Once per Mac. Lifetime updates. No subscription</p>
+              {release === null ? null : <p>Try it free for 7 days first</p>}
+            </div>
+            {release === null ? (
+              <BuyButton placement="pricing" variant="brand">
+                Buy agent caffeine
+              </BuyButton>
+            ) : (
+              <div className="flex flex-wrap items-center justify-center gap-3 md:justify-start">
+                <DownloadButton release={release} placement="pricing" variant="brand">
+                  Download free trial
+                </DownloadButton>
+                <BuyButton placement="pricing" variant="brandOutline">
+                  Buy a key
+                </BuyButton>
+              </div>
+            )}
+            {release === null ? null : <p className="text-balance text-sm">{releaseDetails(release)}</p>}
+          </div>
+        </div>
       </div>
     </section>
   );
