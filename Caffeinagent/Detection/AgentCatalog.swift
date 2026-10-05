@@ -128,7 +128,7 @@ struct AgentCatalog {
 
     /// Raised when a definition changes what it matches, so a lab recording
     /// says which catalog saw its processes.
-    static let version = 2
+    static let version = 3
 
     // MARK: Data
 
@@ -275,9 +275,14 @@ struct AgentCatalog {
     }
 
     /// The names are the basename of argv[0] (a CLI that sets its process
-    /// title lands here), the basename of the script when an interpreter
-    /// runs it (`node /opt/homebrew/bin/gemini`), and the basename of the
-    /// executable.
+    /// title lands here), the script or module when an interpreter runs it
+    /// (`node /opt/homebrew/bin/gemini`, `python -m openhands`), what a
+    /// package runner starts (`bun run opencode`, `npx gemini`), and the
+    /// basename of the executable.
+    ///
+    /// A script file counts under its name only when the name has no
+    /// extension, as an installed command has none: `python pi.py` is
+    /// someone's own script, not Pi.
     static func command(of row: ProcessInfoRow) -> Command {
         let argv0 = baseName(row.arguments.first ?? "").lowercased()
         let executable = baseName(row.executablePath).lowercased()
@@ -285,14 +290,100 @@ struct AgentCatalog {
         var arguments = Array(row.arguments.dropFirst())
         var runsScript = false
         if !argv0.isEmpty { names.append(argv0) }
-        if isInterpreter(argv0) || isInterpreter(executable),
-           let index = arguments.firstIndex(where: { !$0.hasPrefix("-") }) {
-            names.append(scriptName(arguments[index]))
-            arguments = Array(arguments[(index + 1)...])
+        func note(_ target: (name: String, rest: [String])) {
+            names.append(target.name)
+            arguments = target.rest
             runsScript = isInterpreter(executable)
+        }
+        if let target = launched(by: argv0, arguments) {
+            note(target)
+        } else if let interpreter = [argv0, executable].first(where: isInterpreter), let script = script(of: interpreter, arguments) {
+            note(script)
+            if let target = launched(by: script.name, script.rest) { note(target) }
         }
         if !executable.isEmpty && !names.contains(executable) { names.append(executable) }
         return Command(names: names, arguments: arguments, interpreterRunsScript: runsScript)
+    }
+
+    /// The flags of each interpreter that take the next argument as their
+    /// value, and the flags after which there is no script file at all.
+    private static func flags(of interpreter: String) -> (valued: Set<String>, inline: Set<String>) {
+        switch interpreter {
+        case "node": return (["-r", "--require", "--import", "--loader", "--experimental-loader", "-C", "--conditions", "--inspect-port", "--title"], ["-e", "--eval", "-p", "--print"])
+        case "bun": return (["-r", "--preload", "--cwd", "-c", "--config", "--define", "-d"], ["-e", "--eval", "-p", "--print"])
+        case "deno": return (["-c", "--config", "--import-map", "--lock", "--cert", "-L", "--log-level"], [])
+        case "ruby": return (["-I", "-r", "-C", "-E"], ["-e"])
+        default: return (["-W", "-X", "-Q"], ["-c"])
+        }
+    }
+
+    /// The script or module an interpreter runs, and the arguments after it.
+    private static func script(of interpreter: String, _ arguments: [String]) -> (name: String, rest: [String])? {
+        let python = interpreter.hasPrefix("python") || interpreter.hasPrefix("pypy")
+        let flags = flags(of: interpreter)
+        var index = 0
+        while index < arguments.count {
+            let argument = arguments[index]
+            guard argument.hasPrefix("-"), argument != "-" else {
+                return (targetName(argument), Array(arguments[(index + 1)...]))
+            }
+            if flags.inline.contains(argument) { return nil }
+            // `python -m openhands.cli`, also as `-um`: the package is the agent.
+            if python, !argument.hasPrefix("--"), argument.hasSuffix("m") {
+                guard index + 1 < arguments.count else { return nil }
+                let module = arguments[index + 1].split(separator: ".").first.map(String.init) ?? ""
+                return (module.lowercased(), Array(arguments[(index + 2)...]))
+            }
+            index += flags.valued.contains(argument) ? 2 : 1
+        }
+        return nil
+    }
+
+    /// Package runners, with the words that come before the command they
+    /// start. The longer form is tried first.
+    private static let launchers: [String: [[String]]] = [
+        "npx": [[]], "pnpx": [[]], "bunx": [[]], "uvx": [[]],
+        "bun": [["run"], ["x"]], "deno": [["run"]],
+        "pnpm": [["dlx"], ["exec"]], "yarn": [["dlx"]], "npm": [["exec"]],
+        "uv": [["tool", "run"], ["run"]], "pipx": [["run"]],
+    ]
+
+    private static let launcherValuedFlags: Set<String> = [
+        "-p", "--package", "--from", "--with", "--with-editable", "--with-requirements", "--python", "--spec",
+        "-c", "--call", "--config", "--cwd", "--filter", "--import-map", "--lock", "--index-url",
+    ]
+
+    /// What a package runner starts, and the arguments after it. Nil when
+    /// `name` is no runner or has none of its run words.
+    private static func launched(by name: String, _ arguments: [String]) -> (name: String, rest: [String])? {
+        guard let forms = launchers[name] else { return nil }
+        var words: [(index: Int, value: String)] = []
+        var index = 0
+        while index < arguments.count, words.count < 3 {
+            let argument = arguments[index]
+            if argument.hasPrefix("-") {
+                index += launcherValuedFlags.contains(argument) ? 2 : 1
+            } else {
+                words.append((index, argument))
+                index += 1
+            }
+        }
+        for form in forms where words.count > form.count && words.prefix(form.count).map(\.value) == form {
+            let target = words[form.count]
+            return (targetName(target.value), Array(arguments[(target.index + 1)...]))
+        }
+        return nil
+    }
+
+    /// A command name from a path or a package: `/opt/homebrew/bin/gemini`,
+    /// `@google/gemini-cli@latest` and `npm:gemini` all give their last part
+    /// without the version. An extension stays, so a source file matches
+    /// no agent.
+    private static func targetName(_ target: String) -> String {
+        var name = baseName(target)
+        for scheme in ["npm:", "jsr:"] where name.hasPrefix(scheme) { name.removeFirst(scheme.count) }
+        if let at = name.lastIndex(of: "@"), at != name.startIndex { name = String(name[..<at]) }
+        return name.lowercased()
     }
 
     /// The definition and role of a process, nil when it is no agent process.
@@ -427,13 +518,5 @@ struct AgentCatalog {
 
     private static func isInterpreter(_ name: String) -> Bool {
         ["node", "bun", "deno", "ruby"].contains(name) || name.hasPrefix("python") || name.hasPrefix("pypy")
-    }
-
-    private static func scriptName(_ path: String) -> String {
-        let name = baseName(path).lowercased()
-        for suffix in [".js", ".mjs", ".cjs", ".ts", ".py"] where name.hasSuffix(suffix) {
-            return String(name.dropLast(suffix.count))
-        }
-        return name
     }
 }

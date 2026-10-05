@@ -78,7 +78,7 @@ final class AgentCatalogTests: XCTestCase {
             ("gemini with a process title", "/opt/homebrew/bin/node", ["gemini"], "gemini", .session),
             ("gemini script run by node", "/opt/homebrew/Cellar/node/24.1.0/bin/node", ["node", "--no-warnings", "/opt/homebrew/bin/gemini", "-p", "hi"], "gemini", .session),
             ("gemini-cli alias", "/opt/homebrew/bin/node", ["node", "/opt/homebrew/bin/gemini-cli"], "gemini", .session),
-            ("pi script run by bun", "/Users/me/.bun/bin/bun", ["bun", "/Users/me/.bun/bin/pi.js"], "pi", .session),
+            ("pi run by bun", "/Users/me/.bun/bin/bun", ["bun", "/Users/me/.bun/bin/pi"], "pi", .session),
             // The kernel reports the resolved binary, and the Python of
             // Homebrew and of Xcode is inside a Python.app.
             ("aider run by Homebrew python", homebrewPython, ["/opt/homebrew/Cellar/aider/0.86.1/libexec/bin/python", "/opt/homebrew/bin/aider", "--model", "sonnet"], "aider", .session),
@@ -103,6 +103,64 @@ final class AgentCatalogTests: XCTestCase {
             let match = catalog.match(.fixture(Int32(index + 10), path: testCase.path, args: testCase.args), userNames: [])
             XCTAssertEqual(match?.definition.id, testCase.id, testCase.name)
             XCTAssertEqual(match?.role, testCase.role, testCase.name)
+        }
+    }
+
+    /// How runtimes and package runners start a CLI. Nil id means no agent.
+    func testLaunchForms() {
+        let node = "/opt/homebrew/Cellar/node/24.1.0/bin/node"
+        let bun = "/Users/me/.bun/bin/bun"
+        let deno = "/opt/homebrew/bin/deno"
+        let python = "/Users/me/.pyenv/versions/3.12.4/bin/python3.12"
+        let uv = "/opt/homebrew/bin/uv"
+        let cases: [(name: String, path: String, args: [String], id: String?, rest: [String])] = [
+            ("bun run", bun, ["bun", "run", "opencode", "serve"], "opencode", ["serve"]),
+            ("bun run with flags", bun, ["bun", "--cwd", "/tmp/demo", "run", "--silent", "opencode"], "opencode", []),
+            ("bun x", bun, ["bun", "x", "opencode"], "opencode", []),
+            ("bunx", bun, ["bunx", "opencode@latest", "run", "hi"], "opencode", ["run", "hi"]),
+            ("bun with a path", bun, ["bun", "/Users/me/.bun/bin/opencode"], "opencode", []),
+            ("deno run", deno, ["deno", "run", "-A", "gemini"], "gemini", []),
+            ("deno run npm package", deno, ["deno", "run", "--allow-all", "npm:@google/gemini-cli@0.9.0", "-p", "hi"], "gemini", ["-p", "hi"]),
+            ("node with a preload", node, ["node", "-r", "preload", "gemini"], "gemini", []),
+            ("node with two valued flags", node, ["node", "--require", "/tmp/hook.js", "--import", "tsx", "/opt/homebrew/bin/gemini", "-p", "hi"], "gemini", ["-p", "hi"]),
+            ("node symlinked bin", node, ["node", "/usr/local/bin/gemini"], "gemini", []),
+            ("python module", python, ["python", "-m", "openhands"], "openhands", []),
+            ("python dotted module", python, ["python3", "-u", "-m", "openhands.cli.main", "--task", "x"], "openhands", ["--task", "x"]),
+            ("python joined flags", python, ["python3", "-um", "aider", "--model", "sonnet"], "aider", ["--model", "sonnet"]),
+            ("python symlinked bin", python, ["python3", "/Users/me/.local/bin/aider"], "aider", []),
+            ("npx through node", node, ["node", "/opt/homebrew/bin/npx", "--yes", "@google/gemini-cli"], "gemini", []),
+            ("npx with a package flag", node, ["node", "/opt/homebrew/bin/npx", "-p", "@google/gemini-cli", "gemini", "-p", "hi"], "gemini", ["-p", "hi"]),
+            ("pnpm dlx", "/opt/homebrew/bin/pnpm", ["pnpm", "dlx", "opencode"], "opencode", []),
+            ("uvx", "/opt/homebrew/bin/uvx", ["uvx", "--from", "aider-chat", "aider"], "aider", []),
+            ("uv run", uv, ["uv", "run", "--with", "rich", "aider", "--yes"], "aider", ["--yes"]),
+            ("uv tool run", uv, ["uv", "tool", "run", "aider"], "aider", []),
+            ("pipx run through python", python, ["python3", "/opt/homebrew/bin/pipx", "run", "aider"], "aider", []),
+
+            // A source file is someone's own script, whatever its name.
+            ("python file named like an agent", python, ["python", "pi.py"], nil, []),
+            ("python file named claude", python, ["python3", "/Users/me/code/claude.py"], nil, []),
+            ("node file named like an agent", node, ["node", "/Users/me/code/gemini.js"], nil, ["x"]),
+            ("bun file named like an agent", bun, ["bun", "/Users/me/.bun/bin/pi.js"], nil, []),
+            ("bun run of a file", bun, ["bun", "run", "pi.ts"], nil, []),
+            ("uv run of a file", uv, ["uv", "run", "pi.py"], nil, []),
+            // Not a start of the agent.
+            ("node inline code", node, ["node", "-e", "gemini"], nil, []),
+            ("python inline code", python, ["python3", "-c", "aider"], nil, []),
+            ("python module of a tool", python, ["python3", "-m", "pip", "install", "aider"], nil, []),
+            ("bun run of a project script", bun, ["bun", "run", "dev"], nil, []),
+            ("bun install", bun, ["bun", "install", "opencode"], nil, []),
+            ("uv pip", uv, ["uv", "pip", "install", "aider"], nil, []),
+            ("npx of another tool", node, ["node", "/opt/homebrew/bin/npx", "prettier", "gemini"], nil, []),
+            ("value of a node flag", node, ["node", "-r", "gemini", "server.js"], nil, []),
+        ]
+        for (index, testCase) in cases.enumerated() {
+            let row: Row = .fixture(Int32(index + 10), path: testCase.path, args: testCase.args)
+            let match = catalog.match(row, userNames: [])
+            XCTAssertEqual(match?.definition.id, testCase.id, testCase.name)
+            if testCase.id != nil {
+                XCTAssertEqual(match?.role, .session, testCase.name)
+                XCTAssertEqual(AgentCatalog.command(of: row).arguments, testCase.rest, testCase.name)
+            }
         }
     }
 
@@ -164,9 +222,13 @@ final class AgentCatalogTests: XCTestCase {
     }
 
     func testCommand() {
-        let node = AgentCatalog.command(of: .fixture(10, path: "/opt/homebrew/bin/node", args: ["node", "--no-warnings", "/opt/homebrew/bin/gemini.js", "-p", "hi"]))
+        let node = AgentCatalog.command(of: .fixture(10, path: "/opt/homebrew/bin/node", args: ["node", "--no-warnings", "/opt/homebrew/bin/gemini", "-p", "hi"]))
         XCTAssertEqual(node.names, ["node", "gemini"])
         XCTAssertEqual(node.arguments, ["-p", "hi"])
+        XCTAssertTrue(node.interpreterRunsScript)
+        // The extension of a source file stays in the name.
+        let file = AgentCatalog.command(of: .fixture(10, path: "/opt/homebrew/bin/node", args: ["node", "/Users/me/code/gemini.js"]))
+        XCTAssertEqual(file.names, ["node", "gemini.js"])
         let claude = AgentCatalog.command(of: .fixture(11, path: claudeBinary, args: ["/Users/me/.local/bin/claude", "daemon", "run"]))
         XCTAssertEqual(claude.names, ["claude", "2.1.289"])
         XCTAssertEqual(claude.arguments, ["daemon", "run"])
