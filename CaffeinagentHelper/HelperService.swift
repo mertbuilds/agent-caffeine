@@ -6,10 +6,18 @@ import os
 final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProtocol {
     private static let tickInterval: TimeInterval = 5
     private let queue = DispatchQueue(label: SleepFlagHelper.label)
-    private let core = HelperCore(flag: SystemSleepFlag(), marker: MarkerFile(), timeout: SleepFlagHelper.heartbeatTimeout)
+    private let core: HelperCore
+    private let exitProcess: (Int32) -> Void
     private var timer: DispatchSourceTimer?
     private var termination: DispatchSourceSignal?
     private let log = Logger(subsystem: SleepFlagHelper.label, category: "HelperService")
+
+    // The core and the exit are passed in, so a test can stop the service
+    // without the kernel flag and without leaving the process.
+    init(core: HelperCore, exitProcess: @escaping (Int32) -> Void = { exit($0) }) {
+        self.core = core
+        self.exitProcess = exitProcess
+    }
 
     private static let version: String = {
         let info = Bundle.main.infoDictionary
@@ -29,14 +37,14 @@ final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProto
 
     // launchd sends SIGTERM and waits for the exit before it kills. The
     // handler runs on the queue, after a call that is under way.
-    func exitOnTermination() {
-        signal(SIGTERM, SIG_IGN)
-        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: queue)
-        source.setEventHandler { [weak self] in
-            guard let self else { exit(0) }
+    func exitOnTermination(signal number: Int32 = SIGTERM) {
+        signal(number, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: number, queue: queue)
+        source.setEventHandler { [weak self, exitProcess] in
+            guard let self else { return exitProcess(0) }
             if self.core.setByHelper { self.log.info("stopping, clearing SleepDisabled") }
             self.core.shutdown()
-            exit(0)
+            self.exitProcess(0)
         }
         source.resume()
         termination = source

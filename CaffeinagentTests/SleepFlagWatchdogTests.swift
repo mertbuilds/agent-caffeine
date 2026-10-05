@@ -23,6 +23,27 @@ private final class FakeFlag: SleepFlagAccessing {
     }
 }
 
+/// Like the real flag: a write stores the setting, and powerd applies it to
+/// the kernel value a moment later.
+private final class LateFlag: SleepFlagAccessing {
+    var value = false
+    var stored = false
+    var writes: [Bool] = []
+    var forced: [Bool] = []
+
+    func read() -> Bool? { value }
+
+    func set(_ on: Bool, force: Bool) -> Bool {
+        if !force, value == on { return on }
+        writes.append(on)
+        forced.append(force)
+        stored = on
+        return value
+    }
+
+    func powerdApplies() { value = stored }
+}
+
 private final class FakeMarker: MarkerStoring {
     var exists: Bool
     var writeFails = false
@@ -97,7 +118,7 @@ final class HelperClockTests: XCTestCase {
 final class HelperCoreTests: XCTestCase {
     private var now: TimeInterval = 1_000
 
-    private func makeCore(flag: FakeFlag, marker: FakeMarker) -> HelperCore {
+    private func makeCore(flag: SleepFlagAccessing, marker: FakeMarker) -> HelperCore {
         HelperCore(flag: flag, marker: marker, timeout: 60, now: { self.now })
     }
 
@@ -274,7 +295,121 @@ final class HelperCoreTests: XCTestCase {
         flag.setFails = true
         let core = makeCore(flag: flag, marker: marker)
         XCTAssertFalse(core.setSleepDisabled(true))
+        XCTAssertTrue(marker.exists, "Not confirmed is not proof that nothing was written")
+        XCTAssertEqual(flag.forced, [false, true], "False is written whatever the kernel reports")
+        core.tick()
+        core.tick()
         XCTAssertFalse(core.setByHelper)
         XCTAssertFalse(marker.exists)
+        XCTAssertFalse(flag.value)
+    }
+
+    /// The set was not confirmed in time, and powerd applies it later. The
+    /// old code read "off", wrote nothing and dropped the marker: the flag
+    /// came on for ever with nobody to clear it.
+    func testSetThatIsAppliedLateIsTakenBack() {
+        let flag = LateFlag(), marker = FakeMarker()
+        let core = makeCore(flag: flag, marker: marker)
+        XCTAssertFalse(core.setSleepDisabled(true))
+        XCTAssertEqual(flag.writes, [true, false])
+        XCTAssertEqual(flag.forced, [false, true])
+        XCTAssertFalse(flag.stored, "What powerd applies later is off")
+        XCTAssertTrue(marker.exists)
+        XCTAssertTrue(core.setByHelper)
+        flag.powerdApplies()
+        core.tick()
+        XCTAssertTrue(marker.exists)
+        core.tick()
+        XCTAssertFalse(marker.exists)
+        XCTAssertFalse(core.setByHelper)
+        XCTAssertFalse(flag.value)
+    }
+
+    /// powerd applies the "on" first and the "off" after it.
+    func testLateOnIsClearedBeforeTheMarkerGoes() {
+        let flag = LateFlag(), marker = FakeMarker()
+        let core = makeCore(flag: flag, marker: marker)
+        XCTAssertFalse(core.setSleepDisabled(true))
+        flag.value = true
+        core.tick()
+        XCTAssertEqual(flag.writes.last, false)
+        XCTAssertTrue(marker.exists)
+        flag.powerdApplies()
+        XCTAssertFalse(flag.value)
+        core.tick()
+        core.tick()
+        XCTAssertTrue(marker.exists, "The count of checks started again")
+        core.tick()
+        XCTAssertFalse(marker.exists)
+        XCTAssertFalse(core.setByHelper)
+    }
+
+    func testANewSetEndsTheRecoveryOfAFailedOne() {
+        let flag = FakeFlag(), marker = FakeMarker()
+        flag.setFails = true
+        let core = makeCore(flag: flag, marker: marker)
+        XCTAssertFalse(core.setSleepDisabled(true))
+        flag.setFails = false
+        XCTAssertTrue(core.setSleepDisabled(true))
+        now += 30
+        core.tick()
+        XCTAssertTrue(flag.value)
+        XCTAssertTrue(marker.exists)
+    }
+}
+
+final class HelperServiceTests: XCTestCase {
+    /// A signal that nothing else in the test run uses.
+    private let stopSignal = SIGUSR2
+
+    override func tearDown() {
+        signal(stopSignal, SIG_DFL)
+    }
+
+    private func stop(_ service: HelperService, exited: XCTestExpectation) {
+        service.exitOnTermination(signal: stopSignal)
+        kill(getpid(), stopSignal)
+        wait(for: [exited], timeout: 5)
+    }
+
+    /// launchd stops the helper: the flag it owns is cleared, then it exits.
+    func testTerminationClearsTheFlagAndExits() {
+        let flag = FakeFlag(), marker = FakeMarker()
+        let core = HelperCore(flag: flag, marker: marker, timeout: 60, now: { 1_000 })
+        XCTAssertTrue(core.setSleepDisabled(true))
+        let exited = expectation(description: "exit")
+        var seen: [(code: Int32, flag: Bool, marker: Bool)] = []
+        let service = HelperService(core: core) { code in
+            seen.append((code, flag.value, marker.exists))
+            exited.fulfill()
+        }
+        stop(service, exited: exited)
+        XCTAssertEqual(seen.count, 1)
+        XCTAssertEqual(seen.first?.code, 0)
+        XCTAssertEqual(seen.first?.flag, false, "Cleared before the exit")
+        XCTAssertEqual(seen.first?.marker, false)
+        XCTAssertEqual(flag.forced.last, true)
+    }
+
+    func testTerminationLeavesAForeignFlagAndExits() {
+        let flag = FakeFlag(), marker = FakeMarker()
+        flag.value = true
+        let core = HelperCore(flag: flag, marker: marker, timeout: 60, now: { 1_000 })
+        let exited = expectation(description: "exit")
+        let service = HelperService(core: core) { _ in exited.fulfill() }
+        stop(service, exited: exited)
+        XCTAssertTrue(flag.value)
+        XCTAssertEqual(flag.writes, [])
+    }
+
+    func testTerminationThatCannotClearKeepsTheMarkerAndExits() {
+        let flag = FakeFlag(), marker = FakeMarker()
+        let core = HelperCore(flag: flag, marker: marker, timeout: 60, now: { 1_000 })
+        XCTAssertTrue(core.setSleepDisabled(true))
+        flag.setFails = true
+        let exited = expectation(description: "exit")
+        let service = HelperService(core: core) { _ in exited.fulfill() }
+        stop(service, exited: exited)
+        XCTAssertTrue(marker.exists, "The next start tries again")
     }
 }

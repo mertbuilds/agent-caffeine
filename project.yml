@@ -199,6 +199,7 @@ targets:
       - Caffeinagent/UI/MenuModel.swift
       - Caffeinagent/UI/OnboardingModel.swift
       - CaffeinagentHelper/HelperCore.swift
+      - CaffeinagentHelper/HelperService.swift
       - CaffeinagentHelper/SleepFlagWatchdog.swift
     settings:
       base:

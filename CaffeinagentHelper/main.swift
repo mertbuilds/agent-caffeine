@@ -5,7 +5,7 @@ import Foundation
 // queue and costs nothing while idle, and exiting would only add a race with
 // an incoming connection. It leaves only when launchd stops it, and clears a
 // flag it owns on the way out.
-let service = HelperService()
+let service = HelperService(core: HelperCore(flag: SystemSleepFlag(), marker: MarkerFile(), timeout: SleepFlagHelper.heartbeatTimeout))
 service.start()
 service.exitOnTermination()
 

@@ -72,7 +72,13 @@ final class HelperCore {
         }
         watchdog.willSet(now: now())
         if flag.set(true) { return true }
-        return clear()
+        // Not confirmed is not the same as not written: powerd may still
+        // apply the stored "on". So false is written whatever the kernel
+        // reports, and the marker stays until the flag was off on every
+        // check, as after a start with a marker.
+        recoveryChecksLeft = Self.recoveryChecks
+        recoveryWritten = false
+        return recover()
     }
 
     func heartbeat() -> Bool {
@@ -101,7 +107,7 @@ final class HelperCore {
         }
     }
 
-    // The flag of an earlier run. False is written once whatever the kernel
+    // The flag of an earlier run, or of a set that was not confirmed. False is written once whatever the kernel
     // reports, and the marker stays until the flag was off on every check.
     private func recover() -> Bool {
         // On again after the write: the checks start over.
