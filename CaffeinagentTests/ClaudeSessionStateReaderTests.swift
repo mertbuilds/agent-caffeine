@@ -193,7 +193,7 @@ final class ClaudeSessionStateReaderTests: XCTestCase {
         let written = Date(timeIntervalSince1970: 1_791_199_900)
         let tool = #"{"type":"assistant","message":{"role":"assistant","content":[{"type":"tool_use","id":"toolu_01","name":"Bash","input":{"command":"make"}}]}}"#
         let prompt = #"{"type":"user","message":{"role":"user","content":"build it"}}"#
-        let done = #"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Built."}]}}"#
+        let done = #"{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"Built."}],"stop_reason":"end_turn"}}"#
         let meta = #"{"type":"system","subtype":"turn_duration","durationMs":900}"#
         let cases: [(lines: [String], state: ReportedState?, detail: String?)] = [
             ([prompt], .working, "in a turn"),

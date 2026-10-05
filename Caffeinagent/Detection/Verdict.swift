@@ -187,7 +187,7 @@ enum VerdictRules {
         case .automatic:
             break
         }
-        if let state = statedState(of: evidence, memory: memory, now: now) {
+        if let state = statedState(of: evidence, memory: memory, settings: settings, now: now) {
             return (statedVerdict(state, evidence: evidence), memory)
         }
         return (inferredVerdict(evidence: evidence, memory: memory, settings: settings, now: now), memory)
@@ -287,17 +287,29 @@ enum VerdictRules {
     // MARK: Stated
 
     /// The state the agent gives itself, nil when it gives none.
-    private static func statedState(of evidence: AgentEvidence, memory: AgentMemory, now: Date) -> WorkState? {
+    private static func statedState(of evidence: AgentEvidence, memory: AgentMemory, settings: DetectionSettings, now: Date) -> WorkState? {
         if let hook = evidence.hookState, let at = evidence.hookStateAt, now.timeIntervalSince(at) <= hookFreshness {
             return hook
         }
         guard let report = memory.lastReport, let seen = memory.lastReportSeenAt,
               now.timeIntervalSince(seen) <= reportMemory else { return nil }
+        if isLapsed(report, settings: settings, now: now) { return nil }
         return report.state
     }
 
-    /// A stated working never expires by age: a long tool call and a model
-    /// wait are silent, and the instance ends when its process ends.
+    /// A working that was read from the last line of a transcript is a
+    /// guess: an interrupt or a crash can leave that line for ever. It
+    /// holds while the transcript was written within the release time, and
+    /// after that the signs of activity decide. `since` is the last write.
+    private static func isLapsed(_ report: StateReport, settings: DetectionSettings, now: Date) -> Bool {
+        guard report.source == .claudeTranscript, report.state == .working else { return false }
+        guard let lastWrite = report.since else { return true }
+        return now.timeIntervalSince(lastWrite) >= settings.releaseAfterActivity
+    }
+
+    /// A working that the agent states itself never expires by age: a long
+    /// tool call and a model wait are silent, and the instance ends when
+    /// its process ends.
     private static func statedVerdict(_ state: WorkState, evidence: AgentEvidence) -> AgentVerdict {
         if state == .working {
             return AgentVerdict(state: .working, confidence: .reported, reason: .reportsBusy)

@@ -92,6 +92,39 @@ final class VerdictTests: XCTestCase {
         XCTAssertTrue(got.allSatisfy { $0.verdict == verdict(.working, .reported, .reportsBusy) })
     }
 
+    /// Claude Code without a session state file, after an interrupt the
+    /// reader did not see, or a crash: the transcript says working for ever.
+    func testTranscriptWorkingLapsesWhenTheFileStaysUnwritten() {
+        func transcript(_ t: TimeInterval, lastWrite: TimeInterval, busy: Int = 0) -> AgentEvidence {
+            let report = StateReport(state: .working, since: at(lastWrite), observedAt: at(t), source: .claudeTranscript, detail: "in a turn")
+            return evidence("claude", "Claude Code", .state, cpu: 0.4, reported: report, commands: busy, busy: busy, fileAt: at(lastWrite))
+        }
+        // Written until 60 s, then silent.
+        let story = samples(to: 600) { t in transcript(t, lastWrite: min(t, 60)) }
+        for (seconds, got) in run(story) {
+            if seconds < 360 {
+                XCTAssertEqual(got, verdict(.working, .reported, .reportsBusy), "at \(seconds) s")
+            } else {
+                XCTAssertEqual(got.state, .idle, "at \(seconds) s")
+                XCTAssertEqual(got.confidence, .inferredWeak, "at \(seconds) s")
+            }
+        }
+        // A command that still runs holds after the transcript lapsed.
+        let building = samples(to: 600) { t in transcript(t, lastWrite: 0, busy: 1) }
+        XCTAssertEqual(run(building).last?.verdict, verdict(.working, .inferredStrong, .runningCommand(1)))
+        // A shorter release time lapses sooner.
+        var settings = DetectionSettings()
+        settings.releaseAfterActivity = 60
+        let short = run(samples(to: 100) { t in transcript(t, lastWrite: 0) }, settings: settings)
+        XCTAssertEqual(short.first { $0.verdict.state == .idle }?.seconds, 60)
+        // A working without a write time is no working.
+        let undated = StateReport(state: .working, since: nil, observedAt: at(0), source: .claudeTranscript, detail: nil)
+        XCTAssertEqual(run([(0, evidence("claude", "Claude Code", .state, reported: undated))]).first?.verdict.state, .idle)
+        // The state file's working does not lapse.
+        let stated = samples(to: 3600, every: 60) { t in self.claude(.working, at: t) }
+        XCTAssertTrue(run(stated).allSatisfy { $0.verdict == self.verdict(.working, .reported, .reportsBusy) })
+    }
+
     func testUnreadableStateFile() {
         let story: [Sample] = [
             (0, claude(.working, at: 0)),
