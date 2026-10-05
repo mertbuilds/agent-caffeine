@@ -226,6 +226,56 @@ fi
 echo "==> verify signature"
 codesign --verify --deep --strict --verbose=2 "$APP" 2>&1 | tail -3
 
+# The root helper. Xcode signs it in its own target, signs it again when it
+# copies it into Contents/MacOS, and seals the app last, so the bundle is
+# signed inside out. The app and the helper each accept only the other when it
+# meets the requirement in Caffeinagent/Power/SleepFlagHelperProtocol.swift, so
+# a release that fails it could never turn the sleep override on.
+echo "==> verify the helper"
+HELPER_ID="com.caffeinagent.app.helper"
+HELPER="$APP/Contents/MacOS/CaffeinagentHelper"
+HELPER_PLIST="$APP/Contents/Library/LaunchDaemons/$HELPER_ID.plist"
+signed_by_team() {
+  echo "anchor apple generic and identifier \"$1\" and certificate 1[field.1.2.840.113635.100.6.2.6] exists and certificate leaf[field.1.2.840.113635.100.6.1.13] exists and certificate leaf[subject.OU] = \"$TEAM_ID\""
+}
+if [ ! -x "$HELPER" ] || [ ! -f "$HELPER_PLIST" ]; then
+  echo "error: the helper or its launchd plist is missing from the app:" >&2
+  echo "         $HELPER" >&2
+  echo "         $HELPER_PLIST" >&2
+  exit 1
+fi
+/usr/bin/plutil -lint "$HELPER_PLIST" > /dev/null
+BUNDLE_PROGRAM=$(/usr/libexec/PlistBuddy -c "Print :BundleProgram" "$HELPER_PLIST")
+if [ "$APP/$BUNDLE_PROGRAM" != "$HELPER" ]; then
+  echo "error: BundleProgram in $HELPER_PLIST is $BUNDLE_PROGRAM, not the helper's path." >&2
+  exit 1
+fi
+codesign --verify --strict -R="$(signed_by_team "$HELPER_ID")" "$HELPER"
+codesign --verify --strict -R="$(signed_by_team "com.caffeinagent.app")" "$APP"
+HELPER_SIGNATURE=$(codesign -dv "$HELPER" 2>&1)
+if ! grep -qE '^CodeDirectory .*flags=[^ ]*runtime' <<< "$HELPER_SIGNATURE"; then
+  echo "error: the helper is not signed with the hardened runtime, so the notary" >&2
+  echo "       service would refuse the app." >&2
+  exit 1
+fi
+# An entitlement on a root daemon without a provisioning profile makes macOS
+# refuse to start it.
+if codesign -d --entitlements - --xml "$HELPER" 2> /dev/null | grep -q '<key>'; then
+  echo "error: the helper carries entitlements:" >&2
+  codesign -d --entitlements - "$HELPER" >&2
+  exit 1
+fi
+HELPER_ARCHS=$(/usr/bin/lipo -archs "$HELPER")
+case " $HELPER_ARCHS " in
+  *" arm64 "*) ;;
+  *) echo "error: the helper has no arm64 slice: $HELPER_ARCHS" >&2; exit 1 ;;
+esac
+case " $HELPER_ARCHS " in
+  *" x86_64 "*) ;;
+  *) echo "error: the helper has no x86_64 slice: $HELPER_ARCHS" >&2; exit 1 ;;
+esac
+echo "    $HELPER_ID: $HELPER_ARCHS, hardened runtime, team $TEAM_ID"
+
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist")
 echo "==> check the built app's build number"
