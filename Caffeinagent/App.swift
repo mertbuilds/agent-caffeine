@@ -31,6 +31,7 @@ struct MenuBarLabel: View {
     let held: Bool
 
     var body: some View {
-        Image(systemName: held ? "cup.and.saucer.fill" : "cup.and.saucer")
+        Image(nsImage: held ? MenuBarIcon.held : MenuBarIcon.notHeld)
+            .accessibilityLabel(MenuBarIcon.accessibilityLabel(held: held))
     }
 }

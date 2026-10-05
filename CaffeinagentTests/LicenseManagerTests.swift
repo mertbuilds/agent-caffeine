@@ -177,11 +177,11 @@ final class LicenseManagerTests: XCTestCase {
         XCTAssertTrue(api.validateIDs.isEmpty)
 
         now = t0 + 31 * day
-        manager.tick()
+        _ = await manager.tick()?.value
         XCTAssertEqual(manager.entitlement, .expired(.unverified))
 
         store.failLoad = false
-        manager.tick()
+        _ = await manager.tick()?.value
         XCTAssertNil(manager.storageError)
         XCTAssertEqual(manager.record.activationID, "act-1")
     }
@@ -190,35 +190,35 @@ final class LicenseManagerTests: XCTestCase {
 
     /// Advances the measured clock a day at a time, with the wall clock
     /// standing still where it was set back to.
-    private func runDays(_ days: Int, _ manager: LicenseManager) {
+    private func runDays(_ days: Int, _ manager: LicenseManager) async {
         for _ in 0..<days {
             uptime += day
-            manager.tick()
+            _ = await manager.tick()?.value
         }
     }
 
-    func testClockSetBackMidTrialStillExpiresOnSchedule() {
+    func testClockSetBackMidTrialStillExpiresOnSchedule() async {
         let manager = makeManager()
-        runDays(2, manager)
+        await runDays(2, manager)
         now = t0 + 2 * day
         manager.tick()
         XCTAssertEqual(manager.entitlement, .trial(daysLeft: 5))
         now = t0 - 28 * day
-        runDays(4, manager)
+        await runDays(4, manager)
         XCTAssertEqual(manager.entitlement, .trial(daysLeft: 1))
-        runDays(1, manager)
+        await runDays(1, manager)
         XCTAssertEqual(manager.entitlement, .expired(.trialOver))
     }
 
-    func testOfflineMacWithClockSetBackLeavesTheGraceAfterThirtyDays() {
+    func testOfflineMacWithClockSetBackLeavesTheGraceAfterThirtyDays() async {
         store.record = LicenseRecord(key: key, activationID: "act-1", lastValidated: t0, trialStart: t0 - 20 * day)
         api.validation = .unavailable
         let manager = makeManager()
         now = t0 - 60 * day
-        runDays(30, manager)
+        await runDays(30, manager)
         XCTAssertEqual(manager.entitlement, .licensed)
         uptime += 1
-        manager.tick()
+        _ = await manager.tick()?.value
         XCTAssertEqual(manager.entitlement, .expired(.unverified))
     }
 
@@ -292,6 +292,33 @@ final class LicenseManagerTests: XCTestCase {
 
     // MARK: Validation schedule
 
+    func testBurstOfTicksAsksPolarOnce() async {
+        store.record = LicenseRecord(key: key, activationID: "act-1", lastValidated: t0, trialStart: t0 - 20 * day)
+        let manager = makeManager()
+        let gate = ValidationGate()
+        api.validateGate = gate
+        api.validation = .valid
+        let first = manager.tick()
+        XCTAssertNotNil(first)
+        for _ in 0..<10 {
+            XCTAssertEqual(manager.tick(), first, "Before the first request starts")
+        }
+        await gate.waitForCaller()
+        // A clock set back makes a validation due on every tick.
+        now = t0 - day
+        for _ in 0..<10 {
+            XCTAssertEqual(manager.tick(), first, "While the first request waits for Polar")
+        }
+        let joined = Task { await manager.checkNow() }
+        while !manager.busy { await Task.yield() }
+        await gate.open()
+        let result = await first?.value
+        await joined.value
+        XCTAssertEqual(result, .valid)
+        XCTAssertEqual(api.validateIDs, ["act-1"])
+        XCTAssertEqual(manager.entitlement, .licensed)
+    }
+
     func testValidationSchedule() async {
         store.record = LicenseRecord(key: key, activationID: "act-1", lastValidated: t0, trialStart: t0 - 20 * day)
         let manager = makeManager()
@@ -357,7 +384,8 @@ actor ValidationGate {
     }
 }
 
-final class StubLicenseAPI: LicenseAPI, @unchecked Sendable {
+@MainActor
+final class StubLicenseAPI: LicenseAPI {
     var activation: LicenseActivation = .unavailable
     var validation: LicenseValidation = .unavailable
     var deactivation: LicenseDeactivation = .unavailable

@@ -17,7 +17,7 @@ macOS menu bar app that keeps your Mac awake while AI coding agents work. By def
   - While an agent is open: keeps the Mac awake while any agent is detected, working or idle.
   - While an agent is working (default): keeps the Mac awake only while an agent is working.
 - While keeping the Mac awake it holds `PreventUserIdleSystemSleep` and `PreventSystemSleep` assertions, and releases them as soon as the mode no longer calls for them.
-- Surfaces state in the menu bar with a coffee-cup icon: filled when keeping the Mac awake, empty when not.
+- Surfaces state in the menu bar with a robot-head icon: solid and smiling when keeping the Mac awake, outlined with closed eyes when not.
 
 ## macOS limit
 

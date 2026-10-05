@@ -46,6 +46,7 @@ final class LicenseManager: ObservableObject {
     private var storeReadable: Bool
     private var lastAttempt: Date?
     private var lastAttemptFailed = false
+    private var validation: (activationID: String?, token: UUID, task: Task<LicenseValidation?, Never>)?
     private var timer: Timer?
     private var wakeObserver: NSObjectProtocol?
 
@@ -120,10 +121,12 @@ final class LicenseManager: ObservableObject {
         }
     }
 
-    func tick() {
+    /// Returns the validation it started or joined, so a caller can wait for it.
+    @discardableResult
+    func tick() -> Task<LicenseValidation?, Never>? {
         if !storeReadable { reloadStore() }
         refresh()
-        if validationDue { Task { await validate() } }
+        return validationDue ? startValidation() : nil
     }
 
     /// Once a day, or every hour while Polar could not be reached.
@@ -179,6 +182,26 @@ final class LicenseManager: ObservableObject {
     /// a validation without an activation id proves nothing.
     @discardableResult
     func validate() async -> LicenseValidation? {
+        await startValidation().value
+    }
+
+    /// At most one validation is in flight. A caller joins the running one
+    /// unless the activation changed since it started, since its answer is
+    /// then thrown away.
+    private func startValidation() -> Task<LicenseValidation?, Never> {
+        if let running = validation, running.activationID == record.activationID {
+            return running.task
+        }
+        let token = UUID()
+        let task = Task {
+            defer { if validation?.token == token { validation = nil } }
+            return await performValidation()
+        }
+        validation = (record.activationID, token, task)
+        return task
+    }
+
+    private func performValidation() async -> LicenseValidation? {
         guard let key = record.key, let id = record.activationID else { return nil }
         lastAttempt = now()
         let result = await client.validate(key: key, activationID: id)
