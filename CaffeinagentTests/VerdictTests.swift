@@ -172,7 +172,8 @@ final class VerdictTests: XCTestCase {
 
     func testHookState() {
         let cases: [(name: String, hook: ReportedState, age: TimeInterval, reported: ReportedState, want: AgentVerdict)] = [
-            ("fresh idle beats a late state file", .idle, 5, .working, verdict(.idle, .reported, .atPrompt)),
+            ("fresh idle does not beat a reported working", .idle, 5, .working, verdict(.working, .reported, .reportsBusy)),
+            ("fresh idle beats a reported wait", .idle, 5, .waitingForUser, verdict(.idle, .reported, .atPrompt)),
             ("fresh working beats an idle state file", .working, 60, .idle, verdict(.working, .reported, .reportsBusy)),
             ("fresh waiting", .waitingForUser, 1, .working, verdict(.waitingForUser, .reported, .asksPermission)),
             ("old hook gives way", .idle, 61, .working, verdict(.working, .reported, .reportsBusy)),
@@ -181,6 +182,22 @@ final class VerdictTests: XCTestCase {
             let sample = evidence("claude", "Claude Code", .state, reported: report(c.reported, at: 100), hook: c.hook, hookAt: at(100 - c.age))
             XCTAssertEqual(run([(100, sample)]).last?.verdict, c.want, c.name)
         }
+    }
+
+    /// One Codex engine, threads A and B. A stops and its hook says idle,
+    /// B is in a turn. With "An agent finishes" at 30 seconds the Mac was
+    /// released while B worked.
+    func testHookIdleOfOneThreadDoesNotHideTheWorkOfAnother() {
+        var settings = DetectionSettings()
+        settings.releaseAfterState = 30
+        let story = samples(to: 600) { t in self.codexHook(.idle, hookAt: max(0, t - 5), rollout: .working, at: t) }
+        for got in runHeld(story, settings: settings) {
+            XCTAssertEqual(got.verdict, verdict(.working, .reported, .reportsBusy), "at \(got.seconds) s")
+            XCTAssertTrue(got.hold, "at \(got.seconds) s")
+        }
+        // With no state of its own, the hook's idle is all there is.
+        let droid = evidence("droid", "Droid", .activity, hook: .idle, hookAt: at(95))
+        XCTAssertEqual(run([(100, droid)]).last?.verdict, verdict(.idle, .reported, .atPrompt))
     }
 
     // MARK: Hook wait

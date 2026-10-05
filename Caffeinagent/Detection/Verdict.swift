@@ -136,6 +136,7 @@ struct AgentReading: Equatable {
 /// 3. strong signs: a busy command, a working background job, a sleep
 ///    assertion of the agent's own, a session-file write,
 /// 4. weak signs: CPU use.
+/// A hook idle does not beat a reported working.
 /// A reported state beats weak signs in both directions. A reported idle or
 /// waiting does not beat a busy command or a working background job: a turn
 /// that ended is not work that ended.
@@ -331,6 +332,9 @@ enum VerdictRules {
             if hook == .waitingForUser {
                 if memory.endedHookWaitAt != at { return hook }
             } else if now.timeIntervalSince(at) <= hookFreshness {
+                // One process can run many sessions, and the idle of one is
+                // not the idle of all: the agent's own working stands.
+                if hook == .idle, reportedState(memory: memory, settings: settings, now: now) == .working { return .working }
                 return hook
             }
         }

@@ -93,13 +93,20 @@ struct HookStateFile: Codable, Equatable {
     /// session that waits for the user counts at any age: the wait ends
     /// with its next event, not with time. With no such session it is the
     /// newest one, which the verdict then finds too old to use.
+    ///
+    /// Nil when an idle or a wait would stand for the process while the
+    /// last event of another session said working: a long tool call sends
+    /// no event, so that session may still work, and the agent's own state
+    /// has to decide.
     func summary(now: Date, freshness: TimeInterval) -> (state: ReportedState, at: Date)? {
         let known = sessions.values.compactMap { session in
             Self.state(named: session.state).map { (state: $0, at: Date(timeIntervalSince1970: session.at)) }
         }
         let fresh = known.filter { $0.state == .waitingForUser || now.timeIntervalSince($0.at) <= freshness }
         for state in [ReportedState.working, .waitingForUser, .idle] {
-            if let newest = fresh.filter({ $0.state == state }).max(by: { $0.at < $1.at }) { return newest }
+            guard let newest = fresh.filter({ $0.state == state }).max(by: { $0.at < $1.at }) else { continue }
+            if state != .working, known.contains(where: { $0.state == .working }) { return nil }
+            return newest
         }
         return known.max { $0.at < $1.at }
     }

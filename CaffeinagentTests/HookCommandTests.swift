@@ -156,13 +156,36 @@ final class HookCommandTests: XCTestCase {
         XCTAssertEqual(file.summary(now: now.addingTimeInterval(6), freshness: 60)?.state, .working)
         file.apply(.set(.waitingForUser), session: "c", event: "PermissionRequest", at: now.addingTimeInterval(7))
         XCTAssertEqual(file.summary(now: now.addingTimeInterval(8), freshness: 60)?.state, .working)
-        // The working session never sent its last event. Once it is old, the fresh ones count.
-        let later = file.summary(now: now.addingTimeInterval(65), freshness: 60)
+        // The working session sent no event for a minute. It may be in a long
+        // tool call, so the idle and the wait of the others do not stand for
+        // the process, and the agent's own state decides.
+        XCTAssertNil(file.summary(now: now.addingTimeInterval(65), freshness: 60))
+        XCTAssertNil(file.summary(now: now.addingTimeInterval(500), freshness: 60))
+        // Its Stop ends that.
+        file.apply(.set(.idle), session: "a", event: "Stop", at: now.addingTimeInterval(501))
+        let later = file.summary(now: now.addingTimeInterval(502), freshness: 60)
         XCTAssertEqual(later?.state, .waitingForUser)
         XCTAssertEqual(later?.at, now.addingTimeInterval(7))
         // With nothing fresh it is the newest, with its real time.
-        XCTAssertEqual(file.summary(now: now.addingTimeInterval(500), freshness: 60)?.at, now.addingTimeInterval(7))
+        var old = HookStateFile(agent: "codex", pid: 1, start: 0)
+        old.apply(.set(.working), session: "a", event: "UserPromptSubmit", at: now)
+        old.apply(.set(.idle), session: "b", event: "Stop", at: now.addingTimeInterval(7))
+        XCTAssertEqual(old.summary(now: now.addingTimeInterval(500), freshness: 60)?.at, now.addingTimeInterval(7))
         XCTAssertNil(HookStateFile(agent: "codex", pid: 1, start: 0).summary(now: now, freshness: 60))
+    }
+
+    /// Threads A and B of one Codex engine. A's Stop is fresh, B's last
+    /// event was a working more than a minute ago.
+    func testAFreshIdleDoesNotHideAnotherSessionThatWorked() {
+        var file = HookStateFile(agent: "codex", pid: 1, start: 0)
+        file.apply(.set(.working), session: "b", event: "UserPromptSubmit", at: now)
+        file.apply(.set(.working), session: "a", event: "UserPromptSubmit", at: now.addingTimeInterval(100))
+        file.apply(.set(.idle), session: "a", event: "Stop", at: now.addingTimeInterval(200))
+        XCTAssertNil(file.summary(now: now.addingTimeInterval(201), freshness: 60))
+        file.apply(.set(.waitingForUser), session: "a", event: "PermissionRequest", at: now.addingTimeInterval(210))
+        XCTAssertNil(file.summary(now: now.addingTimeInterval(211), freshness: 60))
+        file.apply(.end, session: "b", event: "SessionEnd", at: now.addingTimeInterval(220))
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(221), freshness: 60)?.state, .waitingForUser)
     }
 
     func testAWaitDoesNotAgeOut() {
