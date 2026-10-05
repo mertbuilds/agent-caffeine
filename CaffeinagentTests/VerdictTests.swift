@@ -234,6 +234,35 @@ final class VerdictTests: XCTestCase {
         XCTAssertEqual(got.last?.verdict, verdict(.working, .inferredStrong, .runningCommand(1)))
     }
 
+    /// A quiet stretch as long as the cap lifts it: the agent gets a new
+    /// count when it starts again.
+    func testWeakCapLiftsAfterAQuietStretchAsLongAsTheCap() {
+        var story = samples(to: 1900) { _ in self.opencode(cpu: 14.5) }
+        story += samples(from: 1905, to: 3800) { _ in self.opencode(cpu: 0.2) }
+        story += samples(from: 3805, to: 3900) { _ in self.opencode(cpu: 14.5) }
+        let got = run(story)
+        XCTAssertTrue(got.filter { $0.seconds >= 1810 && $0.seconds <= 3805 }.allSatisfy { $0.verdict.state == .idle })
+        XCTAssertEqual(got.last?.verdict, verdict(.working, .inferredWeak, .cpuActivity))
+        // The new count has a cap of its own.
+        var settings = DetectionSettings()
+        settings.weakEvidenceCap = 600
+        var short = samples(to: 700) { _ in self.opencode(cpu: 14.5) }
+        short += samples(from: 705, to: 1400) { _ in self.opencode(cpu: 0.2) }
+        short += samples(from: 1405, to: 2200) { _ in self.opencode(cpu: 14.5) }
+        let again = run(short, settings: settings)
+        XCTAssertEqual(again.first { $0.seconds == 1500 }?.verdict.state, .working)
+        XCTAssertEqual(again.last?.verdict, verdict(.idle, .inferredWeak, .onlyWeakSigns(minutes: 10)))
+    }
+
+    /// A process that spins all the time is never quiet, so its cap stays.
+    func testWeakCapNeverLiftsForAProcessThatSpins() {
+        let got = run(samples(to: 9000, every: 5) { _ in self.opencode(cpu: 14.5) })
+        XCTAssertTrue(got.filter { $0.seconds >= 1810 }.allSatisfy { $0.verdict == self.verdict(.idle, .inferredWeak, .onlyWeakSigns(minutes: 30)) })
+        // Once capped, breaks that are shorter than the cap do not add up.
+        let bursts = run(samples(to: 9000, every: 5) { t in self.opencode(cpu: t < 1900 || Int(t / 600) % 2 == 0 ? 14.5 : 0.2) })
+        XCTAssertTrue(bursts.filter { $0.seconds >= 1810 }.allSatisfy { $0.verdict.state == .idle })
+    }
+
     /// Weak evidence that stops before the cap releases after the release time.
     func testWeakEvidenceReleases() {
         var story = samples(to: 60) { _ in self.opencode(cpu: 14.5) }

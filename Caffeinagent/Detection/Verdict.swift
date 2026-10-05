@@ -84,7 +84,8 @@ struct AgentMemory: Equatable {
     var lastCPUAt: Date?
     /// When CPU use became the only sign of work.
     var weakOnlySince: Date?
-    /// Set when the cap ran out. Only a strong sign clears it.
+    /// Set when the cap ran out. A strong sign clears it, and so does a
+    /// quiet stretch as long as the cap.
     var weakCapped = false
     var lastReport: StateReport?
     var lastReportSeenAt: Date?
@@ -266,7 +267,9 @@ enum VerdictRules {
 
     /// Tracks how long CPU use has been the only thing that holds. A strong
     /// sign ends the count and lifts the cap. Without a strong sign the cap
-    /// stays, also across a quiet stretch.
+    /// stays until the CPU rule has not held for as long as the cap itself:
+    /// an agent that was quiet for that long and then starts again gets a
+    /// new count, and a process that spins all the time never is that quiet.
     private static func noteWeakOnly(in memory: inout AgentMemory, settings: DetectionSettings, now: Date) {
         if isRecent(memory.lastStrongAt, within: settings.releaseAfterActivity, now: now) {
             memory.weakOnlySince = nil
@@ -277,6 +280,7 @@ enum VerdictRules {
             if now.timeIntervalSince(since) >= settings.weakEvidenceCap { memory.weakCapped = true }
         } else {
             memory.weakOnlySince = nil
+            if memory.weakCapped, !isRecent(memory.lastCPUAt, within: settings.weakEvidenceCap, now: now) { memory.weakCapped = false }
         }
     }
 
