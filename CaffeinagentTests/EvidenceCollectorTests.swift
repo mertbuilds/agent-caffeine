@@ -438,6 +438,37 @@ final class EvidenceCollectorTests: XCTestCase {
         XCTAssertFalse(later.ownsSleepAssertion)
     }
 
+    /// The CPU deltas of the first sample after a sleep span the sleep. Over
+    /// that interval a running build would read as no use at all.
+    func testSampleAfterASleepIsAFirstSample() throws {
+        func rows(build: TimeInterval) -> [Row] {
+            [claude(100, cpu: 50), .fixture(121, ppid: 100, start: processStart, path: "/usr/bin/make", args: ["make"], cpu: build)]
+        }
+        try writeSession(100, status: "idle")
+        var build: TimeInterval = 3
+        func next(at seconds: TimeInterval) throws -> AgentEvidence {
+            build += 1
+            census.rows = rows(build: build)
+            return try XCTUnwrap(sample(at: seconds).frame.agents.first)
+        }
+        var busy: [Int] = []
+        for seconds in stride(from: 0.0, through: 12, by: 2) { busy.append(try next(at: seconds).busyChildCommands) }
+        XCTAssertEqual(busy.last, 1)
+
+        let woke = try next(at: 372)
+        XCTAssertEqual(woke.sampleInterval, 0, "No CPU number over the sleep")
+        XCTAssertNil(woke.cpuFraction)
+        XCTAssertEqual(woke.childCommands, 1)
+        XCTAssertEqual(woke.busyChildCommands, 0)
+
+        let after = try next(at: 374)
+        XCTAssertEqual(after.sampleInterval, 2)
+        XCTAssertEqual(after.subtreeCPUSeconds, 1, accuracy: 0.0001)
+        busy = []
+        for seconds in stride(from: 376.0, through: 384, by: 2) { busy.append(try next(at: seconds).busyChildCommands) }
+        XCTAssertEqual(busy, [0, 0, 1, 1, 1], "Busy again once both halves of a new window show use")
+    }
+
     /// The Grep tool runs the Claude Code binary under the name ugrep.
     func testBuiltInSearchToolIsAChildCommandNotASession() throws {
         census.rows = [

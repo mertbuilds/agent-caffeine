@@ -165,7 +165,11 @@ final class EvidenceCollector: EvidenceCollecting {
         let matches = currentMatches(in: snapshot, userNames: userNames)
         let instances = sources.catalog.instances(in: snapshot, matches: matches)
         let asserting = instances.isEmpty ? [] : sources.assertions.assertingPIDs()
-        let interval = previousAt.map { now.timeIntervalSince($0) } ?? 0
+        // The CPU a process used before and after a sleep, over an interval
+        // that is mostly the sleep, would read as no use at all.
+        let gap = SampleGap.length(from: previousAt, to: now) != nil
+        let interval = gap ? 0 : previousAt.map { now.timeIntervalSince($0) } ?? 0
+        if gap { childWindows.removeAll() }
 
         var sample = EvidenceSample(frame: EvidenceFrame(at: now, agents: [], context: context(snapshot: snapshot, matches: matches)))
         let hookStates = hookReader?.states(snapshot: snapshot, now: now) ?? [:]

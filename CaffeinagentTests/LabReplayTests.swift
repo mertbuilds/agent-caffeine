@@ -108,6 +108,46 @@ final class LabReplayTests: XCTestCase {
         XCTAssertEqual(gone.wronglyHeld, 80)
     }
 
+    /// The Mac sleeps for 6 minutes after 100 seconds. No timer counts the
+    /// sleep: not the release times, not the waiting hold, not the weak cap.
+    /// The step across the sleep does not count either, so each timer ends
+    /// one step of 5 seconds later than its awake time says.
+    func testSleepGapCountsForNoTimer() {
+        let hole: TimeInterval = 360
+        func wall(_ awake: TimeInterval) -> TimeInterval { awake <= 100 ? awake : awake + hole }
+        var settings = DetectionSettings()
+        settings.weakEvidenceCap = 200
+        let story = stride(from: 0, through: 500, by: 5).map { (t: TimeInterval) -> EvidenceFrame in
+            let w = wall(t)
+            // As the collector gives it: no CPU number on the sample after the hole.
+            let interval: TimeInterval = t == 0 || t == 105 ? 0 : 5
+            let writer = AgentEvidence(agentID: "opencode", displayName: "opencode", level: .activity, pid: 200, startTime: Self.processStart,
+                                       subtreeCPUSeconds: 0.004 * interval, sampleInterval: interval, fileActivityAt: self.at(min(t, 100)))
+            let spinner = AgentEvidence(agentID: "goose", displayName: "Goose", level: .activity, pid: 201, startTime: Self.processStart,
+                                        subtreeCPUSeconds: 0.145 * interval, sampleInterval: interval)
+            return EvidenceFrame(at: self.at(w), agents: [
+                self.claude(t <= 90 ? .working : .idle, at: w, pid: 100),
+                self.claude(t < 50 ? .working : .waitingForUser, at: w, pid: 101),
+                writer, spinner,
+            ])
+        }
+        var recording = LabRecording(header: header("sleep", settings: settings), samples: story.map { LabSample(frame: $0) }, marks: [])
+        recording.samples = story.map { LabSample(frame: $0) }
+        let steps = LabReplay.steps(of: recording)
+        XCTAssertEqual(steps.count, 101)
+        for (index, step) in steps.enumerated() {
+            let t = TimeInterval(index * 5)
+            let causes = step.decision.perAgent.map(\.cause)
+            XCTAssertEqual(causes[0], t <= 90 ? .working : t < 215 ? .finishedRecently : nil, "finished at 90 s, awake time \(t) s")
+            XCTAssertEqual(causes[1], t < 50 ? .working : t < 355 ? .waitingForUser : nil, "waits from 50 s, awake time \(t) s")
+            XCTAssertEqual(causes[2], t < 405 ? .working : nil, "last write at 100 s, awake time \(t) s")
+            let spinner = step.readings[3].verdict
+            if t >= 15, t < 220 { XCTAssertEqual(spinner.state, .working, "awake time \(t) s") }
+            if t >= 220 { XCTAssertEqual(spinner.reason, .onlyWeakSigns(minutes: 3), "The cap counts on across the sleep, awake time \(t) s") }
+        }
+        XCTAssertTrue(steps[21].decision.hold, "The first sample after the sleep")
+    }
+
     func testReactionDelayIsTheTimeToTheFirstSampleThatAgrees() {
         let story = frames(to: 500) { t in
             if t >= 470 { return [] }

@@ -107,7 +107,8 @@ struct AgentEvidence: Codable, Equatable {
     var busyChildCommands: Int
     /// CPU seconds the whole subtree used since the previous sample.
     var subtreeCPUSeconds: Double
-    /// Seconds since the previous sample. Zero on the first sample.
+    /// Seconds since the previous sample. Zero on the first sample, and on
+    /// the first one after a `SampleGap`.
     var sampleInterval: TimeInterval
     var energyNanojoules: UInt64?
     var logicalWriteBytes: UInt64?

@@ -150,6 +150,10 @@ final class DetectionEngine: ObservableObject {
     private func apply(_ sample: EvidenceSample, generation: Int, resample: Bool) {
         guard isRunning, generation == self.generation else { return }
         let started = DispatchTime.now().uptimeNanoseconds
+        if let gap = SampleGap.length(from: frame?.at, to: sample.frame.at) {
+            agentMemory = agentMemory.mapValues { $0.shifted(by: gap) }
+            policyMemory = policyMemory.shifted(by: gap)
+        }
         let (readings, nextAgents) = VerdictRules.readings(for: sample.frame, memory: agentMemory, settings: settings)
         agentMemory = nextAgents
         self.readings = readings

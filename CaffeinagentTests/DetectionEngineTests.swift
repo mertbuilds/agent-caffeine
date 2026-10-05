@@ -101,11 +101,14 @@ final class DetectionEngineTests: XCTestCase {
         scheduler = FakeScheduler()
         watcher = FakeWatcher()
         state = .idle
+        slept = 0
         collector.next = { [unowned self] in self.sample() }
         engine = DetectionEngine(collector: collector, scheduler: scheduler, watcher: watcher)
     }
 
-    private var now: Date { Self.start.addingTimeInterval(scheduler.time) }
+    /// Seconds the Mac slept: time that passed and that no timer saw.
+    private var slept: TimeInterval = 0
+    private var now: Date { Self.start.addingTimeInterval(scheduler.time + slept) }
     private let identity = ProcessIdentity(pid: 100, startTime: DetectionEngineTests.processStart)
 
     /// One Claude Code session in `state`, or no agent at all for nil.
@@ -182,6 +185,24 @@ final class DetectionEngineTests: XCTestCase {
         scheduler.advance(by: 2)
         XCTAssertEqual(engine.decision.headline, .noAgents)
         XCTAssertEqual(published, [false, false, true, true, false, false], "Published only when it changes")
+    }
+
+    func testReleaseTimeDoesNotRunWhileTheMacSleeps() {
+        state = .working
+        engine.start()
+        scheduler.advance(by: 4)
+        state = .idle
+        scheduler.advance(by: 2)
+        XCTAssertEqual(engine.decision.headline, .finishedRecently(.one("Claude Code")))
+
+        slept = 360
+        scheduler.advance(by: 2)
+        XCTAssertEqual(engine.frame?.at, Self.start.addingTimeInterval(368))
+        XCTAssertEqual(engine.decision.headline, .finishedRecently(.one("Claude Code")), "The sleep is no part of the release time")
+        scheduler.advance(by: DetectionSettings().releaseAfterState - 6)
+        XCTAssertTrue(engine.decision.hold)
+        scheduler.advance(by: 4)
+        XCTAssertEqual(engine.decision.headline, .idle(.one("Claude Code")))
     }
 
     func testEventBringsTheNextSampleForward() {
