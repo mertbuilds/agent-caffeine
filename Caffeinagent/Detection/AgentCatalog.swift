@@ -348,21 +348,31 @@ struct AgentCatalog {
         "uv": [["tool", "run"], ["run"]], "pipx": [["run"]],
     ]
 
+    /// The flags that take the next argument as their value. A flag that
+    /// is missing here turns its value into the command: `uv run
+    /// --directory ~/code/aider pytest` would be aider.
     private static let launcherValuedFlags: Set<String> = [
         "-p", "--package", "--from", "--with", "--with-editable", "--with-requirements", "--python", "--spec",
         "-c", "--call", "--config", "--cwd", "--filter", "--import-map", "--lock", "--index-url",
+        "--directory", "--project", "--env-file", "-w", "--workspace", "--prefix", "-C", "--dir",
     ]
+
+    /// Where one runner reads a flag of the list above as a switch:
+    /// `pnpm -w` is the workspace root, and `deno --env-file` takes its
+    /// value after `=` only.
+    private static let launcherSwitches: [String: Set<String>] = ["pnpm": ["-w"], "deno": ["--env-file"]]
 
     /// What a package runner starts, and the arguments after it. Nil when
     /// `name` is no runner or has none of its run words.
     private static func launched(by name: String, _ arguments: [String]) -> (name: String, rest: [String])? {
         guard let forms = launchers[name] else { return nil }
+        let valued = launcherValuedFlags.subtracting(launcherSwitches[name] ?? [])
         var words: [(index: Int, value: String)] = []
         var index = 0
         while index < arguments.count, words.count < 3 {
             let argument = arguments[index]
             if argument.hasPrefix("-") {
-                index += launcherValuedFlags.contains(argument) ? 2 : 1
+                index += valued.contains(argument) ? 2 : 1
             } else {
                 words.append((index, argument))
                 index += 1
@@ -370,9 +380,22 @@ struct AgentCatalog {
         }
         for form in forms where words.count > form.count && words.prefix(form.count).map(\.value) == form {
             let target = words[form.count]
+            guard isCommandTarget(target.value) else { return nil }
             return (targetName(target.value), Array(arguments[(target.index + 1)...]))
         }
         return nil
+    }
+
+    /// The net below the flag list: a runner target that is a path counts
+    /// only when it is a command in a `bin` or `.bin` folder. Any other
+    /// path is a folder or a file that a flag we do not know took as its
+    /// value. A package (`@google/gemini-cli`, `npm:@scope/name`) is no path.
+    private static func isCommandTarget(_ target: String) -> Bool {
+        var name = Substring(target)
+        for scheme in ["npm:", "jsr:"] where name.hasPrefix(scheme) { name = name.dropFirst(scheme.count) }
+        guard !name.hasPrefix("@"), name.contains("/") else { return true }
+        let folders = name.split(separator: "/", omittingEmptySubsequences: true).dropLast()
+        return folders.last == "bin" || folders.last == ".bin"
     }
 
     /// A command name from a path or a package: `/opt/homebrew/bin/gemini`,

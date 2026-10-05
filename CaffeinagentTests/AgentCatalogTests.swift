@@ -135,6 +135,15 @@ final class AgentCatalogTests: XCTestCase {
             ("uv run", uv, ["uv", "run", "--with", "rich", "aider", "--yes"], "aider", ["--yes"]),
             ("uv tool run", uv, ["uv", "tool", "run", "aider"], "aider", []),
             ("pipx run through python", python, ["python3", "/opt/homebrew/bin/pipx", "run", "aider"], "aider", []),
+            ("uv run in a project", uv, ["uv", "run", "--directory", "/Users/me/code/tools", "--project", "/Users/me/code/tools", "aider", "--yes"], "aider", ["--yes"]),
+            ("uv run with an env file", uv, ["uv", "run", "--env-file", ".env", "aider"], "aider", []),
+            ("uv run of a command in a bin folder", uv, ["uv", "run", "/Users/me/code/x/.venv/bin/aider", "--yes"], "aider", ["--yes"]),
+            ("npx of a command in .bin", node, ["node", "/opt/homebrew/bin/npx", "./node_modules/.bin/gemini"], "gemini", []),
+            ("npm exec in a workspace", node, ["node", "/opt/homebrew/bin/npm", "exec", "-w", "packages/tools", "--", "gemini", "-p", "hi"], "gemini", ["-p", "hi"]),
+            ("npx with a prefix", node, ["node", "/opt/homebrew/bin/npx", "--prefix", "/Users/me/code/tools", "gemini"], "gemini", []),
+            ("pnpm in a folder", "/opt/homebrew/bin/pnpm", ["pnpm", "-C", "/Users/me/code/tools", "--dir", "/Users/me/code/tools", "dlx", "opencode"], "opencode", []),
+            ("pnpm at the workspace root", "/opt/homebrew/bin/pnpm", ["pnpm", "-w", "exec", "opencode"], "opencode", []),
+            ("deno run with an env file switch", deno, ["deno", "run", "--env-file", "gemini"], "gemini", []),
 
             // A source file is someone's own script, whatever its name.
             ("python file named like an agent", python, ["python", "pi.py"], nil, []),
@@ -152,6 +161,20 @@ final class AgentCatalogTests: XCTestCase {
             ("uv pip", uv, ["uv", "pip", "install", "aider"], nil, []),
             ("npx of another tool", node, ["node", "/opt/homebrew/bin/npx", "prettier", "gemini"], nil, []),
             ("value of a node flag", node, ["node", "-r", "gemini", "server.js"], nil, []),
+            // The value of a runner flag is not the command.
+            ("uv run in a folder named like an agent", uv, ["uv", "run", "--directory", "/Users/me/code/aider", "pytest"], nil, []),
+            ("uv run in a project named like an agent", uv, ["uv", "run", "--project", "/Users/me/code/aider", "pytest"], nil, []),
+            ("npm exec in a workspace named like an agent", node, ["node", "/opt/homebrew/bin/npm", "exec", "-w", "packages/codex", "--", "tsc"], nil, []),
+            ("npm exec in a workspace, long flag", node, ["node", "/opt/homebrew/bin/npm", "exec", "--workspace", "codex", "--", "tsc"], nil, []),
+            ("npx with a prefix named like an agent", node, ["node", "/opt/homebrew/bin/npx", "--prefix", "/Users/me/code/goose", "vitest"], nil, []),
+            ("npx as itself with a prefix", "/opt/homebrew/bin/npx", ["npx", "--prefix", "/Users/me/code/goose", "vitest"], nil, []),
+            ("pnpm in a folder named like an agent", "/opt/homebrew/bin/pnpm", ["pnpm", "-C", "/Users/me/code/opencode", "exec", "tsc"], nil, []),
+            ("uv run with an env file named like an agent", uv, ["uv", "run", "--env-file", "aider", "pytest"], nil, []),
+            ("npx with a package named like an agent", node, ["node", "/opt/homebrew/bin/npx", "--package", "gemini", "tsc"], nil, []),
+            // A flag that is not on the list: its value is a path outside a bin folder.
+            ("value of an unknown runner flag", uv, ["uv", "run", "--some-new-flag", "/Users/me/code/aider", "pytest"], nil, []),
+            ("relative path value of an unknown runner flag", node, ["node", "/opt/homebrew/bin/npx", "--some-new-flag", "packages/codex", "tsc"], nil, []),
+            ("runner target that is a folder", uv, ["uv", "run", "/Users/me/code/aider"], nil, []),
         ]
         for (index, testCase) in cases.enumerated() {
             let row: Row = .fixture(Int32(index + 10), path: testCase.path, args: testCase.args)
