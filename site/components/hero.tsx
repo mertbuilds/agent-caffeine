@@ -42,7 +42,7 @@ export async function Hero() {
         </div>
         {release === null ? (
           <div className="flex flex-col items-center gap-3 md:items-start">
-            <BuyButton placement="hero">Buy agent caffeine · $9</BuyButton>
+            <BuyButton placement="hero">Buy agent caffeine for $9</BuyButton>
             <p className="text-sm text-muted">Pay once. No subscription · macOS 13 or later, Apple silicon and Intel</p>
           </div>
         ) : (
@@ -52,7 +52,7 @@ export async function Hero() {
                 Download free trial
               </DownloadButton>
               <BuyButton placement="hero" variant="outline">
-                Buy a key · $9
+                Buy a key for $9
               </BuyButton>
             </div>
             <div className="flex flex-col gap-1 text-sm text-muted">

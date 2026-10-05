@@ -122,12 +122,12 @@ export default async function BlogPost({ params }: Props) {
           </p>
           {release === null ? (
             <BuyButton placement="blog" size="small">
-              Buy · $9
+              Buy for $9
             </BuyButton>
           ) : (
             <div className="flex shrink-0 items-center gap-4">
               <BuyButton placement="blog" variant="text">
-                Buy · $9
+                Buy for $9
               </BuyButton>
               <DownloadButton release={release} placement="blog" size="small">
                 Download

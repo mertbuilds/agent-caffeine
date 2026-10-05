@@ -55,7 +55,7 @@ export function LaptopScene() {
       aria-label="A laptop runs Claude Code on a refactor. The lid closes and Claude Code keeps working for 14 minutes. The lid opens on the finished work, with all tests passing"
       className="relative aspect-[10/7] w-full [container-type:inline-size]"
     >
-      <div className="absolute inset-0" style={{ perspective: "720cqw", perspectiveOrigin: "50% 30%" }}>
+      <div className="absolute inset-0" style={{ perspective: "200cqw", perspectiveOrigin: "50% 22%" }}>
         <Laptop closed={closed} display={1 - stretch(closed, 0.2, 0.45, linear)}>
           <Terminal
             session={{

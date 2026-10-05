@@ -135,14 +135,14 @@ export function SiteHeader({ release }: { release: Release | null }) {
           {release === null ? (
             <span {...morphName("header-primary")} className="inline-flex">
               <BuyButton placement="header" size="compact">
-                Buy · $9
+                Buy for $9
               </BuyButton>
             </span>
           ) : (
             <>
               <span {...morphName("header-buy")} className="hidden md:inline-flex">
                 <BuyButton placement="header" variant="text">
-                  Buy · $9
+                  Buy for $9
                 </BuyButton>
               </span>
               <span {...morphName("header-primary")} className="inline-flex">

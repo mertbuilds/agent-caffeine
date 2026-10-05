@@ -163,7 +163,7 @@ export function SiteMenu({
                   style={{ animationDelay: `${links.length * duration.stagger}s` }}
                 >
                   <BuyCta href={BUY_URL} placement="header" className={ROW}>
-                    Buy · $9
+                    Buy for $9
                   </BuyCta>
                 </div>
               </>
