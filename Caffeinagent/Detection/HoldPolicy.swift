@@ -50,14 +50,23 @@ enum HoldHeadline: Equatable {
         }
     }
 
+    /// What keeps the Mac awake, as the menu and the power assertion say
+    /// it. Nil when nothing does.
+    var awakeReason: String? {
+        switch self {
+        case .working(let subject): return Self.phrase(subject, one: "is working", many: "are working")
+        case .waitingHeld(let subject): return Self.phrase(subject, one: "waits for you", many: "wait for you")
+        case .finishedRecently(let subject): return Self.phrase(subject, one: "finished a moment ago", many: "finished a moment ago")
+        case .open(let subject): return Self.phrase(subject, one: "is open", many: "are open")
+        case .alwaysOn: return "always on"
+        case .remoteAccess: return "remote access is on"
+        case .idle, .waitingReleased, .noAgents, .safetyStop, .switchedOff, .notEntitled: return nil
+        }
+    }
+
     var text: String {
         switch self {
-        case .working(let subject): return "Awake: \(Self.phrase(subject, one: "is working", many: "are working"))"
-        case .waitingHeld(let subject): return "Awake: \(Self.phrase(subject, one: "waits for you", many: "wait for you"))"
-        case .finishedRecently(let subject): return "Awake: \(Self.phrase(subject, one: "finished a moment ago", many: "finished a moment ago"))"
-        case .open(let subject): return "Awake: \(Self.phrase(subject, one: "is open", many: "are open"))"
-        case .alwaysOn: return "Awake: always on"
-        case .remoteAccess: return "Awake: remote access is on"
+        case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess: return "Awake: \(awakeReason ?? "")"
         case .idle(.one(let name)): return "Mac can sleep: \(name) is idle"
         case .idle(.many): return "Mac can sleep: all agents are idle"
         case .waitingReleased(let subject): return "Mac can sleep: \(Self.phrase(subject, one: "waits for you", many: "wait for you"))"
@@ -122,8 +131,8 @@ enum HoldPolicy {
         return (HoldDecision(hold: hold, lidClosedFlag: lidClosedFlag, headline: headline, perAgent: perAgent), memory)
     }
 
-    /// Safety comes first, then the switch, then the license, as in
-    /// `AwakeMode.shouldHold`. No entitlement means there is none to check.
+    /// Safety comes first, then the switch, then the license. No
+    /// entitlement means there is none to check.
     private static func stopHeadline(enabled: Bool, entitlement: Entitlement?, safety: SafetyStop?) -> HoldHeadline? {
         if let safety { return .safetyStop(safety) }
         guard enabled else { return .switchedOff }

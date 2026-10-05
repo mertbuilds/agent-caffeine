@@ -52,10 +52,29 @@ protocol SleepFlagHelperConnecting {
     func heartbeat() async throws -> Bool
 }
 
-// The sudoers entry of the method this helper replaces.
+// The sudoers entry of the method this helper replaced.
 protocol SudoersCleaning {
     var entryExists: Bool { get }
     func remove() async throws
+}
+
+/// Which value to send to the helper, so it is called only on a change.
+struct SleepFlagRequest: Equatable {
+    private(set) var sent: Bool?
+
+    /// The value to send now, nil for no call. A helper that is not enabled
+    /// gets no call. The next time it is enabled it gets the wanted value,
+    /// also when that is off: the call then clears a flag that an earlier
+    /// run left on.
+    mutating func next(wanted: Bool, helperEnabled: Bool) -> Bool? {
+        guard helperEnabled else {
+            sent = nil
+            return nil
+        }
+        guard sent != wanted else { return nil }
+        sent = wanted
+        return wanted
+    }
 }
 
 @MainActor
@@ -91,7 +110,7 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
     func refreshStatus() {
         let status = service.status
         if helperStatus != status { helperStatus = status }
-        let cleanup = status == .enabled && sudoers.entryExists
+        let cleanup = sudoers.entryExists
         if needsSudoersCleanup != cleanup { needsSudoersCleanup = cleanup }
     }
 
@@ -125,6 +144,44 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
 
     func openLoginItemsSettings() {
         service.openLoginItemsSettings()
+    }
+
+    /// The user switched the helper off in System Settings while the flag
+    /// was on. Nothing clears the flag until the helper runs again.
+    var flagLeftOn: Bool { helperStatus != .enabled && sleepDisabled }
+
+    /// After an update the helper that runs can still be the old binary:
+    /// launchd keeps the process it started. Registering again makes it
+    /// start the new one. Not tested with a real update yet: check that the
+    /// approval in Login Items survives it.
+    func replaceHelper(ifNot appVersion: String) async {
+        refreshStatus()
+        guard helperStatus == .enabled, let running = try? await helper.status(), running.version != appVersion else { return }
+        log.info("helper is \(running.version, privacy: .public), app is \(appVersion, privacy: .public): registering again")
+        do {
+            try await uninstall()
+            try service.register()
+        } catch {
+            log.error("replacing the helper failed: \(error.localizedDescription, privacy: .public)")
+        }
+        refreshStatus()
+    }
+
+    /// For quitting, where nothing can await: blocks the caller for at most
+    /// `timeout` seconds. When the call is late or lost, the heartbeats
+    /// have stopped and the helper's watchdog clears the flag.
+    func clearForQuit(timeout: TimeInterval) {
+        let owed = wanted || sleepDisabled
+        wanted = false
+        stopHeartbeat()
+        guard owed, helperStatus == .enabled else { return }
+        let done = DispatchSemaphore(value: 0)
+        let helper = helper
+        Task.detached {
+            _ = try? await helper.setSleepDisabled(false)
+            done.signal()
+        }
+        _ = done.wait(timeout: .now() + timeout)
     }
 
     func setSleepDisabled(_ on: Bool) async -> Bool {

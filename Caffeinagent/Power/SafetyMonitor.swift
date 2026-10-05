@@ -5,6 +5,23 @@ enum SafetyStop: Equatable {
     case tooHot
 }
 
+extension SafetyStop {
+    /// The text of the notification that tells the user why the Mac slept.
+    var notificationText: String {
+        switch self {
+        case .batteryLow(let percent): return "agent caffeine let your Mac sleep: battery at \(percent) percent"
+        case .tooHot: return "agent caffeine let your Mac sleep: the Mac is too hot"
+        }
+    }
+
+    /// The stop to tell the user about, nil for none. A stop is told once,
+    /// when it begins, and only when it ended a hold. A stop that goes on,
+    /// with a new battery level or as heat after low battery, is the same stop.
+    static func toAnnounce(previous: SafetyStop?, current: SafetyStop?, wasHolding: Bool) -> SafetyStop? {
+        previous == nil && wasHolding ? current : nil
+    }
+}
+
 struct SafetyInputs: Equatable {
     // nil on a Mac without a battery.
     var batteryPercent: Int?

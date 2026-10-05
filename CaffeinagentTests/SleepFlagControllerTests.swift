@@ -7,11 +7,13 @@ private final class FakeService: HelperServiceManaging {
     var statusAfterRegister: HelperStatus = .enabled
     var registerError: Error?
     var unregistered = false
+    var registrations = 0
     var openedSettings = false
 
     init(status: HelperStatus) { self.status = status }
 
     func register() throws {
+        registrations += 1
         status = statusAfterRegister
         if let registerError { throw registerError }
     }
@@ -227,11 +229,76 @@ final class SleepFlagControllerTests: XCTestCase {
     func testSudoersCleanup() async throws {
         let sudoers = FakeSudoers(entryExists: true)
         let pending = makeController(FakeService(status: .notRegistered), FakeHelper(), sudoers)
-        XCTAssertFalse(pending.needsSudoersCleanup)
-        try await pending.install()
         XCTAssertTrue(pending.needsSudoersCleanup)
         try await pending.removeSudoersEntry()
         XCTAssertFalse(pending.needsSudoersCleanup)
         XCTAssertFalse(sudoers.entryExists)
+    }
+
+    func testRequestSendsOnlyChanges() {
+        var request = SleepFlagRequest()
+        XCTAssertNil(request.next(wanted: true, helperEnabled: false))
+        XCTAssertEqual(request.next(wanted: true, helperEnabled: true), true)
+        XCTAssertNil(request.next(wanted: true, helperEnabled: true))
+        XCTAssertEqual(request.next(wanted: false, helperEnabled: true), false)
+        XCTAssertNil(request.next(wanted: false, helperEnabled: true))
+    }
+
+    func testRequestSendsAgainAfterTheHelperWasOff() {
+        var request = SleepFlagRequest()
+        XCTAssertEqual(request.next(wanted: false, helperEnabled: true), false, "clears a flag an earlier run left on")
+        XCTAssertEqual(request.next(wanted: true, helperEnabled: true), true)
+        XCTAssertNil(request.next(wanted: true, helperEnabled: false))
+        XCTAssertEqual(request.next(wanted: true, helperEnabled: true), true)
+        XCTAssertNil(request.next(wanted: false, helperEnabled: false))
+        XCTAssertEqual(request.next(wanted: false, helperEnabled: true), false)
+    }
+
+    func testFlagLeftOnWhenTheHelperIsSwitchedOff() async {
+        let service = FakeService(status: .enabled)
+        let controller = makeController(service)
+        _ = await controller.setSleepDisabled(true)
+        XCTAssertFalse(controller.flagLeftOn)
+        service.status = .requiresApproval
+        controller.refreshStatus()
+        XCTAssertTrue(controller.flagLeftOn)
+    }
+
+    func testClearForQuit() async {
+        let helper = FakeHelper()
+        let controller = makeController(FakeService(status: .enabled), helper)
+        _ = await controller.setSleepDisabled(true)
+        controller.clearForQuit(timeout: 2)
+        XCTAssertFalse(helper.flag)
+        XCTAssertEqual(helper.calls, ["set true", "set false"])
+        await controller.sendHeartbeat()
+        XCTAssertEqual(helper.calls.count, 2, "no heartbeat after the clear")
+    }
+
+    func testClearForQuitMakesNoCallWithoutAFlag() {
+        let helper = FakeHelper()
+        makeController(FakeService(status: .enabled), helper).clearForQuit(timeout: 2)
+        XCTAssertEqual(helper.calls, [])
+    }
+
+    func testOutdatedHelperIsRegisteredAgain() async {
+        let service = FakeService(status: .enabled)
+        let helper = FakeHelper()
+        let controller = makeController(service, helper)
+        await controller.replaceHelper(ifNot: "1.0 (1)")
+        XCTAssertFalse(service.unregistered)
+        XCTAssertEqual(service.registrations, 0)
+        await controller.replaceHelper(ifNot: "1.1 (2)")
+        XCTAssertTrue(service.unregistered)
+        XCTAssertEqual(service.registrations, 1)
+        XCTAssertEqual(controller.helperStatus, .enabled)
+    }
+
+    func testHelperThatIsNotEnabledIsNotReplaced() async {
+        let service = FakeService(status: .notRegistered)
+        let helper = FakeHelper()
+        await makeController(service, helper).replaceHelper(ifNot: "1.1 (2)")
+        XCTAssertEqual(helper.calls, [])
+        XCTAssertEqual(service.registrations, 0)
     }
 }

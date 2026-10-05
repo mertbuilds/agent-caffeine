@@ -92,6 +92,14 @@ struct AgentDefinition: Equatable {
     /// True when the process shape was seen on a real Mac. False entries are
     /// carried over from the old name list or are placeholders.
     let verified: Bool
+
+    /// The names this agent is matched by, lowercased.
+    var processNames: [String] {
+        matchers.compactMap { matcher in
+            if case .name(let name) = matcher.process { return name.lowercased() }
+            return nil
+        }
+    }
 }
 
 struct AgentMatch: Equatable {
@@ -246,6 +254,11 @@ struct AgentCatalog {
             id: "user:\(name)", displayName: name, level: .generic, kind: .cli,
             matchers: [AgentMatcher(.name(name))], exclusions: [], verified: false
         )
+    }
+
+    /// Every name a CLI of the catalog is matched by.
+    var cliNames: Set<String> {
+        Set(definitions.filter { $0.kind == .cli }.flatMap(\.processNames))
     }
 
     // MARK: Matching

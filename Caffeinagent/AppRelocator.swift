@@ -6,12 +6,18 @@ enum AppRelocator {
     private static let declinedKey = "AppRelocator.userDeclined"
     private static let log = Logger(subsystem: "com.caffeinagent.app", category: "AppRelocator")
 
+    /// The root helper is offered only from here: launchd starts it from
+    /// inside the app, and a copy in Downloads or on a disk image moves away.
+    static var isInSystemApplications: Bool {
+        Bundle.main.bundleURL.standardizedFileURL.path.hasPrefix("/Applications/")
+    }
+
     static func offerToMoveIfNeeded() {
         let bundleURL = Bundle.main.bundleURL.standardizedFileURL
         let path = bundleURL.path
 
         // Already installed in a system or user Applications folder.
-        if path.hasPrefix("/Applications/") || path.hasPrefix(NSHomeDirectory() + "/Applications/") {
+        if isInSystemApplications || path.hasPrefix(NSHomeDirectory() + "/Applications/") {
             return
         }
 

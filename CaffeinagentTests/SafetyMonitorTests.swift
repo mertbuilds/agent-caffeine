@@ -56,4 +56,25 @@ final class SafetyMonitorTests: XCTestCase {
         XCTAssertEqual(monitor.update(SafetyInputs(batteryPercent: 44, onBattery: true, thermalState: .nominal)), .batteryLow(percent: 44))
         XCTAssertNil(monitor.update(SafetyInputs(batteryPercent: 45, onBattery: true, thermalState: .nominal)))
     }
+
+    func testStopIsAnnouncedOncePerStop() {
+        let low = SafetyStop.batteryLow(percent: 20)
+        XCTAssertEqual(SafetyStop.toAnnounce(previous: nil, current: low, wasHolding: true), low)
+        // The same stop goes on: a lower level, then heat on top of it.
+        XCTAssertNil(SafetyStop.toAnnounce(previous: low, current: .batteryLow(percent: 19), wasHolding: false))
+        XCTAssertNil(SafetyStop.toAnnounce(previous: .batteryLow(percent: 19), current: .tooHot, wasHolding: false))
+        XCTAssertNil(SafetyStop.toAnnounce(previous: .tooHot, current: nil, wasHolding: false))
+        // It ended, so the next one is a new stop.
+        XCTAssertEqual(SafetyStop.toAnnounce(previous: nil, current: .tooHot, wasHolding: true), .tooHot)
+    }
+
+    func testStopThatEndedNoHoldIsNotAnnounced() {
+        XCTAssertNil(SafetyStop.toAnnounce(previous: nil, current: .tooHot, wasHolding: false))
+        XCTAssertNil(SafetyStop.toAnnounce(previous: nil, current: nil, wasHolding: true))
+    }
+
+    func testNotificationText() {
+        XCTAssertEqual(SafetyStop.batteryLow(percent: 20).notificationText, "agent caffeine let your Mac sleep: battery at 20 percent")
+        XCTAssertEqual(SafetyStop.tooHot.notificationText, "agent caffeine let your Mac sleep: the Mac is too hot")
+    }
 }
