@@ -269,6 +269,9 @@ struct AgentCatalog {
         /// The arguments after the command, and after the script for a CLI
         /// that an interpreter runs.
         let arguments: [String]
+        /// The executable is an interpreter and one of the names is the
+        /// script it runs.
+        var interpreterRunsScript = false
     }
 
     /// The names are the basename of argv[0] (a CLI that sets its process
@@ -280,20 +283,25 @@ struct AgentCatalog {
         let executable = baseName(row.executablePath).lowercased()
         var names: [String] = []
         var arguments = Array(row.arguments.dropFirst())
+        var runsScript = false
         if !argv0.isEmpty { names.append(argv0) }
         if isInterpreter(argv0) || isInterpreter(executable),
            let index = arguments.firstIndex(where: { !$0.hasPrefix("-") }) {
             names.append(scriptName(arguments[index]))
             arguments = Array(arguments[(index + 1)...])
+            runsScript = isInterpreter(executable)
         }
         if !executable.isEmpty && !names.contains(executable) { names.append(executable) }
-        return Command(names: names, arguments: arguments)
+        return Command(names: names, arguments: arguments, interpreterRunsScript: runsScript)
     }
 
     /// The definition and role of a process, nil when it is no agent process.
     /// Desktop engines are tried first. After that, anything else inside an
     /// app bundle is no agent, so an app's helpers never count as the CLI
-    /// whose name they share. `userNames` is the user's editable name list;
+    /// whose name they share. An interpreter that runs a script is no such
+    /// helper: the Python of Homebrew and of Xcode is itself inside a
+    /// `Python.app` (`.../Python.framework/Versions/3.14/Resources/
+    /// Python.app/Contents/MacOS/Python`). `userNames` is the user's editable name list;
     /// a name there that no definition covers matches at the generic level.
     func match(_ row: ProcessInfoRow, userNames: [String]) -> AgentMatch? {
         let command = Self.command(of: row)
@@ -306,7 +314,7 @@ struct AgentCatalog {
             return nil
         }
         if let match = firstMatch(.desktop) { return match }
-        if row.executablePath.contains(".app/Contents/") { return nil }
+        if row.executablePath.contains(".app/Contents/"), !command.interpreterRunsScript { return nil }
         if let match = firstMatch(.cli) { return match }
         for name in userNames where command.names.contains(name.lowercased()) {
             return AgentMatch(definition: Self.userDefinition(name: name), role: .session)
@@ -418,7 +426,7 @@ struct AgentCatalog {
     }
 
     private static func isInterpreter(_ name: String) -> Bool {
-        ["node", "bun", "deno"].contains(name) || name.hasPrefix("python")
+        ["node", "bun", "deno", "ruby"].contains(name) || name.hasPrefix("python") || name.hasPrefix("pypy")
     }
 
     private static func scriptName(_ path: String) -> String {

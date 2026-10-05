@@ -10,6 +10,9 @@ final class AgentCatalogTests: XCTestCase {
     private let chatGPT = "/Applications/ChatGPT.app/Contents"
     private let antigravity = "/Applications/Antigravity.app/Contents"
 
+    private let homebrewPython = "/opt/homebrew/Cellar/python@3.14/3.14.0/Frameworks/Python.framework/Versions/3.14/Resources/Python.app/Contents/MacOS/Python"
+    private let xcodePython = "/Applications/Xcode.app/Contents/Developer/Library/Frameworks/Python3.framework/Versions/3.9/Resources/Python.app/Contents/MacOS/Python"
+
     private var codexDesktopBinary: String { "\(chatGPT)/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex" }
 
     // MARK: match
@@ -76,7 +79,15 @@ final class AgentCatalogTests: XCTestCase {
             ("gemini script run by node", "/opt/homebrew/Cellar/node/24.1.0/bin/node", ["node", "--no-warnings", "/opt/homebrew/bin/gemini", "-p", "hi"], "gemini", .session),
             ("gemini-cli alias", "/opt/homebrew/bin/node", ["node", "/opt/homebrew/bin/gemini-cli"], "gemini", .session),
             ("pi script run by bun", "/Users/me/.bun/bin/bun", ["bun", "/Users/me/.bun/bin/pi.js"], "pi", .session),
-            ("aider run by python", "/opt/homebrew/Cellar/aider/0.86.1/libexec/bin/python3.12", ["/opt/homebrew/Cellar/aider/0.86.1/libexec/bin/python", "/opt/homebrew/bin/aider", "--model", "sonnet"], "aider", .session),
+            // The kernel reports the resolved binary, and the Python of
+            // Homebrew and of Xcode is inside a Python.app.
+            ("aider run by Homebrew python", homebrewPython, ["/opt/homebrew/Cellar/aider/0.86.1/libexec/bin/python", "/opt/homebrew/bin/aider", "--model", "sonnet"], "aider", .session),
+            ("aider run by Xcode python", xcodePython, ["/usr/bin/python3", "/Users/me/Library/Python/3.9/bin/aider"], "aider", .session),
+            ("aider run by a python outside a bundle", "/Users/me/.pyenv/versions/3.12.4/bin/python3.12", ["python3", "/Users/me/.pyenv/shims/aider"], "aider", .session),
+            ("openhands run by ruby in a bundle", "/Applications/Tool.app/Contents/Resources/ruby", ["ruby", "/usr/local/bin/openhands"], "openhands", .session),
+            ("framework python at its prompt", homebrewPython, ["python3"], nil, nil),
+            ("framework python with another script", homebrewPython, ["python3", "/Users/me/code/server.py"], nil, nil),
+            ("bundle helper named like an agent, with a script", "/Applications/Foo.app/Contents/MacOS/aider", ["aider", "/usr/local/bin/aider"], nil, nil),
             ("uppercase argv[0]", "/usr/local/bin/Goose", ["Goose", "session"], "goose", .session),
 
             // Not agents.
