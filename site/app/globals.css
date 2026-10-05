@@ -222,13 +222,13 @@
 .agent-track {
   display: flex;
   width: max-content;
-  animation: agent-slide 60s linear infinite;
+  animation: agent-slide 110s linear infinite;
   will-change: transform;
 }
 
 .agent-track-back {
   animation-direction: reverse;
-  animation-duration: 66s;
+  animation-duration: 124s;
 }
 
 .agent-marquee-paused .agent-track,
