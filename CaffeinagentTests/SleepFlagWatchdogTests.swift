@@ -4,13 +4,22 @@ private final class FakeFlag: SleepFlagAccessing {
     var value = false
     var setFails = false
     var writes: [Bool] = []
+    var forced: [Bool] = []
+    /// What a later read gives, as when powerd applies a stored setting.
+    var valueAfterNextSet: Bool?
 
     func read() -> Bool? { value }
 
-    func set(_ on: Bool) -> Bool {
+    func set(_ on: Bool, force: Bool) -> Bool {
         writes.append(on)
+        forced.append(force)
         if !setFails { value = on }
-        return value
+        let result = value
+        if let later = valueAfterNextSet {
+            value = later
+            valueAfterNextSet = nil
+        }
+        return result
     }
 }
 
@@ -131,8 +140,99 @@ final class HelperCoreTests: XCTestCase {
         XCTAssertTrue(core.setByHelper)
         core.tick()
         XCTAssertFalse(flag.value)
+        XCTAssertTrue(marker.exists, "One read is no proof at boot")
+        core.tick()
+        XCTAssertTrue(marker.exists)
+        core.tick()
         XCTAssertFalse(marker.exists)
         XCTAssertFalse(core.setByHelper)
+        XCTAssertEqual(flag.forced, [true, false, false])
+    }
+
+    func testRestartWritesFalseAlsoWhenTheFlagReadsOff() {
+        let flag = FakeFlag(), marker = FakeMarker(exists: true)
+        // Boot: the kernel says off, and the stored setting comes on a moment later.
+        flag.valueAfterNextSet = true
+        let core = makeCore(flag: flag, marker: marker)
+        core.tick()
+        XCTAssertEqual(flag.writes, [false])
+        XCTAssertEqual(flag.forced, [true], "The write happens whatever the read says")
+        XCTAssertTrue(flag.value)
+        XCTAssertTrue(marker.exists)
+        // The flag came back, so the count of checks starts again.
+        core.tick()
+        XCTAssertFalse(flag.value)
+        core.tick()
+        XCTAssertTrue(marker.exists)
+        core.tick()
+        XCTAssertFalse(marker.exists)
+        XCTAssertFalse(core.setByHelper)
+        XCTAssertFalse(flag.value)
+    }
+
+    func testClientSetEndsTheRecovery() {
+        let flag = FakeFlag(), marker = FakeMarker(exists: true)
+        flag.value = true
+        let core = makeCore(flag: flag, marker: marker)
+        core.tick()
+        XCTAssertTrue(core.setSleepDisabled(true))
+        now += 30
+        core.tick()
+        XCTAssertTrue(flag.value, "A fresh set is under the watchdog, not under the recovery")
+        XCTAssertTrue(marker.exists)
+        XCTAssertFalse(core.setSleepDisabled(false))
+        XCTAssertFalse(marker.exists)
+    }
+
+    func testClientClearDuringRecoveryKeepsTheMarkerUntilConfirmed() {
+        let flag = FakeFlag(), marker = FakeMarker(exists: true)
+        flag.value = true
+        let core = makeCore(flag: flag, marker: marker)
+        XCTAssertFalse(core.setSleepDisabled(false))
+        XCTAssertEqual(flag.forced, [true])
+        XCTAssertTrue(marker.exists)
+        core.tick()
+        core.tick()
+        XCTAssertFalse(marker.exists)
+    }
+
+    func testShutdownClearsAFlagTheHelperOwns() {
+        let flag = FakeFlag(), marker = FakeMarker()
+        let core = makeCore(flag: flag, marker: marker)
+        _ = core.setSleepDisabled(true)
+        core.shutdown()
+        XCTAssertFalse(flag.value)
+        XCTAssertFalse(marker.exists)
+        XCTAssertFalse(core.setByHelper)
+    }
+
+    func testShutdownLeavesAForeignFlag() {
+        let flag = FakeFlag(), marker = FakeMarker()
+        flag.value = true
+        let core = makeCore(flag: flag, marker: marker)
+        _ = core.setSleepDisabled(true)
+        core.shutdown()
+        XCTAssertTrue(flag.value)
+        XCTAssertEqual(flag.writes, [])
+    }
+
+    func testShutdownThatCannotClearKeepsTheMarker() {
+        let flag = FakeFlag(), marker = FakeMarker()
+        let core = makeCore(flag: flag, marker: marker)
+        _ = core.setSleepDisabled(true)
+        flag.setFails = true
+        core.shutdown()
+        XCTAssertTrue(marker.exists)
+        XCTAssertTrue(core.setByHelper)
+    }
+
+    func testShutdownDuringRecoveryClearsAndKeepsTheMarker() {
+        let flag = FakeFlag(), marker = FakeMarker(exists: true)
+        flag.value = true
+        let core = makeCore(flag: flag, marker: marker)
+        core.shutdown()
+        XCTAssertFalse(flag.value)
+        XCTAssertTrue(marker.exists, "The next start checks again")
     }
 
     func testFailedClearKeepsMarkerAndRetries() {

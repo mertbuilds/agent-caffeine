@@ -8,6 +8,7 @@ final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProto
     private let queue = DispatchQueue(label: SleepFlagHelper.label)
     private let core = HelperCore(flag: SystemSleepFlag(), marker: MarkerFile(), timeout: SleepFlagHelper.heartbeatTimeout)
     private var timer: DispatchSourceTimer?
+    private var termination: DispatchSourceSignal?
     private let log = Logger(subsystem: SleepFlagHelper.label, category: "HelperService")
 
     private static let version: String = {
@@ -24,6 +25,21 @@ final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProto
             core.tick()
             updateTimer()
         }
+    }
+
+    // launchd sends SIGTERM and waits for the exit before it kills. The
+    // handler runs on the queue, after a call that is under way.
+    func exitOnTermination() {
+        signal(SIGTERM, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: SIGTERM, queue: queue)
+        source.setEventHandler { [weak self] in
+            guard let self else { exit(0) }
+            if self.core.setByHelper { self.log.info("stopping, clearing SleepDisabled") }
+            self.core.shutdown()
+            exit(0)
+        }
+        source.resume()
+        termination = source
     }
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {

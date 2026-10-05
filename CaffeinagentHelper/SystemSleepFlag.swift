@@ -30,8 +30,8 @@ struct SystemSleepFlag: SleepFlagAccessing {
     // The write only stores a preference and notifies powerd, which sets the
     // kernel flag a moment later, so the kernel value is polled and the write
     // repeated until it matches.
-    func set(_ on: Bool) -> Bool {
-        if read() == on { return on }
+    func set(_ on: Bool, force: Bool) -> Bool {
+        if !force, read() == on { return on }
         for attempt in 0..<Self.attempts {
             if attempt % 5 == 0 { write(on) }
             Thread.sleep(forTimeInterval: Self.attemptDelay)
