@@ -1,0 +1,1 @@
+Lab recordings that `LabReplayTests` replays on every test run. Each `*.jsonl` here must replay with zero wrongly released seconds and with wrongly held seconds within the `wronglyHeldBudget` of its header. Record with `caffeinagent --lab-record <label>`, mark with `--lab-mark`, then copy the file from `~/Library/Application Support/com.caffeinagent.app/lab/`.

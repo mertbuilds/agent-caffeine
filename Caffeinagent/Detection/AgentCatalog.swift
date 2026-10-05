@@ -24,6 +24,11 @@ enum ProcessMatcher: Equatable {
     case name(String)
     case executableSuffix(String)
     case executableContains(String)
+    /// The executable path contains `path`, and the process does not run
+    /// under another tool's name: argv[0] starts with `title`, or is the
+    /// executable's file name, or is missing. Claude Code's binary is also
+    /// its own `ugrep`, with argv[0] `ugrep`, and that is a tool call.
+    case executable(contains: String, title: String)
     /// The executable is at `relativePath` inside an app bundle. `bundle` is
     /// the bundle's file name ("Antigravity.app"), nil for any bundle.
     case appBundle(bundle: String?, relativePath: String)
@@ -113,6 +118,10 @@ struct AgentCatalog {
 
     static let standard = AgentCatalog(definitions: desktopDefinitions + cliDefinitions)
 
+    /// Raised when a definition changes what it matches, so a lab recording
+    /// says which catalog saw its processes.
+    static let version = 2
+
     // MARK: Data
 
     private static let codexDesktopEngine = "Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
@@ -145,14 +154,19 @@ struct AgentCatalog {
 
     static let cliDefinitions: [AgentDefinition] = [
         // Seen 2026-10-05, Claude Code 2.1.286 to 2.1.289. argv[0] is `claude`
-        // and the binary is `~/.local/share/claude/versions/<version>`.
+        // and the binary is `~/.local/share/claude/versions/<version>`. The
+        // daemon's pty host and spares differ: their argv[0] is the whole
+        // title ("claude bg-spare"), and the flag follows as argv[1]. The
+        // binary also runs its built-in search tools under their own names.
         AgentDefinition(
             id: "claude", displayName: "Claude Code", level: .state, kind: .cli,
-            matchers: [AgentMatcher(.name("claude")), AgentMatcher(.executableContains("/claude/versions/"))],
+            matchers: [AgentMatcher(.name("claude")), AgentMatcher(.executable(contains: "/claude/versions/", title: "claude"))],
             exclusions: [
                 AgentExclusion(arguments: .leading(["daemon", "run"])),
                 AgentExclusion(arguments: .leading(["bg-pty-host"])),
+                AgentExclusion(arguments: .leading(["--bg-pty-host"])),
                 AgentExclusion(arguments: .leading(["bg-spare"]), role: .helperMaybeSession),
+                AgentExclusion(arguments: .leading(["--bg-spare"]), role: .helperMaybeSession),
             ],
             verified: true
         ),
@@ -299,6 +313,12 @@ struct AgentCatalog {
         for row in snapshot {
             if let match = match(row, userNames: userNames) { matches[row.pid] = match }
         }
+        return instances(in: snapshot, matches: matches)
+    }
+
+    /// For a caller that keeps the match of each process from one snapshot
+    /// to the next. `matches` is by pid and holds every matched process.
+    func instances(in snapshot: [ProcessInfoRow], matches: [Int32: AgentMatch]) -> [AgentInstance] {
         let byPID = Dictionary(snapshot.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
         let roots = snapshot.filter { row in
             guard let match = matches[row.pid] else { return false }
@@ -358,6 +378,10 @@ struct AgentCatalog {
             return row.executablePath.hasSuffix(suffix)
         case .executableContains(let part):
             return row.executablePath.contains(part)
+        case .executable(let part, let title):
+            guard row.executablePath.contains(part) else { return false }
+            let name = baseName(row.arguments.first ?? "").lowercased()
+            return name.isEmpty || name.hasPrefix(title) || name == baseName(row.executablePath).lowercased()
         case .appBundle(let bundle, let relativePath):
             if let bundle { return row.executablePath.hasSuffix("/\(bundle)/\(relativePath)") }
             return row.executablePath.hasSuffix(".app/\(relativePath)")

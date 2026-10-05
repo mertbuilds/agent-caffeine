@@ -26,7 +26,12 @@ final class AgentCatalogTests: XCTestCase {
             ("claude daemon supervisor", claudeBinary, ["/Users/me/.local/bin/claude", "daemon", "run", "--origin", "transient", "--spawned-by", "{\"label\":\"claude\",\"cwd\":\"/Users/me/wiki\",\"pid\":93968}"], "claude", .helper),
             ("claude pty host", claudeBinary, ["claude", "bg-pty-host", "--bg-pty-host", "/tmp/cc-daemon-501/03c1f701/spare/025596a1.pty.sock", "200", "50", "--", claudeBinary, "--bg-spare", "/tmp/cc-daemon-501/03c1f701/spare/025596a1.claim.sock"], "claude", .helper),
             ("claude spare, claimed or warm", claudeBinary, ["claude", "bg-spare", "--bg-spare", "/tmp/cc-daemon-501/03c1f701/spare/17dea89c.claim.sock"], "claude", .helperMaybeSession),
+            // As KERN_PROCARGS2 gives them: the title is one argv[0].
+            ("claude pty host, title in argv[0]", claudeBinary, ["claude bg-pty-host", "--bg-pty-host", "/tmp/cc-daemon-501/03c1f701/spare/025596a1.pty.sock", "200", "50", "--", claudeBinary, "--bg-spare", "/tmp/cc-daemon-501/03c1f701/spare/025596a1.claim.sock"], "claude", .helper),
+            ("claude spare, title in argv[0]", claudeBinary, ["claude bg-spare", "--bg-spare", "/tmp/cc-daemon-501/03c1f701/spare/17dea89c.claim.sock"], "claude", .helperMaybeSession),
             ("claude told to work on a daemon", claudeBinary, ["claude", "-p", "daemon", "run"], "claude", .session),
+            // Seen 2026-10-05: the Grep tool runs the Claude Code binary as ugrep.
+            ("claude binary as its own search tool", claudeBinary, ["ugrep", "-G", "--ignore-files", "--hidden", "TODO"], nil, nil),
             ("claude desktop app", "/Applications/Claude.app/Contents/MacOS/Claude", ["/Applications/Claude.app/Contents/MacOS/Claude"], nil, nil),
             ("claude helper in a bundle with spaces", "/Users/me/My Apps/Claude.app/Contents/Helpers/claude", ["/Users/me/My Apps/Claude.app/Contents/Helpers/claude", "--stdio"], nil, nil),
             ("claude with a bundle path as argument", "/usr/local/bin/claude", ["/usr/local/bin/claude", "/Applications/Foo.app/Contents/x"], "claude", .session),

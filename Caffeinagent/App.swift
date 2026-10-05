@@ -8,6 +8,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 }
 
 @main
+enum Main {
+    /// The lab commands run without the app. Every other launch is the app.
+    @MainActor
+    static func main() {
+        if LabCommand.run(CommandLine.arguments) { return }
+        CaffeinagentApp.main()
+    }
+}
+
 struct CaffeinagentApp: App {
     @StateObject private var aggregator = StateAggregator()
     @StateObject private var updater = Updater()
