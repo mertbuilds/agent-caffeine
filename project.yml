@@ -158,9 +158,15 @@ targets:
       - Caffeinagent/License/LicenseConfig.swift
       - Caffeinagent/License/LicenseManager.swift
       - Caffeinagent/License/LicenseStore.swift
-      - Caffeinagent/Power/SafetyMonitor.swift
-      - Caffeinagent/Power/SleepFlagController.swift
-      - Caffeinagent/Power/SleepFlagHelperProtocol.swift
+      # Optional, so the project still generates on a branch without the folder.
+      - path: Caffeinagent/Detection
+        optional: true
+      # Without the two files that reach into the system: SMAppService and
+      # XPC, and the battery reader that needs PowerSource.
+      - path: Caffeinagent/Power
+        excludes:
+          - SleepFlagSystem.swift
+          - SafetyInputsReader.swift
       - CaffeinagentHelper/HelperCore.swift
       - CaffeinagentHelper/SleepFlagWatchdog.swift
     settings:
