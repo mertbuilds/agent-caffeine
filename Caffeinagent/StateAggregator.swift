@@ -35,10 +35,15 @@ final class StateAggregator: ObservableObject {
     /// False on a Mac without a battery, where a closed lid needs no helper.
     @Published private(set) var hasBattery = true
     @Published private(set) var helperError: String?
+    /// By hook agent id. Read at launch and when Preferences opens, and
+    /// never changed without the user's word.
+    @Published private(set) var hookStatuses: [String: HookStatus] = [:]
+    @Published private(set) var hookErrors: [String: String] = [:]
 
     let license: LicenseManager
     let sleepFlag: SleepFlagController
     let canSetUpHelper = AppRelocator.isInSystemApplications
+    private let hookInstaller = HookInstaller()
     private let engine: DetectionEngine
     private let power = PowerKeeper()
     private let openFiles = SystemOpenFiles()
@@ -122,6 +127,7 @@ final class StateAggregator: ObservableObject {
 
         license.start()
         engine.start()
+        refreshHookStatuses()
         Task {
             await sleepFlag.replaceHelper(ifNot: AppVersion.helperForm)
             helperChecked = true
@@ -220,6 +226,36 @@ final class StateAggregator: ObservableObject {
             }
             syncSleepFlag()
         }
+    }
+
+    // MARK: Hooks
+
+    /// The hook entries point at the copy in the Applications folder, so
+    /// they are offered only when the hook command is there.
+    var hooksAvailable: Bool {
+        FileManager.default.isExecutableFile(atPath: HookCatalog.executablePath())
+    }
+
+    /// Entries with another path or from an older build read as outdated.
+    /// They are shown, and rewritten only when the user asks.
+    func refreshHookStatuses() {
+        let next = Dictionary(uniqueKeysWithValues: HookCatalog.entries.map { ($0.id, hookInstaller.status(of: $0)) })
+        if hookStatuses != next { hookStatuses = next }
+    }
+
+    func setHooks(_ entry: HookCatalogEntry, on: Bool) {
+        do {
+            if on {
+                try hookInstaller.install(entry)
+            } else {
+                try hookInstaller.uninstall(entry)
+            }
+            hookErrors[entry.id] = nil
+        } catch {
+            let known = error as? HookInstallError ?? .writeFailed
+            hookErrors[entry.id] = known.message(file: hookInstaller.displayPath(for: entry))
+        }
+        refreshHookStatuses()
     }
 
     // MARK: Quit

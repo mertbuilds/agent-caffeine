@@ -23,7 +23,10 @@ struct PreferencesView: View {
                 .tag(PreferencesTab.general)
             AgentPreferences(
                 settings: $aggregator.settings,
-                foundIDs: Set(aggregator.decision.perAgent.map(\.reading.agentID))
+                foundIDs: Set(aggregator.decision.perAgent.map(\.reading.agentID)),
+                hookRows: HookRowModel.rows(statuses: aggregator.hookStatuses, errors: aggregator.hookErrors),
+                hooksAvailable: aggregator.hooksAvailable,
+                setHooks: aggregator.setHooks
             )
             .tabItem { Label("Agents", systemImage: "terminal") }
             .tag(PreferencesTab.agents)
@@ -51,7 +54,10 @@ struct PreferencesView: View {
         }
         .frame(width: 480, height: 500)
         .tint(.brand)
-        .onAppear { aggregator.refreshHelperStatus() }
+        .onAppear {
+            aggregator.refreshHelperStatus()
+            aggregator.refreshHookStatuses()
+        }
     }
 
     private var aboutSection: some View {
@@ -206,6 +212,14 @@ struct GeneralPreferences: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
             }
+            if !RemoteAccessDetector.detectedTools.isEmpty {
+                Section {
+                    Toggle("Stay awake on power while phone access is on", isOn: $settings.stayAwakeForRemoteAccess)
+                    Text("For Claude Code Remote Control. While the Mac is on power and Remote Control is on, the Mac stays awake, also when no agent works.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+            }
             Section("Let the Mac sleep after") {
                 duration(
                     "An agent finishes", $settings.releaseAfterState,
@@ -249,6 +263,9 @@ struct AgentPreferences: View {
     @Binding var settings: DetectionSettings
     /// `AgentDefinition.id` of the agents that run now.
     let foundIDs: Set<String>
+    var hookRows: [HookRowModel] = []
+    var hooksAvailable = true
+    var setHooks: (HookCatalogEntry, Bool) -> Void = { _, _ in }
     @State private var newName = ""
 
     /// A definition without matchers is a placeholder that finds nothing.
@@ -263,6 +280,9 @@ struct AgentPreferences: View {
                         .foregroundStyle(.secondary)
                 }
                 ForEach(found, id: \.id, content: row)
+            }
+            if !hookRows.isEmpty {
+                HookPreferencesSection(rows: hookRows, available: hooksAvailable, set: setHooks)
             }
             Section("Other agents") {
                 ForEach(Self.definitions.filter { !foundIDs.contains($0.id) }, id: \.id, content: row)
@@ -420,7 +440,10 @@ private struct PreferencesPreview: View {
         TabView {
             GeneralPreferences(mode: $mode, settings: $settings)
                 .tabItem { Label("General", systemImage: "gearshape") }
-            AgentPreferences(settings: $settings, foundIDs: ["claude", "codex-desktop"])
+            AgentPreferences(
+                settings: $settings, foundIDs: ["claude", "codex-desktop"],
+                hookRows: HookRowModel.rows(statuses: ["claude": .installed(version: 1), "codex": .outdated, "droid": .notInstalled])
+            )
                 .tabItem { Label("Agents", systemImage: "terminal") }
             LidClosedPreferences(
                 settings: $settings, helper: helper, canSetUp: true, needsSudoersCleanup: needsSudoersCleanup, error: nil,
