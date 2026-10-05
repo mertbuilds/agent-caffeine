@@ -6,8 +6,20 @@ struct PreferencesView: View {
 
     var body: some View {
         Form {
-            Section("CLI allowlist") {
-                Text("processes whose presence keeps the mac awake")
+            Section("Keep the Mac awake") {
+                Picker("Keep the Mac awake", selection: $aggregator.mode) {
+                    ForEach(AwakeMode.allCases) { Text($0.title).tag($0) }
+                }
+                .pickerStyle(.menu)
+                .labelsHidden()
+                VStack(alignment: .leading, spacing: 6) {
+                    ForEach(AwakeMode.allCases) { Text($0.explanation) }
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            }
+            Section("Agents") {
+                Text("agent caffeine looks for these processes. An agent counts as working while it, or a command it started, uses the CPU, and as idle while it waits at its prompt.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 List {
@@ -24,46 +36,47 @@ struct PreferencesView: View {
                 }
                 .frame(minHeight: 140)
                 HStack {
-                    TextField("process name (e.g. codex)", text: $newEntry)
+                    TextField("Process name, for example codex", text: $newEntry)
                         .textFieldStyle(.roundedBorder)
                         .onSubmit(add)
-                    Button("add", action: add)
+                    Button("Add", action: add)
                         .disabled(newEntry.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
-                Button("restore defaults") {
+                Button("Restore defaults") {
                     aggregator.processes.allowlist = ProcessWatcher.defaultAllowlist
                 }
                 .buttonStyle(.borderless)
             }
-            Section("battery override") {
+            Section("Battery") {
                 if aggregator.battery.sudoersInstalled {
-                    Label("installed — pmset toggled automatically when on battery",
+                    Label("Installed. agent caffeine turns on the pmset override automatically on battery.",
                           systemImage: "checkmark.circle.fill")
                         .foregroundStyle(.green)
-                    Button("uninstall sudoers entry…") { aggregator.battery.uninstall() }
+                    Button("Uninstall sudoers entry…") { aggregator.battery.uninstall() }
                 } else {
-                    Text("by default, macos sleeps the mac when the lid closes on battery — even with caffeinagent active. install a sudoers entry to let caffeinagent run `pmset -b disablesleep` without a password prompt every time.")
+                    Text("On battery, macOS sleeps the Mac when you close the lid, even while agent caffeine is active. Install a sudoers entry to let agent caffeine run `pmset -b disablesleep` without asking for your password each time.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                    Button("install sudoers entry…") { aggregator.battery.install() }
+                    Button("Install sudoers entry…") { aggregator.battery.install() }
                 }
                 if let err = aggregator.battery.lastError {
                     Text(err)
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
-                Text("note: on Apple Silicon, `pmset disablesleep` doesn't always beat clamshell sleep. if your mac still sleeps on battery with the lid closed, the override didn't survive — keep the lid open as a fallback.")
+                Text("Note: on Apple silicon, `pmset disablesleep` does not always prevent clamshell sleep. If your Mac still sleeps on battery with the lid closed, the override did not hold. Keep the lid open as a fallback.")
                     .font(.caption)
                     .foregroundStyle(.tertiary)
             }
-            Section("about") {
-                Text("holds a PreventUserIdleSystemSleep assertion (plus PreventSystemSleep) while an agent is active, so the mac stays awake on both battery and AC — the display may still sleep. on battery, also toggles `pmset -b disablesleep` via sudo if you've installed the sudoers entry above.")
+            Section("About") {
+                Text("While it keeps the Mac awake, agent caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. On battery, it also turns on `pmset -b disablesleep` through sudo if you installed the sudoers entry above.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
-        .frame(width: 440, height: 480)
+        .frame(width: 440, height: 600)
+        .tint(.brand)
     }
 
     private func add() {

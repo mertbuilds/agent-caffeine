@@ -14,6 +14,7 @@ struct MenuBarView: View {
         }
         .padding(12)
         .frame(width: 320)
+        .tint(.brand)
     }
 
     private var header: some View {
@@ -30,43 +31,59 @@ struct MenuBarView: View {
             Text(statusLine)
                 .font(.callout)
                 .foregroundStyle(.secondary)
+            Picker("Keep the Mac awake", selection: $aggregator.mode) {
+                ForEach(AwakeMode.allCases) { Text($0.title).tag($0) }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .controlSize(.small)
+            .fixedSize()
             batteryRow
         }
     }
 
     @ViewBuilder
     private var batteryRow: some View {
-        if PowerSource.isOnBattery() {
+        if aggregator.onBattery {
             if aggregator.battery.sudoersInstalled {
                 if aggregator.battery.overrideActive {
-                    Label("on battery: pmset override active", systemImage: "battery.100.bolt")
+                    Label("On battery: override active", systemImage: "battery.100.bolt")
                         .font(.caption)
                         .foregroundStyle(.green)
                 }
-            } else if aggregator.globalState == .active && aggregator.enabled {
+            } else if aggregator.assertionHeld {
                 HStack(spacing: 6) {
-                    Label("on battery: lid close will sleep this mac", systemImage: "battery.50")
+                    Label("On battery: closing the lid will sleep this Mac", systemImage: "battery.50")
                         .font(.caption)
                         .foregroundStyle(.orange)
                     Spacer()
-                    Button("enable override…") { aggregator.battery.install() }
+                    Button("Turn on override…") { aggregator.battery.install() }
                         .buttonStyle(.borderless)
                         .font(.caption)
                 }
             }
-            if let err = aggregator.battery.lastError {
-                Text(err)
-                    .font(.caption2)
-                    .foregroundStyle(.red)
-                    .lineLimit(3)
-            }
+        }
+        // Shown on AC too: a leftover sleep override keeps the Mac awake anywhere.
+        if let err = aggregator.battery.lastError {
+            Text(err)
+                .font(.caption2)
+                .foregroundStyle(.red)
+                .lineLimit(3)
         }
     }
 
+    // Ticks only while the menu is open, so the times stay current without a
+    // redraw on every poll.
     private var agentList: some View {
+        TimelineView(.periodic(from: .now, by: 5)) { context in
+            agentRows(now: context.date)
+        }
+    }
+
+    private func agentRows(now: Date) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             if aggregator.allAgents.isEmpty {
-                Text("no agents detected")
+                Text("No agents running")
                     .font(.callout)
                     .foregroundStyle(.tertiary)
             } else {
@@ -78,12 +95,12 @@ struct MenuBarView: View {
                         VStack(alignment: .leading, spacing: 0) {
                             Text(agent.label)
                                 .font(.callout)
-                            Text("\(agent.source.rawValue) · \(agent.state.rawValue)")
+                            Text("\(agent.source.rawValue) · \(agent.state.displayName)")
                                 .font(.caption2)
                                 .foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Text(timeAgo(agent.lastActivity))
+                        Text(timeAgo(agent.lastActivity, now: now))
                             .font(.caption2)
                             .foregroundStyle(.tertiary)
                     }
@@ -96,7 +113,7 @@ struct MenuBarView: View {
         HStack {
             settingsButton
             Spacer()
-            Button("quit") { NSApp.terminate(nil) }
+            Button("Quit") { NSApp.terminate(nil) }
                 .buttonStyle(.borderless)
         }
         .font(.callout)
@@ -110,7 +127,7 @@ struct MenuBarView: View {
         if #available(macOS 14.0, *) {
             SettingsOpenButton()
         } else {
-            Button("preferences…") {
+            Button("Preferences…") {
                 NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
                 MenuBarView.bringSettingsFront()
             }
@@ -131,12 +148,11 @@ struct MenuBarView: View {
     }
 
     private var statusLine: String {
-        if !aggregator.enabled { return "paused" }
-        switch aggregator.globalState {
-        case .active: return aggregator.assertionHeld ? "keeping mac awake" : "active (assertion not held)"
-        case .waitingForInput: return "waiting for input — mac may sleep"
-        case .idle: return "idle — mac may sleep"
-        }
+        if !aggregator.enabled { return "Paused" }
+        if aggregator.assertionHeld { return "Keeping the Mac awake" }
+        if aggregator.shouldHold { return "Active, but the Mac may sleep" }
+        if aggregator.allAgents.isEmpty { return "No agent is running. The Mac may sleep" }
+        return "Agents are idle. The Mac may sleep"
     }
 
     private func color(for state: AgentState) -> Color {
@@ -147,8 +163,8 @@ struct MenuBarView: View {
         }
     }
 
-    private func timeAgo(_ date: Date) -> String {
-        let s = Int(Date().timeIntervalSince(date))
+    private func timeAgo(_ date: Date, now: Date) -> String {
+        let s = Int(now.timeIntervalSince(date))
         if s < 5 { return "now" }
         if s < 60 { return "\(s)s" }
         if s < 3600 { return "\(s/60)m" }
@@ -156,12 +172,16 @@ struct MenuBarView: View {
     }
 }
 
+extension Color {
+    static let brand = Color(red: 0.165, green: 0.451, blue: 0.910)
+}
+
 @available(macOS 14.0, *)
 private struct SettingsOpenButton: View {
     @Environment(\.openSettings) private var openSettings
 
     var body: some View {
-        Button("preferences…") {
+        Button("Preferences…") {
             openSettings()
             MenuBarView.bringSettingsFront()
         }

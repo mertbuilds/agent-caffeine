@@ -11,7 +11,7 @@ final class PowerKeeper {
     var held: Bool { isHeld }
 
     // PreventUserIdleSystemSleep is the assertion that actually defeats the
-    // idle-sleep timer on both AC and battery — the same one `caffeinate -i`
+    // idle-sleep timer on both AC and battery, the same one `caffeinate -i`
     // holds. PreventSystemSleep alone (the pre-0.2.3 behavior) is honored only
     // on AC and does NOT stop the user-idle timer, so a plugged-in mac still
     // slept once the agent went quiet. We hold both: the idle assertion keeps

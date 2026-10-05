@@ -2,14 +2,8 @@ import SwiftUI
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    @MainActor static var onTerminate: (() -> Void)?
-
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppRelocator.offerToMoveIfNeeded()
-    }
-
-    func applicationWillTerminate(_ notification: Notification) {
-        AppDelegate.onTerminate?()
     }
 }
 
@@ -21,9 +15,8 @@ struct CaffeinagentApp: App {
     var body: some Scene {
         MenuBarExtra {
             MenuBarView(aggregator: aggregator)
-                .onAppear { wireShutdown() }
         } label: {
-            MenuBarLabel(state: aggregator.globalState, enabled: aggregator.enabled, held: aggregator.assertionHeld)
+            MenuBarLabel(held: aggregator.assertionHeld)
         }
         .menuBarExtraStyle(.window)
 
@@ -31,29 +24,12 @@ struct CaffeinagentApp: App {
             PreferencesView(aggregator: aggregator)
         }
     }
-
-    private func wireShutdown() {
-        let agg = aggregator
-        AppDelegate.onTerminate = { agg.shutdown() }
-    }
 }
 
 struct MenuBarLabel: View {
-    let state: AgentState
-    let enabled: Bool
     let held: Bool
 
     var body: some View {
-        Image(systemName: symbol)
-    }
-
-    private var symbol: String {
-        guard enabled else { return "cup.and.saucer" }
-        if held { return "cup.and.saucer.fill" }
-        switch state {
-        case .active: return "cup.and.saucer.fill"
-        case .waitingForInput: return "cup.and.saucer"
-        case .idle: return "cup.and.saucer"
-        }
+        Image(systemName: held ? "cup.and.saucer.fill" : "cup.and.saucer")
     }
 }

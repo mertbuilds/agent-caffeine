@@ -8,7 +8,7 @@
 #   2. Store notarization credentials once via:
 #        xcrun notarytool store-credentials caffeinagent-notary \
 #          --apple-id "<your-apple-id-email>" \
-#          --team-id "5TC37Z26XP" \
+#          --team-id "3HGP3W3TLD" \
 #          --password "<app-specific-password>"
 #      Generate the app-specific password at appleid.apple.com → Sign-in
 #      & Security → App-Specific Passwords.
@@ -82,7 +82,8 @@ echo "==> build dmg (drag-to-applications)"
 # the layout + background survive even when the build host hasn't granted
 # Automation permissions to whatever process is calling this script.
 RELEASE_DMG="$BUILD_DIR/agent-caffeine-$VERSION-$BUILD.dmg"
-DMGBUILD="${DMGBUILD:-$(command -v dmgbuild || ls "$HOME"/Library/Python/*/bin/dmgbuild 2>/dev/null | sort -V | tail -1)}"
+DMGBUILD="${DMGBUILD:-$(command -v dmgbuild || ls "$HOME"/Library/Python/*/bin/dmgbuild 2>/dev/null | sort -V | tail -1 || true)}"
+[ -x "$DMGBUILD" ] || { echo "error: dmgbuild not found" >&2; exit 1; }
 rm -f "$RELEASE_DMG"
 DMG_APP_PATH="$(pwd)/$DIST_APP" \
 DMG_BACKGROUND="$(pwd)/scripts/dmg-background.png" \

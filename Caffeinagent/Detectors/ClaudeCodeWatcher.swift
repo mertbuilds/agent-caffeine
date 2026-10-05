@@ -76,8 +76,8 @@ final class ClaudeCodeWatcher: ObservableObject {
                 guard let mtime = modificationDate(of: url) else { continue }
                 let age = now.timeIntervalSince(mtime)
                 guard age <= idleWindow else { continue }
-                let parsed = parseTail(of: url)
-                let state = classify(age: age, lastType: parsed.lastType)
+                let parsed = Self.parseTail(of: url)
+                let state = classify(age: age, turnInProgress: parsed.turnInProgress)
                 let label = sessionLabel(project: project, file: url, title: parsed.title)
                 found.append(DetectedAgent(
                     id: url.lastPathComponent,
@@ -91,9 +91,9 @@ final class ClaudeCodeWatcher: ObservableObject {
         agents = found.sorted { $0.lastActivity > $1.lastActivity }
     }
 
-    private func classify(age: TimeInterval, lastType: String?) -> AgentState {
+    private func classify(age: TimeInterval, turnInProgress: Bool) -> AgentState {
         if age < activeWindow { return .active }
-        if lastType == "user" || lastType == "attachment" { return .active }
+        if turnInProgress { return .active }
         return .waitingForInput
     }
 
@@ -101,31 +101,53 @@ final class ClaudeCodeWatcher: ObservableObject {
         (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate
     }
 
-    private struct TailParse {
-        var lastType: String?
+    struct TailParse {
+        var lastTurn: String?
+        var turnInProgress = false
         var title: String?
     }
 
-    /// Reads up to the last ~16KB of a jsonl and pulls out the most recent
-    /// `type` field plus the most recent `ai-title` if either is present.
-    private func parseTail(of url: URL) -> TailParse {
-        var result = TailParse()
-        guard let handle = try? FileHandle(forReadingFrom: url) else { return result }
+    /// Reads the last 16KB of a jsonl. A long last line, such as a big tool
+    /// result, can fill that window, so without a turn in it the last 256KB
+    /// are read before the session counts as waiting.
+    nonisolated static func parseTail(of url: URL) -> TailParse {
+        guard let handle = try? FileHandle(forReadingFrom: url) else { return TailParse() }
         defer { try? handle.close() }
-        guard let size = try? handle.seekToEnd() else { return result }
-        let chunk: UInt64 = 16384
-        let offset = size > chunk ? size - chunk : 0
-        try? handle.seek(toOffset: offset)
-        guard let data = try? handle.readToEnd(), !data.isEmpty else { return result }
-        let text = String(decoding: data, as: UTF8.self)
-        let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
-        for line in lines.reversed() {
-            guard let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any] else { continue }
-            if result.lastType == nil, let t = obj["type"] as? String { result.lastType = t }
-            if result.title == nil, obj["type"] as? String == "ai-title", let t = obj["aiTitle"] as? String { result.title = t }
-            if result.lastType != nil && result.title != nil { break }
+        guard let size = try? handle.seekToEnd() else { return TailParse() }
+        var result = TailParse()
+        for chunk: UInt64 in [16_384, 262_144] {
+            let offset = size > chunk ? size - chunk : 0
+            try? handle.seek(toOffset: offset)
+            guard let data = try? handle.readToEnd(), !data.isEmpty else { return TailParse() }
+            result = parseTail(String(decoding: data, as: UTF8.self))
+            if result.lastTurn != nil || offset == 0 { break }
         }
         return result
+    }
+
+    /// Finds the last user or assistant turn, skipping metadata lines such as
+    /// `system` or `last-prompt`, plus the most recent `ai-title`. The turn is
+    /// in progress after a user message or tool result, or while the assistant
+    /// has a tool call running.
+    nonisolated static func parseTail(_ text: String) -> TailParse {
+        var result = TailParse()
+        let lines = text.split(separator: "\n", omittingEmptySubsequences: true)
+        for line in lines.reversed() {
+            guard let obj = try? JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any],
+                  let type = obj["type"] as? String else { continue }
+            if result.lastTurn == nil, type == "user" || type == "assistant" {
+                result.lastTurn = type
+                result.turnInProgress = type == "user" || hasToolUse(obj["message"])
+            }
+            if result.title == nil, type == "ai-title", let t = obj["aiTitle"] as? String { result.title = t }
+            if result.lastTurn != nil && result.title != nil { break }
+        }
+        return result
+    }
+
+    nonisolated private static func hasToolUse(_ message: Any?) -> Bool {
+        guard let content = (message as? [String: Any])?["content"] as? [[String: Any]] else { return false }
+        return content.contains { $0["type"] as? String == "tool_use" }
     }
 
     private func projectLabel(_ dirName: String) -> String {

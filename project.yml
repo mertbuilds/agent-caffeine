@@ -53,3 +53,24 @@ targets:
         PRODUCT_NAME: caffeinagent
         INFOPLIST_KEY_NSPrincipalClass: NSApplication
         CODE_SIGN_ENTITLEMENTS: Caffeinagent/Caffeinagent.entitlements
+    scheme:
+      testTargets:
+        - CaffeinagentTests
+
+  # Compiles the pure logic files directly instead of loading the app as a
+  # test host, so tests never start the app's power and pmset handling.
+  CaffeinagentTests:
+    type: bundle.unit-test
+    platform: macOS
+    # XCTest itself requires macOS 14.
+    deploymentTarget: "14.0"
+    sources:
+      - CaffeinagentTests
+      - Caffeinagent/Detectors/ProcessWatcher.swift
+      - Caffeinagent/Detectors/ClaudeCodeWatcher.swift
+      - Caffeinagent/Models/AgentState.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.tests
+        GENERATE_INFOPLIST_FILE: YES
+        ENABLE_HARDENED_RUNTIME: NO

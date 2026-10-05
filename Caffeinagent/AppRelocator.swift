@@ -15,19 +15,25 @@ enum AppRelocator {
             return
         }
 
-        // Running from a mounted disk image — the user will eject it after install,
-        // no need to prompt.
+        // Running from a mounted disk image. The user will eject it after install,
+        // so there is no need to prompt.
         if path.hasPrefix("/Volumes/") {
+            return
+        }
+
+        // Gatekeeper runs a quarantined download from a random read-only path,
+        // so the real location is unknown and the original cannot be trashed.
+        if path.contains("/AppTranslocation/") {
             return
         }
 
         if UserDefaults.standard.bool(forKey: declinedKey) { return }
 
         let alert = NSAlert()
-        alert.messageText = "move caffeinagent to /applications?"
-        alert.informativeText = "you’re running caffeinagent from \(bundleURL.deletingLastPathComponent().path). moving it to /applications keeps things tidy and lets future updates land cleanly."
-        alert.addButton(withTitle: "move")
-        alert.addButton(withTitle: "not now")
+        alert.messageText = "Move agent caffeine to Applications?"
+        alert.informativeText = "agent caffeine is running from \(bundleURL.deletingLastPathComponent().path). Move it to the Applications folder so it stays in one place and updates install cleanly."
+        alert.addButton(withTitle: "Move")
+        alert.addButton(withTitle: "Not now")
         alert.alertStyle = .informational
 
         let response = alert.runModal()
@@ -44,13 +50,20 @@ enum AppRelocator {
         let fm = FileManager.default
 
         do {
+            // Copy next to the destination first so an existing install is
+            // only replaced once the new copy is complete.
+            let tempDir = try fm.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: destURL, create: true)
+            let tempURL = tempDir.appendingPathComponent(appName)
+            defer { try? fm.removeItem(at: tempDir) }
+            try fm.copyItem(at: sourceURL, to: tempURL)
             if fm.fileExists(atPath: destURL.path) {
-                try fm.removeItem(at: destURL)
+                _ = try fm.replaceItemAt(destURL, withItemAt: tempURL)
+            } else {
+                try fm.moveItem(at: tempURL, to: destURL)
             }
-            try fm.copyItem(at: sourceURL, to: destURL)
         } catch {
             log.error("relocate failed: \(error.localizedDescription, privacy: .public)")
-            showError("couldn’t write to /applications: \(error.localizedDescription). drag caffeinagent there manually.")
+            showError("agent caffeine could not be copied to the Applications folder: \(error.localizedDescription). Drag it there yourself.")
             return
         }
 
@@ -67,7 +80,7 @@ enum AppRelocator {
 
     private static func showError(_ msg: String) {
         let alert = NSAlert()
-        alert.messageText = "move failed"
+        alert.messageText = "Move failed"
         alert.informativeText = msg
         alert.alertStyle = .warning
         alert.runModal()

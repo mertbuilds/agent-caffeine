@@ -6,22 +6,26 @@
 > `Caffeinagent` identifier purely as a build-system convention; nothing
 > outside the toolchain sees it.
 
-macOS menu bar app that keeps your Mac awake while AI coding agents are running. Releases sleep prevention when agents are idle or waiting for your input, so the Mac can nap when it's safe to.
+macOS menu bar app that keeps your Mac awake while AI coding agents work. By default it releases sleep prevention when agents are idle or waiting for your input, so the Mac can nap when it's safe to.
 
 ## What it does
 
 - Watches `~/.claude/projects/*.jsonl` to detect Claude Code session activity (active turn vs. waiting for input vs. idle).
-- Watches a user-editable CLI allowlist (`codex`, `cursor-agent`, `gemini`, …) for non–Claude Code agents.
-- Holds an `IOPMAssertionTypePreventSystemSleep` while any agent is `active`, releases as soon as everything goes `waitingForInput` or `idle`.
+- Watches a user-editable CLI allowlist (`codex`, `cursor-agent`, `gemini`, …). A matched process counts as working while it and its child processes use at least 3% of one core, plus a two-minute grace period; otherwise it is waiting for input.
+- Three modes, picked in the menu or in Preferences:
+  - Always: keeps the Mac awake until you switch it off, agents or not.
+  - While an agent is open: keeps the Mac awake while any agent is detected, working or idle.
+  - While an agent is working (default): keeps the Mac awake only while an agent is working.
+- While keeping the Mac awake it holds `PreventUserIdleSystemSleep` and `PreventSystemSleep` assertions, and releases them as soon as the mode no longer calls for them.
 - Surfaces state in the menu bar with a coffee-cup icon: filled when keeping the Mac awake, empty when not.
 
 ## macOS limit
 
-`kIOPMAssertionTypePreventSystemSleep` keeps the Mac awake with the **lid closed only on AC power**. On battery, macOS clamshell-sleeps regardless — this is enforced below userland by SMC and can't be overridden from a sandboxed app. A Phase 2 privileged helper that toggles `pmset -b disablesleep` can work around this; not yet implemented.
+`kIOPMAssertionTypePreventSystemSleep` keeps the Mac awake with the **lid closed only on AC power**. On battery, macOS clamshell-sleeps regardless, and an assertion alone can't override that. The optional battery override works around it: install the sudoers entry from Preferences, and while the app keeps the Mac awake on battery it runs `sudo pmset -b disablesleep 1`, then `0` when it stops or quits. On Apple silicon this does not always prevent clamshell sleep.
 
 ## Build
 
-Requires Xcode 16+, macOS 14+ deployment target.
+Requires Xcode 16+, macOS 13+ deployment target.
 
 ```bash
 brew install xcodegen          # one-time
@@ -30,8 +34,10 @@ xcodebuild -project Caffeinagent.xcodeproj -scheme Caffeinagent -configuration D
 open build/Build/Products/Debug/caffeinagent.app
 ```
 
+Run the unit tests with `xcodebuild test -project Caffeinagent.xcodeproj -scheme Caffeinagent -destination 'platform=macOS'`.
+
 ## Roadmap
 
 - [x] Phase 1: AC-only sleep prevention + Claude Code jsonl detector + CLI process detector + menu bar UI + preferences
-- [ ] Phase 2: privileged helper (`SMAppService`) for `pmset disablesleep` battery override
+- [x] Phase 2: battery override through a sudoers entry for `pmset -b disablesleep`
 - [ ] Phase 3: launch-at-login, history log of awake periods, notification on state change
