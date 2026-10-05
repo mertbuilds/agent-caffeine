@@ -119,7 +119,7 @@ final class EvidenceCollector: EvidenceCollecting {
     /// table cannot be read.
     static let heldSamples = 5
 
-    /// One more way to say that remote access is on, next to what
+    /// One more way to say that phone access is on, next to what
     /// `RemoteAccessDetector` finds. Nothing detects SSH or screen sharing yet.
     var remoteAccessProbe: () -> Bool = { false }
 

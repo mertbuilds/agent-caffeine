@@ -13,11 +13,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 @main
 enum Main {
-    /// The lab commands run without the app. Every other launch is the app.
+    /// The lab commands run without the app. A plain launch is the app, and
+    /// anything else is refused, so no command line starts a second copy.
     @MainActor
     static func main() {
-        if LabCommand.run(CommandLine.arguments) { return }
-        CaffeinagentApp.main()
+        switch LaunchArguments.kind(of: CommandLine.arguments) {
+        case .lab:
+            if LabCommand.run(CommandLine.arguments) { return }
+            exit(1)
+        case .refused(let argument):
+            FileHandle.standardError.write(Data("Unknown argument \(argument). The app starts without arguments.\n".utf8))
+            exit(1)
+        case .app:
+            CaffeinagentApp.main()
+        }
     }
 }
 

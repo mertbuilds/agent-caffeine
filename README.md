@@ -12,6 +12,7 @@ macOS menu bar app that keeps your Mac awake while AI coding agents work. By def
 
 - Finds the agents that run on the Mac from the process table and a built-in catalog (Claude Code, Codex, opencode, Antigravity and about 45 more). Preferences has one rule per agent (automatic, always counts as working while open, ignore) and a list for process names of tools that are not in the catalog.
 - Reads what each agent says about itself where it can: Claude Code's session state files and Codex's session logs give working, waiting for you, or idle. Other agents are judged by signs of work: a running command, a background task, a power assertion of their own, writes to their session files and, as weak evidence, processor use.
+- Takes the state from an agent's hooks when you switch them on (see Hooks below). A fresh hook state comes before everything else.
 - Three modes, picked in the menu or in Preferences:
   - Always: keeps the Mac awake until you switch it off, agents or not.
   - While an agent is open: keeps the Mac awake while any agent is detected, working or idle.
@@ -20,13 +21,34 @@ macOS menu bar app that keeps your Mac awake while AI coding agents work. By def
 - Lets the Mac sleep when the battery is low (20 percent by default) or the Mac gets too hot, and says so in a notification.
 - Surfaces state in the menu bar with a robot-head icon: solid and smiling when keeping the Mac awake, outlined with closed eyes when not. The menu names what keeps the Mac awake and lists each agent with its state and the reason.
 
-The detection code is in `Caffeinagent/Detection/`, and the research behind it in `docs/research/`. `caffeinagent --lab-record <label>` records what the engine sees without starting the app (see `Caffeinagent/LabCommand.swift`).
+- On power, stays awake while a tool's phone access is on, also when no agent works (see Phone access below).
+
+The detection code is in `Caffeinagent/Detection/`, and the research behind it in `docs/research/`. `caffeinagent --lab-record <label>` records what the engine sees without starting the app (see `Caffeinagent/LabCommand.swift`). The app binary starts the app only without arguments: the lab commands are the only arguments it takes, and it refuses any other.
+
+## Hooks
+
+Some agents can run a command when their state changes. With hooks on, an agent tells agent caffeine when it works, waits for you or is done, so nothing has to be inferred. Hooks are off until you switch them on, per agent, in Preferences > Agents > Better detection or in the setup window.
+
+- Supported: Claude Code and Codex (adds "waits for your permission"), Droid and opencode (adds working, waiting and done). `Caffeinagent/Detection/Hooks/HookCatalog.swift` holds the list, what each entry was confirmed by, and the agents that are left out and why.
+- Switching hooks on adds a few lines to the agent's own config file (`~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.factory/settings.json`), or writes one plugin file for opencode. The rest of the file stays as it is, a backup is kept next to it, and switching hooks off removes exactly those lines again.
+- The lines run `CaffeinagentHook`, a small command inside the app in `/Applications`, never the app itself. It reads the event, writes one small state file per agent process to `~/Library/Application Support/com.caffeinagent.app/hooks/`, prints nothing and always exits 0. It keeps the state and the name of the event, and nothing you or the agent typed. The app does not have to run, and the lines do nothing when the app is gone.
+- Hooks need the app in `/Applications`, because the lines point there.
+
+## Setup window
+
+The first launch opens a setup window once. It names the agents it found, offers the hooks of the agents that have them, and offers the lid closed helper on a Mac with a battery. Every step can be skipped, and the app works the same while the window is open. Everything in it is also in Preferences.
+
+## Phone access
+
+Claude Code Remote Control lets you work with a session on this Mac from a phone or the web, and that only works while the Mac is awake. With "Stay awake on power while phone access is on" (Preferences > General, on by default), the Mac stays awake on power while Remote Control is on, also when no agent works. The menu then says "Awake: phone access is on". On battery this does not hold the Mac awake.
+
+Remote Control counts as on for a `claude remote-control` server, for a session started with `--remote-control` or `--rc`, and for every interactive session when `remoteControlAtStartup` is true in `~/.claude/settings.json`. A session that turns it on later with `/remote-control` is not seen. No other tool has a detector yet (`Caffeinagent/Detection/RemoteAccessDetector.swift`).
 
 ## Lid closed on battery
 
 `kIOPMAssertionTypePreventSystemSleep` keeps the Mac awake with the **lid closed only on AC power**. On battery, macOS sleeps on lid close regardless, and an assertion alone cannot override that. Only the system-wide `SleepDisabled` setting does, and it needs root.
 
-The app sets it through a small root helper (`CaffeinagentHelper/`), registered with `SMAppService` from Preferences > Lid closed and approved once in System Settings > General > Login Items. The helper is offered only when the app runs from `/Applications`. It takes two booleans over XPC from the signed app and nothing else. The app sets the flag together with the power assertions, also on AC, so unplugging with the lid closed does not race it, and sends a heartbeat. The helper clears the flag when the heartbeats stop, at its own start, and never clears a flag it did not set. `SleepDisabled` also blocks the kernel's low-battery and thermal sleep, which is why the app watches both itself.
+The app sets it through a small root helper (`CaffeinagentHelper/`), registered with `SMAppService` from Preferences > Lid closed and approved once in System Settings > General > Login Items. The helper is offered only when the app runs from `/Applications`. It takes two booleans over XPC from the signed app and nothing else. The app sets the flag together with the power assertions, also on AC, so unplugging with the lid closed does not race it, and sends a heartbeat. The helper clears the flag when the heartbeats stop, at its own start, and when launchd stops it, and never clears a flag it did not set. `SleepDisabled` also blocks the kernel's low-battery and thermal sleep, which is why the app watches both itself.
 
 Builds before the helper used a sudoers entry for `pmset -b disablesleep`. The app clears a flag such a build left on at first launch, and Preferences offers to remove the entry.
 
@@ -61,4 +83,5 @@ The app runs fully for 7 days from its first launch. After that it keeps the Mac
 - [x] Phase 1: AC-only sleep prevention + Claude Code jsonl detector + CLI process detector + menu bar UI + preferences
 - [x] Phase 2: battery override through a sudoers entry for `pmset -b disablesleep`
 - [x] Phase 3: detection engine with an agent catalog, root helper for the lid-closed flag, battery and heat safety stops
-- [ ] Phase 4: onboarding window, agent hooks, remote access detection, launch-at-login
+- [x] Phase 4: setup window, agent hooks, phone access detection
+- [ ] Phase 5: launch-at-login

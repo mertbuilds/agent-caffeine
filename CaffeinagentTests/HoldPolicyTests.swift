@@ -262,10 +262,10 @@ final class HoldPolicyTests: XCTestCase {
         let onPower = FrameContext(onBattery: false, remoteAccessDetected: true)
         let onBattery = FrameContext(onBattery: true, batteryPercent: 80, remoteAccessDetected: true)
         let cases: [(name: String, readings: [AgentReading], mode: AwakeMode, context: FrameContext, hold: Bool, text: String)] = [
-            ("on power, no agent", [], .agentWorking, onPower, true, "Awake: remote access is on"),
-            ("on power, idle agent", [claude(.idle)], .agentWorking, onPower, true, "Awake: remote access is on"),
+            ("on power, no agent", [], .agentWorking, onPower, true, "Awake: phone access is on"),
+            ("on power, idle agent", [claude(.idle)], .agentWorking, onPower, true, "Awake: phone access is on"),
             ("on power, working agent", [claude(.working)], .agentWorking, onPower, true, "Awake: Claude Code is working"),
-            ("on power, open mode", [], .agentOpen, onPower, true, "Awake: remote access is on"),
+            ("on power, open mode", [], .agentOpen, onPower, true, "Awake: phone access is on"),
             ("on battery, no agent", [], .agentWorking, onBattery, false, "Mac can sleep: no agent is open"),
             ("on battery, idle agent", [claude(.idle)], .agentWorking, onBattery, false, "Mac can sleep: Claude Code is idle"),
             ("on battery, working agent", [claude(.working)], .agentWorking, onBattery, true, "Awake: Claude Code is working"),
@@ -351,7 +351,7 @@ final class HoldPolicyTests: XCTestCase {
             (.open(.one("Antigravity")), "Awake: Antigravity is open"),
             (.open(.many(4)), "Awake: 4 agents are open"),
             (.alwaysOn, "Awake: always on"),
-            (.remoteAccess, "Awake: remote access is on"),
+            (.remoteAccess, "Awake: phone access is on"),
             (.idle(.one("opencode")), "Mac can sleep: opencode is idle"),
             (.idle(.many(2)), "Mac can sleep: all agents are idle"),
             (.waitingReleased(.one("Codex")), "Mac can sleep: Codex waits for you"),
