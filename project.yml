@@ -114,6 +114,13 @@ targets:
         codeSign: true
         copy:
           destination: executables
+      # The command the agents' hooks run. The hook entries point at it in
+      # Contents/MacOS of the copy in /Applications.
+      - target: CaffeinagentHook
+        embed: true
+        codeSign: true
+        copy:
+          destination: executables
     scheme:
       testTargets:
         - CaffeinagentTests
@@ -135,6 +142,30 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.app.helper
         PRODUCT_NAME: CaffeinagentHelper
+        GENERATE_INFOPLIST_FILE: YES
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        CODE_SIGN_ENTITLEMENTS: CaffeinagentHelper/CaffeinagentHelper.entitlements
+        SKIP_INSTALL: YES
+
+  # The hook command: it starts in a few milliseconds, where the app binary
+  # with SwiftUI and Sparkle would not, so it is a tool of its own. It
+  # shares the event table, the state file and the process matching with
+  # the app.
+  CaffeinagentHook:
+    type: tool
+    platform: macOS
+    sources:
+      - CaffeinagentHook
+      - Caffeinagent/Detection/Hooks/HookEvents.swift
+      - Caffeinagent/Detection/Hooks/HookStateFile.swift
+      - Caffeinagent/Detection/Hooks/HookCommand.swift
+      - Caffeinagent/Detection/ReportedState.swift
+      - Caffeinagent/Detection/AgentCatalog.swift
+      - Caffeinagent/Detection/ProcessCensus.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.app.hook
+        PRODUCT_NAME: CaffeinagentHook
         GENERATE_INFOPLIST_FILE: YES
         CREATE_INFOPLIST_SECTION_IN_BINARY: YES
         CODE_SIGN_ENTITLEMENTS: CaffeinagentHelper/CaffeinagentHelper.entitlements

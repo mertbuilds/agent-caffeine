@@ -239,6 +239,36 @@ final class SystemProcessCensus: ProcessCensusing {
         return rows
     }
 
+    /// One process, for a caller that walks up from a pid. The usage
+    /// counters are left at zero. Nil when the process is gone or belongs to
+    /// another user.
+    static func row(of pid: Int32) -> ProcessInfoRow? {
+        var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_PID, pid]
+        var entry = kinfo_proc()
+        var size = MemoryLayout<kinfo_proc>.stride
+        guard sysctl(&mib, 4, &entry, &size, nil, 0) == 0, size > 0, entry.kp_proc.p_pid == pid else { return nil }
+        var pathBuffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        guard let path = executablePath(of: pid, buffer: &pathBuffer) else { return nil }
+        var argumentBuffer = [UInt8](repeating: 0, count: argumentBufferSize)
+        let start = entry.kp_proc.p_un.__p_starttime
+        return ProcessInfoRow(
+            pid: pid,
+            ppid: entry.kp_eproc.e_ppid,
+            startTime: TimeInterval(start.tv_sec) + TimeInterval(start.tv_usec) / 1_000_000,
+            executablePath: path,
+            arguments: arguments(of: pid, buffer: &argumentBuffer),
+            uid: entry.kp_eproc.e_ucred.cr_uid,
+            tty: entry.kp_eproc.e_tdev,
+            pgid: entry.kp_eproc.e_pgid,
+            tpgid: entry.kp_eproc.e_tpgid,
+            cpuTime: 0,
+            energyNanojoules: nil,
+            instructions: nil,
+            logicalWriteBytes: nil,
+            wakeups: nil
+        )
+    }
+
     private struct ResourceUsage {
         let cpuTime: TimeInterval
         let energyNanojoules: UInt64?
