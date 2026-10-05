@@ -72,12 +72,22 @@ struct PreferencesView: View {
                 Text("While it keeps the Mac awake, agent caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. On battery, it also turns on `pmset -b disablesleep` through sudo if you installed the sudoers entry above.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text("Built by")
+                        .foregroundStyle(.secondary)
+                    Link("mertbuilds.com", destination: Self.builderURL)
+                }
+                .font(.callout)
             }
         }
         .formStyle(.grouped)
         .frame(width: 440, height: 600)
         .tint(.brand)
     }
+
+    private static let builderURL = URL(
+        string: "https://mertbuilds.com/?utm_source=agent-caffeine-app&utm_medium=app&utm_campaign=about"
+    )!
 
     private func add() {
         let trimmed = newEntry.trimmingCharacters(in: .whitespaces)
