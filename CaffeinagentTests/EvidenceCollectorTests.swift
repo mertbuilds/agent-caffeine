@@ -270,29 +270,49 @@ final class EvidenceCollectorTests: XCTestCase {
             XCTAssertEqual(held.roots, before.roots)
             XCTAssertEqual(held.watchedFiles, [session])
         }
-        XCTAssertEqual(sample(at: 14).frame.agents, [], "A table that stays unreadable counts as empty in the end")
+        // Samples that events ask for come 0.2 seconds apart. A count of
+        // five samples was over after one second.
+        for seconds in stride(from: 12.2, through: 14, by: 0.2) {
+            XCTAssertEqual(sample(at: seconds).frame.agents.map(\.pid), [100], "at \(seconds) s")
+        }
+        // The battery and the heat are read on a held sample too.
+        collector.remoteAccessProbe = { true }
+        power.value = FrameContext(onBattery: true, batteryPercent: 9, thermalState: ProcessInfo.ThermalState.critical.rawValue)
+        let last = sample(at: 32)
+        XCTAssertEqual(last.frame.agents.map(\.pid), [100], "30 seconds after the last good read")
+        XCTAssertEqual(last.frame.context, power.value, "Phone access is read from the table and stays as it was")
+        collector.remoteAccessProbe = { false }
+        power.value = FrameContext()
+        XCTAssertEqual(sample(at: 34).frame.agents, [], "A table that stays unreadable counts as empty in the end")
 
         census.unreadable = false
         census.rows = [claude(100, cpu: 9)]
-        let back = try XCTUnwrap(sample(at: 16).frame.agents.first)
+        let back = try XCTUnwrap(sample(at: 36).frame.agents.first)
         XCTAssertEqual(back.reported?.state, .working)
-        XCTAssertEqual(back.sampleInterval, 0, "After 14 seconds without a table the sample is a first one")
+        XCTAssertEqual(back.sampleInterval, 0, "After an empty table the sample is a first one")
 
         // One failure between two good samples: the CPU of both intervals lands in the next one.
         census.rows = [claude(100, cpu: 10)]
-        _ = sample(at: 18)
+        _ = sample(at: 38)
         census.unreadable = true
-        XCTAssertEqual(sample(at: 20).frame.agents.count, 1)
+        XCTAssertEqual(sample(at: 40).frame.agents.count, 1)
         census.unreadable = false
         census.rows = [claude(100, cpu: 12)]
-        let next = try XCTUnwrap(sample(at: 22).frame.agents.first)
+        let next = try XCTUnwrap(sample(at: 42).frame.agents.first)
         XCTAssertEqual(next.sampleInterval, 4)
         XCTAssertEqual(next.subtreeCPUSeconds, 2, accuracy: 0.0001)
 
         // With no frame to keep, an unreadable table gives an empty frame.
         collector = EvidenceCollector(sources: sources)
         census.unreadable = true
-        XCTAssertEqual(sample(at: 24).frame.agents, [])
+        XCTAssertEqual(sample(at: 44).frame.agents, [])
+
+        // The clock was set back while the table could not be read: no frame is kept by a date.
+        census.unreadable = false
+        _ = sample(at: 46)
+        census.unreadable = true
+        XCTAssertEqual(sample(at: 48).frame.agents.count, 1)
+        XCTAssertEqual(sample(at: -3000).frame.agents, [])
     }
 
     func testTranscriptIsReadOnlyWithoutASessionFile() throws {

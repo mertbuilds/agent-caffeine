@@ -119,9 +119,10 @@ final class EvidenceCollector: EvidenceCollecting {
     /// listed again to find a new file.
     static let listingAge: TimeInterval = 5
     static let codexIDs: Set<String> = ["codex", "codex-desktop"]
-    /// How many samples in a row keep the previous frame while the process
-    /// table cannot be read.
-    static let heldSamples = 5
+    /// For how long after the last good read the previous frame is kept
+    /// while the process table cannot be read. A time and not a count of
+    /// samples: an event brings a sample 0.2 seconds after the one before.
+    static let heldSeconds: TimeInterval = 30
 
     /// One more way to say that phone access is on, next to what
     /// `RemoteAccessDetector` finds. Nothing detects SSH or screen sharing yet.
@@ -146,7 +147,7 @@ final class EvidenceCollector: EvidenceCollecting {
     private var matchUserNames: [String] = []
     private var previous: SampleTime?
     private var lastSample: EvidenceSample?
-    private var unreadableTables = 0
+    private var lastReadableAt: SampleTime?
     private var previousRows: [ProcessIdentity: ProcessInfoRow] = [:]
     private var childWindows: [ProcessIdentity: [CPUSample]] = [:]
     private var sessionFiles = FileCache<ClaudeSessionState>()
@@ -214,23 +215,29 @@ final class EvidenceCollector: EvidenceCollecting {
         claudeSettingsFiles.endSample()
         sample.cost = TimeInterval(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
         lastSample = sample
-        unreadableTables = 0
+        lastReadableAt = time
         return sample
     }
 
     /// The process table could not be read. That says nothing about the
     /// agents, so the previous frame stands for this sample, with the new
-    /// time and no CPU numbers. Nil means: go on with what was kept in
-    /// `lastSample`. After `heldSamples` failures in a row the table counts
-    /// as empty, and the empty table is returned.
+    /// time, the power state of now and no CPU numbers. Nil means: go on
+    /// with what was kept in `lastSample`. `heldSeconds` after the last
+    /// good read the table counts as empty, and the empty table is
+    /// returned.
     private func unreadableTable(time: SampleTime, started: UInt64) -> [ProcessInfoRow]? {
-        unreadableTables += 1
-        guard unreadableTables <= Self.heldSamples, var sample = lastSample else {
+        let held = lastReadableAt.map { SampleGap.interval(from: $0, to: time) }
+        guard let held, held >= 0, held <= Self.heldSeconds, var sample = lastSample else {
             lastSample = nil
             return []
         }
         sample.frame.at = time.at
         sample.frame.awake = time.awake
+        // The battery and the heat do not wait for the table. Phone access
+        // is read from the table, so it stays as it was.
+        var context = sources.power.context()
+        context.remoteAccessDetected = sample.frame.context.remoteAccessDetected
+        sample.frame.context = context
         for index in sample.frame.agents.indices {
             sample.frame.agents[index].sampleInterval = 0
             sample.frame.agents[index].subtreeCPUSeconds = 0
