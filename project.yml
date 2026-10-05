@@ -46,6 +46,13 @@ targets:
         type: folder
       - path: THIRD_PARTY_NOTICES.md
         buildPhase: resources
+      # The launchd plist of the root helper. SMAppService.daemon(plistName:)
+      # looks for it in Contents/Library/LaunchDaemons.
+      - path: CaffeinagentHelper/com.caffeinagent.app.helper.plist
+        buildPhase:
+          copyFiles:
+            destination: wrapper
+            subpath: Contents/Library/LaunchDaemons
     info:
       path: Caffeinagent/Info.plist
       properties:
@@ -100,9 +107,38 @@ targets:
           done
     dependencies:
       - package: Sparkle
+      # Lands in Contents/MacOS, where the BundleProgram key of the launchd
+      # plist points, and is signed on copy with the app's identity.
+      - target: CaffeinagentHelper
+        embed: true
+        codeSign: true
+        copy:
+          destination: executables
     scheme:
       testTargets:
         - CaffeinagentTests
+
+  # Root daemon that sets and clears SleepDisabled. The app registers it
+  # through SMAppService and talks to it over XPC. The Info.plist goes into
+  # the binary, so the signature carries the bundle id the app requires. The
+  # empty entitlements file stops Xcode from adding an application identifier
+  # entitlement, which macOS refuses on a binary without a provisioning profile.
+  CaffeinagentHelper:
+    type: tool
+    platform: macOS
+    sources:
+      - path: CaffeinagentHelper
+        excludes:
+          - "*.plist"
+      - Caffeinagent/Power/SleepFlagHelperProtocol.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.app.helper
+        PRODUCT_NAME: CaffeinagentHelper
+        GENERATE_INFOPLIST_FILE: YES
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        CODE_SIGN_ENTITLEMENTS: CaffeinagentHelper/CaffeinagentHelper.entitlements
+        SKIP_INSTALL: YES
 
   # Compiles the pure logic files directly instead of loading the app as a
   # test host, so tests never start the app's power and pmset handling.
@@ -122,6 +158,11 @@ targets:
       - Caffeinagent/License/LicenseConfig.swift
       - Caffeinagent/License/LicenseManager.swift
       - Caffeinagent/License/LicenseStore.swift
+      - Caffeinagent/Power/SafetyMonitor.swift
+      - Caffeinagent/Power/SleepFlagController.swift
+      - Caffeinagent/Power/SleepFlagHelperProtocol.swift
+      - CaffeinagentHelper/HelperCore.swift
+      - CaffeinagentHelper/SleepFlagWatchdog.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.tests
