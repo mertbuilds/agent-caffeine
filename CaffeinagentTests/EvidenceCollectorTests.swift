@@ -2,7 +2,8 @@ import XCTest
 
 private final class FakeCensus: ProcessCensusing {
     var rows: [ProcessInfoRow] = []
-    func snapshot() -> [ProcessInfoRow] { rows }
+    var unreadable = false
+    func snapshot() -> [ProcessInfoRow]? { unreadable ? nil : rows }
 }
 
 private final class FakeAssertions: PowerAssertionListing {
@@ -236,6 +237,62 @@ final class EvidenceCollectorTests: XCTestCase {
         let sample = sample(at: 0)
         XCTAssertEqual(sample.frame.agents.map(\.pid), [31])
         XCTAssertNil(sample.frame.agents.first?.reported)
+    }
+
+    /// A status this build does not know is no state. It must not read as
+    /// idle: the verdict then goes by the signs of activity.
+    func testUnknownClaudeStatusIsNoState() throws {
+        census.rows = [claude(100)]
+        try writeSession(100, status: "compacting")
+        let agent = try XCTUnwrap(sample(at: 0).frame.agents.first)
+        XCTAssertNil(agent.reported)
+        var evidence = agent
+        evidence.busyChildCommands = 1
+        let (verdict, _) = VerdictRules.verdict(for: evidence, memory: AgentMemory(), settings: DetectionSettings(), now: at(0))
+        XCTAssertEqual(verdict, AgentVerdict(state: .working, confidence: .inferredStrong, reason: .runningCommand(1)))
+    }
+
+    /// A failed read of the process table is not "every agent is gone".
+    func testUnreadableProcessTableKeepsThePreviousFrame() throws {
+        census.rows = [claude(100, cpu: 5)]
+        let session = try writeSession(100, status: "busy")
+        let before = sample(at: 0)
+        census.rows = [claude(100, cpu: 6)]
+        XCTAssertEqual(sample(at: 2).frame.agents.first?.subtreeCPUSeconds, 1)
+
+        census.unreadable = true
+        for seconds in stride(from: 4.0, through: 12, by: 2) {
+            let held = sample(at: seconds)
+            XCTAssertEqual(held.frame.at, at(seconds))
+            XCTAssertEqual(held.frame.agents.map(\.pid), [100], "at \(seconds) s")
+            XCTAssertEqual(held.frame.agents.first?.reported?.state, .working)
+            XCTAssertEqual(held.frame.agents.first?.sampleInterval, 0, "No CPU number for a sample that read nothing")
+            XCTAssertEqual(held.roots, before.roots)
+            XCTAssertEqual(held.watchedFiles, [session])
+        }
+        XCTAssertEqual(sample(at: 14).frame.agents, [], "A table that stays unreadable counts as empty in the end")
+
+        census.unreadable = false
+        census.rows = [claude(100, cpu: 9)]
+        let back = try XCTUnwrap(sample(at: 16).frame.agents.first)
+        XCTAssertEqual(back.reported?.state, .working)
+        XCTAssertEqual(back.sampleInterval, 0, "After 14 seconds without a table the sample is a first one")
+
+        // One failure between two good samples: the CPU of both intervals lands in the next one.
+        census.rows = [claude(100, cpu: 10)]
+        _ = sample(at: 18)
+        census.unreadable = true
+        XCTAssertEqual(sample(at: 20).frame.agents.count, 1)
+        census.unreadable = false
+        census.rows = [claude(100, cpu: 12)]
+        let next = try XCTUnwrap(sample(at: 22).frame.agents.first)
+        XCTAssertEqual(next.sampleInterval, 4)
+        XCTAssertEqual(next.subtreeCPUSeconds, 2, accuracy: 0.0001)
+
+        // With no frame to keep, an unreadable table gives an empty frame.
+        collector = EvidenceCollector(sources: sources)
+        census.unreadable = true
+        XCTAssertEqual(sample(at: 24).frame.agents, [])
     }
 
     func testTranscriptIsReadOnlyWithoutASessionFile() throws {

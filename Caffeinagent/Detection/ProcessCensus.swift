@@ -43,7 +43,9 @@ struct ProcessInfoRow: Equatable {
 }
 
 protocol ProcessCensusing {
-    func snapshot() -> [ProcessInfoRow]
+    /// Nil when the process table could not be read. That is not the same
+    /// as a table with no agent in it.
+    func snapshot() -> [ProcessInfoRow]?
 }
 
 /// What a set of processes used between two snapshots.
@@ -192,11 +194,11 @@ final class SystemProcessCensus: ProcessCensusing {
     private let lock = NSLock()
     private var images: [Int32: Image] = [:]
 
-    func snapshot() -> [ProcessInfoRow] {
+    func snapshot() -> [ProcessInfoRow]? {
         lock.lock()
         defer { lock.unlock() }
         let uid = getuid()
-        let table = Self.processTable()
+        guard let table = Self.processTable() else { return nil }
         var rows: [ProcessInfoRow] = []
         rows.reserveCapacity(table.count)
         var alive: [Int32: Image] = [:]
@@ -309,24 +311,25 @@ final class SystemProcessCensus: ProcessCensusing {
     }()
 
     /// Every process, from one `sysctl KERN_PROC_ALL`. The table can grow
-    /// between asking for its size and reading it, so there is slack and a retry.
-    private static func processTable() -> [kinfo_proc] {
+    /// between asking for its size and reading it, so there is slack and a
+    /// retry. Nil when the kernel gives no table.
+    private static func processTable() -> [kinfo_proc]? {
         var mib: [Int32] = [CTL_KERN, KERN_PROC, KERN_PROC_ALL]
         let stride = MemoryLayout<kinfo_proc>.stride
         for _ in 0..<3 {
             var size = 0
-            guard sysctl(&mib, 3, nil, &size, nil, 0) == 0 else { return [] }
+            guard sysctl(&mib, 3, nil, &size, nil, 0) == 0 else { return nil }
             let capacity = size / stride + 64
             var table = [kinfo_proc](repeating: kinfo_proc(), count: capacity)
             var used = capacity * stride
             let result = table.withUnsafeMutableBytes { sysctl(&mib, 3, $0.baseAddress, &used, nil, 0) }
             if result == 0 {
                 table.removeLast(capacity - min(capacity, used / stride))
-                return table
+                return table.isEmpty ? nil : table
             }
-            guard errno == ENOMEM else { return [] }
+            guard errno == ENOMEM else { return nil }
         }
-        return []
+        return nil
     }
 
     private static func readUsage(of pid: Int32, flavor: Int32, into info: inout rusage_info_v6) -> Bool {

@@ -115,6 +115,9 @@ final class EvidenceCollector: EvidenceCollecting {
     /// listed again to find a new file.
     static let listingAge: TimeInterval = 5
     static let codexIDs: Set<String> = ["codex", "codex-desktop"]
+    /// How many samples in a row keep the previous frame while the process
+    /// table cannot be read.
+    static let heldSamples = 5
 
     /// One more way to say that remote access is on, next to what
     /// `RemoteAccessDetector` finds. Nothing detects SSH or screen sharing yet.
@@ -138,6 +141,8 @@ final class EvidenceCollector: EvidenceCollecting {
     private var matchCache: [Int32: MatchEntry] = [:]
     private var matchUserNames: [String] = []
     private var previousAt: Date?
+    private var lastSample: EvidenceSample?
+    private var unreadableTables = 0
     private var previousRows: [ProcessIdentity: ProcessInfoRow] = [:]
     private var childWindows: [ProcessIdentity: [CPUSample]] = [:]
     private var sessionFiles = FileCache<ClaudeSessionState>()
@@ -161,7 +166,9 @@ final class EvidenceCollector: EvidenceCollecting {
     func collect(userNames: [String] = []) -> EvidenceSample {
         let started = DispatchTime.now().uptimeNanoseconds
         let now = sources.now()
-        let snapshot = sources.census.snapshot()
+        guard let snapshot = sources.census.snapshot() ?? unreadableTable(now: now, started: started) else {
+            return lastSample ?? EvidenceSample(frame: EvidenceFrame(at: now, agents: []))
+        }
         let matches = currentMatches(in: snapshot, userNames: userNames)
         let instances = sources.catalog.instances(in: snapshot, matches: matches)
         let asserting = instances.isEmpty ? [] : sources.assertions.assertingPIDs()
@@ -199,7 +206,32 @@ final class EvidenceCollector: EvidenceCollecting {
         rolloutTails.endSample()
         claudeSettingsFiles.endSample()
         sample.cost = TimeInterval(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
+        lastSample = sample
+        unreadableTables = 0
         return sample
+    }
+
+    /// The process table could not be read. That says nothing about the
+    /// agents, so the previous frame stands for this sample, with the new
+    /// time and no CPU numbers. Nil means: go on with what was kept in
+    /// `lastSample`. After `heldSamples` failures in a row the table counts
+    /// as empty, and the empty table is returned.
+    private func unreadableTable(now: Date, started: UInt64) -> [ProcessInfoRow]? {
+        unreadableTables += 1
+        guard unreadableTables <= Self.heldSamples, var sample = lastSample else {
+            lastSample = nil
+            return []
+        }
+        sample.frame.at = now
+        for index in sample.frame.agents.indices {
+            sample.frame.agents[index].sampleInterval = 0
+            sample.frame.agents[index].subtreeCPUSeconds = 0
+            sample.frame.agents[index].energyNanojoules = nil
+            sample.frame.agents[index].logicalWriteBytes = nil
+        }
+        sample.cost = TimeInterval(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
+        lastSample = sample
+        return nil
     }
 
     private func context(snapshot: [ProcessInfoRow], matches: [Int32: AgentMatch]) -> FrameContext {

@@ -212,7 +212,7 @@ final class ProcessCensusTests: XCTestCase {
         } while usage.ru_utime.tv_sec == 0 && usage.ru_utime.tv_usec < 300_000
         XCTAssertNotEqual(sink, 1)
 
-        let rows = SystemProcessCensus().snapshot()
+        let rows = try XCTUnwrap(SystemProcessCensus().snapshot())
         getrusage(RUSAGE_SELF, &usage)
         let expected = TimeInterval(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec)
             + TimeInterval(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1_000_000
@@ -264,12 +264,12 @@ final class ProcessCensusTests: XCTestCase {
 
         let census = SystemProcessCensus()
         // The spawn returns before the exec is done.
-        XCTAssertTrue(wait { census.snapshot().contains { $0.pid == pid && $0.executablePath == "/bin/sleep" } })
+        XCTAssertTrue(wait { (census.snapshot() ?? []).contains { $0.pid == pid && $0.executablePath == "/bin/sleep" } })
         XCTAssertNotNil(SystemProcessCensus.row(of: pid))
 
         kill(pid, SIGKILL)
         XCTAssertTrue(wait { status() == SZOMB }, "The child is a zombie until it is reaped")
-        XCTAssertFalse(census.snapshot().contains { $0.pid == pid })
+        XCTAssertFalse((census.snapshot() ?? []).contains { $0.pid == pid })
         XCTAssertNil(SystemProcessCensus.row(of: pid))
         XCTAssertEqual(status(), SZOMB, "Still not reaped after the snapshot")
     }
@@ -282,9 +282,9 @@ final class ProcessCensusTests: XCTestCase {
         }
         let census = SystemProcessCensus()
         // The first snapshot reads the path and argv of every process.
-        let first = time { census.snapshot().count }
+        let first = time { census.snapshot()?.count ?? 0 }
         var times: [TimeInterval] = []
-        for _ in 0..<20 { times.append(time { census.snapshot().count }.seconds) }
+        for _ in 0..<20 { times.append(time { census.snapshot()?.count ?? 0 }.seconds) }
         times.sort()
         let median = times[times.count / 2]
         print(String(format: "census: %d rows, first %.2f ms, then median %.2f ms, min %.2f ms, max %.2f ms", first.count, first.seconds * 1000, median * 1000, times[0] * 1000, times[times.count - 1] * 1000))
@@ -299,8 +299,8 @@ final class ProcessCensusTests: XCTestCase {
 
     func testSecondSnapshotKeepsPathAndArguments() throws {
         let census = SystemProcessCensus()
-        let first = try XCTUnwrap(census.snapshot().first { $0.pid == getpid() })
-        let second = try XCTUnwrap(census.snapshot().first { $0.pid == getpid() })
+        let first = try XCTUnwrap(census.snapshot()?.first { $0.pid == getpid() })
+        let second = try XCTUnwrap(census.snapshot()?.first { $0.pid == getpid() })
         XCTAssertEqual(second.identity, first.identity)
         XCTAssertEqual(second.executablePath, first.executablePath)
         XCTAssertEqual(second.arguments, ProcessInfo.processInfo.arguments)
