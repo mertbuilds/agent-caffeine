@@ -1,0 +1,343 @@
+import Foundation
+
+/// The one vocabulary for what an agent is doing. It is the same three
+/// states the agents report about themselves, so a reported state needs no
+/// mapping.
+typealias WorkState = ReportedState
+
+struct AgentVerdict: Equatable {
+    enum Confidence: Equatable {
+        /// The agent said so itself (state file, session log or hook), or
+        /// the user's rule decides.
+        case reported
+        /// A sign that only work produces: a busy command, a background
+        /// job, a sleep assertion of its own, a session-file write.
+        case inferredStrong
+        /// CPU use alone, or no sign at all.
+        case inferredWeak
+    }
+
+    var state: WorkState
+    var confidence: Confidence
+    var reason: VerdictReason
+}
+
+enum VerdictReason: Equatable {
+    case reportsBusy
+    case runningCommand(Int)
+    case backgroundJob(Int)
+    case holdsSleepAssertion
+    case writingSessionFile(secondsAgo: Int)
+    /// A command, a background job or a sleep assertion ended a short time ago.
+    case workedRecently(secondsAgo: Int)
+    case cpuActivity
+    case asksPermission
+    case atPrompt
+    case noActivity(minutes: Int)
+    /// CPU use was the only sign for longer than the cap.
+    case onlyWeakSigns(minutes: Int)
+    case alwaysWorkingByRule
+    case ignoredByRule
+
+    /// One line for the menu, below the agent's name.
+    var text: String {
+        switch self {
+        case .reportsBusy: return "Working on a task"
+        case .runningCommand(let count): return "Running \(Self.counted(count, "command"))"
+        case .backgroundJob(let count): return "Running \(Self.counted(count, "background task"))"
+        case .holdsSleepAssertion: return "Asks the Mac to stay awake"
+        case .writingSessionFile(let seconds): return "Wrote to its session \(Self.ago(seconds))"
+        case .workedRecently(let seconds): return "Worked \(Self.ago(seconds))"
+        case .cpuActivity: return "Uses the processor"
+        case .asksPermission: return "Waits for your answer"
+        case .atPrompt: return "Ready for your next message"
+        case .noActivity(let minutes): return minutes < 1 ? "No activity" : "No activity for \(Self.counted(minutes, "minute"))"
+        case .onlyWeakSigns(let minutes): return "No clear sign of work for \(Self.counted(minutes, "minute"))"
+        case .alwaysWorkingByRule: return "Counts as working while it is open"
+        case .ignoredByRule: return "Ignored by agent caffeine"
+        }
+    }
+
+    private static func counted(_ count: Int, _ noun: String) -> String {
+        count == 1 ? "1 \(noun)" : "\(count) \(noun)s"
+    }
+
+    private static func ago(_ seconds: Int) -> String {
+        seconds < 60 ? "a moment ago" : "\(counted(seconds / 60, "minute")) ago"
+    }
+}
+
+/// What has to last from one sample to the next for one agent instance.
+struct AgentMemory: Equatable {
+    struct CPUSample: Equatable {
+        var at: Date
+        var cpuSeconds: Double
+        var interval: TimeInterval
+    }
+
+    var firstSeenAt: Date?
+    var lastCommandAt: Date?
+    var lastBackgroundJobAt: Date?
+    var lastAssertionAt: Date?
+    var lastFileWriteAt: Date?
+    /// The last time the CPU rule held, not the last hot sample.
+    var lastCPUAt: Date?
+    /// When CPU use became the only sign of work.
+    var weakOnlySince: Date?
+    /// Set when the cap ran out. Only a strong sign clears it.
+    var weakCapped = false
+    var lastReport: StateReport?
+    var lastReportSeenAt: Date?
+    /// The samples of the last `cpuWindow * cpuWindowCount` seconds.
+    var cpuSamples: [CPUSample] = []
+
+    var lastStrongAt: Date? {
+        [lastCommandAt, lastBackgroundJobAt, lastAssertionAt, lastFileWriteAt].compactMap { $0 }.max()
+    }
+}
+
+/// An instance together with its verdict: what `HoldPolicy` decides on.
+struct AgentReading: Equatable {
+    var agentID: String
+    var displayName: String
+    var level: AgentDefinition.Level
+    var kind: AgentDefinition.Kind
+    var identity: ProcessIdentity
+    var hasLiveSession: Bool
+    var verdict: AgentVerdict
+
+    init(agentID: String, displayName: String, level: AgentDefinition.Level, kind: AgentDefinition.Kind = .cli,
+         identity: ProcessIdentity, hasLiveSession: Bool = false, verdict: AgentVerdict) {
+        self.agentID = agentID
+        self.displayName = displayName
+        self.level = level
+        self.kind = kind
+        self.identity = identity
+        self.hasLiveSession = hasLiveSession
+        self.verdict = verdict
+    }
+
+    init(evidence: AgentEvidence, verdict: AgentVerdict) {
+        self.init(agentID: evidence.agentID, displayName: evidence.displayName, level: evidence.level, kind: evidence.kind,
+                  identity: evidence.identity, hasLiveSession: evidence.hasLiveSession, verdict: verdict)
+    }
+}
+
+/// Turns evidence into a state. Pure: the caller keeps the memory and
+/// passes the time.
+///
+/// The sources, most trusted first:
+/// 1. a fresh hook state,
+/// 2. the reported state (state file or session log),
+/// 3. strong signs: a busy command, a working background job, a sleep
+///    assertion of the agent's own, a session-file write,
+/// 4. weak signs: CPU use.
+/// A reported state beats weak signs in both directions. A reported idle or
+/// waiting does not beat a busy command or a working background job: a turn
+/// that ended is not work that ended.
+enum VerdictRules {
+    // All numbers below are from docs/research/04-experiments.md, 5 second
+    // windows, percent of one core.
+    //
+    // CPU is weak evidence only. The old rule (3 percent in one window)
+    // missed 45 percent of busy Claude windows and still flagged 2.5 percent
+    // of idle ones. At 2 percent the sweep missed 0 percent of busy windows
+    // (busy was 2.0 to 12.2) and flagged 4.9 percent of idle windows, so one
+    // window proves nothing and the rule asks for 3 hot windows of the last
+    // 6 (30 seconds). Idle windows had median 0.4 and p90 0.6; opencode
+    // streamed text at 14.2 to 15.1. A start-up burst (48 to 125 percent,
+    // seen for about a second) fills at most 2 windows and does not count.
+    //
+    // CPU cannot see a quiet tool call or a model wait on any agent (Codex
+    // 0.0 to 1.9, opencode 0.4 to 1.1, claude -p 0.5 to 1.5). Those are held
+    // by the reported state, or by the release time after a file write.
+    static let weakCPUFraction = 0.02
+    static let cpuWindow: TimeInterval = 5
+    static let cpuWindowCount = 6
+    static let hotWindowsNeeded = 3
+
+    // A left-over command holds only while it uses the CPU. Every idle
+    // helper measured stayed at or under 0.6 percent (Claude daemon and pty
+    // host 0.6, Antigravity language server 0.4, Codex engines 0.2), and a
+    // build or a test run uses many times more. An idle dev server was not
+    // measured; 1 percent is the guess between the two.
+    static let busyChildCPUFraction = 0.01
+
+    /// A state file can be read in the middle of a write. The last state
+    /// stays good for this long, then the state is unknown.
+    static let reportMemory: TimeInterval = 10
+
+    /// A hook state older than this no longer beats the reported state.
+    static let hookFreshness: TimeInterval = 60
+
+    /// Whether one child command counts as busy: its own subtree's CPU
+    /// seconds over the collector's recent window.
+    static func isBusyChild(cpuSeconds: Double, interval: TimeInterval) -> Bool {
+        interval > 0 && cpuSeconds / interval >= busyChildCPUFraction
+    }
+
+    static func verdict(for evidence: AgentEvidence, memory: AgentMemory, settings: DetectionSettings, now: Date) -> (AgentVerdict, AgentMemory) {
+        var memory = memory
+        note(evidence, in: &memory, settings: settings, now: now)
+        switch settings.rule(for: evidence.agentID) {
+        case .ignore:
+            return (AgentVerdict(state: .idle, confidence: .reported, reason: .ignoredByRule), memory)
+        case .alwaysWorkingWhileOpen:
+            return (AgentVerdict(state: .working, confidence: .reported, reason: .alwaysWorkingByRule), memory)
+        case .automatic:
+            break
+        }
+        if let state = statedState(of: evidence, memory: memory, now: now) {
+            return (statedVerdict(state, evidence: evidence), memory)
+        }
+        return (inferredVerdict(evidence: evidence, memory: memory, settings: settings, now: now), memory)
+    }
+
+    /// The verdicts of one frame. An instance that is not in the frame is
+    /// gone, and its memory goes with it.
+    static func readings(for frame: EvidenceFrame, memory: [ProcessIdentity: AgentMemory], settings: DetectionSettings) -> ([AgentReading], [ProcessIdentity: AgentMemory]) {
+        var kept: [ProcessIdentity: AgentMemory] = [:]
+        var readings: [AgentReading] = []
+        for evidence in frame.agents {
+            let (verdict, next) = verdict(for: evidence, memory: memory[evidence.identity] ?? AgentMemory(), settings: settings, now: frame.at)
+            kept[evidence.identity] = next
+            readings.append(AgentReading(evidence: evidence, verdict: verdict))
+        }
+        return (readings, kept)
+    }
+
+    // MARK: Memory
+
+    private static func note(_ evidence: AgentEvidence, in memory: inout AgentMemory, settings: DetectionSettings, now: Date) {
+        memory.firstSeenAt = memory.firstSeenAt ?? now
+        if evidence.busyChildCommands > 0 { memory.lastCommandAt = now }
+        if evidence.backgroundJobsWorking > 0 { memory.lastBackgroundJobAt = now }
+        if evidence.ownsSleepAssertion { memory.lastAssertionAt = now }
+        if let write = fileWrite(of: evidence, now: now) {
+            memory.lastFileWriteAt = max(memory.lastFileWriteAt ?? write, write)
+        }
+        if let report = stateReport(of: evidence) {
+            memory.lastReport = report
+            memory.lastReportSeenAt = now
+        }
+        noteCPU(evidence, in: &memory, now: now)
+        noteWeakOnly(in: &memory, settings: settings, now: now)
+    }
+
+    /// A report from the file activity reader is a write, not a state. A
+    /// write from before the process started belongs to an earlier run:
+    /// opencode's database is shared by all its sessions.
+    private static func fileWrite(of evidence: AgentEvidence, now: Date) -> Date? {
+        let fromReport = evidence.reported.flatMap { $0.source == .fileActivity ? $0.observedAt : nil }
+        guard let write = [evidence.fileActivityAt, fromReport].compactMap({ $0 }).max(),
+              write >= Date(timeIntervalSince1970: evidence.startTime) else { return nil }
+        return min(write, now)
+    }
+
+    private static func stateReport(of evidence: AgentEvidence) -> StateReport? {
+        evidence.reported.flatMap { $0.source == .fileActivity ? nil : $0 }
+    }
+
+    private static func noteCPU(_ evidence: AgentEvidence, in memory: inout AgentMemory, now: Date) {
+        if evidence.sampleInterval > 0, evidence.subtreeCPUSeconds.isFinite {
+            memory.cpuSamples.append(AgentMemory.CPUSample(at: now, cpuSeconds: evidence.subtreeCPUSeconds, interval: evidence.sampleInterval))
+        }
+        let span = cpuWindow * TimeInterval(cpuWindowCount)
+        memory.cpuSamples.removeAll { now.timeIntervalSince($0.at) >= span || $0.at > now }
+        if hasSteadyCPU(memory.cpuSamples, now: now) { memory.lastCPUAt = now }
+    }
+
+    /// The samples are sorted into windows by their age, and a window is hot
+    /// when its samples together reach the threshold. So the rule reads the
+    /// same at one sample per second and at one per five seconds.
+    static func hasSteadyCPU(_ samples: [AgentMemory.CPUSample], now: Date) -> Bool {
+        var cpu = [Double](repeating: 0, count: cpuWindowCount)
+        var time = [TimeInterval](repeating: 0, count: cpuWindowCount)
+        for sample in samples {
+            let age = now.timeIntervalSince(sample.at)
+            guard age >= 0, age < cpuWindow * TimeInterval(cpuWindowCount) else { continue }
+            let index = Int(age / cpuWindow)
+            cpu[index] += sample.cpuSeconds
+            time[index] += sample.interval
+        }
+        let hot = zip(cpu, time).filter { $0.1 > 0 && $0.0 / $0.1 >= weakCPUFraction }.count
+        return hot >= hotWindowsNeeded
+    }
+
+    /// Tracks how long CPU use has been the only thing that holds. A strong
+    /// sign ends the count and lifts the cap. Without a strong sign the cap
+    /// stays, also across a quiet stretch.
+    private static func noteWeakOnly(in memory: inout AgentMemory, settings: DetectionSettings, now: Date) {
+        if isRecent(memory.lastStrongAt, within: settings.releaseAfterActivity, now: now) {
+            memory.weakOnlySince = nil
+            memory.weakCapped = false
+        } else if isRecent(memory.lastCPUAt, within: settings.releaseAfterActivity, now: now) {
+            let since = memory.weakOnlySince ?? now
+            memory.weakOnlySince = since
+            if now.timeIntervalSince(since) >= settings.weakEvidenceCap { memory.weakCapped = true }
+        } else {
+            memory.weakOnlySince = nil
+        }
+    }
+
+    private static func isRecent(_ date: Date?, within span: TimeInterval, now: Date) -> Bool {
+        date.map { now.timeIntervalSince($0) < span } ?? false
+    }
+
+    // MARK: Stated
+
+    /// The state the agent gives itself, nil when it gives none.
+    private static func statedState(of evidence: AgentEvidence, memory: AgentMemory, now: Date) -> WorkState? {
+        if let hook = evidence.hookState, let at = evidence.hookStateAt, now.timeIntervalSince(at) <= hookFreshness {
+            return hook
+        }
+        guard let report = memory.lastReport, let seen = memory.lastReportSeenAt,
+              now.timeIntervalSince(seen) <= reportMemory else { return nil }
+        return report.state
+    }
+
+    /// A stated working never expires by age: a long tool call and a model
+    /// wait are silent, and the instance ends when its process ends.
+    private static func statedVerdict(_ state: WorkState, evidence: AgentEvidence) -> AgentVerdict {
+        if state == .working {
+            return AgentVerdict(state: .working, confidence: .reported, reason: .reportsBusy)
+        }
+        if evidence.busyChildCommands > 0 {
+            return AgentVerdict(state: .working, confidence: .inferredStrong, reason: .runningCommand(evidence.busyChildCommands))
+        }
+        if evidence.backgroundJobsWorking > 0 {
+            return AgentVerdict(state: .working, confidence: .inferredStrong, reason: .backgroundJob(evidence.backgroundJobsWorking))
+        }
+        if state == .waitingForUser {
+            return AgentVerdict(state: .waitingForUser, confidence: .reported, reason: .asksPermission)
+        }
+        return AgentVerdict(state: .idle, confidence: .reported, reason: .atPrompt)
+    }
+
+    // MARK: Inferred
+
+    /// For an agent with no state of its own: working while a strong sign is
+    /// within the release time, or while CPU use holds under its cap.
+    private static func inferredVerdict(evidence: AgentEvidence, memory: AgentMemory, settings: DetectionSettings, now: Date) -> AgentVerdict {
+        let release = settings.releaseAfterActivity
+        if let strong = memory.lastStrongAt, isRecent(strong, within: release, now: now) {
+            return AgentVerdict(state: .working, confidence: .inferredStrong, reason: strongReason(evidence: evidence, memory: memory, lastAt: strong, now: now))
+        }
+        if isRecent(memory.lastCPUAt, within: release, now: now) {
+            if memory.weakCapped {
+                return AgentVerdict(state: .idle, confidence: .inferredWeak, reason: .onlyWeakSigns(minutes: Int(settings.weakEvidenceCap / 60)))
+            }
+            return AgentVerdict(state: .working, confidence: .inferredWeak, reason: .cpuActivity)
+        }
+        let quietSince = [memory.lastStrongAt, memory.lastCPUAt].compactMap { $0 }.max() ?? memory.firstSeenAt ?? now
+        return AgentVerdict(state: .idle, confidence: .inferredWeak, reason: .noActivity(minutes: Int(now.timeIntervalSince(quietSince) / 60)))
+    }
+
+    private static func strongReason(evidence: AgentEvidence, memory: AgentMemory, lastAt: Date, now: Date) -> VerdictReason {
+        if evidence.busyChildCommands > 0 { return .runningCommand(evidence.busyChildCommands) }
+        if evidence.backgroundJobsWorking > 0 { return .backgroundJob(evidence.backgroundJobsWorking) }
+        if evidence.ownsSleepAssertion { return .holdsSleepAssertion }
+        let secondsAgo = Int(now.timeIntervalSince(lastAt))
+        return memory.lastFileWriteAt == lastAt ? .writingSessionFile(secondsAgo: secondsAgo) : .workedRecently(secondsAgo: secondsAgo)
+    }
+}

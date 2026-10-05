@@ -7,3 +7,4 @@ xcuserdata/
 .swiftpm/
 Package.resolved
 scripts/fonts/
+build-*/

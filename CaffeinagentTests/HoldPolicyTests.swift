@@ -1,0 +1,359 @@
+import XCTest
+
+final class HoldPolicyTests: XCTestCase {
+    private static let start = Date(timeIntervalSince1970: 1_791_200_000)
+
+    private typealias Step = (seconds: TimeInterval, readings: [AgentReading])
+
+    private func at(_ seconds: TimeInterval) -> Date { Self.start.addingTimeInterval(seconds) }
+
+    private func run(
+        _ steps: [Step], mode: AwakeMode = .agentWorking, enabled: Bool = true, entitlement: Entitlement? = .licensed,
+        safety: SafetyStop? = nil, settings: DetectionSettings = DetectionSettings(), context: FrameContext = FrameContext()
+    ) -> [(seconds: TimeInterval, decision: HoldDecision)] {
+        var memory = PolicyMemory()
+        return steps.map { step in
+            let (decision, next) = HoldPolicy.decide(
+                readings: step.readings, memory: memory, mode: mode, enabled: enabled, entitlement: entitlement,
+                safety: safety, settings: settings, context: context, now: at(step.seconds)
+            )
+            memory = next
+            return (step.seconds, decision)
+        }
+    }
+
+    /// One step every 5 seconds.
+    private func steps(from: TimeInterval = 0, to: TimeInterval, _ make: (TimeInterval) -> [AgentReading]) -> [Step] {
+        stride(from: from, through: to, by: 5).map { ($0, make($0)) }
+    }
+
+    private func reading(_ id: String, _ name: String, _ level: AgentDefinition.Level, _ state: WorkState, pid: Int32, kind: AgentDefinition.Kind = .cli, live: Bool = false) -> AgentReading {
+        let reason: VerdictReason
+        switch state {
+        case .working: reason = .reportsBusy
+        case .waitingForUser: reason = .asksPermission
+        case .idle: reason = .atPrompt
+        }
+        return AgentReading(
+            agentID: id, displayName: name, level: level, kind: kind, identity: ProcessIdentity(pid: pid, startTime: 1_791_196_400),
+            hasLiveSession: live, verdict: AgentVerdict(state: state, confidence: .reported, reason: reason)
+        )
+    }
+
+    private func claude(_ state: WorkState, pid: Int32 = 1) -> AgentReading { reading("claude", "Claude Code", .state, state, pid: pid) }
+    private func codex(_ state: WorkState, pid: Int32 = 2) -> AgentReading { reading("codex", "Codex", .state, state, pid: pid) }
+    private func opencode(_ state: WorkState, pid: Int32 = 3) -> AgentReading { reading("opencode", "opencode", .activity, state, pid: pid) }
+    private func codexApp(_ state: WorkState, live: Bool) -> AgentReading {
+        reading("codex-desktop", "Codex", .state, state, pid: 4, kind: .desktop, live: live)
+    }
+
+    private func decide(_ readings: [AgentReading], mode: AwakeMode = .agentWorking, enabled: Bool = true, entitlement: Entitlement? = .licensed,
+                        safety: SafetyStop? = nil, settings: DetectionSettings = DetectionSettings(), context: FrameContext = FrameContext()) -> HoldDecision {
+        run([(0, readings)], mode: mode, enabled: enabled, entitlement: entitlement, safety: safety, settings: settings, context: context)[0].decision
+    }
+
+    // MARK: While an agent is working
+
+    func testStateAgentHoldsForTheReleaseTime() {
+        let story = steps(to: 300) { t in [self.claude(t <= 60 ? .working : .idle)] }
+        for (seconds, decision) in run(story) {
+            XCTAssertEqual(decision.hold, seconds < 180, "at \(seconds) s")
+            let text = seconds <= 60 ? "Awake: Claude Code is working"
+                : seconds < 180 ? "Awake: Claude Code finished a moment ago" : "Mac can sleep: Claude Code is idle"
+            XCTAssertEqual(decision.headline.text, text, "at \(seconds) s")
+            let cause: HoldCause? = seconds <= 60 ? .working : seconds < 180 ? .finishedRecently : nil
+            XCTAssertEqual(decision.perAgent.map(\.cause), [cause], "at \(seconds) s")
+        }
+    }
+
+    /// The verdict of an agent that is judged by its activity already
+    /// counts the release time, so the policy adds none.
+    func testActivityAgentReleasesWithItsVerdict() {
+        let got = run([(0, [opencode(.working)]), (5, [opencode(.idle)])])
+        XCTAssertEqual(got.map(\.decision.hold), [true, false])
+        XCTAssertEqual(got.map(\.decision.headline.text), ["Awake: opencode is working", "Mac can sleep: opencode is idle"])
+    }
+
+    func testAgentThatWasNeverWorkingDoesNotHold() {
+        XCTAssertFalse(decide([claude(.idle)]).hold)
+        XCTAssertEqual(decide([claude(.idle), opencode(.idle)]).headline.text, "Mac can sleep: all agents are idle")
+        XCTAssertEqual(decide([]).headline.text, "Mac can sleep: no agent is open")
+    }
+
+    /// Waits 5 minutes, then the Mac can sleep. Work starts the clock again.
+    func testWaitingForTheUser() {
+        var story: [Step] = [(0, [codex(.working)])]
+        story += steps(from: 10, to: 400) { _ in [self.codex(.waitingForUser)] }
+        story += [(405, [codex(.working)])]
+        story += steps(from: 410, to: 800) { _ in [self.codex(.waitingForUser)] }
+        for (seconds, decision) in run(story) {
+            switch seconds {
+            case 0, 405:
+                XCTAssertEqual(decision.headline.text, "Awake: Codex is working", "at \(seconds) s")
+            case 10..<310, 410..<710:
+                XCTAssertTrue(decision.hold, "at \(seconds) s")
+                XCTAssertEqual(decision.headline.text, "Awake: Codex waits for you", "at \(seconds) s")
+                XCTAssertEqual(decision.perAgent.map(\.cause), [.waitingForUser], "at \(seconds) s")
+            default:
+                XCTAssertFalse(decision.hold, "at \(seconds) s")
+                XCTAssertEqual(decision.headline.text, "Mac can sleep: Codex waits for you", "at \(seconds) s")
+            }
+        }
+    }
+
+    func testWaitingHoldIsAdjustable() {
+        var settings = DetectionSettings()
+        settings.waitingHold = 30
+        settings.releaseAfterState = 10
+        let story = steps(to: 60) { t in [self.codex(t == 0 ? .working : .waitingForUser)] }
+        for (seconds, decision) in run(story, settings: settings) {
+            XCTAssertEqual(decision.hold, seconds < 35, "at \(seconds) s")
+        }
+    }
+
+    func testTwoAgentsOneStops() {
+        let story = steps(to: 400) { t in
+            [self.claude(t <= 50 ? .working : .idle, pid: 1), self.claude(t <= 200 ? .working : .idle, pid: 2)]
+        }
+        for (seconds, decision) in run(story) {
+            XCTAssertEqual(decision.hold, seconds < 320, "at \(seconds) s")
+            let text: String
+            switch seconds {
+            case ...50: text = "Awake: 2 agents are working"
+            case ...200: text = "Awake: Claude Code is working"
+            case ..<320: text = "Awake: Claude Code finished a moment ago"
+            default: text = "Mac can sleep: all agents are idle"
+            }
+            XCTAssertEqual(decision.headline.text, text, "at \(seconds) s")
+        }
+    }
+
+    func testTwoAgentsOneExits() {
+        let got = run([(0, [claude(.working, pid: 1), opencode(.working)]), (5, [opencode(.working)]), (10, [])])
+        XCTAssertEqual(got.map(\.decision.hold), [true, true, false])
+        XCTAssertEqual(got.map(\.decision.headline.text), ["Awake: 2 agents are working", "Awake: opencode is working", "Mac can sleep: no agent is open"])
+    }
+
+    /// A process that is gone holds nothing, not even for the release time,
+    /// and a new process with the same pid starts with no memory.
+    func testProcessGone() {
+        var memory = PolicyMemory()
+        func step(_ seconds: TimeInterval, _ readings: [AgentReading]) -> HoldDecision {
+            let (decision, next) = HoldPolicy.decide(readings: readings, memory: memory, mode: .agentWorking, enabled: true, entitlement: .licensed,
+                                                     safety: nil, settings: DetectionSettings(), context: FrameContext(), now: at(seconds))
+            memory = next
+            return decision
+        }
+        XCTAssertTrue(step(0, [claude(.working)]).hold)
+        XCTAssertFalse(step(5, []).hold)
+        XCTAssertEqual(memory, PolicyMemory())
+        var reused = claude(.idle)
+        reused.identity = ProcessIdentity(pid: 1, startTime: 1_791_200_007)
+        XCTAssertFalse(step(10, [reused]).hold)
+    }
+
+    // MARK: Other modes
+
+    func testWhileAnAgentIsOpen() {
+        let cases: [(name: String, readings: [AgentReading], hold: Bool, text: String)] = [
+            ("nothing open", [], false, "Mac can sleep: no agent is open"),
+            ("idle CLI", [claude(.idle)], true, "Awake: Claude Code is open"),
+            ("two idle CLIs", [claude(.idle), opencode(.idle)], true, "Awake: 2 agents are open"),
+            ("desktop app with no live session", [codexApp(.idle, live: false)], false, "Mac can sleep: Codex is idle"),
+            ("desktop app with a live session", [codexApp(.idle, live: true)], true, "Awake: Codex is open"),
+            ("desktop app that works", [codexApp(.working, live: false)], true, "Awake: Codex is working"),
+            ("work comes before open", [claude(.idle), opencode(.working)], true, "Awake: opencode is working"),
+        ]
+        for c in cases {
+            let decision = decide(c.readings, mode: .agentOpen)
+            XCTAssertEqual(decision.hold, c.hold, c.name)
+            XCTAssertEqual(decision.headline.text, c.text, c.name)
+        }
+        XCTAssertEqual(decide([codexApp(.idle, live: true)], mode: .agentOpen).perAgent.map(\.cause), [.open])
+        XCTAssertFalse(decide([codexApp(.idle, live: true)]).hold, "an open app holds nothing in the working mode")
+    }
+
+    func testAlways() {
+        for readings in [[], [claude(.idle)], [claude(.working)]] {
+            let decision = decide(readings, mode: .always)
+            XCTAssertTrue(decision.hold)
+            XCTAssertTrue(decision.lidClosedFlag)
+            XCTAssertEqual(decision.headline.text, "Awake: always on")
+        }
+    }
+
+    func testSwitchedOff() {
+        for mode in AwakeMode.allCases {
+            let decision = decide([claude(.working)], mode: mode, enabled: false, context: FrameContext(remoteAccessDetected: true))
+            XCTAssertFalse(decision.hold, "\(mode)")
+            XCTAssertFalse(decision.lidClosedFlag, "\(mode)")
+            XCTAssertEqual(decision.headline.text, "Mac can sleep: agent caffeine is off", "\(mode)")
+            XCTAssertEqual(decision.perAgent.map(\.cause), [nil], "\(mode)")
+        }
+    }
+
+    /// The entitlement decides as it does in `AwakeMode.shouldHold`.
+    func testEntitlement() {
+        let detected = DetectedAgent(id: "proc:opencode", source: .process, label: "opencode", state: .waitingForInput, lastActivity: Self.start)
+        let working = DetectedAgent(id: "proc:opencode", source: .process, label: "opencode", state: .active, lastActivity: Self.start)
+        let lists: [(old: [DetectedAgent], new: [AgentReading])] = [([], []), ([detected], [opencode(.idle)]), ([working], [opencode(.working)])]
+        let entitlements: [Entitlement] = [.licensed, .trial(daysLeft: 7), .trial(daysLeft: 1), .expired(.trialOver), .expired(.unverified), .expired(.activationRemoved)]
+        for mode in AwakeMode.allCases {
+            for entitlement in entitlements {
+                for enabled in [true, false] {
+                    for list in lists {
+                        let want = mode.shouldHold(enabled: enabled, agents: list.old, entitlement: entitlement)
+                        XCTAssertEqual(decide(list.new, mode: mode, enabled: enabled, entitlement: entitlement).hold, want, "\(mode) \(entitlement) \(enabled) \(list.old.count)")
+                    }
+                }
+            }
+        }
+        XCTAssertEqual(decide([claude(.working)], entitlement: .expired(.trialOver)).headline.text, "Trial ended. agent caffeine is not keeping your Mac awake")
+        XCTAssertTrue(decide([claude(.working)], entitlement: nil).hold)
+    }
+
+    // MARK: Safety, remote access, lid
+
+    func testSafetyStop() {
+        let cases: [(stop: SafetyStop, text: String)] = [
+            (.batteryLow(percent: 20), "Sleeping allowed: battery at 20 percent"),
+            (.batteryLow(percent: 7), "Sleeping allowed: battery at 7 percent"),
+            (.tooHot, "Sleeping allowed: the Mac is too hot"),
+        ]
+        for c in cases {
+            for mode in AwakeMode.allCases {
+                let decision = decide([claude(.working)], mode: mode, safety: c.stop, context: FrameContext(onBattery: false, remoteAccessDetected: true))
+                XCTAssertFalse(decision.hold, "\(c.stop) \(mode)")
+                XCTAssertFalse(decision.lidClosedFlag, "\(c.stop) \(mode)")
+                XCTAssertEqual(decision.headline.text, c.text, "\(c.stop) \(mode)")
+                XCTAssertEqual(decision.perAgent.map(\.cause), [nil], "\(c.stop) \(mode)")
+            }
+        }
+    }
+
+    /// The release time keeps counting under a safety stop.
+    func testSafetyStopEnds() {
+        var memory = PolicyMemory()
+        func step(_ seconds: TimeInterval, _ state: WorkState, safety: SafetyStop?) -> Bool {
+            let (decision, next) = HoldPolicy.decide(readings: [claude(state)], memory: memory, mode: .agentWorking, enabled: true, entitlement: .licensed,
+                                                     safety: safety, settings: DetectionSettings(), context: FrameContext(), now: at(seconds))
+            memory = next
+            return decision.hold
+        }
+        XCTAssertFalse(step(0, .working, safety: .tooHot))
+        XCTAssertFalse(step(5, .idle, safety: .tooHot))
+        XCTAssertTrue(step(10, .idle, safety: nil))
+        XCTAssertFalse(step(120, .idle, safety: nil))
+    }
+
+    func testRemoteAccess() {
+        let onPower = FrameContext(onBattery: false, remoteAccessDetected: true)
+        let onBattery = FrameContext(onBattery: true, batteryPercent: 80, remoteAccessDetected: true)
+        let cases: [(name: String, readings: [AgentReading], mode: AwakeMode, context: FrameContext, hold: Bool, text: String)] = [
+            ("on power, no agent", [], .agentWorking, onPower, true, "Awake: remote access is on"),
+            ("on power, idle agent", [claude(.idle)], .agentWorking, onPower, true, "Awake: remote access is on"),
+            ("on power, working agent", [claude(.working)], .agentWorking, onPower, true, "Awake: Claude Code is working"),
+            ("on power, open mode", [], .agentOpen, onPower, true, "Awake: remote access is on"),
+            ("on battery, no agent", [], .agentWorking, onBattery, false, "Mac can sleep: no agent is open"),
+            ("on battery, idle agent", [claude(.idle)], .agentWorking, onBattery, false, "Mac can sleep: Claude Code is idle"),
+            ("on battery, working agent", [claude(.working)], .agentWorking, onBattery, true, "Awake: Claude Code is working"),
+        ]
+        for c in cases {
+            let decision = decide(c.readings, mode: c.mode, context: c.context)
+            XCTAssertEqual(decision.hold, c.hold, c.name)
+            XCTAssertEqual(decision.headline.text, c.text, c.name)
+        }
+    }
+
+    func testLidClosedFlag() {
+        var off = DetectionSettings()
+        off.stayAwakeLidClosedOnBattery = false
+        let cases: [(name: String, state: WorkState, settings: DetectionSettings, onBattery: Bool, safety: SafetyStop?, want: Bool)] = [
+            ("work on wall power", .working, DetectionSettings(), false, nil, true),
+            ("work on battery", .working, DetectionSettings(), true, nil, true),
+            ("no work", .idle, DetectionSettings(), true, nil, false),
+            ("setting off, wall power", .working, off, false, nil, false),
+            ("setting off, battery", .working, off, true, nil, false),
+            ("safety stop", .working, DetectionSettings(), true, .batteryLow(percent: 20), false),
+        ]
+        for c in cases {
+            let decision = decide([claude(c.state)], safety: c.safety, settings: c.settings, context: FrameContext(onBattery: c.onBattery, batteryPercent: 50))
+            XCTAssertEqual(decision.lidClosedFlag, c.want, c.name)
+        }
+    }
+
+    // MARK: Rules
+
+    func testIgnoredAgent() {
+        var settings = DetectionSettings()
+        settings.agentRules = ["claude": .ignore]
+        let ignored = AgentReading(agentID: "claude", displayName: "Claude Code", level: .state, identity: ProcessIdentity(pid: 1, startTime: 0),
+                                   verdict: AgentVerdict(state: .idle, confidence: .reported, reason: .ignoredByRule))
+        for mode in [AwakeMode.agentOpen, .agentWorking] {
+            let alone = decide([ignored], mode: mode, settings: settings)
+            XCTAssertFalse(alone.hold, "\(mode)")
+            XCTAssertEqual(alone.headline.text, "Mac can sleep: no agent is open", "\(mode)")
+            XCTAssertEqual(alone.perAgent.count, 1)
+        }
+        XCTAssertEqual(decide([ignored, opencode(.idle)], settings: settings).headline.text, "Mac can sleep: opencode is idle")
+        XCTAssertEqual(decide([ignored, opencode(.idle)], mode: .agentOpen, settings: settings).headline.text, "Awake: opencode is open")
+    }
+
+    /// Evidence frames go through the verdicts into the decision, as the
+    /// app and a replayed log do.
+    func testReplayWithRules() {
+        var settings = DetectionSettings()
+        settings.agentRules = ["claude": .ignore, "opencode": .alwaysWorkingWhileOpen]
+        let report = StateReport(state: .working, since: nil, observedAt: at(0), source: .claudeSessionFile, detail: nil)
+        let claude = AgentEvidence(agentID: "claude", displayName: "Claude Code", level: .state, pid: 1, startTime: 1_791_196_400, reported: report)
+        let opencode = AgentEvidence(agentID: "opencode", displayName: "opencode", level: .activity, pid: 3, startTime: 1_791_196_400)
+        let frames = [
+            EvidenceFrame(at: at(0), agents: [claude]),
+            EvidenceFrame(at: at(5), agents: [claude, opencode]),
+            EvidenceFrame(at: at(10), agents: [claude]),
+        ]
+        var agentMemory: [ProcessIdentity: AgentMemory] = [:]
+        var policyMemory = PolicyMemory()
+        var texts: [String] = []
+        for frame in frames {
+            let (readings, nextAgents) = VerdictRules.readings(for: frame, memory: agentMemory, settings: settings)
+            let (decision, nextPolicy) = HoldPolicy.decide(readings: readings, memory: policyMemory, mode: .agentWorking, enabled: true, entitlement: .trial(daysLeft: 3),
+                                                           safety: nil, settings: settings, context: frame.context, now: frame.at)
+            agentMemory = nextAgents
+            policyMemory = nextPolicy
+            texts.append(decision.headline.text)
+        }
+        XCTAssertEqual(texts, ["Mac can sleep: no agent is open", "Awake: opencode is working", "Mac can sleep: no agent is open"])
+    }
+
+    // MARK: Text
+
+    func testHeadlineText() {
+        let cases: [(headline: HoldHeadline, text: String)] = [
+            (.working(.one("Claude Code")), "Awake: Claude Code is working"),
+            (.working(.many(2)), "Awake: 2 agents are working"),
+            (.waitingHeld(.one("Codex")), "Awake: Codex waits for you"),
+            (.waitingHeld(.many(2)), "Awake: 2 agents wait for you"),
+            (.finishedRecently(.one("Codex")), "Awake: Codex finished a moment ago"),
+            (.finishedRecently(.many(3)), "Awake: 3 agents finished a moment ago"),
+            (.open(.one("Antigravity")), "Awake: Antigravity is open"),
+            (.open(.many(4)), "Awake: 4 agents are open"),
+            (.alwaysOn, "Awake: always on"),
+            (.remoteAccess, "Awake: remote access is on"),
+            (.idle(.one("opencode")), "Mac can sleep: opencode is idle"),
+            (.idle(.many(2)), "Mac can sleep: all agents are idle"),
+            (.waitingReleased(.one("Codex")), "Mac can sleep: Codex waits for you"),
+            (.waitingReleased(.many(2)), "Mac can sleep: 2 agents wait for you"),
+            (.noAgents, "Mac can sleep: no agent is open"),
+            (.safetyStop(.batteryLow(percent: 20)), "Sleeping allowed: battery at 20 percent"),
+            (.safetyStop(.tooHot), "Sleeping allowed: the Mac is too hot"),
+            (.switchedOff, "Mac can sleep: agent caffeine is off"),
+            (.notEntitled(.unverified), "License not checked for 30 days. Connect to the internet to keep your Mac awake"),
+        ]
+        for c in cases {
+            XCTAssertEqual(c.headline.text, c.text)
+            XCTAssertEqual(c.headline.keepsAwake, c.text.hasPrefix("Awake:"), c.text)
+            XCTAssertFalse(c.text.contains("\u{2014}"))
+        }
+    }
+}
