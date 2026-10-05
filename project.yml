@@ -141,7 +141,7 @@ targets:
         SKIP_INSTALL: YES
 
   # Compiles the pure logic files directly instead of loading the app as a
-  # test host, so tests never start the app's power and pmset handling.
+  # test host, so tests never start the app's power and sleep flag handling.
   CaffeinagentTests:
     type: bundle.unit-test
     platform: macOS
@@ -149,9 +149,7 @@ targets:
     deploymentTarget: "14.0"
     sources:
       - CaffeinagentTests
-      - Caffeinagent/Detectors/ProcessWatcher.swift
-      - Caffeinagent/Detectors/ClaudeCodeWatcher.swift
-      - Caffeinagent/Models/AgentState.swift
+      - Caffeinagent/Models/AwakeMode.swift
       - Caffeinagent/Models/AppVersion.swift
       - Caffeinagent/License/Entitlement.swift
       - Caffeinagent/License/LicenseClient.swift

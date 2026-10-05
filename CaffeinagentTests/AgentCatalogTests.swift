@@ -118,15 +118,18 @@ final class AgentCatalogTests: XCTestCase {
 
     // MARK: catalog data
 
+    /// The names the app matched before it had a catalog. A saved name list
+    /// is migrated against the catalog, so each of them has to stay in it.
     func testCatalogCoversTheOldAllowlist() {
-        var names: Set<String> = []
-        for definition in AgentCatalog.cliDefinitions {
-            for matcher in definition.matchers {
-                if case .name(let name) = matcher.process { names.insert(name) }
-            }
-        }
-        XCTAssertEqual(Set(ProcessWatcher.defaultAllowlist).subtracting(names), [])
-        for name in ProcessWatcher.defaultAllowlist {
+        let oldAllowlist = [
+            "aider", "aider-desk", "amp", "antigravity", "augment", "claude", "cline", "cn", "codearts-agent", "codebuddy",
+            "codemaker", "codestudio", "codex", "command-code", "copilot", "crush", "cursor-agent", "deepagents", "devin",
+            "dexto", "droid", "firebender", "forgecode", "gemini", "gemini-cli", "goose", "grok", "hermes-agent", "iflow-cli",
+            "junie", "kilo", "kiro-cli", "mcpjam", "mistral-vibe", "neovate", "opencode", "openclaw", "openhands", "pi",
+            "pochi", "qoder", "qwen-code", "rovodev", "tabnine-cli", "trae", "trae-cn", "windsurf", "zencoder",
+        ]
+        XCTAssertEqual(Set(oldAllowlist).subtracting(catalog.cliNames), [])
+        for name in oldAllowlist {
             let match = catalog.match(.fixture(10, path: "/usr/local/bin/\(name)", args: [name]), userNames: [])
             XCTAssertEqual(match?.role, .session, name)
             XCTAssertEqual(match?.definition.kind, .cli, name)

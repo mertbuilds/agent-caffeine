@@ -4,7 +4,17 @@ import AppKit
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppRelocator.offerToMoveIfNeeded()
+        // The onboarding window opens here while `Onboarding.isPending`.
     }
+}
+
+/// The seam for the onboarding window, which is not built yet. It is the
+/// place to set up the lid-closed helper and to ask for notifications, and
+/// it sets `completedKey` when the user is done.
+enum Onboarding {
+    static let completedKey = "Onboarding.completed"
+
+    static var isPending: Bool { !UserDefaults.standard.bool(forKey: completedKey) }
 }
 
 @main
@@ -26,7 +36,7 @@ struct CaffeinagentApp: App {
         MenuBarExtra {
             MenuBarView(aggregator: aggregator)
         } label: {
-            MenuBarLabel(held: aggregator.assertionHeld)
+            MenuBarLabel(held: aggregator.decision.hold)
         }
         .menuBarExtraStyle(.window)
 

@@ -93,8 +93,8 @@ final class XPCSleepFlagHelper: SleepFlagHelperConnecting {
 }
 
 struct SudoersEntry: SudoersCleaning {
-    // Same path as BatteryOverride, which wrote it.
-    private static let path = "/etc/sudoers.d/caffeinagent"
+    // Written by the builds that ran `sudo pmset` themselves.
+    fileprivate static let path = "/etc/sudoers.d/caffeinagent"
 
     var entryExists: Bool { FileManager.default.fileExists(atPath: Self.path) }
 
@@ -129,4 +129,28 @@ struct SudoersEntry: SudoersCleaning {
 struct SudoersCleanupError: LocalizedError {
     let message: String
     var errorDescription: String? { message }
+}
+
+// The builds before the helper set SleepDisabled through `sudo pmset` and
+// remembered it in UserDefaults, because the flag survives a quit.
+enum LegacyBatteryOverride {
+    private static let flagKey = "BatteryOverride.overrideSetByApp"
+
+    /// Clears a flag such a build left on, then forgets it. `sudo -n` never
+    /// asks for a password: without the sudoers entry it fails at once.
+    static func clearLeftover(defaults: UserDefaults = .standard) {
+        guard defaults.bool(forKey: flagKey) else { return }
+        defaults.removeObject(forKey: flagKey)
+        guard FileManager.default.fileExists(atPath: SudoersEntry.path) else { return }
+        let task = Process()
+        task.executableURL = URL(fileURLWithPath: "/usr/bin/sudo")
+        // Word for word the command the sudoers entry allows.
+        task.arguments = ["-n", "/usr/bin/pmset", "-b", "disablesleep", "0"]
+        task.standardOutput = FileHandle.nullDevice
+        task.standardError = FileHandle.nullDevice
+        let exited = DispatchSemaphore(value: 0)
+        task.terminationHandler = { _ in exited.signal() }
+        guard (try? task.run()) != nil else { return }
+        exited.wait()
+    }
 }

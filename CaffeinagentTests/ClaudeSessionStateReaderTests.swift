@@ -203,7 +203,7 @@ final class ClaudeSessionStateReaderTests: XCTestCase {
             ([], nil, nil),
         ]
         for (lines, state, detail) in cases {
-            let parsed = ClaudeCodeWatcher.parseTail(lines.joined(separator: "\n"))
+            let parsed = ClaudeTranscriptReader.parseTail(lines.joined(separator: "\n"))
             let report = ClaudeTranscriptReader.report(from: parsed, lastWrite: written, now: now)
             XCTAssertEqual(report?.state, state, "\(lines.count) lines")
             XCTAssertEqual(report?.detail, detail, "\(lines.count) lines")

@@ -133,7 +133,7 @@ final class EvidenceCollector: EvidenceCollecting {
     private var childWindows: [ProcessIdentity: [CPUSample]] = [:]
     private var sessionFiles = FileCache<ClaudeSessionState>()
     private var jobFiles = FileCache<ClaudeJobState>()
-    private var transcripts = FileCache<ClaudeCodeWatcher.TailParse>()
+    private var transcripts = FileCache<ClaudeTranscriptReader.TailParse>()
     private var rolloutTails = FileCache<CodexTurnState>()
     private var rolloutCwds: [String: String] = [:]
     private var rolloutListing: (at: Date, files: [CodexRolloutFile])?
@@ -300,7 +300,7 @@ final class EvidenceCollector: EvidenceCollecting {
         }
         guard let path = choice?.path else { return }
         let url = URL(fileURLWithPath: path)
-        guard let hit = transcripts.value(at: path, read: { ClaudeCodeWatcher.parseTail(of: url) }), let parsed = hit.value else { return }
+        guard let hit = transcripts.value(at: path, read: { ClaudeTranscriptReader.parseTail(of: url) }), let parsed = hit.value else { return }
         watched.insert(path)
         evidence.fileActivityAt = hit.signature.modifiedAt
         evidence.reported = ClaudeTranscriptReader.report(from: parsed, lastWrite: hit.signature.modifiedAt, now: now)

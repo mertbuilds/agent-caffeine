@@ -192,18 +192,22 @@ final class HoldPolicyTests: XCTestCase {
         }
     }
 
-    /// The entitlement decides as it does in `AwakeMode.shouldHold`.
+    /// A trial holds as a license does, an expired one never holds, and the
+    /// switch comes before both.
     func testEntitlement() {
-        let detected = DetectedAgent(id: "proc:opencode", source: .process, label: "opencode", state: .waitingForInput, lastActivity: Self.start)
-        let working = DetectedAgent(id: "proc:opencode", source: .process, label: "opencode", state: .active, lastActivity: Self.start)
-        let lists: [(old: [DetectedAgent], new: [AgentReading])] = [([], []), ([detected], [opencode(.idle)]), ([working], [opencode(.working)])]
+        let lists: [[AgentReading]] = [[], [opencode(.idle)], [opencode(.working)]]
+        let holds: [AwakeMode: [Bool]] = [
+            .always: [true, true, true],
+            .agentOpen: [false, true, true],
+            .agentWorking: [false, false, true],
+        ]
         let entitlements: [Entitlement] = [.licensed, .trial(daysLeft: 7), .trial(daysLeft: 1), .expired(.trialOver), .expired(.unverified), .expired(.activationRemoved)]
         for mode in AwakeMode.allCases {
             for entitlement in entitlements {
                 for enabled in [true, false] {
-                    for list in lists {
-                        let want = mode.shouldHold(enabled: enabled, agents: list.old, entitlement: entitlement)
-                        XCTAssertEqual(decide(list.new, mode: mode, enabled: enabled, entitlement: entitlement).hold, want, "\(mode) \(entitlement) \(enabled) \(list.old.count)")
+                    for (index, list) in lists.enumerated() {
+                        let want = enabled && entitlement.allowsHolding && holds[mode]![index]
+                        XCTAssertEqual(decide(list, mode: mode, enabled: enabled, entitlement: entitlement).hold, want, "\(mode) \(entitlement) \(enabled) \(index)")
                     }
                 }
             }
