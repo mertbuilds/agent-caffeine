@@ -6,7 +6,9 @@ import Foundation
 /// The owner adds marks that say what an agent really did.
 ///
 /// Each line goes out in one `write` on a descriptor opened for appending,
-/// so a second process (`--lab-mark`) can add a mark to the same file.
+/// so a second process (`--lab-mark`) can add a mark to the same file. The
+/// recorder holds a lock on the file for as long as it records, and that
+/// lock is how the second process knows the recording still runs.
 final class LabRecorder {
     let directory: URL
     private let now: () -> Date
@@ -51,6 +53,11 @@ final class LabRecorder {
         let url = directory.appendingPathComponent(Self.fileName(label: label, at: header.startedAt))
         let opened = open(url.path, O_WRONLY | O_APPEND | O_CREAT, 0o600)
         guard opened >= 0 else { throw LabError.cannotWrite(url.path) }
+        // Gone with the descriptor, also when the process dies.
+        guard flock(opened, LOCK_EX | LOCK_NB) == 0 else {
+            close(opened)
+            throw LabError.cannotWrite(url.path)
+        }
         lock.lock()
         descriptor = opened
         self.url = url
@@ -121,24 +128,33 @@ final class LabRecorder {
         return newest?.url
     }
 
-    /// A recorder writes a sample every 2 or 5 seconds, so a file that was
-    /// written longer ago than this belongs to a recording that has ended.
-    static let runningAge: TimeInterval = 15
+    /// True while a recorder holds its lock on the file. The time of the
+    /// last write says nothing: a mark is a write too.
+    static func isBeingRecorded(_ url: URL) -> Bool {
+        let descriptor = open(url.path, O_RDONLY)
+        guard descriptor >= 0 else { return false }
+        defer { close(descriptor) }
+        if flock(descriptor, LOCK_SH | LOCK_NB) == 0 {
+            flock(descriptor, LOCK_UN)
+            return false
+        }
+        return errno == EWOULDBLOCK
+    }
 
     /// The recording that a recorder still writes, for a mark from another
     /// process. A mark in a finished recording would change its score.
-    static func runningRecording(in directory: URL = LabRecorder.labDirectory(), now: Date = Date()) -> URL? {
-        guard let url = newestRecording(in: directory),
-              let written = (try? url.resourceValues(forKeys: [.contentModificationDateKey]))?.contentModificationDate,
-              now.timeIntervalSince(written) <= runningAge else { return nil }
+    static func runningRecording(in directory: URL = LabRecorder.labDirectory()) -> URL? {
+        guard let url = newestRecording(in: directory), isBeingRecorded(url) else { return nil }
         return url
     }
 
-    /// Adds a mark to a recording that another process may be writing.
+    /// Adds a mark to a recording that another process is writing. A
+    /// recording that has ended takes no mark.
     static func appendMark(_ mark: LabMark, to url: URL) throws {
         let descriptor = open(url.path, O_WRONLY | O_APPEND)
         guard descriptor >= 0 else { throw LabError.cannotWrite(url.path) }
         defer { close(descriptor) }
+        guard isBeingRecorded(url) else { throw LabError.noRecording }
         writeAll(try LabFormat.line(LabLine(mark: mark)), to: descriptor)
     }
 }

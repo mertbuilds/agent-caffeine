@@ -159,16 +159,37 @@ final class LabRecorderTests: XCTestCase {
 
     /// `--lab-mark` must not write into a recording that has ended.
     func testOnlyARunningRecordingTakesAMarkFromAnotherProcess() throws {
-        let now = Date()
-        XCTAssertNil(LabRecorder.runningRecording(in: directory, now: now))
+        XCTAssertNil(LabRecorder.runningRecording(in: directory))
         let url = try recorder.start(label: "run", header: header("run"))
-        XCTAssertEqual(LabRecorder.runningRecording(in: directory, now: now.addingTimeInterval(1))?.lastPathComponent, url.lastPathComponent)
-        XCTAssertEqual(LabRecorder.runningRecording(in: directory, now: now.addingTimeInterval(10))?.lastPathComponent, url.lastPathComponent)
+        XCTAssertTrue(LabRecorder.isBeingRecorded(url))
+        XCTAssertEqual(LabRecorder.runningRecording(in: directory)?.lastPathComponent, url.lastPathComponent)
+        // A recorder that wrote nothing for an hour still records.
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(-3600)], ofItemAtPath: url.path)
+        XCTAssertEqual(LabRecorder.runningRecording(in: directory)?.lastPathComponent, url.lastPathComponent)
+        let mark = LabMark(at: at(1), agent: "claude", truth: .working, note: nil)
+        try LabRecorder.appendMark(mark, to: url)
+        XCTAssertTrue(LabRecorder.isBeingRecorded(url), "A mark does not take the lock away")
+
         recorder.stop()
-        XCTAssertNil(LabRecorder.runningRecording(in: directory, now: now.addingTimeInterval(60)), "Finished a minute ago")
-        try FileManager.default.setAttributes([.modificationDate: now.addingTimeInterval(-3600)], ofItemAtPath: url.path)
-        XCTAssertNil(LabRecorder.runningRecording(in: directory, now: now))
+        // Written a moment ago, by the mark and by the recorder: the old
+        // rule of 15 seconds took this file for a running recording.
+        XCTAssertFalse(LabRecorder.isBeingRecorded(url))
+        XCTAssertNil(LabRecorder.runningRecording(in: directory))
         XCTAssertNotNil(LabRecorder.newestRecording(in: directory))
+        let before = try Data(contentsOf: url)
+        XCTAssertThrowsError(try LabRecorder.appendMark(mark, to: url)) { XCTAssertEqual("\($0)", "\(LabError.noRecording)") }
+        XCTAssertEqual(try Data(contentsOf: url), before, "A finished recording takes no mark")
+        XCTAssertEqual(try LabFormat.recording(at: url).marks, [mark])
+        XCTAssertFalse(LabRecorder.isBeingRecorded(directory.appendingPathComponent("missing.jsonl")))
+    }
+
+    /// One file has one recorder.
+    func testASecondRecorderCannotTakeAFileThatIsBeingRecorded() throws {
+        let url = try recorder.start(label: "run", header: header("run"))
+        let second = LabRecorder(directory: directory, now: { self.at(0) })
+        XCTAssertThrowsError(try second.start(label: "run", header: header("run")))
+        XCTAssertFalse(second.isRecording)
+        XCTAssertTrue(LabRecorder.isBeingRecorded(url))
     }
 
     func testHeaderHoldsNoPaths() throws {
