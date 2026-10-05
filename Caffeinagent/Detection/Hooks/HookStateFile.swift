@@ -11,6 +11,10 @@ struct HookStateFile: Codable, Equatable {
     static let maxSessions = 64
     static let sessionLifetime: TimeInterval = 24 * 3600
     static let directoryOverrideKey = "CAFFEINAGENT_HOOKS_DIR"
+    /// Two hook commands that started this close together can finish out
+    /// of order. A state that is further ahead of the clock than this was
+    /// written before the clock was set back.
+    static let clockTolerance: TimeInterval = 5
 
     struct Session: Codable, Equatable {
         /// `working`, `waiting` or `idle`.
@@ -67,8 +71,12 @@ struct HookStateFile: Codable, Equatable {
         }
     }
 
-    /// An event that is older than what the session already holds is
-    /// dropped: two hook commands can finish out of order.
+    /// The events of a session count in the order they arrive: the hook
+    /// command reads, changes and writes the file under one lock. Only an
+    /// event that is a moment older than what the session holds is
+    /// dropped, because two hook commands can finish out of order. What
+    /// the session holds from further ahead is from before the clock was
+    /// set back, and the new event replaces it.
     mutating func apply(_ action: HookAction, session: String, event: String, at: Date) {
         let time = at.timeIntervalSince1970
         switch action {
@@ -77,10 +85,10 @@ struct HookStateFile: Codable, Equatable {
         case .end:
             sessions[session] = nil
         case .set(let state):
-            if let known = sessions[session], known.at > time { return }
+            if let known = sessions[session], known.at > time, known.at - time <= Self.clockTolerance { return }
             sessions[session] = Session(state: Self.name(of: state), event: event, at: time)
         }
-        sessions = sessions.filter { time - $0.value.at < Self.sessionLifetime }
+        sessions = sessions.filter { abs(time - $0.value.at) < Self.sessionLifetime }
         if sessions.count > Self.maxSessions {
             let kept = sessions.sorted { $0.value.at > $1.value.at }.prefix(Self.maxSessions)
             sessions = Dictionary(uniqueKeysWithValues: kept.map { ($0.key, $0.value) })
@@ -98,11 +106,17 @@ struct HookStateFile: Codable, Equatable {
     /// last event of another session said working: a long tool call sends
     /// no event, so that session may still work, and the agent's own state
     /// has to decide.
+    ///
+    /// A state from ahead of the clock is from before the clock was set
+    /// back. It is as good as too old.
     func summary(now: Date, freshness: TimeInterval) -> (state: ReportedState, at: Date)? {
         let known = sessions.values.compactMap { session in
             Self.state(named: session.state).map { (state: $0, at: Date(timeIntervalSince1970: session.at)) }
         }
-        let fresh = known.filter { $0.state == .waitingForUser || now.timeIntervalSince($0.at) <= freshness }
+        let fresh = known.filter { state in
+            let age = now.timeIntervalSince(state.at)
+            return age >= -Self.clockTolerance && (state.state == .waitingForUser || age <= freshness)
+        }
         for state in [ReportedState.working, .waitingForUser, .idle] {
             guard let newest = fresh.filter({ $0.state == state }).max(by: { $0.at < $1.at }) else { continue }
             if state != .working, known.contains(where: { $0.state == .working }) { return nil }

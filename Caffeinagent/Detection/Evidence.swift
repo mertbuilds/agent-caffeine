@@ -283,6 +283,8 @@ struct EvidenceFrame: Codable, Equatable {
 
     var version = EvidenceFrame.currentVersion
     var at: Date
+    /// Seconds the Mac was awake since boot, read with `at`. See `SampleGap`.
+    var awake: TimeInterval?
     var agents: [AgentEvidence]
     var context: FrameContext
 
@@ -293,13 +295,14 @@ struct EvidenceFrame: Codable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version = "v", at, agents, context = "ctx"
+        case version = "v", at, awake = "up", agents, context = "ctx"
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         version = try container.decodeIfPresent(Int.self, forKey: .version) ?? EvidenceFrame.currentVersion
         at = try container.decode(Date.self, forKey: .at)
+        awake = try container.decodeIfPresent(TimeInterval.self, forKey: .awake)
         agents = try container.decodeIfPresent([AgentEvidence].self, forKey: .agents) ?? []
         context = try container.decodeIfPresent(FrameContext.self, forKey: .context) ?? FrameContext()
     }

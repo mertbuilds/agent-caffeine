@@ -260,7 +260,7 @@ enum VerdictRules {
     /// write or a state change after the wait began. An approved tool call
     /// sends its next event only when it is done.
     private static func noteHookWait(_ evidence: AgentEvidence, in memory: inout AgentMemory, settings: DetectionSettings, now: Date) {
-        guard evidence.hookState == .waitingForUser, let at = evidence.hookStateAt else {
+        guard evidence.hookState == .waitingForUser, let at = evidence.hookStateAt, !isAhead(at, of: now) else {
             memory.endedHookWaitAt = nil
             return
         }
@@ -330,7 +330,7 @@ enum VerdictRules {
 
     /// The state the agent gives itself, nil when it gives none.
     private static func statedState(of evidence: AgentEvidence, memory: AgentMemory, settings: DetectionSettings, now: Date) -> WorkState? {
-        if let hook = evidence.hookState, let at = evidence.hookStateAt {
+        if let hook = evidence.hookState, let at = evidence.hookStateAt, !isAhead(at, of: now) {
             if hook == .waitingForUser {
                 if memory.endedHookWaitAt != at { return hook }
             } else if now.timeIntervalSince(at) <= hookFreshness {
@@ -341,6 +341,12 @@ enum VerdictRules {
             }
         }
         return reportedState(memory: memory, settings: settings, now: now)
+    }
+
+    /// A hook state from ahead of the clock was written before the clock
+    /// was set back, and says nothing about now.
+    private static func isAhead(_ at: Date, of now: Date) -> Bool {
+        at.timeIntervalSince(now) > HookStateFile.clockTolerance
     }
 
     /// The state of the agent's own state file or session log.

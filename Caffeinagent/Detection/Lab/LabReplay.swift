@@ -98,14 +98,14 @@ enum LabReplay {
         let mode = mode ?? recording.header.flatMap { AwakeMode(rawValue: $0.mode) } ?? .agentWorking
         var agentMemory: [ProcessIdentity: AgentMemory] = [:]
         var policyMemory = PolicyMemory()
-        var previousAt: Date?
+        var previous: SampleTime?
         return recording.samples.map { sample in
             // As the engine does.
-            if let gap = SampleGap.length(from: previousAt, to: sample.frame.at) {
+            if let gap = SampleGap.length(from: previous, to: sample.frame.time) {
                 agentMemory = agentMemory.mapValues { $0.shifted(by: gap) }
                 policyMemory = policyMemory.shifted(by: gap)
             }
-            previousAt = sample.frame.at
+            previous = sample.frame.time
             let (readings, nextAgents) = VerdictRules.readings(for: sample.frame, memory: agentMemory, settings: settings)
             let (decision, nextPolicy) = HoldPolicy.decide(
                 readings: readings, memory: policyMemory, mode: mode, enabled: true, entitlement: nil, safety: nil,

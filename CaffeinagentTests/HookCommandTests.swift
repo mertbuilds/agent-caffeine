@@ -206,6 +206,32 @@ final class HookCommandTests: XCTestCase {
         XCTAssertEqual(file.sessions["a"]?.state, "idle")
     }
 
+    /// The clock is set back by an hour. The state from before is ahead of
+    /// the clock: it is not a fresh state, and the next event replaces it.
+    func testClockSetBack() {
+        var file = HookStateFile(agent: "claude", pid: 1, start: 0)
+        file.apply(.set(.idle), session: "a", event: "Stop", at: now.addingTimeInterval(3600))
+        file.apply(.set(.waitingForUser), session: "b", event: "Notification", at: now.addingTimeInterval(3600))
+        let stale = file.summary(now: now, freshness: 60)
+        XCTAssertEqual(stale?.at, now.addingTimeInterval(3600), "The newest, with its real time, for the verdict to refuse")
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(3597), freshness: 60)?.state, .waitingForUser, "A few seconds ahead is no step")
+
+        file.apply(.set(.working), session: "a", event: "UserPromptSubmit", at: now.addingTimeInterval(10))
+        XCTAssertEqual(file.sessions["a"], .init(state: "working", event: "UserPromptSubmit", at: now.timeIntervalSince1970 + 10))
+        let fresh = file.summary(now: now.addingTimeInterval(11), freshness: 60)
+        XCTAssertEqual(fresh?.state, .working)
+        XCTAssertEqual(fresh?.at, now.addingTimeInterval(10))
+        XCTAssertNotNil(file.sessions["b"], "A session from ahead of the clock is not dropped as old")
+    }
+
+    /// The clock is set forward by an hour: the events come in order.
+    func testClockSetForward() {
+        var file = HookStateFile(agent: "claude", pid: 1, start: 0)
+        file.apply(.set(.working), session: "a", event: "UserPromptSubmit", at: now)
+        file.apply(.set(.idle), session: "a", event: "Stop", at: now.addingTimeInterval(3600))
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(3601), freshness: 60)?.state, .idle)
+    }
+
     func testOldAndSurplusSessionsAreDropped() {
         var file = HookStateFile(agent: "claude", pid: 1, start: 0)
         file.apply(.set(.working), session: "old", event: "UserPromptSubmit", at: now)

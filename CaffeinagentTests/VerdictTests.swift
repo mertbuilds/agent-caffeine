@@ -200,6 +200,19 @@ final class VerdictTests: XCTestCase {
         XCTAssertEqual(run([(100, droid)]).last?.verdict, verdict(.idle, .reported, .atPrompt))
     }
 
+    /// A hook state from ahead of the clock was written before the clock
+    /// was set back. A stuck idle of that kind beat the reported working.
+    func testHookStateFromAheadOfTheClockIsNotUsed() {
+        for hook in [ReportedState.idle, .waitingForUser, .working] {
+            let ahead = evidence("droid", "Droid", .activity, hook: hook, hookAt: at(3700))
+            XCTAssertEqual(run([(100, ahead)]).last?.verdict, verdict(.idle, .inferredWeak, .noActivity(minutes: 0)), "\(hook)")
+        }
+        let waiting = evidence("claude", "Claude Code", .state, reported: report(.working, at: 100), hook: .waitingForUser, hookAt: at(3700))
+        XCTAssertEqual(run([(100, waiting)]).last?.verdict, verdict(.working, .reported, .reportsBusy))
+        let near = evidence("droid", "Droid", .activity, hook: .waitingForUser, hookAt: at(104))
+        XCTAssertEqual(run([(100, near)]).last?.verdict.state, .waitingForUser, "A few seconds ahead is no step")
+    }
+
     // MARK: Hook wait
 
     private func codexHook(_ hook: ReportedState, hookAt: TimeInterval, rollout: ReportedState?, at seconds: TimeInterval, writeAt: TimeInterval = -5, busy: Int = 0) -> AgentEvidence {

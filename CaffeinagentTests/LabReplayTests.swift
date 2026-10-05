@@ -108,6 +108,74 @@ final class LabReplayTests: XCTestCase {
         XCTAssertEqual(gone.wronglyHeld, 80)
     }
 
+    // MARK: Clock
+
+    func testSampleGap() {
+        func time(_ wall: TimeInterval, _ awake: TimeInterval?) -> SampleTime { SampleTime(at: at(wall), awake: awake) }
+        let cases: [(name: String, from: SampleTime?, to: SampleTime, want: TimeInterval?)] = [
+            ("first sample", nil, time(0, 50), nil),
+            ("next sample", time(0, 50), time(2, 52), nil),
+            ("a time sync moves the date a little", time(0, 50), time(2.6, 52), nil),
+            ("late timer", time(0, 50), time(14, 64), nil),
+            ("sleep of an hour", time(0, 50), time(3602, 52), 3600),
+            ("short sleep", time(0, 50), time(10, 52), 8),
+            ("sampling stopped for ten minutes", time(0, 50), time(600, 650), 600),
+            ("clock set forward by an hour", time(0, 50), time(3602, 52), 3600),
+            ("clock set back by an hour", time(0, 50), time(-3598, 52), -3600),
+            ("clock set back while the sampling was stopped", time(0, 50), time(-3000, 650), -3000),
+            ("no awake clock: by the date", time(0, nil), time(16, nil), 16),
+            ("no awake clock: no hole", time(0, nil), time(15, nil), nil),
+            ("no awake clock: a step back is not seen", time(0, nil), time(-3598, nil), nil),
+            ("awake clock of another boot: by the date", time(0, 500), time(20, 3), 20),
+        ]
+        for c in cases {
+            XCTAssertEqual(SampleGap.length(from: c.from, to: c.to), c.want, c.name)
+        }
+        XCTAssertEqual(SampleGap.interval(from: time(0, 50), to: time(-3598, 52)), 2)
+        XCTAssertEqual(SampleGap.interval(from: time(0, nil), to: time(5, nil)), 5)
+        XCTAssertGreaterThan(SampleGap.awakeSeconds(), 0)
+    }
+
+    /// The clock is set by an hour after 100 seconds, back or forward. The
+    /// timers run on the awake time: the release times, the waiting hold
+    /// and the release after a command all end where they would have.
+    /// With the step back, every one of them ran for an hour longer.
+    func testClockStepCountsForNoTimer() {
+        for step in [-3600.0, 3600.0] {
+            func wall(_ awake: TimeInterval) -> TimeInterval { awake <= 100 ? awake : awake + step }
+            let story = stride(from: 0, through: 500, by: 5).map { (t: TimeInterval) -> EvidenceFrame in
+                let w = wall(t)
+                var builder = self.agent("opencode", "opencode", .activity, pid: 200, state: nil, at: w, commands: 1, busy: t <= 100 ? 1 : 0)
+                // As the collector gives it: no CPU number on the sample after the step.
+                if t == 105 { builder.sampleInterval = 0 }
+                var frame = EvidenceFrame(at: self.at(w), agents: [
+                    self.claude(t <= 90 ? .working : .idle, at: w, pid: 100),
+                    self.claude(t < 50 ? .working : .waitingForUser, at: w, pid: 101),
+                    builder,
+                ])
+                frame.awake = 5000 + t
+                return frame
+            }
+            let steps = LabReplay.steps(of: LabRecording(header: header("clock"), samples: story.map { LabSample(frame: $0) }, marks: []))
+            XCTAssertEqual(steps.count, 101)
+            for (index, got) in steps.enumerated() {
+                let t = TimeInterval(index * 5)
+                let causes = got.decision.perAgent.map(\.cause)
+                XCTAssertEqual(causes[0], t <= 90 ? .working : t < 210 ? .finishedRecently : nil, "step \(step): finished at 90 s, awake time \(t) s")
+                XCTAssertEqual(causes[1], t < 50 ? .working : t < 350 ? .waitingForUser : nil, "step \(step): waits from 50 s, awake time \(t) s")
+                XCTAssertEqual(causes[2], t < 400 ? .working : nil, "step \(step): command until 100 s, awake time \(t) s")
+            }
+        }
+    }
+
+    func testFrameKeepsItsAwakeTime() throws {
+        var frame = EvidenceFrame(at: at(0), agents: [])
+        XCTAssertFalse(String(decoding: try LabFormat.encoder().encode(frame), as: UTF8.self).contains("\"up\""))
+        frame.awake = 1234.5
+        let data = try LabFormat.encoder().encode(frame)
+        XCTAssertEqual(try LabFormat.decoder().decode(EvidenceFrame.self, from: data).awake, 1234.5)
+    }
+
     /// The Mac sleeps for 6 minutes after 100 seconds. No timer counts the
     /// sleep: not the release times, not the waiting hold, not the weak cap.
     /// The step across the sleep does not count either, so each timer ends

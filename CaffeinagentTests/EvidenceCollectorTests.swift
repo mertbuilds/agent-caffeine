@@ -495,6 +495,39 @@ final class EvidenceCollectorTests: XCTestCase {
         XCTAssertFalse(later.ownsSleepAssertion)
     }
 
+    /// The clock is set back by an hour, then forward again. Each sample
+    /// after a step is a first sample, and the interval of the others is
+    /// the awake time, whatever the date says.
+    func testSampleAfterAClockStepIsAFirstSample() throws {
+        var awake: TimeInterval = 9000
+        sources.awakeSeconds = { awake }
+        collector = EvidenceCollector(sources: sources)
+        try writeSession(100, status: "idle")
+        var cpu: TimeInterval = 50
+        func next(at seconds: TimeInterval) throws -> EvidenceSample {
+            awake += 2
+            cpu += 1
+            census.rows = [claude(100, cpu: cpu)]
+            return sample(at: seconds)
+        }
+        _ = try next(at: 0)
+        let second = try next(at: 2)
+        XCTAssertEqual(second.frame.awake, 9004)
+        XCTAssertEqual(try XCTUnwrap(second.frame.agents.first).sampleInterval, 2, accuracy: 0.001)
+        XCTAssertEqual(SampleGap.length(from: second.frame.time, to: try next(at: 4).frame.time), nil)
+
+        let back = try next(at: -3594)
+        XCTAssertEqual(try XCTUnwrap(back.frame.agents.first).sampleInterval, 0, "No CPU number over the step")
+        XCTAssertEqual(back.frame.awake, 9008)
+        let after = try next(at: -3592)
+        XCTAssertEqual(try XCTUnwrap(after.frame.agents.first).sampleInterval, 2, accuracy: 0.001)
+        XCTAssertEqual(try XCTUnwrap(after.frame.agents.first).subtreeCPUSeconds, 1, accuracy: 0.001)
+
+        let forward = try next(at: 10)
+        XCTAssertEqual(try XCTUnwrap(forward.frame.agents.first).sampleInterval, 0)
+        XCTAssertEqual(try XCTUnwrap(try next(at: 12).frame.agents.first).sampleInterval, 2, accuracy: 0.001)
+    }
+
     /// The CPU deltas of the first sample after a sleep span the sleep. Over
     /// that interval a running build would read as no use at all.
     func testSampleAfterASleepIsAFirstSample() throws {

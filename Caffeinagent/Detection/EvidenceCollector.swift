@@ -95,11 +95,15 @@ final class EvidenceCollector: EvidenceCollecting {
         /// `~/.claude/settings.json`, for the Remote Control switch. Nil reads none.
         var claudeSettings: URL?
         var now: () -> Date = Date.init
+        /// Seconds the Mac was awake since boot. Nil records none, and a
+        /// hole between two samples is then judged by the date alone.
+        var awakeSeconds: (() -> TimeInterval)?
 
         static func system() -> Sources {
             var sources = Sources(census: SystemProcessCensus(), assertions: SystemPowerAssertions(), power: SystemPowerContext(), openFiles: SystemOpenFiles())
             sources.hookDirectory = HookStateFile.directory()
             sources.claudeSettings = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude/settings.json")
+            sources.awakeSeconds = SampleGap.awakeSeconds
             return sources
         }
     }
@@ -140,7 +144,7 @@ final class EvidenceCollector: EvidenceCollecting {
 
     private var matchCache: [Int32: MatchEntry] = [:]
     private var matchUserNames: [String] = []
-    private var previousAt: Date?
+    private var previous: SampleTime?
     private var lastSample: EvidenceSample?
     private var unreadableTables = 0
     private var previousRows: [ProcessIdentity: ProcessInfoRow] = [:]
@@ -165,8 +169,9 @@ final class EvidenceCollector: EvidenceCollecting {
 
     func collect(userNames: [String] = []) -> EvidenceSample {
         let started = DispatchTime.now().uptimeNanoseconds
-        let now = sources.now()
-        guard let snapshot = sources.census.snapshot() ?? unreadableTable(now: now, started: started) else {
+        let time = SampleTime(at: sources.now(), awake: sources.awakeSeconds?())
+        let now = time.at
+        guard let snapshot = sources.census.snapshot() ?? unreadableTable(time: time, started: started) else {
             return lastSample ?? EvidenceSample(frame: EvidenceFrame(at: now, agents: []))
         }
         let matches = currentMatches(in: snapshot, userNames: userNames)
@@ -174,11 +179,13 @@ final class EvidenceCollector: EvidenceCollecting {
         let asserting = instances.isEmpty ? [] : sources.assertions.assertingPIDs()
         // The CPU a process used before and after a sleep, over an interval
         // that is mostly the sleep, would read as no use at all.
-        let gap = SampleGap.length(from: previousAt, to: now) != nil
-        let interval = gap ? 0 : previousAt.map { now.timeIntervalSince($0) } ?? 0
+        // A clock that was set is a hole too: no interval can be trusted.
+        let gap = SampleGap.length(from: previous, to: time) != nil
+        let interval = gap ? 0 : previous.map { SampleGap.interval(from: $0, to: time) } ?? 0
         if gap { childWindows.removeAll() }
 
         var sample = EvidenceSample(frame: EvidenceFrame(at: now, agents: [], context: context(snapshot: snapshot, matches: matches)))
+        sample.frame.awake = time.awake
         let hookStates = hookReader?.states(snapshot: snapshot, now: now) ?? [:]
         // A new state file is a new entry in the folder.
         if let hookReader { sample.watchedFiles.insert(hookReader.directory.path) }
@@ -195,7 +202,7 @@ final class EvidenceCollector: EvidenceCollecting {
             sample.roots.insert(instance.identity)
         }
 
-        previousAt = now
+        previous = time
         previousRows = rows
         childWindows = childWindows.filter { liveUnits.contains($0.key) }
         activityReaders = activityReaders.filter { activities[$0.key] != nil }
@@ -216,13 +223,14 @@ final class EvidenceCollector: EvidenceCollecting {
     /// time and no CPU numbers. Nil means: go on with what was kept in
     /// `lastSample`. After `heldSamples` failures in a row the table counts
     /// as empty, and the empty table is returned.
-    private func unreadableTable(now: Date, started: UInt64) -> [ProcessInfoRow]? {
+    private func unreadableTable(time: SampleTime, started: UInt64) -> [ProcessInfoRow]? {
         unreadableTables += 1
         guard unreadableTables <= Self.heldSamples, var sample = lastSample else {
             lastSample = nil
             return []
         }
-        sample.frame.at = now
+        sample.frame.at = time.at
+        sample.frame.awake = time.awake
         for index in sample.frame.agents.indices {
             sample.frame.agents[index].sampleInterval = 0
             sample.frame.agents[index].subtreeCPUSeconds = 0
@@ -380,7 +388,7 @@ final class EvidenceCollector: EvidenceCollecting {
     /// working directory that was written since the process started.
     private func fillFromTranscript(_ evidence: inout AgentEvidence, instance: AgentInstance, now: Date, watched: inout Set<String>) {
         var choice = transcriptChoices[instance.identity]
-        if choice.map({ now.timeIntervalSince($0.at) >= Self.listingAge }) ?? true {
+        if choice.map({ now.timeIntervalSince($0.at) >= Self.listingAge || $0.at > now }) ?? true {
             choice = (now, newestTranscript(for: instance))
             transcriptChoices[instance.identity] = choice
         }
