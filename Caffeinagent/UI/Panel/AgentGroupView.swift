@@ -6,8 +6,10 @@ struct AgentGroupView: View {
     let group: PanelGroup
     let isOpen: Bool
     let toggle: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
+        let layout = Self.childLayout(of: group)
         VStack(alignment: .leading, spacing: 0) {
             if group.canToggle {
                 Button(action: toggle) {
@@ -22,9 +24,10 @@ struct AgentGroupView: View {
             }
             if isOpen {
                 VStack(alignment: .leading, spacing: 0) {
-                    ForEach(group.children) { AgentChildView(child: $0) }
+                    ForEach(group.children) { AgentChildView(child: $0, layout: layout) }
                 }
                 .padding(.bottom, PanelMetrics.childrenBottom)
+                .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: layout)
                 .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
@@ -35,10 +38,17 @@ struct AgentGroupView: View {
         return group.header.state == .idle ? .trailing : .below
     }
 
+    /// From the widths of the texts at the width of the menu, so it is
+    /// known before the layout and the layout never feeds it.
+    static func childLayout(of group: PanelGroup) -> ChildLayout {
+        ChildLayout.decide(group.children.compactMap(AgentChildView.widths), gap: PanelMetrics.childGap, available: PanelMetrics.childWidth)
+    }
+
     /// For the height of the list before the layout.
     static func height(of group: PanelGroup, isOpen: Bool) -> CGFloat {
         let header = AgentRowView.height(of: group.header, summary: summaryPlace(group))
         guard isOpen else { return header }
-        return group.children.reduce(header + PanelMetrics.childrenBottom) { $0 + AgentChildView.height(of: $1) }
+        let layout = childLayout(of: group)
+        return group.children.reduce(header + PanelMetrics.childrenBottom) { $0 + AgentChildView.height(of: $1, layout: layout) }
     }
 }

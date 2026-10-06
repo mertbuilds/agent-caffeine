@@ -1,9 +1,10 @@
 import SwiftUI
 
 /// One session below the name of its agent: what it is called, then its
-/// state. The state goes on a line of its own when both do not fit.
+/// state. The group decides whether the state goes on a line of its own.
 struct AgentChildView: View {
     let child: PanelChild
+    let layout: ChildLayout
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -13,20 +14,15 @@ struct AgentChildView: View {
                     .foregroundStyle(.secondary)
                     .frame(height: PanelMetrics.childRowHeight)
             } else {
-                ViewThatFits(in: .horizontal) {
-                    HStack(spacing: PanelMetrics.childGap) {
-                        label.fixedSize()
-                        Spacer(minLength: 0)
-                        detail.fixedSize()
-                    }
-                    .frame(height: PanelMetrics.childRowHeight)
-                    VStack(alignment: .leading, spacing: 0) {
-                        label
-                        // A long state gets smaller before it is cut.
-                        detail.minimumScaleFactor(0.8)
-                    }
-                    .frame(height: PanelMetrics.childTwoLineHeight)
+                // One stack for both shapes, so the texts move when the shape changes.
+                stack {
+                    label.frame(maxWidth: .infinity, alignment: .leading)
+                    // A long state gets smaller before it is cut.
+                    detail
+                        .minimumScaleFactor(0.8)
+                        .fixedSize(horizontal: layout == .oneLine, vertical: false)
                 }
+                .frame(height: Self.height(of: child, layout: layout))
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -35,6 +31,13 @@ struct AgentChildView: View {
         .help(child.hint)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(child.accessibilityLabel)
+    }
+
+    private var stack: AnyLayout {
+        switch layout {
+        case .oneLine: AnyLayout(HStackLayout(spacing: PanelMetrics.childGap))
+        case .twoLines: AnyLayout(VStackLayout(alignment: .leading, spacing: 0))
+        }
     }
 
     private var label: some View {
@@ -54,10 +57,17 @@ struct AgentChildView: View {
             .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: child.detail)
     }
 
+    /// Nil for a count, which is one line in both shapes.
+    static func widths(of child: PanelChild) -> ChildLayout.Widths? {
+        guard let detail = child.detail else { return nil }
+        return ChildLayout.Widths(
+            label: TextFit.width(child.label, style: .callout),
+            detail: TextFit.width(ChildLayout.reserved(detail), style: .callout, digits: true)
+        )
+    }
+
     /// For the height of the list before the layout.
-    static func height(of child: PanelChild) -> CGFloat {
-        guard let detail = child.detail else { return PanelMetrics.childRowHeight }
-        let width = TextFit.width(child.label, style: .callout) + PanelMetrics.childGap + TextFit.width(detail, style: .callout, digits: true)
-        return width <= PanelMetrics.childWidth ? PanelMetrics.childRowHeight : PanelMetrics.childTwoLineHeight
+    static func height(of child: PanelChild, layout: ChildLayout) -> CGFloat {
+        child.detail == nil || layout == .oneLine ? PanelMetrics.childRowHeight : PanelMetrics.childTwoLineHeight
     }
 }
