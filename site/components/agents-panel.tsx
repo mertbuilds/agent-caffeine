@@ -546,12 +546,16 @@ export function BatteryLine({ battery }: { battery: Battery }) {
         </span>
         <span className={`h-1 w-[1.5px] rounded-r-[1px] transition-colors ${colors}`} style={{ background: outline }} />
       </span>
-      <span aria-hidden="true" className={`transition-colors ${colors}`} style={{ color: accent }}>
-        <Flow>{battery.charge}</Flow>
-      </span>
-      <span aria-hidden="true" className="text-[color-mix(in_srgb,var(--panel-fg)_30%,transparent)]">
-        ·
-      </span>
+      {battery.charge !== null && (
+        <>
+          <span aria-hidden="true" className={`transition-colors ${colors}`} style={{ color: accent }}>
+            <Flow>{battery.charge}</Flow>
+          </span>
+          <span aria-hidden="true" className="text-[color-mix(in_srgb,var(--panel-fg)_30%,transparent)]">
+            ·
+          </span>
+        </>
+      )}
       <span aria-hidden="true">
         <Flow>{battery.consequence}</Flow>
       </span>

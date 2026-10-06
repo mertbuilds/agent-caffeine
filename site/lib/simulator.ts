@@ -802,8 +802,8 @@ export type Battery = {
   percent: number;
   floor: number;
   level: "normal" | "nearFloor" | "stopped";
-  /** "88%". */
-  charge: string;
+  /** "88%". Null when stopped: the headline says the number then. */
+  charge: string | null;
   /** What follows from it, after the number. */
   consequence: string;
   /** For a screen reader. */
@@ -873,7 +873,7 @@ function battery(state: SimState, line: Headline): Battery | null {
     percent: shown,
     floor: BATTERY_FLOOR,
     level,
-    charge: percent(shown),
+    charge: level === "stopped" ? null : percent(shown),
     consequence: level === "stopped" ? `starts again at ${percent(recovery)}` : `sleeps below ${percent(BATTERY_FLOOR)}`,
     spoken:
       level === "stopped"

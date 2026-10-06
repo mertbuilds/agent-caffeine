@@ -219,7 +219,7 @@ test("the battery line shows on battery, amber near the floor and red when stopp
   assert.equal(view(setBattery(onBattery, 31)).battery?.level, "normal");
   assert.equal(view(setBattery(onBattery, 30)).battery?.level, "nearFloor");
   const stopped = view(setBattery(onBattery, BATTERY_FLOOR)).battery;
-  assert.deepEqual([stopped?.level, stopped?.charge, stopped?.consequence], ["stopped", "20%", "starts again at 25%"]);
+  assert.deepEqual([stopped?.level, stopped?.charge, stopped?.consequence], ["stopped", null, "starts again at 25%"]);
   assert.equal(stopped?.spoken, "Battery 20 percent, agent caffeine starts again at 25 percent");
   assert.equal(view(startPause(onBattery, "oneHour")).battery, null);
   assert.equal(view(setEnabled(onBattery, false)).battery, null);
