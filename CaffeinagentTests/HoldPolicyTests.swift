@@ -351,8 +351,8 @@ final class HoldPolicyTests: XCTestCase {
 
     func testSafetyStop() {
         let cases: [(stop: SafetyStop, text: String)] = [
-            (.batteryLow(percent: 20), "Sleeping allowed: battery at 20 percent"),
-            (.batteryLow(percent: 7), "Sleeping allowed: battery at 7 percent"),
+            (.batteryLow(percent: 20), "Sleeping allowed: battery at 20%"),
+            (.batteryLow(percent: 7), "Sleeping allowed: battery at 7%"),
             (.tooHot, "Sleeping allowed: the Mac is too hot"),
         ]
         for c in cases {
@@ -502,7 +502,7 @@ final class HoldPolicyTests: XCTestCase {
             (.waitingReleased(.one("Codex")), "Mac can sleep: Codex is waiting for you"),
             (.waitingReleased(.many(2)), "Mac can sleep: 2 agents are waiting for you"),
             (.noAgents, "Mac can sleep: no agent is open"),
-            (.safetyStop(.batteryLow(percent: 20)), "Sleeping allowed: battery at 20 percent"),
+            (.safetyStop(.batteryLow(percent: 20)), "Sleeping allowed: battery at 20%"),
             (.safetyStop(.tooHot), "Sleeping allowed: the Mac is too hot"),
             (.switchedOff, "Mac can sleep: agent caffeine is off"),
             (.paused(until: Self.start), "Mac can sleep: agent caffeine is paused"),

@@ -156,6 +156,6 @@ final class ReachableTests: XCTestCase {
 
     func testTheCostIsOneNumberInOnePlace() {
         XCTAssertEqual(Reachable.batteryPercentPerHour, 1)
-        XCTAssertEqual(PanelText.reachableCost, "Uses about 1 percent of battery per hour")
+        XCTAssertEqual(PanelText.reachableCost, "Uses about 1% of battery per hour")
     }
 }

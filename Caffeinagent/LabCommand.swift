@@ -126,7 +126,7 @@ enum LabCommand {
             lines.append(String(format: "Sample cost: min %.2f ms, median %.2f ms, max %.2f ms.", low, sorted[sorted.count / 2], high))
         }
         if seconds > 0 {
-            lines.append(String(format: "Process CPU: %.2f s, %.2f percent of one core.", cpu, cpu / seconds * 100))
+            lines.append(String(format: "Process CPU: %.2f s, %.2f%% of one core.", cpu, cpu / seconds * 100))
             lines.append(String(format: "File: %d bytes, %.0f bytes per minute.", size, Double(size) / seconds * 60))
         }
         lines.append(url.path)

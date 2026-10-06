@@ -59,7 +59,7 @@ final class MenuModelTests: XCTestCase {
             (.waitingReleased(.one("Codex")), canSleep, "Codex is waiting for your answer"),
             (.waitingReleased(.many(2)), canSleep, "2 agents are waiting for your answer"),
             (.noAgents, canSleep, "No agent is open"),
-            (.safetyStop(.batteryLow(percent: 20)), canSleep, "The battery is at 20 percent"),
+            (.safetyStop(.batteryLow(percent: 20)), canSleep, "The battery is at 20%"),
             (.safetyStop(.tooHot), canSleep, "Your Mac got too hot"),
             (.switchedOff, "agent caffeine is off", "Your Mac sleeps as usual"),
             (.notEntitled(.trialOver), canSleep, "Your trial has ended"),
@@ -295,7 +295,7 @@ final class MenuModelTests: XCTestCase {
         var onBattery = input(.noAgents)
         onBattery.onBattery = true
         onBattery.batteryPercent = 80
-        XCTAssertEqual(MenuModel.state(onBattery, now: now).reachableCost, "Uses about 1 percent of battery per hour")
+        XCTAssertEqual(MenuModel.state(onBattery, now: now).reachableCost, "Uses about 1% of battery per hour")
     }
 
     func testOnBatteryWithoutTheHelperTheLineSaysTheLidStillSleeps() {
@@ -429,7 +429,7 @@ final class MenuModelTests: XCTestCase {
     func testAttentionTexts() {
         var battery = input(.safetyStop(.batteryLow(percent: 18)))
         battery.settings.batteryFloorPercent = 20
-        XCTAssertEqual(MenuModel.attention(battery), PanelAttention(kind: .safetyStop, text: "agent caffeine starts again at 25 percent"))
+        XCTAssertEqual(MenuModel.attention(battery), PanelAttention(kind: .safetyStop, text: "agent caffeine starts again at 25%"))
         XCTAssertEqual(MenuModel.attention(input(.safetyStop(.tooHot))), PanelAttention(kind: .safetyStop, text: "agent caffeine starts again when it is cool"))
 
         var helper = input(.alwaysOn)

@@ -64,7 +64,7 @@ enum SmokeHealth {
             failures.append("main thread stalled for \(m.longestStallMs) ms")
         }
         if m.cpuPercent >= maxCPUPercent {
-            failures.append("used \(m.cpuPercent) percent of one core")
+            failures.append("used \(m.cpuPercent)% of one core")
         }
         let rate = sceneEvaluationsPerSecond(m)
         if rate >= maxSceneEvaluationsPerSecond {

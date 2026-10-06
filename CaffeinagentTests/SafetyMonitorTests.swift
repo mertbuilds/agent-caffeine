@@ -149,27 +149,27 @@ final class SafetyMonitorTests: XCTestCase {
     func testTexts() {
         XCTAssertEqual(
             NoLimitBatteryWarning.notificationText(percent: 10),
-            "The battery is at 10 percent. agent caffeine keeps your Mac awake because the battery limit is off"
+            "The battery is at 10%. agent caffeine keeps your Mac awake because the battery limit is off"
         )
         XCTAssertEqual(
             NoLimitBatteryWarning.notificationText(percent: 5),
-            "The battery is at 5 percent. agent caffeine keeps your Mac awake because the battery limit is off"
+            "The battery is at 5%. agent caffeine keeps your Mac awake because the battery limit is off"
         )
         var settings = DetectionSettings()
         settings.batteryFloorPercent = 35
-        XCTAssertEqual(SafetyText.stillSleeps(settings), "Your Mac still sleeps below 35 percent battery and when it gets too hot.")
+        XCTAssertEqual(SafetyText.stillSleeps(settings), "Your Mac still sleeps below 35% battery and when it gets too hot.")
         settings.batteryFloorEnabled = false
         XCTAssertEqual(SafetyText.stillSleeps(settings), "Your Mac still sleeps when it gets too hot. The battery limit is off.")
         XCTAssertTrue(SafetyText.alwaysTold(batteryFloorEnabled: true).contains("because the battery is low or your Mac got too hot"))
         XCTAssertFalse(SafetyText.alwaysTold(batteryFloorEnabled: false).contains("battery is low"))
         for text in [SafetyText.floorOnHelp, SafetyText.floorOffWarning, SafetyText.floorOffQuestion, SafetyText.floorOffConsequence,
                      SafetyText.alwaysTold(batteryFloorEnabled: true), SafetyText.alwaysTold(batteryFloorEnabled: false)] {
-            XCTAssertFalse(text.contains("%") || text.contains("\u{2014}"), text)
+            XCTAssertFalse(text.contains("percent") || text.contains("\u{2014}"), text)
         }
     }
 
     func testNotificationText() {
-        XCTAssertEqual(SafetyStop.batteryLow(percent: 20).notificationText, "agent caffeine let your Mac sleep because the battery is at 20 percent")
+        XCTAssertEqual(SafetyStop.batteryLow(percent: 20).notificationText, "agent caffeine let your Mac sleep because the battery is at 20%")
         XCTAssertEqual(SafetyStop.tooHot.notificationText, "agent caffeine let your Mac sleep because it got too hot")
     }
 }

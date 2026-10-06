@@ -37,8 +37,8 @@ final class PanelBatteryTests: XCTestCase {
         XCTAssertEqual(battery.fill, 0.58, accuracy: 0.0001)
         XCTAssertEqual(try XCTUnwrap(battery.tick), 0.2, accuracy: 0.0001)
         XCTAssertEqual(battery.level, .normal)
-        XCTAssertEqual(battery.leading, "58 percent battery")
-        XCTAssertEqual(battery.trailing, "Sleeps below 20 percent")
+        XCTAssertEqual(battery.leading, "58% battery")
+        XCTAssertEqual(battery.trailing, "Sleeps below 20%")
         XCTAssertEqual(battery.accessibilityLabel, "Battery 58 percent, agent caffeine lets your Mac sleep below 20 percent")
     }
 
@@ -47,7 +47,7 @@ final class PanelBatteryTests: XCTestCase {
         input.settings.batteryFloorPercent = 35
         let battery = try XCTUnwrap(MenuModel.battery(input))
         XCTAssertEqual(try XCTUnwrap(battery.tick), 0.35, accuracy: 0.0001)
-        XCTAssertEqual(battery.trailing, "Sleeps below 35 percent")
+        XCTAssertEqual(battery.trailing, "Sleeps below 35%")
     }
 
     func testAmberWithinTenPointsOfTheFloor() {
@@ -65,7 +65,7 @@ final class PanelBatteryTests: XCTestCase {
         input.settings.batteryFloorPercent = 20
         let battery = try XCTUnwrap(MenuModel.battery(input))
         XCTAssertEqual(battery.level, .stopped)
-        XCTAssertEqual(battery.trailing, "Starts again at 25 percent")
+        XCTAssertEqual(battery.trailing, "Starts again at 25%")
         XCTAssertEqual(battery.accessibilityLabel, "Battery 19 percent, agent caffeine starts again at 25 percent")
         // Heat is not the battery's stop.
         let hot = self.input(.safetyStop(.tooHot), percent: 60)
@@ -78,7 +78,7 @@ final class PanelBatteryTests: XCTestCase {
         let battery = try XCTUnwrap(MenuModel.battery(input))
         XCTAssertNil(battery.tick)
         XCTAssertEqual(battery.fill, 0.58, accuracy: 0.0001)
-        XCTAssertEqual(battery.leading, "58 percent battery")
+        XCTAssertEqual(battery.leading, "58% battery")
         XCTAssertEqual(battery.trailing, "No battery limit")
         XCTAssertEqual(battery.accessibilityLabel, "Battery 58 percent, no battery limit")
         XCTAssertEqual(battery.level, .normal)
@@ -97,6 +97,10 @@ final class PanelBatteryTests: XCTestCase {
         XCTAssertEqual(MenuModel.battery(input)?.trailing, "No battery limit")
     }
 
+    func testAPercentIsWrittenWithTheSignAndNoSpace() {
+        XCTAssertEqual([0, 1, 20, 88, 100].map(PanelText.percent), ["0%", "1%", "20%", "88%", "100%"])
+    }
+
     func testAPercentOutOfRangeIsCut() {
         XCTAssertEqual(MenuModel.battery(input(percent: 104))?.fill, 1)
         XCTAssertEqual(MenuModel.battery(input(percent: -3))?.fill, 0)
@@ -109,8 +113,10 @@ final class PanelBatteryTests: XCTestCase {
             let battery = try XCTUnwrap(MenuModel.battery(input))
             for text in [battery.leading, battery.trailing, battery.accessibilityLabel] {
                 XCTAssertFalse(text.hasSuffix("."), text)
-                XCTAssertFalse(text.contains("%"), text)
             }
+            // The sign on the screen, the word for VoiceOver.
+            XCTAssertFalse((battery.leading + battery.trailing).contains("percent"))
+            XCTAssertFalse(battery.accessibilityLabel.contains("%"), battery.accessibilityLabel)
         }
     }
 }

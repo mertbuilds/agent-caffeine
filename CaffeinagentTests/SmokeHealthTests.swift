@@ -26,7 +26,7 @@ final class SmokeHealthTests: XCTestCase {
         XCTAssertEqual(failures { $0.longestStallMs = 499 }, [])
         XCTAssertEqual(failures { $0.longestStallMs = 500 }, ["main thread stalled for 500 ms"])
         XCTAssertEqual(failures { $0.cpuPercent = 14.9 }, [])
-        XCTAssertEqual(failures { $0.cpuPercent = 15 }, ["used 15.0 percent of one core"])
+        XCTAssertEqual(failures { $0.cpuPercent = 15 }, ["used 15.0% of one core"])
         XCTAssertEqual(failures { $0.sceneEvaluations = 399 }, [])
         XCTAssertEqual(failures { $0.sceneEvaluations = 400 }, ["scenes worked out 50 times per second"])
         XCTAssertEqual(failures { $0.samples = 1 }, ["engine gave 1 samples, expected 2 or more"])

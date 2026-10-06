@@ -4,6 +4,18 @@ import Foundation
 /// would say, a duration always comes with "for" or "ago", and a label on
 /// one line has no period.
 enum PanelText {
+    // MARK: Numbers
+
+    /// The copy is English, so a number follows the English form in every
+    /// region. The one place to change when the app gets a second language.
+    static let copyLocale = Locale(identifier: "en")
+
+    /// "88%", for a line on the screen. A label for VoiceOver spells
+    /// "percent" out.
+    static func percent(_ value: Int) -> String {
+        value.formatted(.percent.locale(copyLocale))
+    }
+
     // MARK: Headline
 
     static let awakeTitle = "Your Mac stays awake"
@@ -55,7 +67,7 @@ enum PanelText {
         case .noAgents:
             return (canSleepTitle, "No agent is open")
         case .safetyStop(.batteryLow(let percent)):
-            return (canSleepTitle, "The battery is at \(percent) percent")
+            return (canSleepTitle, "The battery is at \(Self.percent(percent))")
         case .safetyStop(.tooHot):
             return (canSleepTitle, "Your Mac got too hot")
         case .switchedOff:
@@ -115,12 +127,17 @@ enum PanelText {
     }
 
     /// Below the choices, on battery.
-    static let reachableCost = "Uses about \(Reachable.batteryPercentPerHour) percent of battery per hour"
+    static let reachableCost = "Uses about \(percent(Reachable.batteryPercentPerHour)) of battery per hour"
     static let reachableNeedsLidClosed = "Close the lid and your Mac still sleeps. Set up lid closed to stay reachable"
 
     // MARK: Attention
 
     static func startsAgain(atBatteryPercent percent: Int) -> String {
+        "agent caffeine starts again at \(Self.percent(percent))"
+    }
+
+    /// For VoiceOver.
+    static func startsAgainSpoken(atBatteryPercent percent: Int) -> String {
         "agent caffeine starts again at \(percent) percent"
     }
 
@@ -141,11 +158,11 @@ enum PanelText {
     // MARK: Battery
 
     static func batteryLeft(percent: Int) -> String {
-        "\(percent) percent battery"
+        "\(Self.percent(percent)) battery"
     }
 
     static func batterySleepsBelow(percent: Int) -> String {
-        "Sleeps below \(percent) percent"
+        "Sleeps below \(Self.percent(percent))"
     }
 
     static let batteryNoLimit = "No battery limit"
@@ -155,7 +172,7 @@ enum PanelText {
     }
 
     static func batteryStartsAgain(atPercent percent: Int) -> String {
-        "Starts again at \(percent) percent"
+        "Starts again at \(Self.percent(percent))"
     }
 
     static func batterySpoken(percent: Int, floor: Int) -> String {
@@ -163,7 +180,7 @@ enum PanelText {
     }
 
     static func batterySpokenStopped(percent: Int, recovery: Int) -> String {
-        "Battery \(percent) percent, \(startsAgain(atBatteryPercent: recovery))"
+        "Battery \(percent) percent, \(startsAgainSpoken(atBatteryPercent: recovery))"
     }
 
     // MARK: Actions

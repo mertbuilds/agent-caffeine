@@ -519,7 +519,7 @@ struct LidClosedPreferences: View {
             Section {
                 Toggle("Let your Mac sleep when the battery is low", isOn: batteryFloorSwitch)
                 Stepper(value: $settings.batteryFloorPercent, in: DetectionSettings.batteryFloorRange, step: 5) {
-                    Text("Sleep below \(settings.batteryFloorPercent) percent")
+                    Text("Sleep below \(PanelText.percent(settings.batteryFloorPercent))")
                 }
                 .disabled(!settings.batteryFloorEnabled)
                 Group {
