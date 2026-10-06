@@ -34,7 +34,7 @@ struct PanelView: View {
             )
             Divider()
             BottomBar(
-                enabled: $enabled, mode: $mode, licenseActions: state.licenseActions,
+                enabled: $enabled, mode: $mode, pausedLabel: state.pausedLabel, licenseActions: state.licenseActions,
                 perform: perform, openPreferences: openPreferences, quit: quit
             )
         }

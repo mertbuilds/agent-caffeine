@@ -42,12 +42,14 @@ enum HoldHeadline: Equatable {
     case noAgents
     case safetyStop(SafetyStop)
     case switchedOff
+    /// The user paused agent caffeine until this time.
+    case paused(until: Date)
     case notEntitled(ExpiredReason)
 
     var keepsAwake: Bool {
         switch self {
         case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess: return true
-        case .idle, .waitingReleased, .noAgents, .safetyStop, .switchedOff, .notEntitled: return false
+        case .idle, .waitingReleased, .noAgents, .safetyStop, .switchedOff, .paused, .notEntitled: return false
         }
     }
 
@@ -61,7 +63,7 @@ enum HoldHeadline: Equatable {
         case .open(let subject): return Self.phrase(subject, one: "is open", many: "are open")
         case .alwaysOn: return "always on"
         case .remoteAccess: return "phone access is on"
-        case .idle, .waitingReleased, .noAgents, .safetyStop, .switchedOff, .notEntitled: return nil
+        case .idle, .waitingReleased, .noAgents, .safetyStop, .switchedOff, .paused, .notEntitled: return nil
         }
     }
 
@@ -75,6 +77,7 @@ enum HoldHeadline: Equatable {
         case .safetyStop(.batteryLow(let percent)): return "Sleeping allowed: battery at \(percent) percent"
         case .safetyStop(.tooHot): return "Sleeping allowed: the Mac is too hot"
         case .switchedOff: return "Mac can sleep: agent caffeine is off"
+        case .paused: return "Mac can sleep: agent caffeine is paused"
         case .notEntitled(let reason): return reason.text
         }
     }
@@ -112,14 +115,14 @@ struct PolicyMemory: Equatable {
 /// never releases the Mac while another still works.
 enum HoldPolicy {
     static func decide(
-        readings: [AgentReading], memory: PolicyMemory, mode: AwakeMode, enabled: Bool, entitlement: Entitlement?,
-        safety: SafetyStop?, settings: DetectionSettings, context: FrameContext, now: Date
+        readings: [AgentReading], memory: PolicyMemory, mode: AwakeMode, enabled: Bool, pausedUntil: Date? = nil,
+        entitlement: Entitlement?, safety: SafetyStop?, settings: DetectionSettings, context: FrameContext, now: Date
     ) -> (HoldDecision, PolicyMemory) {
         let memory = remember(readings, memory: memory, settings: settings, now: now)
         let perAgent = readings.map { reading in
             AgentHold(reading: reading, cause: cause(of: reading, memory: memory, mode: mode, settings: settings, now: now))
         }
-        if let stop = stopHeadline(enabled: enabled, entitlement: entitlement, safety: safety) {
+        if let stop = stopHeadline(enabled: enabled, pausedUntil: pausedUntil, entitlement: entitlement, safety: safety, now: now) {
             let released = perAgent.map { AgentHold(reading: $0.reading, cause: nil) }
             return (HoldDecision(hold: false, lidClosedFlag: false, headline: stop, perAgent: released), memory)
         }
@@ -132,11 +135,18 @@ enum HoldPolicy {
         return (HoldDecision(hold: hold, lidClosedFlag: lidClosedFlag, headline: headline, perAgent: perAgent), memory)
     }
 
-    /// Safety comes first, then the switch, then the license. No
-    /// entitlement means there is none to check.
-    private static func stopHeadline(enabled: Bool, entitlement: Entitlement?, safety: SafetyStop?) -> HoldHeadline? {
+    /// Safety comes first, then the switch, then a pause, then the
+    /// license. A pause is the user's own word like the switch, so it is
+    /// named before a license that ran out. It comes after the switch,
+    /// because a pause of an app that is off means nothing. Every stop
+    /// gives a decision without the sleep flag, so a pause never leaves
+    /// SleepDisabled on. No entitlement means there is none to check.
+    private static func stopHeadline(
+        enabled: Bool, pausedUntil: Date?, entitlement: Entitlement?, safety: SafetyStop?, now: Date
+    ) -> HoldHeadline? {
         if let safety { return .safetyStop(safety) }
         guard enabled else { return .switchedOff }
+        if let pausedUntil, now < pausedUntil { return .paused(until: pausedUntil) }
         if case .expired(let reason)? = entitlement { return .notEntitled(reason) }
         return nil
     }

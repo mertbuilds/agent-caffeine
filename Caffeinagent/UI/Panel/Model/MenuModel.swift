@@ -16,7 +16,10 @@ enum MenuModel {
         // decision says.
         let (title, subtitle) = pose == .helperOff
             ? (PanelText.helperOffTitle, PanelText.helperOffReason)
-            : PanelText.headline(input.decision.headline, waitingFor: waitingHoldLeft(input, now: now))
+            : PanelText.headline(
+                input.decision.headline, waitingFor: waitingHoldLeft(input, now: now),
+                now: now, calendar: input.calendar, locale: input.locale
+            )
         let (groups, moreIdle) = groups(input, now: now)
         return PanelState(
             pose: pose,
@@ -26,7 +29,8 @@ enum MenuModel {
             groups: groups,
             moreIdle: moreIdle,
             emptyText: input.decision.perAgent.isEmpty ? PanelText.empty(mode: input.mode) : nil,
-            licenseActions: licenseActions(input)
+            licenseActions: licenseActions(input),
+            pausedLabel: input.pausedUntil.map { PanelText.pausedUntil($0, calendar: input.calendar, locale: input.locale) }
         )
     }
 
@@ -49,6 +53,7 @@ enum MenuModel {
         case .safetyStop(.batteryLow): return .safetyStop(.battery)
         case .safetyStop(.tooHot): return .safetyStop(.heat)
         case .switchedOff, .notEntitled: return .off
+        case .paused: return .paused
         }
     }
 

@@ -132,6 +132,24 @@ enum PanelFixtures {
         Agent(id: "codex", name: "Codex", minutes: 40),
     ]))
 
+    /// Paused for an hour while an agent works: the rows keep their states.
+    static let paused = paused(.oneHour)
+    static let pausedUntilTomorrow = paused(.untilTomorrow)
+
+    private static func paused(_ choice: PauseChoice) -> PanelState {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let until = Pause.deadline(for: choice, now: now, calendar: calendar)
+        var input = Self.input(.paused(until: until), [
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 12, label: "wiki"),
+            Agent(id: "codex", name: "Codex", minutes: 40),
+        ])
+        input.pausedUntil = until
+        input.calendar = calendar
+        input.locale = Locale(identifier: "en_GB")
+        return state(input)
+    }
+
     static let safetyStop: PanelState = {
         var input = Self.input(.safetyStop(.batteryLow(percent: 20)), [
             Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 48, label: "wiki"),
@@ -182,7 +200,7 @@ enum PanelFixtures {
     static let all: [(name: String, state: PanelState)] = [
         ("working", working), ("waiting", waiting), ("all-idle", allIdle), ("same-folder", sameFolder), ("no-agent", noAgent),
         ("grouped", grouped), ("mixed", mixed), ("idle-groups", idleGroups), ("long-label", longLabel),
-        ("off", off), ("safety-stop", safetyStop), ("too-hot", tooHot), ("lid-closed", lidClosedNotSetUp),
+        ("off", off), ("paused", paused), ("safety-stop", safetyStop), ("too-hot", tooHot), ("lid-closed", lidClosedNotSetUp),
         ("helper-off", helperSwitchedOff), ("helper-silent", helperNotResponding), ("trial-ending", trialEnding), ("trial-over", trialOver),
     ]
 

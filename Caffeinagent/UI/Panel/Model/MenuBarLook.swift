@@ -19,6 +19,8 @@ struct MenuBarLook: Equatable, Hashable {
     var solid: Bool
     /// Of the whole picture. Less than 1 when the app is off.
     var opacity: Double = 1
+    /// Drawn like "can sleep", and said to VoiceOver as its own state.
+    var paused = false
 
     init(look: RobotLook) {
         switch look.eyes {
@@ -32,18 +34,21 @@ struct MenuBarLook: Equatable, Hashable {
 
     init(pose: HeroPose) {
         self.init(look: RobotLook(pose: pose))
+        paused = pose == .paused
     }
 
-    init(eyes: Eyes, solid: Bool, opacity: Double = 1) {
+    init(eyes: Eyes, solid: Bool, opacity: Double = 1, paused: Bool = false) {
         self.eyes = eyes
         self.solid = solid
         self.opacity = opacity
+        self.paused = paused
     }
 
     /// What VoiceOver says for the item in the menu bar.
     var accessibilityLabel: String {
         switch eyes {
         case .happy, .open: return "agent caffeine, Mac stays awake"
+        case .closed where paused: return "agent caffeine, paused"
         case .closed: return opacity < 1 ? "agent caffeine, off" : "agent caffeine, Mac can sleep"
         case .dead: return "agent caffeine, needs attention"
         }

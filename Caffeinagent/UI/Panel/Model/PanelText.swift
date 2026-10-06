@@ -9,6 +9,7 @@ enum PanelText {
     static let awakeTitle = "Your Mac stays awake"
     static let canSleepTitle = "Your Mac can sleep"
     static let offTitle = "agent caffeine is off"
+    static let pausedTitle = "agent caffeine is paused"
     static let helperOffTitle = "Your Mac may not sleep"
     static let helperOffReason = "agent caffeine was switched off in Login Items"
 
@@ -21,7 +22,11 @@ enum PanelText {
     /// The outcome, then the reason.
     /// - Parameter waitingFor: how long the Mac still stays awake for an
     ///   agent that waits, when that is known.
-    static func headline(_ headline: HoldHeadline, waitingFor: TimeInterval? = nil) -> (title: String, subtitle: String) {
+    ///   - now: for a pause, to say whether it ends today or tomorrow.
+    static func headline(
+        _ headline: HoldHeadline, waitingFor: TimeInterval? = nil,
+        now: Date = Date(), calendar: Calendar = .current, locale: Locale = .current
+    ) -> (title: String, subtitle: String) {
         switch headline {
         case .working(let subject):
             return (awakeTitle, phrase(subject, one: "is working", many: "are working"))
@@ -53,6 +58,8 @@ enum PanelText {
             return (canSleepTitle, "Your Mac got too hot")
         case .switchedOff:
             return (offTitle, "Your Mac sleeps as usual")
+        case .paused(let until):
+            return (pausedTitle, startsAgain(at: until, now: now, calendar: calendar, locale: locale))
         case .notEntitled(.trialOver):
             return (canSleepTitle, "Your trial has ended")
         case .notEntitled(.unverified):
@@ -67,6 +74,30 @@ enum PanelText {
         case .one(let name): return "\(name) \(one)"
         case .many(let count): return "\(count) agents \(many)"
         }
+    }
+
+    // MARK: Pause
+
+    /// "15:30", or "3:30 PM" for a user who set the 12-hour clock.
+    static func time(_ date: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = locale
+        formatter.calendar = calendar
+        formatter.timeZone = calendar.timeZone
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter.string(from: date)
+    }
+
+    /// Below the headline of a pause. A pause never ends later than tomorrow.
+    static func startsAgain(at date: Date, now: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
+        let time = time(date, calendar: calendar, locale: locale)
+        return calendar.isDate(date, inSameDayAs: now) ? "Starts again at \(time)" : "Starts again tomorrow at \(time)"
+    }
+
+    /// In the bar at the bottom, in place of the mode.
+    static func pausedUntil(_ date: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
+        "Paused until \(time(date, calendar: calendar, locale: locale))"
     }
 
     // MARK: Attention
@@ -101,6 +132,10 @@ enum PanelText {
         case .activateAgain: return "Activate again"
         case .setUpLidClosed: return "Set up…"
         case .dismissLidClosedHint: return "Dismiss"
+        case .pause(.thirtyMinutes): return "Pause for 30 minutes"
+        case .pause(.oneHour): return "Pause for 1 hour"
+        case .pause(.untilTomorrow): return "Pause until tomorrow"
+        case .resume: return "Resume now"
         }
     }
 
@@ -187,6 +222,8 @@ enum PanelText {
     static let buyInMenu = "Buy agent caffeine for $9"
     static let quit = "Quit agent caffeine"
     static let gearMenu = "Preferences and more"
+    static let pauseMenu = "Pause"
+    static let resume = "Resume"
     static let mainSwitch = "agent caffeine"
     static let expanded = "Expanded"
     static let collapsed = "Collapsed"

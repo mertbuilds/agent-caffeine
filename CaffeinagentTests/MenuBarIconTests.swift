@@ -17,14 +17,16 @@ final class MenuBarIconTests: XCTestCase {
         for (name, state) in PanelFixtures.all {
             let hero = RobotLook(pose: state.pose)
             let bar = MenuBarLook(pose: state.pose)
-            XCTAssertEqual(bar, MenuBarLook(look: hero), name)
+            var drawn = MenuBarLook(look: hero)
+            drawn.paused = state.pose == .paused
+            XCTAssertEqual(bar, drawn, name)
             XCTAssertEqual(bar.eyes, eyes(hero.eyes), name)
             // A solid head exactly while the title says the Mac stays awake.
             XCTAssertEqual(bar.solid, state.title == PanelText.awakeTitle, name)
             XCTAssertEqual(bar.opacity < 1, hero.eyes == .dim, name)
         }
         let poses = Set(PanelFixtures.all.map { MenuBarLook(pose: $0.state.pose) })
-        XCTAssertEqual(poses.count, 5, "Awake, waiting, can sleep, off and knocked out are all among the fixtures")
+        XCTAssertEqual(poses.count, 6, "Awake, waiting, can sleep, paused, off and knocked out are all among the fixtures")
     }
 
     func testEveryPose() {
@@ -34,6 +36,7 @@ final class MenuBarIconTests: XCTestCase {
             (.attentive, MenuBarLook(eyes: .open, solid: true), "agent caffeine, Mac stays awake"),
             (.asleep, MenuBarLook(eyes: .closed, solid: false), "agent caffeine, Mac can sleep"),
             (.off, MenuBarLook(eyes: .closed, solid: false, opacity: 0.45), "agent caffeine, off"),
+            (.paused, MenuBarLook(eyes: .closed, solid: false, paused: true), "agent caffeine, paused"),
             (.safetyStop(.battery), MenuBarLook(eyes: .dead, solid: false), "agent caffeine, needs attention"),
             (.safetyStop(.heat), MenuBarLook(eyes: .dead, solid: false), "agent caffeine, needs attention"),
             (.helperOff, MenuBarLook(eyes: .dead, solid: false), "agent caffeine, needs attention"),
@@ -45,7 +48,7 @@ final class MenuBarIconTests: XCTestCase {
     }
 
     func testOnlyTheKnockedOutRobotLeavesTheTemplate() {
-        for pose in [HeroPose.awake(wisps: 2), .attentive, .asleep, .off, .helperOff] {
+        for pose in [HeroPose.awake(wisps: 2), .attentive, .asleep, .paused, .off, .helperOff] {
             let look = MenuBarLook(pose: pose)
             let image = MenuBarIcon.image(for: look)
             XCTAssertEqual(image.size, MenuBarIcon.size)

@@ -52,6 +52,51 @@ final class HoldPolicyTests: XCTestCase {
         run([(0, readings)], mode: mode, enabled: enabled, entitlement: entitlement, safety: safety, settings: settings, context: context)[0].decision
     }
 
+    // MARK: Pause
+
+    private func paused(
+        _ readings: [AgentReading], until: TimeInterval, at seconds: TimeInterval = 0, mode: AwakeMode = .agentWorking, enabled: Bool = true,
+        entitlement: Entitlement? = .licensed, safety: SafetyStop? = nil
+    ) -> HoldDecision {
+        HoldPolicy.decide(
+            readings: readings, memory: PolicyMemory(), mode: mode, enabled: enabled, pausedUntil: at(until), entitlement: entitlement,
+            safety: safety, settings: DetectionSettings(), context: FrameContext(), now: at(seconds)
+        ).0
+    }
+
+    func testAPauseHoldsNothingAndNeverSetsTheSleepFlag() {
+        for mode in AwakeMode.allCases {
+            let decision = paused([claude(.working), codex(.waitingForUser)], until: 1800, mode: mode)
+            XCTAssertFalse(decision.hold, "\(mode)")
+            XCTAssertFalse(decision.lidClosedFlag, "\(mode)")
+            XCTAssertEqual(decision.headline, .paused(until: at(1800)), "\(mode)")
+            XCTAssertEqual(decision.perAgent.map(\.cause), [nil, nil], "\(mode)")
+            // The rows still say what the agents do.
+            XCTAssertEqual(decision.perAgent.map(\.reading.verdict.state), [.working, .waitingForUser], "\(mode)")
+        }
+    }
+
+    func testAPauseIsOverAtItsTime() {
+        XCTAssertEqual(paused([claude(.working)], until: 1800, at: 1799).headline, .paused(until: at(1800)))
+        let after = paused([claude(.working)], until: 1800, at: 1800)
+        XCTAssertEqual(after.headline, .working(.one("Claude Code")))
+        XCTAssertTrue(after.hold)
+        XCTAssertTrue(after.lidClosedFlag)
+    }
+
+    /// Safety, then the switch, then the pause, then the license.
+    func testTheOrderOfTheStops() {
+        let agents = [claude(.working)]
+        XCTAssertEqual(paused(agents, until: 1800, safety: .tooHot).headline, .safetyStop(.tooHot))
+        XCTAssertEqual(paused(agents, until: 1800, enabled: false).headline, .switchedOff)
+        XCTAssertEqual(paused(agents, until: 1800, entitlement: .expired(.trialOver)).headline, .paused(until: at(1800)))
+        XCTAssertEqual(paused(agents, until: 1800, at: 1800, entitlement: .expired(.trialOver)).headline, .notEntitled(.trialOver))
+        for decision in [paused(agents, until: 1800, safety: .tooHot), paused(agents, until: 1800, enabled: false)] {
+            XCTAssertFalse(decision.hold)
+            XCTAssertFalse(decision.lidClosedFlag)
+        }
+    }
+
     // MARK: While an agent is working
 
     func testStateAgentHoldsForTheReleaseTime() {
@@ -360,6 +405,7 @@ final class HoldPolicyTests: XCTestCase {
             (.safetyStop(.batteryLow(percent: 20)), "Sleeping allowed: battery at 20 percent"),
             (.safetyStop(.tooHot), "Sleeping allowed: the Mac is too hot"),
             (.switchedOff, "Mac can sleep: agent caffeine is off"),
+            (.paused(until: Self.start), "Mac can sleep: agent caffeine is paused"),
             (.notEntitled(.unverified), "Your license was not checked for 30 days. Connect to the internet to keep your Mac awake."),
         ]
         for c in cases {

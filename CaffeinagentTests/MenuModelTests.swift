@@ -122,6 +122,7 @@ final class MenuModelTests: XCTestCase {
             (.waitingReleased(.one("Codex")), .asleep),
             (.noAgents, .asleep),
             (.switchedOff, .off),
+            (.paused(until: now), .paused),
             (.notEntitled(.trialOver), .off),
             (.safetyStop(.batteryLow(percent: 12)), .safetyStop(.battery)),
             (.safetyStop(.tooHot), .safetyStop(.heat)),
@@ -171,6 +172,62 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(MenuModel.state(stopped, now: now).title, "Your Mac can sleep")
     }
 
+    // MARK: Pause
+
+    private func pausedInput(until: Date, locale: String = "en_GB") -> PanelInput {
+        var input = input(.paused(until: until), [claude(pid: 1, .working, .reportsBusy)])
+        input.pausedUntil = until
+        input.calendar = Calendar(identifier: .gregorian)
+        input.calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        input.locale = Locale(identifier: locale)
+        return input
+    }
+
+    /// `now` is 13:46 on a day in 1970, in the time zone of the test.
+    func testThePausedHeadlineSaysWhenItStartsAgain() {
+        let today = MenuModel.state(pausedInput(until: now.addingTimeInterval(104 * 60)), now: now)
+        XCTAssertEqual(today.pose, .paused)
+        XCTAssertEqual(today.title, "agent caffeine is paused")
+        XCTAssertEqual(today.subtitle, "Starts again at 15:30")
+        XCTAssertEqual(today.pausedLabel, "Paused until 15:30")
+        XCTAssertNil(today.attention)
+        // The agents keep their own states.
+        XCTAssertEqual(today.groups.map(\.header.state), [.working])
+
+        let tomorrow = MenuModel.state(pausedInput(until: now.addingTimeInterval((16 * 60 + 14) * 60)), now: now)
+        XCTAssertEqual(tomorrow.subtitle, "Starts again tomorrow at 06:00")
+        XCTAssertEqual(tomorrow.pausedLabel, "Paused until 06:00")
+        for text in [today.title, today.subtitle, tomorrow.subtitle, today.pausedLabel ?? ""] {
+            XCTAssertFalse(text.hasSuffix("."), text)
+        }
+    }
+
+    func testTheTimeFollowsTheClockOfTheUser() {
+        let until = now.addingTimeInterval(104 * 60)
+        func plain(_ text: String?) -> String? { text?.replacingOccurrences(of: "\u{202F}", with: " ") }
+        let twelve = MenuModel.state(pausedInput(until: until, locale: "en_US"), now: now)
+        XCTAssertEqual(plain(twelve.subtitle), "Starts again at 3:30 PM")
+        XCTAssertEqual(plain(twelve.pausedLabel), "Paused until 3:30 PM")
+        XCTAssertEqual(MenuModel.state(pausedInput(until: until, locale: "de_DE"), now: now).pausedLabel, "Paused until 15:30")
+    }
+
+    func testOnlyAPauseHasThePausedLabel() {
+        XCTAssertNil(MenuModel.state(input(.switchedOff), now: now).pausedLabel)
+        XCTAssertNil(MenuModel.state(input(.working(.one("Claude Code"))), now: now).pausedLabel)
+        // A safety stop takes the headline. The bar still offers to resume.
+        var stopped = pausedInput(until: now.addingTimeInterval(600))
+        stopped.decision.headline = .safetyStop(.tooHot)
+        let state = MenuModel.state(stopped, now: now)
+        XCTAssertEqual(state.title, "Your Mac can sleep")
+        XCTAssertEqual(state.pausedLabel, "Paused until 13:56")
+    }
+
+    func testThePauseActionsReadAsWholePhrases() {
+        XCTAssertEqual(PauseChoice.allCases.map { PanelAction.pause($0).title }, ["Pause for 30 minutes", "Pause for 1 hour", "Pause until tomorrow"])
+        XCTAssertEqual(PanelAction.resume.title, "Resume now")
+        XCTAssertEqual(PanelText.resume, "Resume")
+    }
+
     func testEveryRobotLook() {
         let awake = RobotLook(pose: .awake(wisps: 3))
         XCTAssertEqual([awake.eyes, RobotLook(pose: .attentive).eyes, RobotLook(pose: .asleep).eyes, RobotLook(pose: .off).eyes], [.happy, .open, .closed, .dim])
@@ -179,7 +236,9 @@ final class MenuModelTests: XCTestCase {
         XCTAssertTrue(RobotLook(pose: .asleep).snoozes)
         XCTAssertEqual(RobotLook(pose: .off).saturation, 0)
         // Only a robot that is awake steams, bobs and blinks.
-        for pose in [HeroPose.asleep, .off, .safetyStop(.battery), .safetyStop(.heat), .helperOff] {
+        // A pause comes back by itself: the sleeping robot, not the grey one.
+        XCTAssertEqual(RobotLook(pose: .paused), RobotLook(pose: .asleep))
+        for pose in [HeroPose.asleep, .paused, .off, .safetyStop(.battery), .safetyStop(.heat), .helperOff] {
             let look = RobotLook(pose: pose)
             XCTAssertEqual(look.wisps, 0, "\(pose)")
             XCTAssertEqual(look.bob, 0, "\(pose)")

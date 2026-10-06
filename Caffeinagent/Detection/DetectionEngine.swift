@@ -56,6 +56,8 @@ final class DetectionEngine: ObservableObject {
 
     var mode: AwakeMode { didSet { if mode != oldValue { decideAgain() } } }
     var enabled: Bool { didSet { if enabled != oldValue { decideAgain() } } }
+    /// Nil when the user did not pause. The owner clears it when the pause ends.
+    var pausedUntil: Date? { didSet { if pausedUntil != oldValue { decideAgain() } } }
     /// Nil means there is no license to check.
     var entitlement: Entitlement? { didSet { if entitlement != oldValue { decideAgain() } } }
     /// New agent names need a new look at the process table.
@@ -86,7 +88,7 @@ final class DetectionEngine: ObservableObject {
 
     init(
         collector: EvidenceCollecting, scheduler: DetectionScheduling, watcher: DetectionWatching,
-        mode: AwakeMode = .agentWorking, enabled: Bool = true, entitlement: Entitlement? = nil,
+        mode: AwakeMode = .agentWorking, enabled: Bool = true, pausedUntil: Date? = nil, entitlement: Entitlement? = nil,
         settings: DetectionSettings = DetectionSettings(), safety: SafetyStop? = nil
     ) {
         self.collector = collector
@@ -94,23 +96,24 @@ final class DetectionEngine: ObservableObject {
         self.watcher = watcher
         self.mode = mode
         self.enabled = enabled
+        self.pausedUntil = pausedUntil
         self.entitlement = entitlement
         self.settings = settings
         self.safety = safety
         decision = HoldPolicy.decide(
-            readings: [], memory: PolicyMemory(), mode: mode, enabled: enabled, entitlement: entitlement,
+            readings: [], memory: PolicyMemory(), mode: mode, enabled: enabled, pausedUntil: pausedUntil, entitlement: entitlement,
             safety: safety, settings: settings, context: FrameContext(), now: Date()
         ).0
     }
 
     /// The engine that reads this Mac.
     static func system(
-        mode: AwakeMode = .agentWorking, enabled: Bool = true, entitlement: Entitlement? = nil,
+        mode: AwakeMode = .agentWorking, enabled: Bool = true, pausedUntil: Date? = nil, entitlement: Entitlement? = nil,
         settings: DetectionSettings = DetectionSettings(), safety: SafetyStop? = nil
     ) -> DetectionEngine {
         DetectionEngine(
             collector: EvidenceCollector(), scheduler: DispatchDetectionScheduler(), watcher: SystemDetectionWatcher(),
-            mode: mode, enabled: enabled, entitlement: entitlement, settings: settings, safety: safety
+            mode: mode, enabled: enabled, pausedUntil: pausedUntil, entitlement: entitlement, settings: settings, safety: safety
         )
     }
 
@@ -189,7 +192,7 @@ final class DetectionEngine: ObservableObject {
 
     private func decide(at now: Date, context: FrameContext) {
         let (next, memory) = HoldPolicy.decide(
-            readings: readings, memory: policyMemory, mode: mode, enabled: enabled, entitlement: entitlement,
+            readings: readings, memory: policyMemory, mode: mode, enabled: enabled, pausedUntil: pausedUntil, entitlement: entitlement,
             safety: safety, settings: settings, context: context, now: now
         )
         policyMemory = memory

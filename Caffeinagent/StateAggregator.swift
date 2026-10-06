@@ -40,6 +40,22 @@ final class StateAggregator: ObservableObject {
             guard enabled != oldValue else { return }
             defaults.set(enabled, forKey: Self.enabledKey)
             engine.enabled = enabled
+            // Off ends a pause. See `PauseSwitch`.
+            resumeNow()
+        }
+    }
+    /// Until when agent caffeine acts as if it were off. The end is saved,
+    /// so a pause lasts over a restart of the app and a sleep of the Mac.
+    @PublishedOnChange private(set) var pause: Pause {
+        didSet {
+            guard pause != oldValue else { return }
+            if let until = pause.until {
+                defaults.set(until, forKey: Self.pausedUntilKey)
+            } else {
+                defaults.removeObject(forKey: Self.pausedUntilKey)
+            }
+            engine.pausedUntil = pause.until
+            armPauseTimer()
         }
     }
     @PublishedOnChange var mode: AwakeMode {
@@ -108,10 +124,12 @@ final class StateAggregator: ObservableObject {
     private var hiddenNotice: HiddenNotice?
     private var lastHelperRefresh = Date.distantPast
     private var napActivity: NSObjectProtocol?
+    private var pauseTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private var sigtermSource: DispatchSourceSignal?
     private static let enabledKey = "StateAggregator.enabled"
     private static let modeKey = "StateAggregator.mode"
+    private static let pausedUntilKey = "StateAggregator.pausedUntil"
     private static let lidClosedHintKey = "StateAggregator.lidClosedHintDismissed"
     /// System Settings tells nobody when the user allows or removes the
     /// helper, so its state is read again this often.
@@ -124,7 +142,11 @@ final class StateAggregator: ObservableObject {
         let mode = defaults.string(forKey: Self.modeKey).flatMap(AwakeMode.init(rawValue:)) ?? .agentWorking
         let settings = DetectionSettingsStore.load(from: defaults)
         LegacyBatteryOverride.clearLeftover(defaults: defaults)
-        let engine = DetectionEngine.system(mode: mode, enabled: enabled, entitlement: license.entitlement, settings: settings)
+        let pause = Pause(stored: defaults.object(forKey: Self.pausedUntilKey) as? Date, now: Date())
+        if pause.until == nil { defaults.removeObject(forKey: Self.pausedUntilKey) }
+        let engine = DetectionEngine.system(
+            mode: mode, enabled: enabled, pausedUntil: pause.until, entitlement: license.entitlement, settings: settings
+        )
         self.license = license
         self.sleepFlag = parts.sleepFlag
         self.defaults = defaults
@@ -133,6 +155,7 @@ final class StateAggregator: ObservableObject {
         self.engine = engine
         self.entitlement = license.entitlement
         self.enabled = enabled
+        self.pause = pause
         self.mode = mode
         self.settings = settings
         self.lidClosedHintDismissed = defaults.bool(forKey: Self.lidClosedHintKey)
@@ -165,6 +188,15 @@ final class StateAggregator: ObservableObject {
         sleepFlag.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
+
+        // A timer does not run while the Mac sleeps, and a clock that was
+        // set moves the end of a pause.
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
+            .merge(with: NotificationCenter.default.publisher(for: .NSSystemClockDidChange))
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.settlePause() }
+            .store(in: &cancellables)
+        armPauseTimer()
 
         NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)
             .sink { [weak self] _ in self?.shutdown() }
@@ -203,6 +235,7 @@ final class StateAggregator: ObservableObject {
             hasLicenseKey: license.record.key != nil,
             labels: sessionLabels,
             hints: sessionHints,
+            pausedUntil: pause.until,
             clock: stateClock,
             settings: settings,
             flagLeftOn: sleepFlag.flagLeftOn,
@@ -218,6 +251,42 @@ final class StateAggregator: ObservableObject {
             ),
             lidClosedHintDismissed: lidClosedHintDismissed
         )
+    }
+
+    // MARK: Pause
+
+    /// Nothing to pause while agent caffeine is off.
+    func startPause(_ choice: PauseChoice) {
+        guard enabled else { return }
+        var next = pause
+        next.start(choice, now: Date(), calendar: .current)
+        pause = next
+    }
+
+    func resumeNow() {
+        var next = pause
+        next.resume()
+        pause = next
+    }
+
+    /// Ends a pause whose time has come, and sets the timer for one that
+    /// goes on: after a sleep the old timer is late.
+    private func settlePause() {
+        var next = pause
+        next.settle(now: Date())
+        pause = next
+        armPauseTimer()
+    }
+
+    private func armPauseTimer() {
+        pauseTimer?.invalidate()
+        pauseTimer = nil
+        guard let until = pause.until else { return }
+        let timer = Timer(fire: until, interval: 0, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.settlePause() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        pauseTimer = timer
     }
 
     // MARK: Engine
@@ -240,6 +309,8 @@ final class StateAggregator: ObservableObject {
         }
         engine.safety = stop
         announceHiddenNotice()
+        // In case the timer of the pause is late.
+        if pause.until != nil, !pause.isPaused(now: Date()) { settlePause() }
         // Also keeps the assertions for another timeout.
         updatePower()
         sleepFlag.refreshHealth()
@@ -385,6 +456,7 @@ final class StateAggregator: ObservableObject {
     // returns, or the wait for the helper ran out.
     func shutdown() {
         engine.stop()
+        pauseTimer?.invalidate()
         sleepFlag.clearForQuit(timeout: 2)
         power.release()
         if let napActivity {

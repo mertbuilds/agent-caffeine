@@ -16,6 +16,9 @@ enum HeroPose: Equatable {
     case asleep
     /// Switched off, or the license does not allow a hold.
     case off
+    /// Paused by the user. Drawn like `asleep`: it starts again by itself,
+    /// so the grey of `off` would be wrong.
+    case paused
     /// Stopped to protect the Mac. The robot is knocked out.
     case safetyStop(SafetyKind)
     /// The helper was switched off in Login Items while the sleep flag was
@@ -33,6 +36,8 @@ enum PanelAction: Equatable {
     case activateAgain
     case setUpLidClosed
     case dismissLidClosedHint
+    case pause(PauseChoice)
+    case resume
 
     var title: String { PanelText.title(of: self) }
 }
@@ -210,6 +215,8 @@ struct PanelState: Equatable {
     var emptyText: String?
     /// License items of the gear menu.
     var licenseActions: [PanelAction] = []
+    /// "Paused until 15:30" for the bar at the bottom. Nil when not paused.
+    var pausedLabel: String?
 
     var moreIdleTitle: String? {
         moreIdle.isEmpty ? nil : PanelText.moreIdle(moreIdle.count)
@@ -272,6 +279,10 @@ struct PanelInput: Equatable {
     var hints: [ProcessIdentity: SessionHint] = [:]
     /// For the start time of a session, when nothing else tells it apart.
     var calendar = Calendar.current
+    /// For the time a pause ends at, with the user's 12 or 24 hour clock.
+    var locale = Locale.current
+    /// Nil when the user did not pause.
+    var pausedUntil: Date?
     var clock = StateClock()
     var settings = DetectionSettings()
     /// The sleep flag is on and the helper was switched off in Login Items.

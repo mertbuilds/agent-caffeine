@@ -276,6 +276,13 @@ final class DetectionEngineTests: XCTestCase {
         engine.enabled = true
         XCTAssertEqual(engine.decision.headline, .working(.one("Claude Code")))
 
+        let until = Date.distantFuture
+        engine.pausedUntil = until
+        XCTAssertEqual(engine.decision.headline, .paused(until: until))
+        XCTAssertFalse(engine.decision.lidClosedFlag)
+        engine.pausedUntil = nil
+        XCTAssertEqual(engine.decision.headline, .working(.one("Claude Code")))
+
         engine.safety = .tooHot
         XCTAssertEqual(engine.decision.headline, .safetyStop(.tooHot))
         engine.safety = nil

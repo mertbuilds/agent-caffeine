@@ -50,6 +50,10 @@ struct MenuBarView: View {
             openPreferences()
         case .dismissLidClosedHint:
             aggregator.lidClosedHintDismissed = true
+        case .pause(let choice):
+            aggregator.startPause(choice)
+        case .resume:
+            aggregator.resumeNow()
         }
     }
 }

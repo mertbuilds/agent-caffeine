@@ -55,7 +55,7 @@ struct RobotLook: Equatable {
             antenna = .amber
             blinks = true
             bob = RobotFloat.travel
-        case .asleep:
+        case .asleep, .paused:
             eyes = .closed
             antenna = .dark
             saturation = 0.6
