@@ -9,11 +9,13 @@ struct BatteryLine: View {
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 5) {
             glyph
-            Text(battery.charge)
-                .foregroundStyle(accent)
-                .contentTransition(.numericText())
-            Text(PanelText.batterySeparator)
-                .foregroundStyle(.tertiary)
+            if let charge = battery.charge {
+                Text(charge)
+                    .foregroundStyle(accent)
+                    .contentTransition(.numericText())
+                Text(PanelText.batterySeparator)
+                    .foregroundStyle(.tertiary)
+            }
             Text(battery.consequence)
         }
         .font(.callout)

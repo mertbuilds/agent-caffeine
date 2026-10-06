@@ -105,8 +105,9 @@ struct PanelBattery: Equatable {
         case .stopped, .nearEmpty: return .red
         }
     }
-    /// "88%".
-    var charge: String { PanelText.percent(percent) }
+    /// "88%". Nil while the floor stopped agent caffeine: the headline
+    /// says the number then.
+    var charge: String? { level == .stopped ? nil : PanelText.percent(percent) }
     /// What follows from it, after the number.
     var consequence: String {
         guard let floor else { return PanelText.batteryNoLimit }

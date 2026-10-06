@@ -68,7 +68,8 @@ final class PanelBatteryTests: XCTestCase {
         let battery = try XCTUnwrap(MenuModel.battery(input))
         XCTAssertEqual(battery.level, .stopped)
         XCTAssertEqual(battery.tone, .red)
-        XCTAssertEqual(battery.charge, "19%")
+        XCTAssertNil(battery.charge, "The headline says the number")
+        XCTAssertEqual(battery.fill, 0.19, accuracy: 0.0001)
         XCTAssertEqual(battery.consequence, "starts again at 25%")
         XCTAssertEqual(battery.accessibilityLabel, "Battery 19 percent, agent caffeine starts again at 25 percent")
         // Heat is not the battery's stop.
@@ -82,6 +83,7 @@ final class PanelBatteryTests: XCTestCase {
         let state = MenuModel.state(input, now: Date())
         XCTAssertEqual(state.title, "Your Mac can sleep")
         XCTAssertEqual(state.subtitle, "The battery is at 19%")
+        XCTAssertNil(state.battery?.charge, "The number is said once, in the headline")
         XCTAssertEqual(state.battery?.consequence, "starts again at 25%")
         XCTAssertNil(state.attention, "The line of the battery says when agent caffeine starts again")
         // Heat keeps its line: the battery says nothing about it.
@@ -129,11 +131,11 @@ final class PanelBatteryTests: XCTestCase {
         noLimit.settings.batteryFloorEnabled = false
         for input in [input(), input(.safetyStop(.batteryLow(percent: 19)), percent: 19), noLimit] {
             let battery = try XCTUnwrap(MenuModel.battery(input))
-            for text in [battery.charge, battery.consequence, battery.accessibilityLabel] {
+            for text in [battery.charge ?? "", battery.consequence, battery.accessibilityLabel] {
                 XCTAssertFalse(text.hasSuffix("."), text)
             }
             // The sign on the screen, the word for VoiceOver.
-            XCTAssertFalse((battery.charge + battery.consequence).contains("percent"))
+            XCTAssertFalse(((battery.charge ?? "") + battery.consequence).contains("percent"))
             XCTAssertFalse(battery.accessibilityLabel.contains("%"), battery.accessibilityLabel)
         }
     }
