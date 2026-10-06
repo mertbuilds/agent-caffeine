@@ -23,6 +23,10 @@ struct PanelView: View {
                     AttentionLine(attention: attention, busy: busy, perform: perform)
                         .transition(.opacity)
                 }
+                if let battery = state.battery {
+                    BatteryBar(battery: battery)
+                        .transition(.opacity)
+                }
             }
             .padding(.horizontal, PanelMetrics.gutter)
             .padding(.top, 12)
@@ -41,6 +45,7 @@ struct PanelView: View {
         .frame(width: PanelMetrics.width)
         .tint(.brand)
         .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.attention)
+        .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.battery == nil)
         .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.groups.map { [$0.id] + $0.children.map(\.id) })
     }
 }

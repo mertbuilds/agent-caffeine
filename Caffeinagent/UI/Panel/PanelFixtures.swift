@@ -161,6 +161,29 @@ enum PanelFixtures {
 
     static let tooHot = state(input(.safetyStop(.tooHot)))
 
+    /// On battery, with the bar: far from the floor, close to it, and stopped.
+    static let onBattery = onBattery(percent: 58)
+    static let onBatteryNearFloor = onBattery(percent: 27)
+    static let onBatteryStopped: PanelState = {
+        var input = Self.input(.safetyStop(.batteryLow(percent: 19)), [
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 82, label: "wiki"),
+            Agent(id: "codex", name: "Codex", minutes: 40),
+        ])
+        input.onBattery = true
+        input.batteryPercent = 19
+        return state(input)
+    }()
+
+    private static func onBattery(percent: Int) -> PanelState {
+        var input = Self.input(.working(.one("Claude Code")), [
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 82, label: "wiki", cause: .working),
+            Agent(id: "codex", name: "Codex", minutes: 40),
+        ])
+        input.onBattery = true
+        input.batteryPercent = percent
+        return state(input)
+    }
+
     static let lidClosedNotSetUp: PanelState = {
         var input = Self.input(.working(.one("Claude Code")), [
             Agent(id: "claude", name: "Claude Code", state: .working, reason: .backgroundJob(1), minutes: 100, label: "wiki", cause: .working),
@@ -200,7 +223,8 @@ enum PanelFixtures {
     static let all: [(name: String, state: PanelState)] = [
         ("working", working), ("waiting", waiting), ("all-idle", allIdle), ("same-folder", sameFolder), ("no-agent", noAgent),
         ("grouped", grouped), ("mixed", mixed), ("idle-groups", idleGroups), ("long-label", longLabel),
-        ("off", off), ("paused", paused), ("safety-stop", safetyStop), ("too-hot", tooHot), ("lid-closed", lidClosedNotSetUp),
+        ("off", off), ("paused", paused), ("safety-stop", safetyStop), ("too-hot", tooHot),
+        ("on-battery", onBattery), ("on-battery-near-floor", onBatteryNearFloor), ("on-battery-stopped", onBatteryStopped), ("lid-closed", lidClosedNotSetUp),
         ("helper-off", helperSwitchedOff), ("helper-silent", helperNotResponding), ("trial-ending", trialEnding), ("trial-over", trialOver),
     ]
 

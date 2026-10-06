@@ -120,6 +120,28 @@ enum PanelText {
         "Your trial ends in \(HumaneDuration.counted(days, "day"))"
     }
 
+    // MARK: Battery
+
+    static func batteryLeft(percent: Int) -> String {
+        "\(percent) percent battery"
+    }
+
+    static func batterySleepsBelow(percent: Int) -> String {
+        "Sleeps below \(percent) percent"
+    }
+
+    static func batteryStartsAgain(atPercent percent: Int) -> String {
+        "Starts again at \(percent) percent"
+    }
+
+    static func batterySpoken(percent: Int, floor: Int) -> String {
+        "Battery \(percent) percent, agent caffeine lets your Mac sleep below \(floor) percent"
+    }
+
+    static func batterySpokenStopped(percent: Int, recovery: Int) -> String {
+        "Battery \(percent) percent, \(startsAgain(atBatteryPercent: recovery))"
+    }
+
     // MARK: Actions
 
     static func title(of action: PanelAction) -> String {

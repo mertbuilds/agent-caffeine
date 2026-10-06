@@ -40,6 +40,9 @@ struct PanelPreview: View {
 #Preview("Paused until tomorrow") { PanelPreview(state: PanelFixtures.pausedUntilTomorrow) }
 #Preview("Safety stop") { PanelPreview(state: PanelFixtures.safetyStop) }
 #Preview("Too hot") { PanelPreview(state: PanelFixtures.tooHot) }
+#Preview("On battery") { PanelPreview(state: PanelFixtures.onBattery) }
+#Preview("On battery, near the floor") { PanelPreview(state: PanelFixtures.onBatteryNearFloor) }
+#Preview("On battery, stopped") { PanelPreview(state: PanelFixtures.onBatteryStopped) }
 #Preview("Lid closed not set up") { PanelPreview(state: PanelFixtures.lidClosedNotSetUp) }
 #Preview("Helper switched off") { PanelPreview(state: PanelFixtures.helperSwitchedOff, mode: .always) }
 #Preview("Helper gives no answer") { PanelPreview(state: PanelFixtures.helperNotResponding) }

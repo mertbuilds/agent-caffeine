@@ -9,6 +9,8 @@ enum MenuModel {
     static let idleChildrenInView = 6
     /// The trial is named in the menu from this many days left.
     static let trialWarningDays = 2
+    /// The battery bar turns amber this many points above the floor.
+    static let batteryWarningPoints = 10
 
     static func state(_ input: PanelInput, now: Date) -> PanelState {
         let pose = pose(input)
@@ -26,6 +28,7 @@ enum MenuModel {
             title: title,
             subtitle: subtitle,
             attention: attention(input),
+            battery: battery(input),
             groups: groups,
             moreIdle: moreIdle,
             emptyText: input.decision.perAgent.isEmpty ? PanelText.empty(mode: input.mode) : nil,
@@ -122,6 +125,24 @@ enum MenuModel {
             )
         }
         return nil
+    }
+
+    // MARK: Battery
+
+    /// The battery floor stops every hold on battery, with the lid open
+    /// too, so the bar is there whenever agent caffeine could hold on
+    /// battery, with or without the helper for a closed lid.
+    static func battery(_ input: PanelInput) -> PanelBattery? {
+        guard input.onBattery, let percent = input.batteryPercent,
+              input.enabled, input.pausedUntil == nil, input.entitlement.allowsHolding else { return nil }
+        let floor = input.settings.batteryFloorPercent
+        var level = PanelBattery.Level.normal
+        if case .safetyStop(.batteryLow) = input.decision.headline {
+            level = .stopped
+        } else if percent <= floor + batteryWarningPoints {
+            level = .nearFloor
+        }
+        return PanelBattery(percent: min(max(percent, 0), 100), floor: floor, level: level)
     }
 
     /// The hint of the first time. Not for a helper that was set up

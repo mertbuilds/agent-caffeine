@@ -115,6 +115,9 @@ final class StateAggregator: ObservableObject {
     @PublishedOnChange private(set) var entitlement: Entitlement
     /// False on a Mac without a battery, where a closed lid needs no helper.
     @PublishedOnChange private(set) var hasBattery = true
+    /// For the battery bar of the menu.
+    @PublishedOnChange private(set) var onBattery = false
+    @PublishedOnChange private(set) var batteryPercent: Int?
     @PublishedOnChange private(set) var helperError: String?
     /// By hook agent id. Read at launch and when Preferences opens, and
     /// never changed without the user's word.
@@ -270,7 +273,10 @@ final class StateAggregator: ObservableObject {
             helperLost: MenuModel.helperLost(
                 setup: sleepFlag.setup, wasSetUp: sleepFlag.wasSetUp, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
             ),
-            lidClosedHintDismissed: lidClosedHintDismissed
+            lidClosedHintDismissed: lidClosedHintDismissed,
+            enabled: enabled,
+            onBattery: onBattery,
+            batteryPercent: batteryPercent
         )
     }
 
@@ -376,6 +382,8 @@ final class StateAggregator: ObservableObject {
         let context = sample.frame.context
         if sessionHints != sample.sessionHints { sessionHints = sample.sessionHints }
         if hasBattery != (context.batteryPercent != nil) { hasBattery = context.batteryPercent != nil }
+        if onBattery != context.onBattery { onBattery = context.onBattery }
+        if batteryPercent != context.batteryPercent { batteryPercent = context.batteryPercent }
         let stop = safetyMonitor.update(context.safetyInputs)
         if let begun = SafetyStop.toAnnounce(previous: engine.safety, current: stop, wasHolding: power.held) {
             notify(begun.notificationText)

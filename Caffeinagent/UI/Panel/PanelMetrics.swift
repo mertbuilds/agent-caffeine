@@ -28,6 +28,9 @@ enum PanelMetrics {
     /// The list scrolls when it is taller.
     static let listMaxHeight: CGFloat = 300
     static let controlHeight: CGFloat = 28
+    static let batteryBarHeight: CGFloat = 4
+    /// The mark of the battery floor reaches past the bar.
+    static let batteryTickHeight: CGFloat = 8
 
     /// The ring's slot, which also holds the box.
     static var logoSlot: CGFloat { logoBox + 2 * ringGap }

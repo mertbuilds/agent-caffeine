@@ -59,6 +59,42 @@ struct PanelAttention: Equatable {
     var actions: [PanelAction] = []
 }
 
+/// The charge of the battery against the level where agent caffeine lets
+/// the Mac sleep. Only while the Mac runs on battery and agent caffeine
+/// could keep it awake.
+struct PanelBattery: Equatable {
+    enum Level: Equatable {
+        case normal
+        /// Within `MenuModel.batteryWarningPoints` of the floor.
+        case nearFloor
+        /// The battery floor stopped agent caffeine.
+        case stopped
+    }
+
+    /// 0 to 100.
+    var percent: Int
+    /// The setting "let your Mac sleep below".
+    var floor: Int
+    var level: Level
+
+    /// How much of the bar is filled, 0 to 1.
+    var fill: Double { Double(percent) / 100 }
+    /// Where the mark of the floor stands, 0 to 1.
+    var tick: Double { Double(floor) / 100 }
+    var leading: String { PanelText.batteryLeft(percent: percent) }
+    var trailing: String {
+        level == .stopped ? PanelText.batteryStartsAgain(atPercent: recovery) : PanelText.batterySleepsBelow(percent: floor)
+    }
+    /// One reading for VoiceOver.
+    var accessibilityLabel: String {
+        level == .stopped
+            ? PanelText.batterySpokenStopped(percent: percent, recovery: recovery)
+            : PanelText.batterySpoken(percent: percent, floor: floor)
+    }
+
+    private var recovery: Int { floor + SafetyMonitor.batteryRecoveryPoints }
+}
+
 /// The header line of a group of the agent list.
 struct PanelRow: Equatable, Identifiable {
     enum State: Equatable {
@@ -206,6 +242,9 @@ struct PanelState: Equatable {
     var title: String
     var subtitle: String
     var attention: PanelAttention?
+    /// Nil on wall power, on a Mac without a battery, and while agent
+    /// caffeine is off, paused or without a license.
+    var battery: PanelBattery?
     /// Always in view: the agents with a session that waits or works, and
     /// the first idle ones.
     var groups: [PanelGroup]
@@ -299,4 +338,9 @@ struct PanelInput: Equatable {
     /// for it on a Mac with a battery.
     var helperLost = false
     var lidClosedHintDismissed = false
+    /// The switch. A pause does not change it.
+    var enabled = true
+    var onBattery = false
+    /// Nil on a Mac without a battery.
+    var batteryPercent: Int?
 }
