@@ -14,6 +14,14 @@ final class LaunchArgumentsTests: XCTestCase {
             (["--lab-score", "/tmp/x.jsonl"], .lab),
             (["-NSDocumentRevisionsDebugMode", "YES", "--lab-record", "desk"], .lab),
             (["--lab-nothing"], .lab),
+            (["--smoke-test", "8"], .smokeTest(seconds: 8)),
+            (["-NSDocumentRevisionsDebugMode", "YES", "--smoke-test", "6.5"], .smokeTest(seconds: 6.5)),
+            // Too short for two samples, too long, no number, nothing.
+            (["--smoke-test", "2"], .refused("--smoke-test")),
+            (["--smoke-test", "600"], .refused("--smoke-test")),
+            (["--smoke-test", "long"], .refused("--smoke-test")),
+            (["--smoke-test"], .refused("--smoke-test")),
+            (["--smoke", "8"], .refused("--smoke")),
             // What a hook entry or a script could pass by mistake.
             (["claude", "Stop", "v=1"], .refused("claude")),
             (["hook", "claude", "Stop"], .refused("hook")),
@@ -110,6 +118,9 @@ final class LaunchArgumentsTests: XCTestCase {
             // A command is no launch of the app, whatever else is true.
             (.lab, false, false, .runLab),
             (.lab, true, true, .runLab),
+            // The smoke test runs next to a copy that is installed.
+            (.smokeTest(seconds: 8), false, false, .runSmokeTest(seconds: 8)),
+            (.smokeTest(seconds: 8), true, true, .runSmokeTest(seconds: 8)),
             (.refused("-h"), false, false, .refuse("-h")),
             (.refused("claude"), true, true, .refuse("claude")),
         ]

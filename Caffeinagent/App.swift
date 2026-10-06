@@ -5,6 +5,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var reopenObserver: NSObjectProtocol?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
+        // No offer to move, no setup window and no word from other copies.
+        guard !SmokeTest.isActive else { return SmokeTest.appDidLaunch() }
         AppRelocator.offerToMoveIfNeeded()
         // After the first sample, so the window can name the agents it found.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
@@ -36,8 +38,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 @main
 enum Main {
-    /// The lab commands run without the app. A plain launch is the app
-    /// when no other copy runs, and anything else is refused, so no
+    /// The lab commands run without the app, and the smoke test runs the
+    /// app with nothing behind it. A plain launch is the app when no
+    /// other copy runs, and anything else is refused, so no
     /// command line starts a second copy. A second copy leaves, and when
     /// the icon of the first is hidden it asks for Preferences first.
     @MainActor
@@ -45,11 +48,14 @@ enum Main {
         let kind = LaunchArguments.kind(of: CommandLine.arguments)
         let anotherCopyRuns = kind == .app
             && !SingleInstance.mayStart(others: { otherCopies().count }, sleep: { Thread.sleep(forTimeInterval: $0) })
-        let iconHidden = !MenuBarVisibility.isShown(in: .standard)
+        let iconHidden = anotherCopyRuns && !MenuBarVisibility.isShown(in: .standard)
         switch Reopen.action(kind: kind, anotherCopyRuns: anotherCopyRuns, iconHidden: iconHidden) {
         case .runLab:
             if LabCommand.run(CommandLine.arguments) { return }
             exit(1)
+        case .runSmokeTest(let seconds):
+            SmokeTest.prepare(seconds: seconds)
+            CaffeinagentApp.main()
         case .refuse(let argument):
             FileHandle.standardError.write(Data("Unknown argument \(argument). The app starts without arguments.\n".utf8))
             exit(1)
@@ -97,6 +103,7 @@ struct CaffeinagentApp: App {
     }
 
     var body: some Scene {
+        let _ = SmokeTest.countSceneEvaluation()
         MenuBarExtra(isInserted: Self.menuBarIconInserted(aggregator)) {
             MenuBarView(aggregator: aggregator)
         } label: {

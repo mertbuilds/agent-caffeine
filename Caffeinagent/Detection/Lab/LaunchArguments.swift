@@ -9,6 +9,9 @@ enum LaunchArguments {
     enum Kind: Equatable {
         case app
         case lab
+        /// `--smoke-test <seconds>`: the app starts, measures itself and
+        /// leaves. See `SmokeTest`.
+        case smokeTest(seconds: TimeInterval)
         /// Not a launch of the app and not a known command.
         case refused(String)
     }
@@ -18,11 +21,21 @@ enum LaunchArguments {
     /// other option with one dash is a typo or a guess (`-h`, `-lab-record`).
     static let systemOptionPrefixes = ["-psn_", "-NS", "-Apple"]
 
+    static let smokeTestOption = "--smoke-test"
+    /// Shorter than this and the engine has no time for two samples.
+    static let smokeTestSeconds: ClosedRange<TimeInterval> = 6...120
+
     /// `arguments` starts with the path of the binary. A system option
     /// has at most one value.
     static func kind(of arguments: [String]) -> Kind {
         let rest = Array(arguments.dropFirst())
         if rest.contains(where: { $0.hasPrefix("--lab-") }) { return .lab }
+        if let index = rest.firstIndex(of: smokeTestOption) {
+            guard index + 1 < rest.count, let seconds = TimeInterval(rest[index + 1]), smokeTestSeconds.contains(seconds) else {
+                return .refused(smokeTestOption)
+            }
+            return .smokeTest(seconds: seconds)
+        }
         var index = 0
         while index < rest.count {
             let argument = rest[index]
@@ -80,6 +93,7 @@ enum SingleInstance {
 enum Reopen {
     enum Action: Equatable {
         case runLab
+        case runSmokeTest(seconds: TimeInterval)
         case refuse(String)
         case start
         /// Another copy runs: this one leaves.
@@ -97,6 +111,7 @@ enum Reopen {
     static func action(kind: LaunchArguments.Kind, anotherCopyRuns: Bool, iconHidden: Bool) -> Action {
         switch kind {
         case .lab: return .runLab
+        case .smokeTest(let seconds): return .runSmokeTest(seconds: seconds)
         case .refused(let argument): return .refuse(argument)
         case .app:
             guard anotherCopyRuns else { return .start }

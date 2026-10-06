@@ -2,8 +2,16 @@ import Foundation
 import IOKit.pwr_mgt
 import os
 
+/// The power assertions, so the smoke test can run the app without them.
 @MainActor
-final class PowerKeeper {
+protocol PowerHolding: AnyObject {
+    var held: Bool { get }
+    func hold(reason: String)
+    func release()
+}
+
+@MainActor
+final class PowerKeeper: PowerHolding {
     /// The assertions end on their own after this long, so an app that
     /// hangs cannot keep the Mac awake for good. Every `hold` starts the
     /// time again, and the engine decides every few seconds. Checked on

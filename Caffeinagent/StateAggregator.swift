@@ -2,6 +2,28 @@ import AppKit
 import Combine
 import os
 
+/// What the aggregator reaches the Mac through. The app passes the real
+/// parts. The smoke test passes parts that do nothing, so it can start
+/// the app next to a copy that is installed (see `SmokeTest`).
+@MainActor
+struct AggregatorParts {
+    var defaults: UserDefaults
+    var license: LicenseManager
+    var sleepFlag: SleepFlagController
+    var power: PowerHolding
+    var notify: (String) -> Void
+
+    static func system() -> AggregatorParts {
+        AggregatorParts(
+            defaults: .standard,
+            license: LicenseManager(client: LicenseClient(), store: KeychainLicenseStore()),
+            sleepFlag: SleepFlagController(),
+            power: PowerKeeper(),
+            notify: SafetyNotifier.post
+        )
+    }
+}
+
 /// Joins the detection engine to what it drives: the power assertions, the
 /// root helper's sleep flag, the notification of a safety stop, and the
 /// state the menu and Preferences show.
@@ -11,26 +33,26 @@ final class StateAggregator: ObservableObject {
     // changes nothing must not make SwiftUI work out the scenes and the
     // menu bar label again.
     /// One for the app: the scenes and the setup window share it.
-    static let shared = StateAggregator()
+    static let shared = StateAggregator(parts: SmokeTest.parts ?? .system())
 
     @PublishedOnChange var enabled: Bool {
         didSet {
             guard enabled != oldValue else { return }
-            UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
+            defaults.set(enabled, forKey: Self.enabledKey)
             engine.enabled = enabled
         }
     }
     @PublishedOnChange var mode: AwakeMode {
         didSet {
             guard mode != oldValue else { return }
-            UserDefaults.standard.set(mode.rawValue, forKey: Self.modeKey)
+            defaults.set(mode.rawValue, forKey: Self.modeKey)
             engine.mode = mode
         }
     }
     @PublishedOnChange var settings: DetectionSettings {
         didSet {
             guard settings != oldValue else { return }
-            DetectionSettingsStore.save(settings, to: .standard)
+            DetectionSettingsStore.save(settings, to: defaults)
             safetyMonitor.batteryFloorPercent = settings.batteryFloorPercent
             engine.settings = settings
         }
@@ -41,7 +63,7 @@ final class StateAggregator: ObservableObject {
     @PublishedOnChange var showMenuBarIcon: Bool {
         didSet {
             guard showMenuBarIcon != oldValue else { return }
-            MenuBarVisibility.set(showMenuBarIcon, in: .standard)
+            MenuBarVisibility.set(showMenuBarIcon, in: defaults)
         }
     }
     /// The tab Preferences shows, so the menu can open one.
@@ -58,7 +80,7 @@ final class StateAggregator: ObservableObject {
     @PublishedOnChange var lidClosedHintDismissed: Bool {
         didSet {
             guard lidClosedHintDismissed != oldValue else { return }
-            UserDefaults.standard.set(lidClosedHintDismissed, forKey: Self.lidClosedHintKey)
+            defaults.set(lidClosedHintDismissed, forKey: Self.lidClosedHintKey)
         }
     }
     @PublishedOnChange private(set) var entitlement: Entitlement
@@ -75,7 +97,11 @@ final class StateAggregator: ObservableObject {
     let canSetUpHelper = AppRelocator.isInSystemApplications
     private let hookInstaller = HookInstaller()
     private let engine: DetectionEngine
-    private let power = PowerKeeper()
+    /// How many samples the engine gave. For the smoke test.
+    private(set) var samples = 0
+    private let defaults: UserDefaults
+    private let power: PowerHolding
+    private let notify: (String) -> Void
     private let openFiles = SystemOpenFiles()
     private var safetyMonitor = SafetyMonitor()
     private var flagRequest = SleepFlagRequest()
@@ -91,22 +117,26 @@ final class StateAggregator: ObservableObject {
     /// helper, so its state is read again this often.
     private static let helperRefreshInterval: TimeInterval = 30
 
-    init() {
-        let license = LicenseManager(client: LicenseClient(), store: KeychainLicenseStore())
-        let enabled = UserDefaults.standard.object(forKey: Self.enabledKey) as? Bool ?? true
-        let mode = UserDefaults.standard.string(forKey: Self.modeKey).flatMap(AwakeMode.init(rawValue:)) ?? .agentWorking
-        let settings = DetectionSettingsStore.load(from: .standard)
-        LegacyBatteryOverride.clearLeftover()
+    init(parts: AggregatorParts) {
+        let license = parts.license
+        let defaults = parts.defaults
+        let enabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? true
+        let mode = defaults.string(forKey: Self.modeKey).flatMap(AwakeMode.init(rawValue:)) ?? .agentWorking
+        let settings = DetectionSettingsStore.load(from: defaults)
+        LegacyBatteryOverride.clearLeftover(defaults: defaults)
         let engine = DetectionEngine.system(mode: mode, enabled: enabled, entitlement: license.entitlement, settings: settings)
         self.license = license
-        self.sleepFlag = SleepFlagController()
+        self.sleepFlag = parts.sleepFlag
+        self.defaults = defaults
+        self.power = parts.power
+        self.notify = parts.notify
         self.engine = engine
         self.entitlement = license.entitlement
         self.enabled = enabled
         self.mode = mode
         self.settings = settings
-        self.lidClosedHintDismissed = UserDefaults.standard.bool(forKey: Self.lidClosedHintKey)
-        self.showMenuBarIcon = MenuBarVisibility.isShown(in: .standard)
+        self.lidClosedHintDismissed = defaults.bool(forKey: Self.lidClosedHintKey)
+        self.showMenuBarIcon = MenuBarVisibility.isShown(in: defaults)
         self.decision = engine.decision
         safetyMonitor.batteryFloorPercent = settings.batteryFloorPercent
 
@@ -197,12 +227,13 @@ final class StateAggregator: ObservableObject {
     }
 
     private func sampled(_ sample: DetectionSample) {
+        samples += 1
         let context = sample.frame.context
         if sessionHints != sample.sessionHints { sessionHints = sample.sessionHints }
         if hasBattery != (context.batteryPercent != nil) { hasBattery = context.batteryPercent != nil }
         let stop = safetyMonitor.update(context.safetyInputs)
         if let begun = SafetyStop.toAnnounce(previous: engine.safety, current: stop, wasHolding: power.held) {
-            SafetyNotifier.post(begun.notificationText)
+            notify(begun.notificationText)
         }
         engine.safety = stop
         announceHiddenNotice()
@@ -225,7 +256,7 @@ final class StateAggregator: ObservableObject {
             entitlement: entitlement
         )
         if let begun = HiddenNotice.toAnnounce(previous: hiddenNotice, current: current, iconHidden: !showMenuBarIcon) {
-            SafetyNotifier.post(begun.notificationText)
+            notify(begun.notificationText)
         }
         hiddenNotice = current
     }

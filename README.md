@@ -24,7 +24,7 @@ macOS menu bar app that keeps your Mac awake while AI coding agents work. By def
 
 - On power, stays awake while a tool's phone access is on, also when no agent works (see Phone access below).
 
-The detection code is in `Caffeinagent/Detection/`, and the research behind it in `docs/research/`. `caffeinagent --lab-record <label>` records what the engine sees without starting the app (see `Caffeinagent/LabCommand.swift`). The app binary starts the app only without arguments: the lab commands are the only arguments it takes, and it refuses any other.
+The detection code is in `Caffeinagent/Detection/`, and the research behind it in `docs/research/`. `caffeinagent --lab-record <label>` records what the engine sees without starting the app (see `Caffeinagent/LabCommand.swift`). The app binary starts the app only without arguments: the lab commands and `--smoke-test` (see Before a release) are the only arguments it takes, and it refuses any other.
 
 ## Hooks
 
@@ -74,6 +74,10 @@ The app updates itself with [Sparkle](https://sparkle-project.org). It reads the
 - Updates are signed with the EdDSA key in the login keychain under the account `agent-caffeine`. Its public half is `SUPublicEDKey` in `project.yml`. Every Sparkle tool call passes `--account agent-caffeine`.
 - Run the script from a local Terminal: the keychain refuses SSH and scripted sessions.
 - Third-party licenses are in `THIRD_PARTY_NOTICES.md` and `Resources/Licenses/`, both bundled into the app.
+
+## Before a release
+
+Run `scripts/smoke-test.sh`. The unit tests never start the app, so they pass on a build that hangs at launch. The smoke test builds the app and starts it for 8 seconds as `caffeinagent --smoke-test 8`: the real scenes, the real aggregator and the real engine, with no power assertion, helper, Keychain, Polar, Sparkle or notification behind them, and with settings of its own, so it is safe next to the copy you use. It hides and shows the icon, opens Preferences once, and fails when the main thread stalls, the app uses more than 15 percent of a core, the scenes are worked out more than 50 times per second, the menu bar has no icon or the engine takes no sample. It prints what it measured as one line of JSON, then PASS or FAIL. `scripts/smoke-test.sh --app <path>` tests a bundle that is built already, and `scripts/release.sh` runs it on the signed app and stops when it fails, also with `--dry-run`.
 
 ## License keys
 

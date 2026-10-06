@@ -8,7 +8,8 @@ import Sparkle
 final class Updater: ObservableObject {
     @Published private(set) var canCheckForUpdates = false
 
-    private let controller: SPUStandardUpdaterController
+    /// Nil in the smoke test, which runs the app without Sparkle.
+    private let controller: SPUStandardUpdaterController?
     // Sparkle holds its user driver delegate weakly.
     private let userDriverDelegate: DockIconUserDriverDelegate
 
@@ -22,11 +23,16 @@ final class Updater: ObservableObject {
         #endif
         let userDriverDelegate = DockIconUserDriverDelegate()
         self.userDriverDelegate = userDriverDelegate
-        controller = SPUStandardUpdaterController(
+        guard !SmokeTest.isActive else {
+            controller = nil
+            return
+        }
+        let controller = SPUStandardUpdaterController(
             startingUpdater: startUpdater,
             updaterDelegate: nil,
             userDriverDelegate: userDriverDelegate
         )
+        self.controller = controller
         controller.updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
     }
@@ -35,7 +41,7 @@ final class Updater: ObservableObject {
     /// windows would open behind the app in front.
     func checkForUpdates() {
         NSApp.activate(ignoringOtherApps: true)
-        controller.checkForUpdates(nil)
+        controller?.checkForUpdates(nil)
     }
 }
 

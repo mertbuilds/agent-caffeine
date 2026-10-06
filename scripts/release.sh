@@ -18,9 +18,9 @@
 # Run it from a local Terminal on the Mac. Sparkle signs with the private key in
 # the login keychain, and the keychain refuses SSH and scripted sessions.
 #
-#   --dry-run  do everything local (build, sign, dmg, appcast, latest.json) but
-#              notarize nothing, upload nothing and publish nothing to Polar,
-#              and print each upload command instead.
+#   --dry-run  do everything local (build, sign, smoke test, dmg, appcast,
+#              latest.json) but notarize nothing, upload nothing and publish
+#              nothing to Polar, and print each upload command instead.
 #
 # One-time setup before first run:
 #   1. In Xcode → Settings → Accounts → your account → Manage Certificates,
@@ -309,6 +309,11 @@ if [ -n "$HOOK_OUTPUT" ]; then
   exit 1
 fi
 echo "    $HOOK_ID: $HOOK_ARCHS, hardened runtime, silent"
+
+# The unit tests never start the app. This starts the signed app for a few
+# seconds, next to a copy that is installed, and stops the release when its
+# main thread hangs, it burns a core, it shows no icon or it takes no sample.
+scripts/smoke-test.sh --app "$APP"
 
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist")
