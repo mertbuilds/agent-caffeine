@@ -30,6 +30,10 @@ final class StateAggregator: ObservableObject {
             engine.settings = settings
         }
     }
+    /// The robot in the menu bar. Hiding it changes nothing else.
+    @Published var showMenuBarIcon: Bool {
+        didSet { MenuBarVisibility.set(showMenuBarIcon, in: .standard) }
+    }
     /// The tab Preferences shows, so the menu can open one.
     @Published var preferencesTab = PreferencesTab.general
     @Published private(set) var decision: HoldDecision
@@ -62,6 +66,7 @@ final class StateAggregator: ObservableObject {
     private let openFiles = SystemOpenFiles()
     private var safetyMonitor = SafetyMonitor()
     private var flagRequest = SleepFlagRequest()
+    private var hiddenNotice: HiddenNotice?
     /// The helper gets no call before its version was checked at launch.
     private var helperChecked = false
     private var lastHelperRefresh = Date.distantPast
@@ -90,6 +95,7 @@ final class StateAggregator: ObservableObject {
         self.mode = mode
         self.settings = settings
         self.lidClosedHintDismissed = UserDefaults.standard.bool(forKey: Self.lidClosedHintKey)
+        self.showMenuBarIcon = MenuBarVisibility.isShown(in: .standard)
         self.decision = engine.decision
         safetyMonitor.batteryFloorPercent = settings.batteryFloorPercent
 
@@ -186,9 +192,20 @@ final class StateAggregator: ObservableObject {
             SafetyNotifier.post(begun.notificationText)
         }
         engine.safety = stop
+        announceHiddenNotice()
         // Also keeps the assertions for another timeout.
         updatePower()
         if sample.frame.at.timeIntervalSince(lastHelperRefresh) >= Self.helperRefreshInterval { refreshHelperStatus() }
+    }
+
+    /// With the icon hidden, the menu's word that agent caffeine cannot do
+    /// its work reaches nobody, so it is told once as a notification.
+    private func announceHiddenNotice() {
+        let current = HiddenNotice.current(flagLeftOn: sleepFlag.flagLeftOn, entitlement: entitlement)
+        if let begun = HiddenNotice.toAnnounce(previous: hiddenNotice, current: current, iconHidden: !showMenuBarIcon) {
+            SafetyNotifier.post(begun.notificationText)
+        }
+        hiddenNotice = current
     }
 
     private func updatePower() {

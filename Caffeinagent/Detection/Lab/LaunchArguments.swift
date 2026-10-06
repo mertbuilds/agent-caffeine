@@ -73,3 +73,40 @@ enum SingleInstance {
         }
     }
 }
+
+/// What a start of the binary does, and how a copy that runs comes back
+/// when its icon is hidden: without the icon, opening the app again is the
+/// only way to Preferences.
+enum Reopen {
+    enum Action: Equatable {
+        case runLab
+        case refuse(String)
+        case start
+        /// Another copy runs: this one leaves.
+        case quit
+        /// Another copy runs with its icon hidden: this one asks it to
+        /// show Preferences, then leaves.
+        case askRunningCopy
+    }
+
+    /// The running copy shows Preferences when it gets this. It carries
+    /// nothing, and the running copy decides for itself.
+    static let notificationName = "com.caffeinagent.app.showPreferences"
+
+    /// `anotherCopyRuns` counts only for a plain launch.
+    static func action(kind: LaunchArguments.Kind, anotherCopyRuns: Bool, iconHidden: Bool) -> Action {
+        switch kind {
+        case .lab: return .runLab
+        case .refused(let argument): return .refuse(argument)
+        case .app:
+            guard anotherCopyRuns else { return .start }
+            return iconHidden ? .askRunningCopy : .quit
+        }
+    }
+
+    /// Whether the copy that runs shows Preferences when the user opens
+    /// the app again. With the icon shown, the menu is the way in.
+    static func showsPreferences(iconHidden: Bool) -> Bool {
+        iconHidden
+    }
+}

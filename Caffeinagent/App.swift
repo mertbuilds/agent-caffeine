@@ -2,12 +2,35 @@ import SwiftUI
 import AppKit
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private var reopenObserver: NSObjectProtocol?
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         AppRelocator.offerToMoveIfNeeded()
         // After the first sample, so the window can name the agents it found.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             if Onboarding.isPending { OnboardingWindow.show(aggregator: .shared) }
         }
+        // A second copy that leaves asks for Preferences this way. What it
+        // sends is not read.
+        reopenObserver = DistributedNotificationCenter.default().addObserver(
+            forName: Notification.Name(Reopen.notificationName), object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { _ = self?.showPreferencesIfHidden() }
+        }
+    }
+
+    /// The user opened the app again, from the Finder or Spotlight.
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
+        !showPreferencesIfHidden()
+    }
+
+    @MainActor
+    private func showPreferencesIfHidden() -> Bool {
+        let aggregator = StateAggregator.shared
+        guard Reopen.showsPreferences(iconHidden: !aggregator.showMenuBarIcon) else { return false }
+        aggregator.preferencesTab = .general
+        PreferencesWindow.show()
+        return true
     }
 }
 
@@ -15,31 +38,41 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 enum Main {
     /// The lab commands run without the app. A plain launch is the app
     /// when no other copy runs, and anything else is refused, so no
-    /// command line starts a second copy.
+    /// command line starts a second copy. A second copy leaves, and when
+    /// the icon of the first is hidden it asks for Preferences first.
     @MainActor
     static func main() {
-        switch LaunchArguments.kind(of: CommandLine.arguments) {
-        case .lab:
+        let kind = LaunchArguments.kind(of: CommandLine.arguments)
+        let anotherCopyRuns = kind == .app
+            && !SingleInstance.mayStart(others: { otherCopies().count }, sleep: { Thread.sleep(forTimeInterval: $0) })
+        let iconHidden = !MenuBarVisibility.isShown(in: .standard)
+        switch Reopen.action(kind: kind, anotherCopyRuns: anotherCopyRuns, iconHidden: iconHidden) {
+        case .runLab:
             if LabCommand.run(CommandLine.arguments) { return }
             exit(1)
-        case .refused(let argument):
+        case .refuse(let argument):
             FileHandle.standardError.write(Data("Unknown argument \(argument). The app starts without arguments.\n".utf8))
             exit(1)
-        case .app:
-            guard SingleInstance.mayStart(others: otherCopies, sleep: { Thread.sleep(forTimeInterval: $0) }) else {
-                FileHandle.standardError.write(Data("agent caffeine is already running.\n".utf8))
-                exit(0)
-            }
+        case .askRunningCopy:
+            DistributedNotificationCenter.default().postNotificationName(
+                Notification.Name(Reopen.notificationName), object: nil, userInfo: nil, deliverImmediately: true
+            )
+            _ = otherCopies().first?.activate(options: [])
+            fallthrough
+        case .quit:
+            FileHandle.standardError.write(Data("agent caffeine is already running.\n".utf8))
+            exit(0)
+        case .start:
             CaffeinagentApp.main()
         }
     }
 
     /// The other running copies of the app, from any folder.
-    private static func otherCopies() -> Int {
-        guard let bundleID = Bundle.main.bundleIdentifier else { return 0 }
+    private static func otherCopies() -> [NSRunningApplication] {
+        guard let bundleID = Bundle.main.bundleIdentifier else { return [] }
         let own = ProcessInfo.processInfo.processIdentifier
         return NSRunningApplication.runningApplications(withBundleIdentifier: bundleID)
-            .filter { $0.processIdentifier != own && !$0.isTerminated }.count
+            .filter { $0.processIdentifier != own && !$0.isTerminated }
     }
 }
 
@@ -49,7 +82,7 @@ struct CaffeinagentApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     var body: some Scene {
-        MenuBarExtra {
+        MenuBarExtra(isInserted: $aggregator.showMenuBarIcon) {
             MenuBarView(aggregator: aggregator)
         } label: {
             MenuBarLabel(look: MenuBarLook(pose: MenuModel.pose(aggregator.panelInput)))

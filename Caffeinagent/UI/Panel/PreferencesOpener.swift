@@ -26,6 +26,18 @@ struct PreferencesOpener<Content: View>: View {
 
 /// The window of the Settings scene.
 enum PreferencesWindow {
+    /// Opens Preferences with no view to ask: from the app delegate, when
+    /// the icon is hidden and the menu does not exist.
+    @MainActor
+    static func show() {
+        if #available(macOS 14.0, *) {
+            SettingsAction.open()
+        } else {
+            NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        }
+        bringFront()
+    }
+
     /// Seconds between the tries of `bringFront`.
     static let tries: [TimeInterval] = [0, 0.1, 0.3]
 

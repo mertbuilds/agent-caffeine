@@ -99,4 +99,28 @@ final class LaunchArgumentsTests: XCTestCase {
         XCTAssertTrue(HookCatalog.pluginSource().contains("/Contents/MacOS/CaffeinagentHook"))
         XCTAssertFalse(HookCatalog.pluginSource().contains("/Contents/MacOS/caffeinagent"))
     }
+
+    func testReopenAction() {
+        let cases: [(kind: LaunchArguments.Kind, anotherCopyRuns: Bool, iconHidden: Bool, want: Reopen.Action)] = [
+            (.app, false, false, .start),
+            // A hidden icon never keeps the app from starting.
+            (.app, false, true, .start),
+            (.app, true, false, .quit),
+            (.app, true, true, .askRunningCopy),
+            // A command is no launch of the app, whatever else is true.
+            (.lab, false, false, .runLab),
+            (.lab, true, true, .runLab),
+            (.refused("-h"), false, false, .refuse("-h")),
+            (.refused("claude"), true, true, .refuse("claude")),
+        ]
+        for c in cases {
+            XCTAssertEqual(Reopen.action(kind: c.kind, anotherCopyRuns: c.anotherCopyRuns, iconHidden: c.iconHidden), c.want, "\(c)")
+        }
+    }
+
+    /// Without the icon, opening the app again is the only way to Preferences.
+    func testRunningCopyShowsPreferencesOnlyWhenTheIconIsHidden() {
+        XCTAssertTrue(Reopen.showsPreferences(iconHidden: true))
+        XCTAssertFalse(Reopen.showsPreferences(iconHidden: false))
+    }
 }

@@ -18,7 +18,7 @@ struct PreferencesView: View {
 
     var body: some View {
         TabView(selection: $aggregator.preferencesTab) {
-            GeneralPreferences(mode: $aggregator.mode, settings: $aggregator.settings)
+            GeneralPreferences(mode: $aggregator.mode, settings: $aggregator.settings, showMenuBarIcon: $aggregator.showMenuBarIcon)
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag(PreferencesTab.general)
             AgentPreferences(
@@ -197,6 +197,7 @@ struct PreferencesView: View {
 struct GeneralPreferences: View {
     @Binding var mode: AwakeMode
     @Binding var settings: DetectionSettings
+    @Binding var showMenuBarIcon: Bool
 
     /// From 30 seconds to 30 minutes.
     private static let durations: [TimeInterval] = [30, 60, 120, 180, 300, 600, 900, 1200, 1800]
@@ -236,6 +237,12 @@ struct GeneralPreferences: View {
                     "While an agent is waiting for you", $settings.waitingHold,
                     help: "Your Mac stays awake this long while an agent is waiting for your answer. After that it can sleep."
                 )
+            }
+            Section {
+                Toggle("Show agent caffeine in the menu bar", isOn: $showMenuBarIcon)
+                Text("When hidden, open agent caffeine again from Applications or Spotlight to see this window.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -438,10 +445,11 @@ private struct PreferencesPreview: View {
     var needsSudoersCleanup = false
     @State private var mode = AwakeMode.agentWorking
     @State private var settings = DetectionSettings()
+    @State private var showMenuBarIcon = true
 
     var body: some View {
         TabView {
-            GeneralPreferences(mode: $mode, settings: $settings)
+            GeneralPreferences(mode: $mode, settings: $settings, showMenuBarIcon: $showMenuBarIcon)
                 .tabItem { Label("General", systemImage: "gearshape") }
             AgentPreferences(
                 settings: $settings, foundIDs: ["claude", "codex-desktop"],
