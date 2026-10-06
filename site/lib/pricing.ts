@@ -17,7 +17,14 @@ const ALL_PLANS: readonly Plan[] = [
     checkoutUrl:
       process.env.NEXT_PUBLIC_BUY_URL ?? "https://buy.polar.sh/polar_cl_UtPTTZP0j4vXcUW47KZQalB2aVkSo3GyKubce3pvdr1",
   },
-  { id: "three", macs: 3, price: 29, checkoutUrl: process.env.NEXT_PUBLIC_BUY_URL_THREE_MACS ?? "" },
+  {
+    id: "three",
+    macs: 3,
+    price: 29,
+    checkoutUrl:
+      process.env.NEXT_PUBLIC_BUY_URL_THREE_MACS ??
+      "https://buy.polar.sh/polar_cl_8L5mWP6HGDRU1OtZE9aUCiRGYLILln6kWyAKW0qHkIb",
+  },
 ];
 
 /** The plans a reader can buy now, the one for a single Mac first. */
