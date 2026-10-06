@@ -34,6 +34,10 @@ final class DetectionSettingsStoreTests: XCTestCase {
         var want = DetectionSettings()
         want.waitingHold = 60
         XCTAssertEqual(DetectionSettingsStore.load(from: defaults), want)
+        XCTAssertTrue(want.displayOffLidClosed, "On for settings of a build that did not have it")
+        want.displayOffLidClosed = false
+        DetectionSettingsStore.save(want, to: defaults)
+        XCTAssertEqual(DetectionSettingsStore.load(from: defaults), want)
     }
 
     func testNumbersOutOfRangeAreNotTaken() throws {

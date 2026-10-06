@@ -22,6 +22,12 @@ final class LaunchArgumentsTests: XCTestCase {
             (["--smoke-test", "long"], .refused("--smoke-test")),
             (["--smoke-test"], .refused("--smoke-test")),
             (["--smoke", "8"], .refused("--smoke")),
+            // The probe of the displays reads only, and starts no app.
+            (["--display-probe", "120"], .displayProbe(seconds: 120)),
+            (["--display-probe", "0"], .refused("--display-probe")),
+            (["--display-probe", "7200"], .refused("--display-probe")),
+            (["--display-probe"], .refused("--display-probe")),
+            (["--display", "8"], .refused("--display")),
             // What a hook entry or a script could pass by mistake.
             (["claude", "Stop", "v=1"], .refused("claude")),
             (["hook", "claude", "Stop"], .refused("hook")),
@@ -121,6 +127,7 @@ final class LaunchArgumentsTests: XCTestCase {
             // The smoke test runs next to a copy that is installed.
             (.smokeTest(seconds: 8), false, false, .runSmokeTest(seconds: 8)),
             (.smokeTest(seconds: 8), true, true, .runSmokeTest(seconds: 8)),
+            (.displayProbe(seconds: 60), true, true, .runDisplayProbe(seconds: 60)),
             (.refused("-h"), false, false, .refuse("-h")),
             (.refused("claude"), true, true, .refuse("claude")),
         ]

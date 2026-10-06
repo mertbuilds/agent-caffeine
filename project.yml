@@ -205,6 +205,7 @@ targets:
         excludes:
           - SleepFlagSystem.swift
           - SafetyInputsReader.swift
+          - DisplaySystem.swift
       # The menu's model, the agent marks and the path reader. No SwiftUI.
       - Caffeinagent/UI/Panel/Model
       # The states the previews show, so the tests cover every one of them.

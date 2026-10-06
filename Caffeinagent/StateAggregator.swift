@@ -12,6 +12,8 @@ struct AggregatorParts {
     var sleepFlag: SleepFlagController
     var power: PowerHolding
     var hotKeys: HotKeyRegistering
+    /// Nil leaves the displays alone.
+    var display: DisplayController?
     var notify: (String) -> Void
 
     static func system() -> AggregatorParts {
@@ -21,6 +23,10 @@ struct AggregatorParts {
             sleepFlag: SleepFlagController(),
             power: PowerKeeper(),
             hotKeys: GlobalHotKey(),
+            display: DisplayController(
+                reader: SystemDisplayReader(), sleeper: SystemDisplaySleep(),
+                dimmer: BuiltinDimmer(methods: BuiltinDimmer.systemMethods, defaults: .standard), watcher: SystemDisplayWatcher()
+            ),
             notify: SafetyNotifier.post
         )
     }
@@ -125,6 +131,7 @@ final class StateAggregator: ObservableObject {
     private let defaults: UserDefaults
     private let power: PowerHolding
     private let hotKeys: HotKeyRegistering
+    private let display: DisplayController?
     private let notify: (String) -> Void
     private let openFiles = SystemOpenFiles()
     private var safetyMonitor = SafetyMonitor()
@@ -160,6 +167,7 @@ final class StateAggregator: ObservableObject {
         self.defaults = defaults
         self.power = parts.power
         self.hotKeys = parts.hotKeys
+        self.display = parts.display
         self.notify = parts.notify
         self.engine = engine
         self.entitlement = license.entitlement
@@ -233,6 +241,8 @@ final class StateAggregator: ObservableObject {
         refreshHookStatuses()
         syncSleepFlag()
         registerShortcuts()
+        // A lid that closes is acted on at once, not at the next sample.
+        display?.start { [weak self] in self?.engine.requestSample() }
         // On its own, so a helper that gives no answer holds nothing up.
         Task { await sleepFlag.replaceHelper(ifNot: AppVersion.helperForm) }
     }
@@ -372,6 +382,9 @@ final class StateAggregator: ObservableObject {
         }
         engine.safety = stop
         announceHiddenNotice()
+        display?.update(
+            lidClosed: context.lidClosed, holding: sample.decision.hold, enabled: settings.displayOffLidClosed, now: sample.frame.at
+        )
         // In case the timer of the pause is late.
         if pause.until != nil, !pause.isPaused(now: Date()) { settlePause() }
         // Also keeps the assertions for another timeout.
@@ -521,6 +534,7 @@ final class StateAggregator: ObservableObject {
         engine.stop()
         pauseTimer?.invalidate()
         hotKeys.unregisterAll()
+        display?.stop()
         sleepFlag.clearForQuit(timeout: 2)
         power.release()
         if let napActivity {

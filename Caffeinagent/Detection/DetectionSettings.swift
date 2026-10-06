@@ -24,6 +24,9 @@ struct DetectionSettings: Codable, Equatable {
     var weakEvidenceCap: TimeInterval = 1800
     var batteryFloorPercent = SafetyMonitor.defaultBatteryFloorPercent
     var stayAwakeLidClosedOnBattery = true
+    /// While agent caffeine keeps the Mac awake with the lid closed, the
+    /// built-in display is kept dark. See `DisplayRules`.
+    var displayOffLidClosed = true
     /// On power, the Mac stays awake while a tool's phone access is on,
     /// also with no agent at work.
     var stayAwakeForRemoteAccess = true
@@ -40,7 +43,7 @@ struct DetectionSettings: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case releaseAfterState, releaseAfterActivity, waitingHold, weakEvidenceCap
-        case batteryFloorPercent, stayAwakeLidClosedOnBattery, stayAwakeForRemoteAccess, agentRules, userAgentNames
+        case batteryFloorPercent, stayAwakeLidClosedOnBattery, displayOffLidClosed, stayAwakeForRemoteAccess, agentRules, userAgentNames
     }
 
     /// No time is shorter than a second or longer than a day.
@@ -68,6 +71,7 @@ struct DetectionSettings: Codable, Equatable {
         let floor = try container.decodeIfPresent(Int.self, forKey: .batteryFloorPercent) ?? defaults.batteryFloorPercent
         batteryFloorPercent = min(max(floor, Self.batteryFloorRange.lowerBound), Self.batteryFloorRange.upperBound)
         stayAwakeLidClosedOnBattery = try container.decodeIfPresent(Bool.self, forKey: .stayAwakeLidClosedOnBattery) ?? defaults.stayAwakeLidClosedOnBattery
+        displayOffLidClosed = try container.decodeIfPresent(Bool.self, forKey: .displayOffLidClosed) ?? defaults.displayOffLidClosed
         stayAwakeForRemoteAccess = try container.decodeIfPresent(Bool.self, forKey: .stayAwakeForRemoteAccess) ?? defaults.stayAwakeForRemoteAccess
         agentRules = try container.decodeIfPresent([String: AgentRule].self, forKey: .agentRules) ?? defaults.agentRules
         userAgentNames = try container.decodeIfPresent([String].self, forKey: .userAgentNames) ?? defaults.userAgentNames

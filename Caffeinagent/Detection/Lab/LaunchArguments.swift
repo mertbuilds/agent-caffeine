@@ -12,6 +12,9 @@ enum LaunchArguments {
         /// `--smoke-test <seconds>`: the app starts, measures itself and
         /// leaves. See `SmokeTest`.
         case smokeTest(seconds: TimeInterval)
+        /// `--display-probe <seconds>`: prints what the lid and the
+        /// displays do, and starts no app. See `DisplayProbe`.
+        case displayProbe(seconds: TimeInterval)
         /// Not a launch of the app and not a known command.
         case refused(String)
     }
@@ -25,6 +28,9 @@ enum LaunchArguments {
     /// Shorter than this and the engine has no time for two samples.
     static let smokeTestSeconds: ClosedRange<TimeInterval> = 6...120
 
+    static let displayProbeOption = "--display-probe"
+    static let displayProbeSeconds: ClosedRange<TimeInterval> = 1...3600
+
     /// `arguments` starts with the path of the binary. A system option
     /// has at most one value.
     static func kind(of arguments: [String]) -> Kind {
@@ -35,6 +41,12 @@ enum LaunchArguments {
                 return .refused(smokeTestOption)
             }
             return .smokeTest(seconds: seconds)
+        }
+        if let index = rest.firstIndex(of: displayProbeOption) {
+            guard index + 1 < rest.count, let seconds = TimeInterval(rest[index + 1]), displayProbeSeconds.contains(seconds) else {
+                return .refused(displayProbeOption)
+            }
+            return .displayProbe(seconds: seconds)
         }
         var index = 0
         while index < rest.count {
@@ -94,6 +106,7 @@ enum Reopen {
     enum Action: Equatable {
         case runLab
         case runSmokeTest(seconds: TimeInterval)
+        case runDisplayProbe(seconds: TimeInterval)
         case refuse(String)
         case start
         /// Another copy runs: this one leaves.
@@ -112,6 +125,7 @@ enum Reopen {
         switch kind {
         case .lab: return .runLab
         case .smokeTest(let seconds): return .runSmokeTest(seconds: seconds)
+        case .displayProbe(let seconds): return .runDisplayProbe(seconds: seconds)
         case .refused(let argument): return .refuse(argument)
         case .app:
             guard anotherCopyRuns else { return .start }

@@ -427,6 +427,12 @@ struct LidClosedPreferences: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
+            Section {
+                Toggle("Turn the display off when the lid is closed", isOn: $settings.displayOffLidClosed)
+                Text("With the lid closed, agent caffeine keeps the built-in display dark so it does not use the battery or warm your Mac.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
             if needsSudoersCleanup {
                 Section {
                     Text("An older version of agent caffeine added an admin entry to this Mac. It is no longer used.")

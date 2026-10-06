@@ -56,6 +56,8 @@ enum Main {
         case .runSmokeTest(let seconds):
             SmokeTest.prepare(seconds: seconds)
             CaffeinagentApp.main()
+        case .runDisplayProbe(let seconds):
+            DisplayProbe.run(seconds: seconds)
         case .refuse(let argument):
             FileHandle.standardError.write(Data("Unknown argument \(argument). The app starts without arguments.\n".utf8))
             exit(1)

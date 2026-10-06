@@ -26,7 +26,7 @@ macOS menu bar app that keeps your Mac awake while AI coding agents work. By def
 
 - On power, stays awake while a tool's phone access is on, also when no agent works (see Phone access below).
 
-The detection code is in `Caffeinagent/Detection/`, and the research behind it in `docs/research/`. `caffeinagent --lab-record <label>` records what the engine sees without starting the app (see `Caffeinagent/LabCommand.swift`). The app binary starts the app only without arguments: the lab commands and `--smoke-test` (see Before a release) are the only arguments it takes, and it refuses any other.
+The detection code is in `Caffeinagent/Detection/`, and the research behind it in `docs/research/`. `caffeinagent --lab-record <label>` records what the engine sees without starting the app (see `Caffeinagent/LabCommand.swift`). The app binary starts the app only without arguments: the lab commands, `--display-probe` and `--smoke-test` (see Before a release) are the only arguments it takes, and it refuses any other.
 
 ## Hooks
 
@@ -52,6 +52,16 @@ Remote Control counts as on for a `claude remote-control` server, for a session 
 `kIOPMAssertionTypePreventSystemSleep` keeps the Mac awake with the **lid closed only on AC power**. On battery, macOS sleeps on lid close regardless, and an assertion alone cannot override that. Only the system-wide `SleepDisabled` setting does, and it needs root.
 
 The app sets it through a small root helper (`CaffeinagentHelper/`), registered with `SMAppService` from Preferences > Lid closed and approved once in System Settings > General > Login Items. The helper is offered only when the app runs from `/Applications`. It takes two booleans over XPC from the signed app and nothing else. The app sets the flag together with the power assertions, also on AC, so unplugging with the lid closed does not race it, and sends a heartbeat. The helper clears the flag when the heartbeats stop, at its own start, and when launchd stops it, and never clears a flag it did not set. `SleepDisabled` also blocks the kernel's low-battery and thermal sleep, which is why the app watches both itself.
+
+### The display under a closed lid
+
+"Turn the display off when the lid is closed" (Preferences > Lid closed, on by default) keeps the built-in display dark while agent caffeine keeps the Mac awake with the lid closed. The rules are `Caffeinagent/Power/DisplayRules.swift`:
+
+- No external display: the displays are put to sleep at once (`IORequestIdle` on `IODisplayWrangler`, the request `pmset displaysleepnow` makes, and that command when the request is refused), and again when something wakes them under the lid, at most once per 5 seconds. When sleep does not hold, the brightness of the built-in display also goes to zero. Keys or a pointer that move under the closed lid mean someone uses the Mac from afar: for a minute after them the display is only dimmed, never put to sleep.
+- With an external display: display sleep would take the display you work on, so only the brightness of the built-in display goes to zero.
+- The brightness is set through the private `DisplayServices` framework, then IOKit's `IODisplaySetFloatParameter`, then `CoreDisplay`, whichever works first. Your value is saved before the display goes dark and put back when the lid opens, when the setting goes off, when agent caffeine quits, and at the next launch after a crash.
+
+`caffeinagent --display-probe <seconds>` prints once per second what the lid, each display, the brightness readers and the keyboard backlight say. It only reads, and starts no app.
 
 Builds before the helper used a sudoers entry for `pmset -b disablesleep`. The app clears a flag such a build left on at first launch, and Preferences offers to remove the entry.
 
