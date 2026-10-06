@@ -8,6 +8,8 @@ struct PanelView: View {
     /// A license check is under way.
     var busy = false
     var startsExpanded = false
+    /// Groups that start the other way round than their kind says.
+    var startsToggled: Set<String> = []
     let perform: (PanelAction) -> Void
     let openPreferences: () -> Void
     let quit: () -> Void
@@ -27,8 +29,8 @@ struct PanelView: View {
             .padding(.bottom, 16)
             Divider()
             AgentList(
-                rows: state.rows, moreIdle: state.moreIdle, moreIdleTitle: state.moreIdleTitle,
-                emptyText: state.emptyText, startsExpanded: startsExpanded
+                groups: state.groups, moreIdle: state.moreIdle, moreIdleTitle: state.moreIdleTitle,
+                emptyText: state.emptyText, startsExpanded: startsExpanded, startsToggled: startsToggled
             )
             Divider()
             BottomBar(
@@ -39,6 +41,6 @@ struct PanelView: View {
         .frame(width: PanelMetrics.width)
         .tint(.brand)
         .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.attention)
-        .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.rows.map(\.id))
+        .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.groups.map { [$0.id] + $0.children.map(\.id) })
     }
 }

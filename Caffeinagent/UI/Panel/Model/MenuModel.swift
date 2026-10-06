@@ -3,8 +3,10 @@ import Foundation
 /// What the menu shows, worked out from the decision. Pure: the caller
 /// passes the time.
 enum MenuModel {
-    /// Idle agents in view before the rest goes behind "more idle".
-    static let idleRowsInView = 3
+    /// Idle agents in view before the rest goes behind "more idle agents".
+    static let idleGroupsInView = 4
+    /// Idle sessions that an opened group lists before "and 4 more".
+    static let idleChildrenInView = 6
     /// The trial is named in the menu from this many days left.
     static let trialWarningDays = 2
 
@@ -15,13 +17,13 @@ enum MenuModel {
         let (title, subtitle) = pose == .helperOff
             ? (PanelText.helperOffTitle, PanelText.helperOffReason)
             : PanelText.headline(input.decision.headline, waitingFor: waitingHoldLeft(input, now: now))
-        let (rows, moreIdle) = rows(input, now: now)
+        let (groups, moreIdle) = groups(input, now: now)
         return PanelState(
             pose: pose,
             title: title,
             subtitle: subtitle,
             attention: attention(input),
-            rows: rows,
+            groups: groups,
             moreIdle: moreIdle,
             emptyText: input.decision.perAgent.isEmpty ? PanelText.empty(mode: input.mode) : nil,
             licenseActions: licenseActions(input)
@@ -138,113 +140,200 @@ enum MenuModel {
         }
     }
 
-    // MARK: Rows
+    // MARK: Groups
 
-    /// Agents that work come first, the longest at work on top, then the
-    /// ones that wait, each on its own line. Idle sessions of the same
-    /// agent share one line when there are two or more. The idle agent
-    /// that was active last is on top, and from the fourth on they go
-    /// behind "more idle".
-    static func rows(_ input: PanelInput, now: Date) -> (inView: [PanelRow], moreIdle: [PanelRow]) {
+    /// One group for each agent. Agents with a session that waits come
+    /// first, then the ones with a session that works, the longest at
+    /// work on top, then the idle ones, the one that was active last on
+    /// top. From the fifth idle agent on they go behind "more idle agents".
+    static func groups(_ input: PanelInput, now: Date) -> (inView: [PanelGroup], moreIdle: [PanelGroup]) {
         let readings = input.decision.perAgent.map(\.reading)
-        var active: [SingleRow] = []
-        for state in [WorkState.working, .waitingForUser] {
-            let found = readings.filter { $0.verdict.state == state }
-                .map { (reading: $0, since: input.clock.since($0.identity)) }
-            // Stable: instances with the same start keep the order of the readings.
-            let ordered = found.enumerated().sorted {
-                let (a, b) = ($0.element.since ?? .distantFuture, $1.element.since ?? .distantFuture)
-                return a == b ? $0.offset < $1.offset : a < b
-            }
-            active += ordered.map { SingleRow(row: activeRow($0.element.reading, input: input, now: now), identity: $0.element.reading.identity) }
+        var order: [String] = []
+        var byAgent: [String: [AgentReading]] = [:]
+        for reading in readings {
+            if byAgent[reading.agentID] == nil { order.append(reading.agentID) }
+            byAgent[reading.agentID, default: []].append(reading)
         }
-        let all = distinguished(active + idleRows(readings.filter { $0.verdict.state == .idle }, clock: input.clock, now: now), input: input)
-        let idle = Array(all.dropFirst(active.count))
+        let names = groupNames(readings)
+        let unordered = order.map { built(byAgent[$0] ?? [], name: names[$0] ?? "", input: input, now: now) }
+        // Stable: agents of the same rank and start keep the order of the readings.
+        let ordered = unordered.enumerated().sorted {
+            let (a, b) = ($0.element, $1.element)
+            if a.rank != b.rank { return a.rank < b.rank }
+            if a.rank == .idle {
+                let (sinceA, sinceB) = (a.since ?? .distantPast, b.since ?? .distantPast)
+                return sinceA == sinceB ? $0.offset < $1.offset : sinceA > sinceB
+            }
+            let (sinceA, sinceB) = (a.since ?? .distantFuture, b.since ?? .distantFuture)
+            return sinceA == sinceB ? $0.offset < $1.offset : sinceA < sinceB
+        }.map(\.element)
+        let all = distinguished(ordered, input: input)
+        let active = all.filter { $0.kind == .active }.count
+        let idle = all.count - active
         // A line that only hides one agent is no shorter than the agent.
-        let inView = idle.count <= idleRowsInView + 1 ? idle.count : idleRowsInView
-        return (Array(all.prefix(active.count + inView)), Array(idle.dropFirst(inView)))
+        let inView = idle <= idleGroupsInView + 1 ? idle : idleGroupsInView
+        return (Array(all.prefix(active + inView)), Array(all.dropFirst(active + inView)))
     }
 
-    /// A line, and the one session it stands for. A line for several
-    /// sessions has none.
-    private struct SingleRow {
-        var row: PanelRow
+    /// A group, where it stands in the list, and the one session it
+    /// stands for. A group of several sessions has none.
+    private struct Built {
+        enum Rank: Int, Comparable {
+            case waiting
+            case working
+            case idle
+            case ignored
+
+            static func < (a: Rank, b: Rank) -> Bool { a.rawValue < b.rawValue }
+        }
+
+        var group: PanelGroup
         var identity: ProcessIdentity?
+        var rank: Rank
+        /// Since when the longest session waits or works, or when the
+        /// last one went idle.
+        var since: Date?
     }
 
-    private static func activeRow(_ reading: AgentReading, input: PanelInput, now: Date) -> PanelRow {
+    /// The name of each agent. A desktop app that is open next to the
+    /// command line tool of the same name says that it is the app.
+    private static func groupNames(_ readings: [AgentReading]) -> [String: String] {
+        var names: [String: String] = [:]
+        let commandLine = Set(readings.filter { $0.kind == .cli }.map(\.displayName))
+        for reading in readings {
+            let isApp = reading.kind == .desktop && commandLine.contains(reading.displayName)
+            names[reading.agentID] = isApp ? PanelText.app(reading.displayName) : reading.displayName
+        }
+        return names
+    }
+
+    private static func built(_ readings: [AgentReading], name: String, input: PanelInput, now: Date) -> Built {
+        let first = readings[0]
+        let waiting = longestFirst(readings.filter { $0.verdict.state == .waitingForUser }, clock: input.clock)
+        let working = longestFirst(readings.filter { $0.verdict.state == .working }, clock: input.clock)
+        // Stable: the idle session that was active last comes first.
+        let idle = readings.filter { $0.verdict.state == .idle }
+            .map { (reading: $0, since: idleSince($0, clock: input.clock, now: now)) }
+            .enumerated().sorted {
+                let (a, b) = ($0.element.since ?? .distantPast, $1.element.since ?? .distantPast)
+                return a == b ? $0.offset < $1.offset : a > b
+            }.map(\.element)
+        let active = waiting + working
+        var header = PanelRow(id: first.agentID, agentID: first.agentID, name: name, label: nil, state: .idle, detail: "", hint: "")
+        var rank = Built.Rank.idle
+        var since = idle.first?.since
+        if let longest = waiting.first {
+            (header.state, rank, since) = (.waiting, .waiting, input.clock.since(longest.identity))
+        } else if let longest = working.first {
+            (header.state, rank, since) = (.working, .working, input.clock.since(longest.identity))
+        }
+        var group = PanelGroup(header: header, working: working.count, waiting: waiting.count, idle: idle.count)
+        if active.isEmpty, isIgnored(first) {
+            group.header.detail = PanelText.ignored
+            group.header.hint = first.verdict.reason.text
+            return Built(group: group, identity: readings.count == 1 ? first.identity : nil, rank: .ignored, since: since)
+        }
+        if readings.count == 1 {
+            group.header.label = active.isEmpty ? nil : input.labels[first.identity]
+            group.header.detail = active.isEmpty
+                ? PanelText.idle(seconds: since.map { now.timeIntervalSince($0) }, finished: input.clock.before(first.identity) == .working)
+                : activeDetail(first, input: input, now: now)
+            group.header.hint = first.verdict.reason.text
+            return Built(group: group, identity: first.identity, rank: rank, since: since)
+        }
+        group.header.detail = PanelText.groupSummary(working: working.count, waiting: waiting.count, idle: idle.count)
+        group.header.hint = group.header.detail
+        if active.isEmpty {
+            let listed = Array(idle.prefix(idleChildrenInView))
+            group.children = zip(listed, childLabels(listed.map(\.reading), input: input)).map { session, label in
+                child(session.reading, label: label, input: input, detail: PanelText.idle(
+                    seconds: session.since.map { now.timeIntervalSince($0) },
+                    finished: input.clock.before(session.reading.identity) == .working
+                ))
+            }
+            if idle.count > listed.count {
+                group.children.append(count(PanelText.andMore(idle.count - listed.count), agentID: first.agentID))
+            }
+        } else {
+            group.children = zip(active, childLabels(active, input: input)).map { reading, label in
+                child(reading, label: label, input: input, detail: activeDetail(reading, input: input, now: now))
+            }
+            if !idle.isEmpty {
+                group.children.append(count(PanelText.idleSessions(idle.count), agentID: first.agentID))
+            }
+        }
+        return Built(group: group, identity: nil, rank: rank, since: since)
+    }
+
+    /// Stable: sessions with the same start keep the order of the readings.
+    private static func longestFirst(_ readings: [AgentReading], clock: StateClock) -> [AgentReading] {
+        readings.enumerated().sorted {
+            let (a, b) = (clock.since($0.element.identity) ?? .distantFuture, clock.since($1.element.identity) ?? .distantFuture)
+            return a == b ? $0.offset < $1.offset : a < b
+        }.map(\.element)
+    }
+
+    /// The phrase of a session that works or waits.
+    private static func activeDetail(_ reading: AgentReading, input: PanelInput, now: Date) -> String {
         let seconds = input.clock.since(reading.identity).map { now.timeIntervalSince($0) }
         // An instance that was first seen in this state began before that.
         let startSeen = input.clock.before(reading.identity) != nil
-        let working = reading.verdict.state == .working
-        return PanelRow(
+        return reading.verdict.state == .working
+            ? PanelText.working(reading.verdict.reason, seconds: seconds, startSeen: startSeen)
+            : PanelText.waiting(seconds: seconds, startSeen: startSeen)
+    }
+
+    // MARK: Children
+
+    private static func child(_ reading: AgentReading, label: String, input: PanelInput, detail: String) -> PanelChild {
+        PanelChild(
             id: "\(reading.identity.pid):\(reading.identity.startTime)",
-            agentID: reading.agentID,
-            name: reading.displayName,
-            label: input.labels[reading.identity],
-            state: working ? .working : .waiting,
-            detail: working
-                ? PanelText.working(reading.verdict.reason, seconds: seconds, startSeen: startSeen)
-                : PanelText.waiting(seconds: seconds, startSeen: startSeen),
-            hint: reading.verdict.reason.text
+            label: label,
+            detail: detail,
+            hint: [input.labels[reading.identity], reading.verdict.reason.text].compactMap { $0 }.joined(separator: " · ")
         )
     }
 
-    private static func idleRows(_ idle: [AgentReading], clock: StateClock, now: Date) -> [SingleRow] {
-        var groups: [(readings: [AgentReading], since: Date?)] = []
-        var index: [String: Int] = [:]
-        for reading in idle {
-            let since = idleSince(reading, clock: clock, now: now)
-            if let at = index[reading.agentID] {
-                groups[at].readings.append(reading)
-                groups[at].since = [groups[at].since, since].compactMap { $0 }.max()
-            } else {
-                index[reading.agentID] = groups.count
-                groups.append(([reading], since))
+    /// A line that counts sessions in place of their names.
+    private static func count(_ text: String, agentID: String) -> PanelChild {
+        PanelChild(id: "count:\(agentID)", label: text, detail: nil, hint: text)
+    }
+
+    /// What each session of one agent is called: its own name, else its
+    /// folder, else its terminal, else when it started. Sessions that
+    /// would read the same also get their terminal, else their start.
+    static func childLabels(_ readings: [AgentReading], input: PanelInput) -> [String] {
+        let hints = readings.map { input.hints[$0.identity] }
+        let terminals = hints.map { $0?.terminal }
+        let starts = readings.map { started($0.identity, calendar: input.calendar) }
+        let plain = readings.indices.map { hints[$0]?.name ?? input.labels[readings[$0].identity] ?? terminals[$0] ?? starts[$0] }
+        var labels = plain
+        for indices in Dictionary(grouping: plain.indices, by: { plain[$0] }).values where indices.count > 1 {
+            let among = indices.map { terminals[$0] }
+            for (place, index) in indices.enumerated() {
+                let terminal = unique(among, at: place).flatMap { $0 == plain[index] ? nil : $0 }
+                let more = terminal ?? starts[index]
+                labels[index] = more == plain[index] ? more : "\(plain[index]) · \(more)"
             }
         }
-        let ordered = groups.enumerated().sorted {
-            let (a, b) = ($0.element, $1.element)
-            let (ignoredA, ignoredB) = (isIgnored(a.readings[0]), isIgnored(b.readings[0]))
-            if ignoredA != ignoredB { return ignoredB }
-            let (sinceA, sinceB) = (a.since ?? .distantPast, b.since ?? .distantPast)
-            return sinceA == sinceB ? $0.offset < $1.offset : sinceA > sinceB
-        }
-        return ordered.map { _, group in
-            let first = group.readings[0]
-            let count = group.readings.count
-            var row = PanelRow(
-                id: "idle:\(first.agentID)", agentID: first.agentID, name: first.displayName, label: nil, state: .idle,
-                detail: PanelText.idle(
-                    seconds: group.since.map { now.timeIntervalSince($0) },
-                    finished: clock.before(first.identity) == .working
-                ),
-                hint: first.verdict.reason.text
-            )
-            if isIgnored(first) {
-                row.detail = PanelText.ignored
-            } else if count > 1 {
-                row.detail = PanelText.idleSessions(count)
-                row.hint = row.detail
-            }
-            return SingleRow(row: row, identity: count == 1 ? first.identity : nil)
-        }
+        return labels
     }
 
     // MARK: Same title
 
-    /// Lines that would read the same get what tells them apart: the name
-    /// of the session, else its terminal, else when it started.
-    private static func distinguished(_ rows: [SingleRow], input: PanelInput) -> [PanelRow] {
-        var result = rows.map(\.row)
-        let sameTitle = Dictionary(grouping: rows.indices.filter { rows[$0].identity != nil }, by: { rows[$0].row.title })
+    /// Agents of one session whose lines would read the same get what
+    /// tells them apart: the name of the session, else its terminal,
+    /// else when it started.
+    private static func distinguished(_ built: [Built], input: PanelInput) -> [PanelGroup] {
+        var result = built.map(\.group)
+        let sameTitle = Dictionary(grouping: built.indices.filter { built[$0].identity != nil }, by: { built[$0].group.header.title })
         for indices in sameTitle.values where indices.count > 1 {
-            let hints = indices.map { rows[$0].identity.flatMap { input.hints[$0] } }
+            let hints = indices.map { built[$0].identity.flatMap { input.hints[$0] } }
             let names = hints.map { $0?.name }
             let terminals = hints.map { $0?.terminal }
             for (place, index) in indices.enumerated() {
-                guard let identity = rows[index].identity else { continue }
-                result[index].distinction = unique(names, at: place) ?? unique(terminals, at: place) ?? started(identity, calendar: input.calendar)
+                guard let identity = built[index].identity else { continue }
+                result[index].header.distinction = unique(names, at: place) ?? unique(terminals, at: place) ?? started(identity, calendar: input.calendar)
             }
         }
         return result

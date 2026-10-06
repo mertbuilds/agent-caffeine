@@ -15,12 +15,24 @@ enum PanelMetrics {
     static let ringWidth: CGFloat = 1.5
     static let activeRowHeight: CGFloat = 44
     static let idleRowHeight: CGFloat = 36
+    /// A session below the name of its agent.
+    static let childRowHeight: CGFloat = 24
+    /// With the state on a line of its own.
+    static let childTwoLineHeight: CGFloat = 40
+    /// Between a session's name and its state on one line.
+    static let childGap: CGFloat = 12
+    /// The slot of the chevron of a group that opens.
+    static let chevronWidth: CGFloat = 10
+    /// Below the last session of an open group.
+    static let childrenBottom: CGFloat = 4
     /// The list scrolls when it is taller.
     static let listMaxHeight: CGFloat = 300
     static let controlHeight: CGFloat = 28
 
     /// The ring's slot, which also holds the box.
     static var logoSlot: CGFloat { logoBox + 2 * ringGap }
+    /// From the leading edge of an agent's name to the trailing edge of the list.
+    static var childWidth: CGFloat { width - 2 * (gutter - ringGap) - logoSlot - 8 }
     /// Nested corners share one centre.
     static var ringRadius: CGFloat { logoBoxRadius + ringGap }
 

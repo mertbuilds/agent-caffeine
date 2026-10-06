@@ -138,11 +138,39 @@ enum PanelText {
     }
 
     static func idleSessions(_ count: Int) -> String {
-        "\(count) idle sessions"
+        HumaneDuration.counted(count, "idle session")
+    }
+
+    /// At the trailing edge of an agent with several sessions: "2 working,
+    /// 1 waiting for you", and "8 idle sessions" when none works or waits.
+    static func groupSummary(working: Int, waiting: Int, idle: Int) -> String {
+        let active = activeCounts(working: working, waiting: waiting)
+        return active.isEmpty ? idleSessions(idle) : active.joined(separator: ", ")
+    }
+
+    /// For VoiceOver, with the idle sessions: "3 working, 8 idle".
+    static func groupSpoken(working: Int, waiting: Int, idle: Int) -> String {
+        let active = activeCounts(working: working, waiting: waiting)
+        if active.isEmpty { return idleSessions(idle) }
+        return (active + (idle > 0 ? ["\(idle) idle"] : [])).joined(separator: ", ")
+    }
+
+    private static func activeCounts(working: Int, waiting: Int) -> [String] {
+        [working > 0 ? "\(working) working" : nil, waiting > 0 ? "\(waiting) waiting for you" : nil].compactMap { $0 }
+    }
+
+    /// Below the idle sessions that are listed.
+    static func andMore(_ count: Int) -> String {
+        "and \(count) more"
     }
 
     static func moreIdle(_ count: Int) -> String {
-        "\(count) more idle"
+        HumaneDuration.counted(count, "more idle agent")
+    }
+
+    /// A desktop app next to the command line tool of the same name.
+    static func app(_ name: String) -> String {
+        "\(name) app"
     }
 
     static let ignored = "Ignored"

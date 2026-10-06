@@ -90,6 +90,43 @@ enum PanelFixtures {
 
     static let noAgent = state(input(.noAgents))
 
+    /// Three sessions of one agent at work, and its idle ones.
+    static let grouped = state(input(.working(.many(3)), [
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 6.5, label: "wiki", cause: .working, hint: SessionHint(name: "wiki-6e", terminal: "ttys001")),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 6.4, label: "wiki", cause: .working, hint: SessionHint(name: "speaker-grille-spacing", terminal: "ttys002")),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 6.3, label: "wiki", cause: .working, hint: SessionHint(name: "wiki-1d", terminal: "ttys003")),
+    ] + idleClaude + [
+        Agent(id: "codex", name: "Codex", minutes: 6),
+        Agent(id: "antigravity", name: "Antigravity", minutes: 13 * 60),
+    ]))
+
+    /// Sessions that wait next to sessions that work.
+    static let mixed = state(input(.working(.many(2)), [
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 14, label: "wiki", cause: .working, hint: SessionHint(name: "wiki-6e")),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .runningCommand(3), minutes: 3, label: "site", cause: .working),
+        Agent(id: "claude", name: "Claude Code", state: .waitingForUser, reason: .asksPermission, minutes: 0.2, label: "notes", cause: .waitingForUser),
+        Agent(id: "codex", name: "Codex", state: .waitingForUser, reason: .asksPermission, minutes: 3, label: "website", cause: .waitingForUser),
+    ] + idleClaude.prefix(2) + [
+        Agent(id: "antigravity", name: "Antigravity", minutes: 13 * 60),
+    ]))
+
+    /// Only idle sessions. The user can open the first group.
+    static let idleGroups = state(input(.idle(.many(11)), (1...10).map {
+        Agent(id: "claude", name: "Claude Code", minutes: Double($0) * 7, hint: SessionHint(name: $0 % 3 == 0 ? nil : "wiki-\($0)e", terminal: "ttys00\($0)"))
+    } + [
+        Agent(id: "codex", name: "Codex", minutes: 6, hint: SessionHint(terminal: "ttys011")),
+        Agent(id: "codex", name: "Codex", minutes: 50, hint: SessionHint(terminal: "ttys012")),
+        Agent(id: "antigravity", name: "Antigravity", minutes: 13 * 60),
+    ]))
+
+    /// A session with a name of 40 characters, and one that asks.
+    static let longLabel = state(input(.working(.many(2)), [
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .runningCommand(3), minutes: 3, label: "wiki", cause: .working, hint: SessionHint(name: "rewrite-the-onboarding-flow-for-new-team")),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 6, label: "wiki", cause: .working, hint: SessionHint(name: "wiki-6e")),
+        Agent(id: "claude", name: "Claude Code", state: .waitingForUser, reason: .asksPermission, minutes: 3, label: "wiki", cause: .waitingForUser, hint: SessionHint(name: "speaker-grille-spacing")),
+        Agent(id: "codex", name: "Codex", minutes: 6),
+    ]))
+
     static let off = state(input(.switchedOff, [
         Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 12, label: "wiki"),
         Agent(id: "codex", name: "Codex", minutes: 40),
@@ -144,6 +181,7 @@ enum PanelFixtures {
     /// Every state by name, for the tests and the offscreen pictures.
     static let all: [(name: String, state: PanelState)] = [
         ("working", working), ("waiting", waiting), ("all-idle", allIdle), ("same-folder", sameFolder), ("no-agent", noAgent),
+        ("grouped", grouped), ("mixed", mixed), ("idle-groups", idleGroups), ("long-label", longLabel),
         ("off", off), ("safety-stop", safetyStop), ("too-hot", tooHot), ("lid-closed", lidClosedNotSetUp),
         ("helper-off", helperSwitchedOff), ("helper-silent", helperNotResponding), ("trial-ending", trialEnding), ("trial-over", trialOver),
     ]

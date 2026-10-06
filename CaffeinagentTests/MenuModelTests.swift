@@ -380,11 +380,15 @@ final class MenuModelTests: XCTestCase {
         for (action, title) in titles { XCTAssertEqual(action.title, title) }
     }
 
-    // MARK: Rows
+    // MARK: Groups
+
+    private func headers(_ input: PanelInput) -> [PanelRow] {
+        MenuModel.groups(input, now: now).inView.map(\.header)
+    }
 
     func testNoAgentsGiveTheEmptyLine() {
         let state = MenuModel.state(input(.noAgents), now: now)
-        XCTAssertEqual(state.rows, [])
+        XCTAssertEqual(state.groups, [])
         XCTAssertEqual(state.emptyText, "Start an agent and agent caffeine keeps your Mac awake while it works")
         XCTAssertNil(MenuModel.state(input(.idle(.one("Codex")), [hold("codex", "Codex", pid: 1, .idle, .atPrompt)]), now: now).emptyText)
         var always = input(.alwaysOn)
@@ -397,51 +401,156 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(AwakeMode.allCases.map(\.shortTitle), ["Always", "While open", "While working"])
     }
 
-    func testWorkingComesFirstTheLongestOnTopThenWaitingThenIdle() {
+    func testOneSessionIsTheHeaderItself() {
+        let perAgent = [claude(pid: 1, .working, .runningCommand(3)), hold("codex", "Codex", pid: 2, .idle, .atPrompt)]
+        var input = input(.working(.one("Claude Code")), perAgent)
+        input.labels = [identity(1): "wiki"]
+        input.hints = [identity(1): SessionHint(name: "wiki-6e", terminal: "ttys001")]
+        input.clock = clock(perAgent, secondsAgo: [1: 3 * 60, 2: 6 * 60])
+        let groups = MenuModel.groups(input, now: now).inView
+        XCTAssertEqual(groups.map(\.id), ["claude", "codex"])
+        XCTAssertEqual(groups.map(\.header.title), ["Claude Code · wiki", "Codex"])
+        XCTAssertEqual(groups.map(\.header.detail), ["Running 3 commands for 3 minutes", "Idle for 6 minutes"])
+        XCTAssertEqual(groups.map(\.header.state), [.working, .idle])
+        XCTAssertEqual(groups.map(\.children), [[], []])
+        XCTAssertEqual(groups.map(\.canToggle), [false, false])
+        XCTAssertEqual(groups.map(\.accessibilityLabel), ["Claude Code, wiki, running 3 commands for 3 minutes", "Codex, idle for 6 minutes"])
+        XCTAssertEqual(groups[0].header.hint, "Running 3 commands")
+    }
+
+    /// Three sessions of Claude Code at work and eight idle ones.
+    func testSessionsOfOneAgentShareOneGroup() {
+        var perAgent = (1...3).map { claude(pid: $0, .working, .reportsBusy) } + (4...11).map { claude(pid: $0, .idle) }
+        perAgent += [hold("codex", "Codex", pid: 20, .idle, .atPrompt), hold("antigravity", "Antigravity", pid: 21, .idle, .noActivity(minutes: 13 * 60))]
+        var input = input(.working(.many(3)), perAgent)
+        input.labels = [identity(1): "wiki", identity(2): "wiki", identity(3): "wiki"]
+        input.hints = [identity(1): SessionHint(name: "wiki-6e"), identity(2): SessionHint(name: "speaker-grille-spacing"), identity(3): SessionHint(name: "wiki-1d")]
+        input.clock = clock(perAgent, secondsAgo: [1: 360, 2: 400, 3: 380, 20: 360])
+        let state = MenuModel.state(input, now: now)
+        XCTAssertEqual(state.moreIdle, [])
+        XCTAssertEqual(state.groups.map(\.header.title), ["Claude Code", "Codex", "Antigravity"])
+        XCTAssertEqual(state.groups.map(\.header.detail), ["3 working", "Idle for 6 minutes", "Idle for 13 hours"])
+        let group = state.groups[0]
+        XCTAssertEqual(group.header.state, .working)
+        XCTAssertEqual(group.kind, .active)
+        XCTAssertTrue(group.canToggle)
+        XCTAssertTrue(group.opensByDefault)
+        XCTAssertEqual(group.children.map(\.label), ["speaker-grille-spacing", "wiki-1d", "wiki-6e", "8 idle sessions"], "The longest at work on top")
+        XCTAssertEqual(group.children.map(\.detail), ["Working for 6 minutes", "Working for 6 minutes", "Working for 6 minutes", nil])
+        XCTAssertEqual(group.children[0].hint, "wiki · Working on a task")
+        XCTAssertEqual(group.children[0].accessibilityLabel, "speaker-grille-spacing, working for 6 minutes")
+        XCTAssertEqual(group.accessibilityLabel, "Claude Code, 3 working, 8 idle")
+        XCTAssertEqual(Set(group.children.map(\.id)).count, 4)
+        XCTAssertFalse(group.children.contains { $0.label.contains("Claude Code") }, "The name of the agent is in the header only")
+    }
+
+    func testWaitingSessionsComeBeforeWorkingOnes() {
         let perAgent = [
-            claude(pid: 1, .idle),
+            claude(pid: 1, .working, .reportsBusy),
             claude(pid: 2, .waitingForUser, .asksPermission),
             claude(pid: 3, .working, .runningCommand(3)),
             claude(pid: 4, .idle),
-            claude(pid: 5, .working, .reportsBusy),
-            hold("codex", "Codex", pid: 6, .working, .backgroundJob(1)),
+        ]
+        var input = input(.working(.many(2)), perAgent)
+        input.labels = [identity(1): "wiki", identity(2): "notes", identity(3): "site"]
+        input.clock = clock(perAgent, secondsAgo: [1: 3 * 60, 2: 30, 3: 12 * 60])
+        let group = MenuModel.groups(input, now: now).inView[0]
+        XCTAssertEqual(group.header.detail, "2 working, 1 waiting for you")
+        XCTAssertEqual(group.header.state, .waiting, "The most urgent state is on the ring")
+        XCTAssertEqual(group.children.map(\.label), ["notes", "site", "wiki", "1 idle session"])
+        XCTAssertEqual(group.children.map(\.detail), ["Waiting for your answer", "Running 3 commands for 12 minutes", "Working for 3 minutes", nil])
+        XCTAssertEqual(group.accessibilityLabel, "Claude Code, 2 working, 1 waiting for you, 1 idle")
+    }
+
+    func testAGroupOfIdleSessionsIsClosedAndListsThemWhenOpened() {
+        let perAgent = (1...10).map { claude(pid: $0, .idle) }
+        var input = input(.idle(.many(10)), perAgent)
+        input.hints = Dictionary(uniqueKeysWithValues: (1...10).map { (identity(Int32($0)), SessionHint(terminal: "ttys\($0)")) })
+        input.clock = clock(perAgent, secondsAgo: Dictionary(uniqueKeysWithValues: (1...10).map { (Int32($0), TimeInterval($0) * 600) }))
+        let group = MenuModel.groups(input, now: now).inView[0]
+        XCTAssertEqual(group.header.detail, "10 idle sessions")
+        XCTAssertEqual(group.header.state, .idle)
+        XCTAssertEqual(group.kind, .idle)
+        XCTAssertFalse(group.opensByDefault)
+        XCTAssertTrue(group.canToggle)
+        XCTAssertFalse(GroupDisclosure().isOpen(group))
+        XCTAssertEqual(group.children.map(\.label), ["ttys1", "ttys2", "ttys3", "ttys4", "ttys5", "ttys6", "and 4 more"], "The one that was active last on top")
+        XCTAssertEqual(group.children.prefix(2).map(\.detail), ["Idle for 10 minutes", "Idle for 20 minutes"])
+        XCTAssertNil(group.children[6].detail)
+        XCTAssertEqual(group.accessibilityLabel, "Claude Code, 10 idle sessions")
+    }
+
+    func testGroupsWithAWaitingSessionComeFirstThenWorkingThenIdle() {
+        let perAgent = [
+            hold("amp", "Amp", pid: 1, .idle, .atPrompt),
+            hold("amp", "Amp", pid: 2, .idle, .atPrompt),
+            claude(pid: 3, .working, .reportsBusy),
+            claude(pid: 4, .working, .reportsBusy),
+            hold("codex", "Codex", pid: 5, .working, .backgroundJob(1)),
+            hold("codex", "Codex", pid: 6, .waitingForUser, .asksPermission),
             hold("opencode", "opencode", pid: 7, .working, .cpuActivity),
+            hold("goose", "Goose", pid: 8, .idle, .atPrompt),
+            hold("pi", "Pi", pid: 9, .waitingForUser, .asksPermission),
         ]
         var input = input(.working(.many(4)), perAgent)
-        input.labels = [identity(3): "site", identity(5): "wiki", identity(2): "notes"]
-        input.clock = clock(perAgent, secondsAgo: [3: 3 * 60, 5: 12 * 60, 6: 20, 2: 3 * 60, 7: 95 * 60])
-        let (rows, more) = MenuModel.rows(input, now: now)
+        input.clock = clock(perAgent, secondsAgo: [1: 900, 2: 7200, 3: 60, 4: 12 * 60, 5: 20, 6: 3 * 60, 7: 95 * 60, 8: 300, 9: 10 * 60])
+        let (groups, more) = MenuModel.groups(input, now: now)
         XCTAssertEqual(more, [])
-        XCTAssertEqual(rows.map(\.title), ["opencode", "Claude Code · wiki", "Claude Code · site", "Codex", "Claude Code · notes", "Claude Code"])
-        XCTAssertEqual(rows.map(\.state), [.working, .working, .working, .working, .waiting, .idle])
-        XCTAssertEqual(rows.map(\.detail), [
-            "Working for 1 hour", "Working for 12 minutes", "Running 3 commands for 3 minutes", "Running 1 background task",
-            "Waiting for your answer for 3 minutes", "2 idle sessions",
+        XCTAssertEqual(groups.map(\.header.name), ["Pi", "Codex", "opencode", "Claude Code", "Goose", "Amp"])
+        XCTAssertEqual(groups.map(\.header.state), [.waiting, .waiting, .working, .working, .idle, .idle])
+        XCTAssertEqual(groups.map(\.header.detail), [
+            "Waiting for your answer for 10 minutes", "1 working, 1 waiting for you", "Working for 1 hour", "2 working", "Idle for 5 minutes", "2 idle sessions",
         ])
-        XCTAssertEqual(rows.map(\.accessibilityLabel), [
-            "opencode, working for 1 hour", "Claude Code, wiki, working for 12 minutes", "Claude Code, site, running 3 commands for 3 minutes",
-            "Codex, running 1 background task", "Claude Code, notes, waiting for your answer for 3 minutes", "Claude Code, 2 idle sessions",
-        ])
-        XCTAssertEqual(rows[2].hint, "Running 3 commands")
-        XCTAssertEqual(Set(rows.map(\.id)).count, rows.count)
+        XCTAssertEqual(groups.map(\.opensByDefault), [true, true, true, true, false, false])
+        XCTAssertEqual(groups.map(\.canToggle), [false, true, false, true, false, true])
+        XCTAssertEqual(groups[1].children.map(\.detail), ["Waiting for your answer for 3 minutes", "Running 1 background task"])
+        XCTAssertEqual(Set(groups.map(\.id)).count, groups.count)
+    }
+
+    func testAGroupKeepsItsIdentityWhenItsStateChanges() {
+        let before = MenuModel.groups(input(.idle(.many(2)), [claude(pid: 1, .idle), claude(pid: 2, .idle)]), now: now).inView
+        let after = MenuModel.groups(input(.working(.one("Claude Code")), [claude(pid: 1, .working, .reportsBusy), claude(pid: 2, .idle)]), now: now).inView
+        XCTAssertEqual(before.map(\.id), after.map(\.id))
+        XCTAssertEqual(before[0].kind, .idle)
+        XCTAssertEqual(after[0].kind, .active)
+        XCTAssertEqual(after[0].children.last?.label, "1 idle session")
+    }
+
+    func testSummariesAndPlurals() {
+        XCTAssertEqual(PanelText.groupSummary(working: 3, waiting: 0, idle: 8), "3 working")
+        XCTAssertEqual(PanelText.groupSummary(working: 1, waiting: 0, idle: 0), "1 working")
+        XCTAssertEqual(PanelText.groupSummary(working: 0, waiting: 1, idle: 2), "1 waiting for you")
+        XCTAssertEqual(PanelText.groupSummary(working: 2, waiting: 1, idle: 0), "2 working, 1 waiting for you")
+        XCTAssertEqual(PanelText.groupSummary(working: 0, waiting: 0, idle: 8), "8 idle sessions")
+        XCTAssertEqual(PanelText.groupSummary(working: 0, waiting: 0, idle: 1), "1 idle session")
+        XCTAssertEqual(PanelText.groupSpoken(working: 3, waiting: 0, idle: 8), "3 working, 8 idle")
+        XCTAssertEqual(PanelText.groupSpoken(working: 1, waiting: 2, idle: 0), "1 working, 2 waiting for you")
+        XCTAssertEqual(PanelText.groupSpoken(working: 0, waiting: 0, idle: 2), "2 idle sessions")
+        XCTAssertEqual(PanelText.idleSessions(1), "1 idle session")
+        XCTAssertEqual(PanelText.idleSessions(7), "7 idle sessions")
+        XCTAssertEqual(PanelText.moreIdle(3), "3 more idle agents")
+        XCTAssertEqual(PanelText.moreIdle(1), "1 more idle agent")
+        XCTAssertEqual(PanelText.andMore(4), "and 4 more")
     }
 
     func testAnAgentWithNoKnownStartHasNoDuration() {
         let state = MenuModel.state(input(.working(.one("Claude Code")), [claude(pid: 1, .working, .reportsBusy)]), now: now)
-        XCTAssertEqual(state.rows.map(\.detail), ["Working"])
+        XCTAssertEqual(state.groups.map(\.header.detail), ["Working"])
     }
 
     func testRulesAreNamedQuietly() {
         let perAgent = [
             hold("goose", "Goose", pid: 1, .working, .alwaysWorkingByRule),
             hold("amp", "Amp", pid: 2, .idle, .ignoredByRule),
+            hold("amp", "Amp", pid: 4, .idle, .ignoredByRule),
             hold("codex", "Codex", pid: 3, .idle, .atPrompt),
         ]
         var input = input(.working(.one("Goose")), perAgent)
-        input.clock = clock(perAgent, secondsAgo: [1: 600, 2: 600, 3: 7200])
-        let rows = MenuModel.rows(input, now: now).inView
-        XCTAssertEqual(rows.map(\.title), ["Goose", "Codex", "Amp"], "An ignored agent is last")
-        XCTAssertEqual(rows.map(\.detail), ["Always counts as working", "Idle for 2 hours", "Ignored"])
+        input.clock = clock(perAgent, secondsAgo: [1: 600, 2: 600, 3: 7200, 4: 600])
+        let groups = MenuModel.groups(input, now: now).inView
+        XCTAssertEqual(groups.map(\.header.title), ["Goose", "Codex", "Amp"], "An ignored agent is last")
+        XCTAssertEqual(groups.map(\.header.detail), ["Always counts as working", "Idle for 2 hours", "Ignored"])
+        XCTAssertFalse(groups[2].canToggle, "Nothing to open below an agent that is ignored")
     }
 
     func testIdleTimeComesFromTheVerdictWhenItKnowsMore() {
@@ -452,14 +561,14 @@ final class MenuModelTests: XCTestCase {
         ]
         var input = input(.idle(.many(3)), perAgent)
         input.clock = clock(perAgent, secondsAgo: [1: 30, 2: 30, 3: 30])
-        let rows = MenuModel.rows(input, now: now).inView
+        let rows = headers(input)
         XCTAssertEqual(rows.map(\.title), ["Codex", "Amp", "opencode"], "The one that was active last is on top")
         XCTAssertEqual(rows.map(\.detail), ["Idle", "Idle", "Idle for 6 hours"])
         XCTAssertEqual(rows[2].hint, "No activity for 6 hours")
         XCTAssertEqual(rows[2].accessibilityLabel, "opencode, idle for 6 hours")
     }
 
-    func testManyIdleSessionsShareOneLineAndTheRestGoesBehindMoreIdle() {
+    func testIdleAgentsBeyondFourGoBehindMoreIdleAgents() {
         let names = [("codex", "Codex"), ("opencode", "opencode"), ("amp", "Amp"), ("goose", "Goose"), ("pi", "Pi"), ("grok", "Grok")]
         var perAgent = (1...8).map { claude(pid: $0, .idle) }
         perAgent += names.enumerated().map { hold($1.0, $1.1, pid: Int32(20 + $0), .idle, .atPrompt) }
@@ -469,28 +578,41 @@ final class MenuModelTests: XCTestCase {
         ages[4] = 120
         input.clock = clock(perAgent, secondsAgo: ages)
         let state = MenuModel.state(input, now: now)
-        XCTAssertEqual(state.rows.map(\.title), ["Claude Code", "Codex", "opencode"])
-        XCTAssertEqual(state.rows.map(\.detail), ["8 idle sessions", "Idle for 3 hours", "Idle for 3 hours"])
-        XCTAssertEqual(state.moreIdle.map(\.title), ["Amp", "Goose", "Pi", "Grok"])
-        XCTAssertEqual(state.moreIdleTitle, "4 more idle")
-        XCTAssertEqual(Set((state.rows + state.moreIdle).map(\.id)).count, 7)
+        XCTAssertEqual(state.groups.map(\.header.title), ["Claude Code", "Codex", "opencode", "Amp"])
+        XCTAssertEqual(state.groups.map(\.header.detail), ["8 idle sessions", "Idle for 3 hours", "Idle for 3 hours", "Idle for 3 hours"])
+        XCTAssertEqual(state.moreIdle.map(\.header.title), ["Goose", "Pi", "Grok"])
+        XCTAssertEqual(state.moreIdleTitle, "3 more idle agents")
+        XCTAssertEqual(Set((state.groups + state.moreIdle).map(\.id)).count, 7)
     }
 
     func testOneMoreIdleAgentIsShownInsteadOfHidden() {
-        let names = [("codex", "Codex"), ("opencode", "opencode"), ("amp", "Amp"), ("goose", "Goose")]
-        let perAgent = names.enumerated().map { hold($1.0, $1.1, pid: Int32($0), .idle, .atPrompt) }
-        let state = MenuModel.state(input(.idle(.many(4)), perAgent), now: now)
-        XCTAssertEqual(state.rows.count, 4)
+        let names = [("codex", "Codex"), ("opencode", "opencode"), ("amp", "Amp"), ("goose", "Goose"), ("pi", "Pi")]
+        var perAgent = names.enumerated().map { hold($1.0, $1.1, pid: Int32($0), .idle, .atPrompt) }
+        perAgent += [claude(pid: 10, .working, .reportsBusy), claude(pid: 11, .working, .reportsBusy)]
+        let state = MenuModel.state(input(.working(.many(2)), perAgent), now: now)
+        XCTAssertEqual(state.groups.count, 6, "Agents at work do not count")
         XCTAssertNil(state.moreIdleTitle)
     }
 
     func testAgentsWithTheSameNameStayApart() {
-        let rows = MenuModel.rows(input(.idle(.many(3)), [
+        let rows = headers(input(.idle(.many(3)), [
             hold("codex", "Codex", pid: 1, .idle, .atPrompt),
-            hold("codex-desktop", "Codex", pid: 2, .idle, .atPrompt),
+            hold("user:codex", "Codex", pid: 2, .idle, .atPrompt),
             hold("codex", "Codex", pid: 3, .idle, .atPrompt),
-        ]), now: now).inView
+        ]))
         XCTAssertEqual(rows.map(\.detail), ["2 idle sessions", "Idle"])
+    }
+
+    func testADesktopAppNextToItsCommandLineToolSaysThatItIsTheApp() {
+        func app(pid: Int32) -> AgentHold {
+            AgentHold(reading: AgentReading(
+                agentID: "codex-desktop", displayName: "Codex", level: .state, kind: .desktop, identity: identity(pid),
+                verdict: AgentVerdict(state: .idle, confidence: .reported, reason: .atPrompt)
+            ), cause: nil)
+        }
+        let both = headers(input(.idle(.many(2)), [hold("codex", "Codex", pid: 1, .idle, .atPrompt), app(pid: 2)]))
+        XCTAssertEqual(both.map(\.title), ["Codex", "Codex app"])
+        XCTAssertEqual(headers(input(.idle(.one("Codex")), [app(pid: 2)])).map(\.title), ["Codex"], "Alone it needs no other name")
     }
 
     func testSessionLabelIsTheFolderName() {
@@ -498,6 +620,42 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(MenuModel.sessionLabel(workingDirectory: "/Users/me/code/website/"), "website")
         XCTAssertNil(MenuModel.sessionLabel(workingDirectory: "/"))
         XCTAssertNil(MenuModel.sessionLabel(workingDirectory: nil))
+    }
+
+    // MARK: Open and closed
+
+    func testTheUsersChoiceHoldsWhileTheGroupStaysOfOneKind() {
+        let working = MenuModel.groups(input(.working(.many(2)), [claude(pid: 1, .working, .reportsBusy), claude(pid: 2, .working, .reportsBusy)]), now: now).inView[0]
+        let moreWork = MenuModel.groups(input(.working(.many(2)), [claude(pid: 1, .working, .reportsBusy), claude(pid: 2, .waitingForUser, .asksPermission), claude(pid: 3, .idle)]), now: now).inView[0]
+        let idle = MenuModel.groups(input(.idle(.many(2)), [claude(pid: 1, .idle), claude(pid: 2, .idle)]), now: now).inView[0]
+        var disclosure = GroupDisclosure()
+        XCTAssertTrue(disclosure.isOpen(working))
+        XCTAssertFalse(disclosure.isOpen(idle))
+
+        disclosure.toggle(working)
+        XCTAssertFalse(disclosure.isOpen(working))
+        XCTAssertFalse(disclosure.settled(with: [moreWork]).isOpen(moreWork), "Another session that works or waits changes nothing")
+
+        // All sessions went idle, then one works again.
+        disclosure = disclosure.settled(with: [idle])
+        XCTAssertFalse(disclosure.isOpen(idle))
+        XCTAssertTrue(disclosure.settled(with: [working]).isOpen(working), "The choice went with the change of kind")
+
+        disclosure.toggle(idle)
+        XCTAssertTrue(disclosure.isOpen(idle))
+        disclosure.toggle(idle)
+        XCTAssertFalse(disclosure.isOpen(idle))
+        disclosure.toggle(idle)
+        XCTAssertTrue(disclosure.isOpen(working), "A choice for the idle group says nothing about the working one")
+        XCTAssertEqual(disclosure.settled(with: []), GroupDisclosure(), "A group that is gone is forgotten")
+    }
+
+    func testAGroupOfOneSessionNeverOpens() {
+        let single = MenuModel.groups(input(.working(.one("Claude Code")), [claude(pid: 1, .working, .reportsBusy)]), now: now).inView[0]
+        var disclosure = GroupDisclosure()
+        XCTAssertFalse(disclosure.isOpen(single))
+        disclosure.toggle(single)
+        XCTAssertEqual(disclosure, GroupDisclosure())
     }
 
     // MARK: First minute
@@ -509,7 +667,7 @@ final class MenuModelTests: XCTestCase {
             for (reading, secondsAgo) in steps { clock = clock.updated(with: [reading], now: now.addingTimeInterval(-secondsAgo)) }
             var input = input(.noAgents, [AgentHold(reading: steps[steps.count - 1].0, cause: nil)])
             input.clock = clock
-            return MenuModel.rows(input, now: now).inView[0].detail
+            return headers(input)[0].detail
         }
         XCTAssertEqual(detail([(idle, 300), (busy, 20)]), "Started a moment ago")
         XCTAssertEqual(detail([(idle, 300), (busy, 60)]), "Working for 1 minute")
@@ -529,23 +687,26 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(PanelText.working(.runningCommand(1), seconds: 12 * 60, startSeen: true), "Running 1 command for 12 minutes")
         XCTAssertEqual(PanelText.working(.backgroundJob(1), seconds: 5 * 60, startSeen: false), "Running 1 background task for 5 minutes")
         XCTAssertEqual(PanelText.working(.alwaysWorkingByRule, seconds: 600, startSeen: true), "Always counts as working")
-        XCTAssertEqual(PanelText.moreIdle(6), "6 more idle")
-        XCTAssertEqual(PanelText.idleSessions(7), "7 idle sessions")
     }
 
-    func testNoRowTextIsABareDuration() {
-        for (_, state) in PanelFixtures.all {
-            for row in state.rows + state.moreIdle {
-                XCTAssertFalse(row.detail.contains("·"), row.detail)
-                XCTAssertFalse(row.detail.hasSuffix("."), row.detail)
-                if row.detail.contains("minute") || row.detail.contains("hour") || row.detail.contains("day") {
-                    XCTAssertTrue(row.detail.contains(" for ") || row.detail.hasSuffix(" ago"), row.detail)
+    func testNoLineOfTheListIsABareDuration() {
+        for (name, state) in PanelFixtures.all {
+            for group in state.groups + state.moreIdle {
+                for detail in [group.header.detail] + group.children.compactMap(\.detail) {
+                    XCTAssertFalse(detail.contains("·"), detail)
+                    XCTAssertFalse(detail.hasSuffix("."), detail)
+                    if detail.contains("minute") || detail.contains("hour") || detail.contains("day") {
+                        XCTAssertTrue(detail.contains(" for ") || detail.hasSuffix(" ago"), detail)
+                    }
                 }
+                XCTAssertEqual(Set(group.children.map(\.label)).count, group.children.count, "\(name): two sessions read the same")
+                XCTAssertEqual(Set(group.children.map(\.id)).count, group.children.count, name)
             }
+            XCTAssertEqual(Set((state.groups + state.moreIdle).map(\.id)).count, state.groups.count + state.moreIdle.count, name)
         }
     }
 
-    // MARK: Same title
+    // MARK: Session names
 
     private func sameFolder(_ hints: [Int32: SessionHint], pids: [Int32] = [1, 2, 3]) -> PanelInput {
         var input = input(.working(.many(pids.count)), pids.map { claude(pid: $0, .working, .reportsBusy) })
@@ -555,33 +716,40 @@ final class MenuModelTests: XCTestCase {
         return input
     }
 
+    private func childLabels(_ input: PanelInput) -> [String] {
+        MenuModel.groups(input, now: now).inView[0].children.map(\.label)
+    }
+
     func testOneSessionKeepsItsPlainTitle() {
-        let rows = MenuModel.rows(sameFolder([1: SessionHint(name: "wiki-1d", terminal: "ttys001")], pids: [1]), now: now).inView
+        let rows = headers(sameFolder([1: SessionHint(name: "wiki-1d", terminal: "ttys001")], pids: [1]))
         XCTAssertEqual(rows.map(\.title), ["Claude Code · wiki"])
         XCTAssertNil(rows[0].distinction)
     }
 
-    func testSessionsInOneFolderAreToldApartByTheirNames() {
-        let rows = MenuModel.rows(sameFolder([
+    func testASessionIsCalledByItsOwnNameThenItsFolder() {
+        XCTAssertEqual(childLabels(sameFolder([
             1: SessionHint(name: "wiki-1d", terminal: "ttys001"),
             2: SessionHint(name: "speaker-grille-spacing", terminal: "ttys002"),
-            3: SessionHint(name: "notes", terminal: "ttys003"),
-        ]), now: now).inView
-        XCTAssertEqual(rows.map(\.title), ["Claude Code · wiki-1d", "wiki · speaker-grille-spacing", "Claude Code · wiki · notes"])
-        XCTAssertEqual(rows[1].accessibilityLabel, "Claude Code, wiki, speaker-grille-spacing, working")
-        XCTAssertEqual(Set(rows.map(\.title)).count, 3)
-        for row in rows { XCTAssertLessThanOrEqual(row.title.count, PanelRow.titleFit, row.title) }
+        ])), ["wiki-1d", "speaker-grille-spacing", "wiki"])
+        let long = String(repeating: "a", count: 40)
+        XCTAssertEqual(childLabels(sameFolder([1: SessionHint(name: long)], pids: [1, 2])), [long, "wiki"], "A long name stays whole: the menu cuts it at its end")
     }
 
-    func testWithoutAUsableNameTheTerminalThenTheStartTellsThemApart() {
-        let rows = MenuModel.rows(sameFolder([
+    func testSessionsThatWouldReadTheSameGetTheirTerminalThenTheirStart() {
+        XCTAssertEqual(childLabels(sameFolder([
             1: SessionHint(name: "same", terminal: "ttys004"),
             2: SessionHint(name: "same", terminal: "ttys005"),
-        ]), now: now).inView
-        XCTAssertEqual(rows.map(\.title), ["Claude Code · wiki · ttys004", "Claude Code · wiki · ttys005", "Claude Code · wiki · since 00:00"])
+        ])), ["same · ttys004", "same · ttys005", "wiki"])
+        XCTAssertEqual(childLabels(sameFolder([1: SessionHint(terminal: "ttys004"), 2: SessionHint(terminal: "ttys005")], pids: [1, 2])), ["wiki · ttys004", "wiki · ttys005"])
         // Two sessions in one terminal name: only the start is left.
-        let shared = MenuModel.rows(sameFolder([1: SessionHint(terminal: "ttys004"), 2: SessionHint(terminal: "ttys004")], pids: [1, 2]), now: now).inView
-        XCTAssertEqual(shared.map(\.distinction), ["since 00:00", "since 00:00"])
+        XCTAssertEqual(childLabels(sameFolder([1: SessionHint(terminal: "ttys004"), 2: SessionHint(terminal: "ttys004")], pids: [1, 2])), ["wiki · since 00:00", "wiki · since 00:00"])
+    }
+
+    func testWithoutANameOrAFolderTheTerminalThenTheStartNamesASession() {
+        var input = input(.idle(.many(3)), [claude(pid: 1, .idle), claude(pid: 2, .idle), claude(pid: 3, .idle)])
+        input.hints = [identity(1): SessionHint(terminal: "ttys004"), identity(2): SessionHint(terminal: "ttys004")]
+        input.calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        XCTAssertEqual(childLabels(input), ["ttys004 · since 00:00", "ttys004 · since 00:00", "since 00:00"])
     }
 
     func testAFolderThatOnlyBeginsLikeTheNameStays() {
@@ -596,11 +764,11 @@ final class MenuModelTests: XCTestCase {
     func testIdleAgentsWithTheSameNameAreToldApart() {
         var input = input(.idle(.many(2)), [
             hold("codex", "Codex", pid: 1, .idle, .atPrompt),
-            hold("codex-desktop", "Codex", pid: 2, .idle, .atPrompt),
+            hold("user:codex", "Codex", pid: 2, .idle, .atPrompt),
         ])
         input.hints = [identity(1): SessionHint(terminal: "ttys009")]
         input.calendar.timeZone = TimeZone(secondsFromGMT: 0)!
-        XCTAssertEqual(MenuModel.rows(input, now: now).inView.map(\.title), ["Codex · ttys009", "Codex · since 00:00"])
+        XCTAssertEqual(headers(input).map(\.title), ["Codex · ttys009", "Codex · since 00:00"])
     }
 
     func testASessionHintPrintsNothing() {

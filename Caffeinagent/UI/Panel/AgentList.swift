@@ -2,18 +2,26 @@ import SwiftUI
 
 /// The agents, or one friendly line when none is open. A long list scrolls.
 struct AgentList: View {
-    let rows: [PanelRow]
-    let moreIdle: [PanelRow]
+    let groups: [PanelGroup]
+    let moreIdle: [PanelGroup]
     let moreIdleTitle: String?
     let emptyText: String?
     @State private var isExpanded: Bool
+    @State private var disclosure: GroupDisclosure
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
-    init(rows: [PanelRow], moreIdle: [PanelRow], moreIdleTitle: String?, emptyText: String?, startsExpanded: Bool = false) {
-        self.rows = rows
+    init(
+        groups: [PanelGroup], moreIdle: [PanelGroup], moreIdleTitle: String?, emptyText: String?,
+        startsExpanded: Bool = false, startsToggled: Set<String> = []
+    ) {
+        self.groups = groups
         self.moreIdle = moreIdle
         self.moreIdleTitle = moreIdleTitle
         self.emptyText = emptyText
         _isExpanded = State(initialValue: startsExpanded)
+        var disclosure = GroupDisclosure()
+        for group in groups + moreIdle where startsToggled.contains(group.id) { disclosure.toggle(group) }
+        _disclosure = State(initialValue: disclosure)
     }
 
     var body: some View {
@@ -26,7 +34,7 @@ struct AgentList: View {
                 .padding(.horizontal, PanelMetrics.gutter + 8)
                 .padding(.vertical, 20)
                 .frame(maxWidth: .infinity)
-        } else if contentHeight > PanelMetrics.listMaxHeight {
+        } else if scrolls {
             ScrollView { list }
                 .frame(height: PanelMetrics.listMaxHeight)
         } else {
@@ -36,12 +44,12 @@ struct AgentList: View {
 
     private var list: some View {
         VStack(alignment: .leading, spacing: 0) {
-            ForEach(rows) { AgentRowView(row: $0) }
+            ForEach(groups) { view(of: $0) }
             if let moreIdleTitle {
                 MoreIdleRow(title: moreIdleTitle, isExpanded: $isExpanded)
                 if isExpanded {
-                    ForEach(moreIdle) { row in
-                        AgentRowView(row: row)
+                    ForEach(moreIdle) { group in
+                        view(of: group)
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
@@ -51,11 +59,23 @@ struct AgentList: View {
         .padding(.horizontal, PanelMetrics.gutter - PanelMetrics.ringGap)
         .padding(.vertical, 8)
         .clipped()
+        .onChange(of: kinds) { _ in disclosure = disclosure.settled(with: groups + moreIdle) }
     }
 
-    private var contentHeight: CGFloat {
-        let shown = rows + (isExpanded ? moreIdle : [])
-        let rowsHeight = shown.reduce(0) { $0 + ($1.state == .idle ? PanelMetrics.idleRowHeight : PanelMetrics.activeRowHeight) }
-        return rowsHeight + (moreIdleTitle == nil ? 0 : PanelMetrics.idleRowHeight) + 16
+    private func view(of group: PanelGroup) -> some View {
+        AgentGroupView(group: group, isOpen: disclosure.isOpen(group)) {
+            withAnimation(reduceMotion ? nil : PanelMetrics.stateChange) { disclosure.toggle(group) }
+        }
+    }
+
+    private var kinds: [String: PanelGroup.Kind] {
+        Dictionary((groups + moreIdle).map { ($0.id, $0.kind) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// Worked out before the layout, with the widths of the texts.
+    private var scrolls: Bool {
+        let shown = groups + (isExpanded ? moreIdle : [])
+        let groupsHeight = shown.reduce(0) { $0 + AgentGroupView.height(of: $1, isOpen: disclosure.isOpen($1)) }
+        return groupsHeight + (moreIdleTitle == nil ? 0 : PanelMetrics.idleRowHeight) + 16 > PanelMetrics.listMaxHeight
     }
 }

@@ -54,7 +54,7 @@ struct PanelAttention: Equatable {
     var actions: [PanelAction] = []
 }
 
-/// One line of the agent list.
+/// The header line of a group of the agent list.
 struct PanelRow: Equatable, Identifiable {
     enum State: Equatable {
         case working
@@ -73,8 +73,8 @@ struct PanelRow: Equatable, Identifiable {
     var distinction: String?
     var state: State
     /// A whole phrase: "Working for 14 minutes", "Idle for 6 hours",
-    /// "8 idle sessions". Below the title for an agent that works or
-    /// waits, at the trailing edge for an idle one.
+    /// "3 working". Below the title for one session that works or waits,
+    /// at the trailing edge for an idle one and for several sessions.
     var detail: String
     /// The evidence, for the tooltip.
     var hint: String
@@ -109,17 +109,103 @@ struct PanelRow: Equatable, Identifiable {
     }
 }
 
+/// One session below the name of its agent, or one line that counts the
+/// sessions that are not listed.
+struct PanelChild: Equatable, Identifiable {
+    var id: String
+    /// The session's name, else its folder, else its terminal, else when
+    /// it started. Or the count: "8 idle sessions", "and 4 more".
+    var label: String
+    /// A whole phrase: "Working for 6 minutes". Nil for a count.
+    var detail: String?
+    /// The folder and the evidence, for the tooltip.
+    var hint: String
+
+    /// "wiki-6e, working for 6 minutes".
+    var accessibilityLabel: String {
+        guard let detail else { return label }
+        return "\(label), \(detail.prefix(1).lowercased() + detail.dropFirst())"
+    }
+}
+
+/// All sessions of one agent: a header line, and the sessions below it
+/// when there are two or more.
+struct PanelGroup: Equatable, Identifiable {
+    /// What decides whether the group is open before the user chose.
+    enum Kind: Equatable {
+        /// A session works or waits.
+        case active
+        case idle
+    }
+
+    /// With one session this is the session's own line. With more, the
+    /// name alone, the most urgent state inside for the ring, and the
+    /// summary as its detail: "3 working".
+    var header: PanelRow
+    /// Below the header of an open group. Empty when there is nothing to
+    /// open: one session, or an agent that a rule ignores.
+    var children: [PanelChild] = []
+    var working = 0
+    var waiting = 0
+    var idle = 0
+
+    /// `AgentDefinition.id`: the group keeps its place when its sessions
+    /// change state.
+    var id: String { header.agentID }
+    var kind: Kind { working + waiting > 0 ? .active : .idle }
+    var canToggle: Bool { !children.isEmpty }
+    var opensByDefault: Bool { kind == .active }
+
+    /// "Claude Code, 3 working, 8 idle".
+    var accessibilityLabel: String {
+        canToggle ? "\(header.name), \(PanelText.groupSpoken(working: working, waiting: waiting, idle: idle))" : header.accessibilityLabel
+    }
+}
+
+/// Which groups the user opened or closed by hand. A choice holds while
+/// the group stays of the same kind.
+struct GroupDisclosure: Equatable {
+    private struct Choice: Equatable {
+        var isOpen: Bool
+        var kind: PanelGroup.Kind
+    }
+
+    private var choices: [String: Choice] = [:]
+
+    init() {}
+
+    func isOpen(_ group: PanelGroup) -> Bool {
+        guard group.canToggle else { return false }
+        guard let choice = choices[group.id], choice.kind == group.kind else { return group.opensByDefault }
+        return choice.isOpen
+    }
+
+    mutating func toggle(_ group: PanelGroup) {
+        guard group.canToggle else { return }
+        choices[group.id] = Choice(isOpen: !isOpen(group), kind: group.kind)
+    }
+
+    /// Without the choices for a group that is gone or changed its kind,
+    /// so an old choice never comes back.
+    func settled(with groups: [PanelGroup]) -> GroupDisclosure {
+        let kinds = Dictionary(groups.map { ($0.id, $0.kind) }, uniquingKeysWith: { first, _ in first })
+        var next = self
+        next.choices = choices.filter { kinds[$0.key] == $0.value.kind }
+        return next
+    }
+}
+
 /// Everything the menu shows at one moment.
 struct PanelState: Equatable {
     var pose: HeroPose
     var title: String
     var subtitle: String
     var attention: PanelAttention?
-    /// Always in view: the agents that work, the ones that wait, and the
-    /// first idle ones.
-    var rows: [PanelRow]
-    /// The idle agents behind "9 more idle".
-    var moreIdle: [PanelRow] = []
+    /// Always in view: the agents with a session that waits or works, and
+    /// the first idle ones.
+    var groups: [PanelGroup]
+    /// The idle agents behind "3 more idle agents".
+    var moreIdle: [PanelGroup] = []
     /// In place of the list when no agent is open.
     var emptyText: String?
     /// License items of the gear menu.

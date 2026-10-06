@@ -5,19 +5,21 @@ import SwiftUI
 struct PanelPreview: View {
     let state: PanelState
     var startsExpanded = false
+    var startsToggled: Set<String> = []
     @State private var enabled: Bool
     @State private var mode: AwakeMode
 
-    init(state: PanelState, startsExpanded: Bool = false, enabled: Bool = true, mode: AwakeMode = .agentWorking) {
+    init(state: PanelState, startsExpanded: Bool = false, startsToggled: Set<String> = [], enabled: Bool = true, mode: AwakeMode = .agentWorking) {
         self.state = state
         self.startsExpanded = startsExpanded
+        self.startsToggled = startsToggled
         _enabled = State(initialValue: enabled)
         _mode = State(initialValue: mode)
     }
 
     var body: some View {
         PanelView(
-            state: state, enabled: $enabled, mode: $mode, startsExpanded: startsExpanded,
+            state: state, enabled: $enabled, mode: $mode, startsExpanded: startsExpanded, startsToggled: startsToggled,
             perform: { _ in }, openPreferences: {}, quit: {}
         )
     }
@@ -25,6 +27,11 @@ struct PanelPreview: View {
 
 #Preview("Working") { PanelPreview(state: PanelFixtures.working) }
 #Preview("Expanded idle list") { PanelPreview(state: PanelFixtures.working, startsExpanded: true) }
+#Preview("Grouped sessions") { PanelPreview(state: PanelFixtures.grouped) }
+#Preview("Working and waiting") { PanelPreview(state: PanelFixtures.mixed) }
+#Preview("Idle groups") { PanelPreview(state: PanelFixtures.idleGroups) }
+#Preview("Idle group opened") { PanelPreview(state: PanelFixtures.idleGroups, startsToggled: ["claude"]) }
+#Preview("Long session name") { PanelPreview(state: PanelFixtures.longLabel) }
 #Preview("Waiting") { PanelPreview(state: PanelFixtures.waiting) }
 #Preview("All idle") { PanelPreview(state: PanelFixtures.allIdle) }
 #Preview("No agent") { PanelPreview(state: PanelFixtures.noAgent) }
