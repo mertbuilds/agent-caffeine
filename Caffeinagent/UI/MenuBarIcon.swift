@@ -2,17 +2,16 @@ import AppKit
 
 /// The robot of the app icon, small, for the menu bar: the head with its
 /// ear pads, the antenna with its ball, the visor and the eyes. Drawn as
-/// vector on a 19 x 22 point canvas (origin top left) whose edges lie on
+/// vector on a 19 x 20 point canvas (origin top left) whose edges lie on
 /// whole points, so they are sharp at 1x and 2x. The template flag lets
 /// macOS tint it for light and dark menu bars and the selected state.
 ///
-/// The drawing takes the top 18 points. The 4 empty points below it put
-/// the middle of the head, not of head plus antenna, on the middle of the
-/// menu bar, which centres the canvas: the antenna then stands above the
-/// line the other icons sit on. 22 points is the height of a status item,
-/// so the icon cannot go higher than this.
+/// The drawing takes the top 18 points. The menu bar centres the canvas,
+/// so the 2 empty points below the drawing lift it by 1 point: the head
+/// sits 1 point under the middle of the bar and the antenna stands above
+/// the line the other icons sit on. Set by eye on a real menu bar.
 enum MenuBarIcon {
-    static let size = NSSize(width: 19, height: 22)
+    static let size = NSSize(width: 19, height: 20)
 
     /// A robot that is knocked out gets red crosses for eyes, in a picture
     /// that is no template and takes its ink from the menu bar it is drawn
