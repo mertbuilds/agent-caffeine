@@ -1,82 +1,122 @@
 import AppKit
 
-/// The robot head in the menu bar, drawn as vector on an 18 x 18 point canvas
-/// (origin top left). The drawing handler runs at the backing scale of the
-/// screen, so edges stay sharp at 1x and 2x, and the template flag lets macOS
-/// tint it for light and dark menu bars and the selected state.
+/// The robot of the app icon, small, for the menu bar: the head with its
+/// ear pads, the antenna with its ball, the visor and the eyes. Drawn as
+/// vector on a 19 x 18 point canvas (origin top left) whose edges lie on
+/// whole points, so they are sharp at 1x and 2x. The template flag lets
+/// macOS tint it for light and dark menu bars and the selected state.
 enum MenuBarIcon {
-    static let held = make(held: true)
-    static let notHeld = make(held: false)
+    static let size = NSSize(width: 19, height: 18)
 
-    static func make(held: Bool) -> NSImage {
-        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: true) { _ in
-            guard let context = NSGraphicsContext.current?.cgContext else { return false }
-            // The thin antenna adds little weight, so the head reads low when
-            // the canvas is centred. Lift it half a point (one pixel at 2x).
-            context.translateBy(x: 0, y: -0.5)
-            context.setFillColor(NSColor.black.cgColor)
-            context.setStrokeColor(NSColor.black.cgColor)
-            if held {
-                drawAwake(in: context)
-            } else {
-                drawAsleep(in: context)
-            }
-            return true
-        }
-        image.isTemplate = true
-        image.accessibilityDescription = accessibilityLabel(held: held)
+    /// A robot that is knocked out gets red crosses for eyes, in a picture
+    /// that is no template and takes its ink from the menu bar it is drawn
+    /// in. Off: the crosses are in the ink of the menu bar like the rest.
+    ///
+    /// Checked with a status item on macOS 26: the menu bar extra hands
+    /// this very image to its button, the button draws it again under the
+    /// appearance of the menu bar when that changes (white ink on a dark
+    /// bar, black on a light one), and a highlighted button keeps the
+    /// normal background style, so the ink stays.
+    static let redCrosses = true
+
+    private static var cache: [MenuBarLook: NSImage] = [:]
+
+    static func image(for look: MenuBarLook) -> NSImage {
+        if let image = cache[look] { return image }
+        let image = make(look, colored: redCrosses && look.eyes == .dead)
+        cache[look] = image
         return image
     }
 
-    static func accessibilityLabel(held: Bool) -> String {
-        held ? "agent caffeine, keeping the Mac awake" : "agent caffeine, not keeping the Mac awake"
+    static func make(_ look: MenuBarLook, colored: Bool) -> NSImage {
+        let image = NSImage(size: size, flipped: true) { _ in
+            guard let context = NSGraphicsContext.current?.cgContext else { return false }
+            // A template is tinted by macOS. A picture with colour has to
+            // take the ink of the menu bar it is drawn in.
+            let ink = colored ? NSColor.labelColor.usingColorSpace(.sRGB)?.withAlphaComponent(1).cgColor ?? NSColor.black.cgColor : NSColor.black.cgColor
+            draw(look, in: context, ink: ink, crosses: colored ? NSColor.systemRed.cgColor : ink)
+            return true
+        }
+        image.isTemplate = !colored
+        image.accessibilityDescription = look.accessibilityLabel
+        return image
     }
 
-    private static func drawAwake(in context: CGContext) {
-        context.fillEllipse(in: CGRect(x: 9 - 1.35, y: 2.3 - 1.35, width: 2.7, height: 2.7))
-        context.fill(CGRect(x: 8.4, y: 3, width: 1.2, height: 2.6))
-        for (rect, radius) in [
-            (CGRect(x: 2.6, y: 5.2, width: 12.8, height: 10.3), 4.6),
-            (CGRect(x: 0.9, y: 8.6, width: 2, height: 3.4), 1),
-            (CGRect(x: 15.1, y: 8.6, width: 2, height: 3.4), 1),
-        ] {
-            context.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
-            context.fillPath()
-        }
+    static func draw(_ look: MenuBarLook, in context: CGContext, ink: CGColor, crosses: CGColor) {
+        context.saveGState()
+        defer { context.restoreGState() }
+        context.setAlpha(look.opacity)
+        context.beginTransparencyLayer(auxiliaryInfo: nil)
+        defer { context.endTransparencyLayer() }
+        context.setFillColor(ink)
+        context.setStrokeColor(ink)
 
-        // Smiling eyes, cut out of the head.
-        let eyes = CGMutablePath()
-        for x in [5.5, 10.0] {
-            eyes.move(to: CGPoint(x: x, y: 11.1))
-            eyes.addQuadCurve(to: CGPoint(x: x + 2.5, y: 11.1), control: CGPoint(x: x + 1.25, y: 9.0))
+        let head = CGRect(x: 2, y: 5, width: 15, height: 12)
+        let visor = CGRect(x: 4, y: 8, width: 11, height: 6)
+        // The ball of the antenna and its stem.
+        context.fillEllipse(in: CGRect(x: 8, y: 0, width: 3, height: 3))
+        context.fill(CGRect(x: 9, y: 3, width: 1, height: 2))
+        // The ear pads reach out from behind the head.
+        for x in [0.0, 16.0] { fill(CGRect(x: x, y: 8.5, width: 3, height: 5), radius: 1.5, in: context) }
+
+        if look.solid {
+            fill(head, radius: 5, in: context)
+            context.setBlendMode(.destinationOut)
+            fill(visor, radius: 3, in: context)
+            context.setBlendMode(.normal)
+        } else {
+            // The inside of the head is empty, also where the ear pads began.
+            context.setBlendMode(.destinationOut)
+            fill(head, radius: 5, in: context)
+            context.setBlendMode(.normal)
+            context.setLineWidth(1)
+            context.addPath(CGPath(roundedRect: head.insetBy(dx: 0.5, dy: 0.5), cornerWidth: 4.5, cornerHeight: 4.5, transform: nil))
+            context.strokePath()
         }
-        context.setBlendMode(.destinationOut)
-        context.setLineWidth(1.35)
-        context.setLineCap(.round)
-        context.addPath(eyes)
-        context.strokePath()
+        // At 1x the eyes are set on whole pixels.
+        drawEyes(look.eyes, in: context, crosses: crosses, onPixels: abs(context.ctm.a) < 1.5)
     }
 
-    private static func drawAsleep(in context: CGContext) {
-        context.setLineWidth(1.1)
-        context.strokeEllipse(in: CGRect(x: 9 - 0.9, y: 2.3 - 0.9, width: 1.8, height: 1.8))
-        context.strokeLineSegments(between: [CGPoint(x: 9, y: 3.3), CGPoint(x: 9, y: 5.3)])
-
-        context.setLineWidth(1.25)
-        context.addPath(CGPath(roundedRect: CGRect(x: 3.2, y: 5.8, width: 11.6, height: 9.1), cornerWidth: 4, cornerHeight: 4, transform: nil))
-        context.strokePath()
-
+    /// Two eyes in the visor, each 3 points wide. At 1x a curve of that
+    /// size is a smear, so each eye is a few whole pixels there.
+    private static func drawEyes(_ eyes: MenuBarLook.Eyes, in context: CGContext, crosses: CGColor, onPixels: Bool) {
         context.setLineCap(.round)
-        context.strokeLineSegments(between: [
-            CGPoint(x: 1.6, y: 9), CGPoint(x: 1.6, y: 11.6),
-            CGPoint(x: 16.4, y: 9), CGPoint(x: 16.4, y: 11.6),
-        ])
+        context.setLineJoin(.round)
+        for x in onPixels ? [5.0, 11.0] : [5.5, 10.5] {
+            func pixels(_ points: [(CGFloat, CGFloat)]) {
+                context.fill(points.map { CGRect(x: x + $0.0, y: 10 + $0.1, width: 1, height: 1) })
+            }
+            switch eyes {
+            case .happy where onPixels:
+                pixels([(1, 0), (0, 1), (2, 1)])
+            case .happy:
+                context.setLineWidth(1.2)
+                context.move(to: CGPoint(x: x, y: 12))
+                context.addQuadCurve(to: CGPoint(x: x + 3, y: 12), control: CGPoint(x: x + 1.5, y: 8.6))
+                context.strokePath()
+            case .open where onPixels:
+                // Two pixels wide, and the same distance from the middle.
+                context.fill(CGRect(x: x == 5 ? 6 : 11, y: 10, width: 2, height: 2))
+            case .open:
+                context.fillEllipse(in: CGRect(x: x + 0.25, y: 9.75, width: 2.5, height: 2.5))
+            case .closed:
+                context.fill(CGRect(x: x, y: 11, width: 3, height: 1))
+            case .dead where onPixels:
+                context.setFillColor(crosses)
+                pixels([(0, 0), (2, 0), (1, 1), (0, 2), (2, 2)])
+            case .dead:
+                context.setStrokeColor(crosses)
+                context.setLineWidth(1.1)
+                context.strokeLineSegments(between: [
+                    CGPoint(x: x + 0.25, y: 9.75), CGPoint(x: x + 2.75, y: 12.25),
+                    CGPoint(x: x + 2.75, y: 9.75), CGPoint(x: x + 0.25, y: 12.25),
+                ])
+            }
+        }
+    }
 
-        // Closed eyes.
-        context.setLineWidth(1.3)
-        context.strokeLineSegments(between: [
-            CGPoint(x: 5.5, y: 10.6), CGPoint(x: 8, y: 10.6),
-            CGPoint(x: 10, y: 10.6), CGPoint(x: 12.5, y: 10.6),
-        ])
+    private static func fill(_ rect: CGRect, radius: CGFloat, in context: CGContext) {
+        context.addPath(CGPath(roundedRect: rect, cornerWidth: radius, cornerHeight: radius, transform: nil))
+        context.fillPath()
     }
 }
