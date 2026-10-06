@@ -9,7 +9,7 @@ enum MenuModel {
     static let idleChildrenInView = 6
     /// The trial is named in the menu from this many days left.
     static let trialWarningDays = 2
-    /// The battery bar turns amber this many points above the floor.
+    /// The line of the battery turns amber this many points above the floor.
     static let batteryWarningPoints = 10
 
     static func state(_ input: PanelInput, now: Date) -> PanelState {
@@ -104,8 +104,11 @@ enum MenuModel {
         if case .safetyStop(let stop) = input.decision.headline {
             switch stop {
             case .batteryLow:
-                let recovery = input.settings.batteryFloorPercent + SafetyMonitor.batteryRecoveryPoints
-                return PanelAttention(kind: .safetyStop, text: PanelText.startsAgain(atBatteryPercent: recovery))
+                // The line of the battery says when it starts again. Once is enough.
+                if battery(input) == nil {
+                    let recovery = input.settings.batteryFloorPercent + SafetyMonitor.batteryRecoveryPoints
+                    return PanelAttention(kind: .safetyStop, text: PanelText.startsAgain(atBatteryPercent: recovery))
+                }
             case .tooHot:
                 return PanelAttention(kind: .safetyStop, text: PanelText.startsAgainWhenCool)
             }
@@ -161,13 +164,13 @@ enum MenuModel {
     // MARK: Battery
 
     /// The battery floor stops every hold on battery, with the lid open
-    /// too, and with the floor off the user has to see the end coming, so the bar is there whenever agent caffeine could hold on
+    /// too, and with the floor off the user has to see the end coming, so the line is there whenever agent caffeine could hold on
     /// battery, with or without the helper for a closed lid.
     static func battery(_ input: PanelInput) -> PanelBattery? {
         guard input.onBattery, let percent = input.batteryPercent,
               input.enabled, input.pausedUntil == nil, input.entitlement.allowsHolding else { return nil }
         let shown = min(max(percent, 0), 100)
-        // With no floor the bar still shows the end coming.
+        // With no floor the line still shows the end coming.
         guard input.settings.batteryFloorEnabled else {
             let reached = NoLimitBatteryWarning.levels.filter { percent <= $0 }.count
             return PanelBattery(percent: shown, floor: nil, level: [.normal, .nearFloor, .nearEmpty][reached])

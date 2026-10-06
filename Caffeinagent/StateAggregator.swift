@@ -151,7 +151,7 @@ final class StateAggregator: ObservableObject {
     @PublishedOnChange private(set) var entitlement: Entitlement
     /// False on a Mac without a battery, where a closed lid needs no helper.
     @PublishedOnChange private(set) var hasBattery = true
-    /// For the battery bar of the menu.
+    /// For the line of the battery in the menu.
     @PublishedOnChange private(set) var onBattery = false
     @PublishedOnChange private(set) var batteryPercent: Int?
     @PublishedOnChange private(set) var helperError: String?

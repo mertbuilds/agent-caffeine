@@ -67,8 +67,8 @@ struct PanelAttention: Equatable {
     var actions: [PanelAction] = []
 }
 
-/// The charge of the battery against the level where agent caffeine lets
-/// the Mac sleep. Only while the Mac runs on battery and agent caffeine
+/// The charge of the battery and the level where agent caffeine lets the
+/// Mac sleep, on one line below the headline. Only while the Mac runs on battery and agent caffeine
 /// could keep it awake.
 struct PanelBattery: Equatable {
     enum Level: Equatable {
@@ -88,12 +88,27 @@ struct PanelBattery: Equatable {
     var floor: Int?
     var level: Level
 
-    /// How much of the bar is filled, 0 to 1.
+    /// What the mark and the number are drawn in. The rest of the line
+    /// stays quiet.
+    enum Tone: Equatable {
+        case quiet
+        case amber
+        case red
+    }
+
+    /// How much of the mark is filled, 0 to 1.
     var fill: Double { Double(percent) / 100 }
-    /// Where the mark of the floor stands, 0 to 1. Nil for no mark.
-    var tick: Double? { floor.map { Double($0) / 100 } }
-    var leading: String { PanelText.batteryLeft(percent: percent) }
-    var trailing: String {
+    var tone: Tone {
+        switch level {
+        case .normal: return .quiet
+        case .nearFloor: return .amber
+        case .stopped, .nearEmpty: return .red
+        }
+    }
+    /// "88%".
+    var charge: String { PanelText.percent(percent) }
+    /// What follows from it, after the number.
+    var consequence: String {
         guard let floor else { return PanelText.batteryNoLimit }
         return level == .stopped
             ? PanelText.batteryStartsAgain(atPercent: floor + SafetyMonitor.batteryRecoveryPoints)

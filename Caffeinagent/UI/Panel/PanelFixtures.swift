@@ -182,7 +182,7 @@ enum PanelFixtures {
 
     static let tooHot = state(input(.safetyStop(.tooHot)))
 
-    /// On battery, with the bar: far from the floor, close to it, and stopped.
+    /// On battery, with the line of the battery: far from the floor, close to it, and stopped.
     static let onBattery = onBattery(percent: 58)
     static let onBatteryNearFloor = onBattery(percent: 27)
     static let onBatteryStopped: PanelState = {
@@ -195,7 +195,7 @@ enum PanelFixtures {
         return state(input)
     }()
 
-    /// The battery floor is off: no mark on the bar.
+    /// The battery floor is off, and the battery is low.
     static let onBatteryNoLimit = onBattery(percent: 9, floorEnabled: false)
 
     private static func onBattery(percent: Int, floorEnabled: Bool = true) -> PanelState {

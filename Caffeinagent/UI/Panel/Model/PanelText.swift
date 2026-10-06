@@ -157,22 +157,20 @@ enum PanelText {
 
     // MARK: Battery
 
-    static func batteryLeft(percent: Int) -> String {
-        "\(Self.percent(percent)) battery"
-    }
-
+    /// The second half of the line, after the charge: lower case.
     static func batterySleepsBelow(percent: Int) -> String {
-        "Sleeps below \(Self.percent(percent))"
+        "sleeps below \(Self.percent(percent))"
     }
 
-    static let batteryNoLimit = "No battery limit"
+    static let batteryNoLimit = "no battery limit"
+    static let batterySeparator = "·"
 
     static func batterySpokenNoLimit(percent: Int) -> String {
         "Battery \(percent) percent, no battery limit"
     }
 
     static func batteryStartsAgain(atPercent percent: Int) -> String {
-        "Starts again at \(Self.percent(percent))"
+        "starts again at \(Self.percent(percent))"
     }
 
     static func batterySpoken(percent: Int, floor: Int) -> String {

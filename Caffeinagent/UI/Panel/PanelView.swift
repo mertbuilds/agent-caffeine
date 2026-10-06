@@ -18,13 +18,15 @@ struct PanelView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 12) {
-                HeroView(state: state)
+                VStack(spacing: PanelMetrics.batteryLineTop) {
+                    HeroView(state: state)
+                    if let battery = state.battery {
+                        BatteryLine(battery: battery)
+                            .transition(.opacity)
+                    }
+                }
                 if let attention = state.attention {
                     AttentionLine(attention: attention, busy: busy, perform: perform)
-                        .transition(.opacity)
-                }
-                if let battery = state.battery {
-                    BatteryBar(battery: battery)
                         .transition(.opacity)
                 }
             }

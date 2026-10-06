@@ -430,6 +430,13 @@ final class MenuModelTests: XCTestCase {
         var battery = input(.safetyStop(.batteryLow(percent: 18)))
         battery.settings.batteryFloorPercent = 20
         XCTAssertEqual(MenuModel.attention(battery), PanelAttention(kind: .safetyStop, text: "agent caffeine starts again at 25%"))
+        // The line of the battery says it when it is there, so the sentence comes once.
+        battery.onBattery = true
+        battery.batteryPercent = 18
+        XCTAssertNil(MenuModel.attention(battery))
+        XCTAssertEqual(MenuModel.battery(battery)?.consequence, "starts again at 25%")
+        battery.lidClosedNeedsSetup = true
+        XCTAssertEqual(MenuModel.attention(battery)?.kind, .lidClosedNotSetUp, "What else needs the user is still said")
         XCTAssertEqual(MenuModel.attention(input(.safetyStop(.tooHot))), PanelAttention(kind: .safetyStop, text: "agent caffeine starts again when it is cool"))
 
         var helper = input(.alwaysOn)
