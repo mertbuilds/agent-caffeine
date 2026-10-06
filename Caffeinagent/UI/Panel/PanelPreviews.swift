@@ -33,6 +33,7 @@ struct PanelPreview: View {
 #Preview("Too hot") { PanelPreview(state: PanelFixtures.tooHot) }
 #Preview("Lid closed not set up") { PanelPreview(state: PanelFixtures.lidClosedNotSetUp) }
 #Preview("Helper switched off") { PanelPreview(state: PanelFixtures.helperSwitchedOff, mode: .always) }
+#Preview("Helper gives no answer") { PanelPreview(state: PanelFixtures.helperNotResponding) }
 #Preview("Trial ending") { PanelPreview(state: PanelFixtures.trialEnding) }
 #Preview("Trial over") { PanelPreview(state: PanelFixtures.trialOver) }
 

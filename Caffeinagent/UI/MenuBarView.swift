@@ -33,6 +33,8 @@ struct MenuBarView: View {
         switch action {
         case .openLoginItems:
             aggregator.sleepFlag.openLoginItemsSettings()
+        case .tryHelperAgain:
+            aggregator.repairHelper()
         case .buy:
             NSWorkspace.shared.open(license.config.checkoutURL)
         case .enterKey:

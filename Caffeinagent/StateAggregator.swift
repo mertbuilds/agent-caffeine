@@ -166,6 +166,10 @@ final class StateAggregator: ObservableObject {
             lidClosedNeedsSetup: MenuModel.lidClosedNeedsSetup(
                 helper: sleepFlag.helperStatus, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
             ),
+            helperNotResponding: MenuModel.helperNotResponding(
+                notResponding: sleepFlag.notResponding, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
+            ),
+            helperRepairTried: sleepFlag.repairTried,
             lidClosedHintDismissed: lidClosedHintDismissed
         )
     }

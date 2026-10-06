@@ -80,6 +80,14 @@ enum MenuModel {
                 actions: [.openLoginItems]
             )
         }
+        // The robot keeps its pose: the Mac still stays awake with the lid open.
+        if input.helperNotResponding {
+            return PanelAttention(
+                kind: .helperNotResponding,
+                text: PanelText.helperNotResponding,
+                actions: input.helperRepairTried ? [.tryHelperAgain, .openLoginItems] : [.tryHelperAgain]
+            )
+        }
         switch input.entitlement {
         case .expired(.trialOver):
             return PanelAttention(kind: .license, text: PanelText.buyToKeepAwake, actions: [.buy, .enterKey])
@@ -108,6 +116,10 @@ enum MenuModel {
 
     static func lidClosedNeedsSetup(helper: HelperStatus, wanted: Bool, hasBattery: Bool) -> Bool {
         hasBattery && wanted && helper != .enabled
+    }
+
+    static func helperNotResponding(notResponding: Bool, wanted: Bool, hasBattery: Bool) -> Bool {
+        hasBattery && wanted && notResponding
     }
 
     private static func licenseActions(_ input: PanelInput) -> [PanelAction] {

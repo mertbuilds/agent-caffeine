@@ -59,7 +59,7 @@ struct AttentionLine: View {
 
     private var symbol: String {
         switch attention.kind {
-        case .safetyStop, .helperSwitchedOff: return "exclamationmark.triangle.fill"
+        case .safetyStop, .helperSwitchedOff, .helperNotResponding: return "exclamationmark.triangle.fill"
         case .license: return "key.fill"
         case .lidClosedNotSetUp: return "laptopcomputer"
         }
@@ -67,7 +67,7 @@ struct AttentionLine: View {
 
     private var tint: Color {
         switch attention.kind {
-        case .safetyStop, .license: return .orange
+        case .safetyStop, .helperNotResponding, .license: return .orange
         case .helperSwitchedOff: return .red
         case .lidClosedNotSetUp: return .secondary
         }

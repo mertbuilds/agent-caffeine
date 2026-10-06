@@ -33,11 +33,14 @@ struct PreferencesView: View {
             LidClosedPreferences(
                 settings: $aggregator.settings,
                 helper: aggregator.sleepFlag.helperStatus,
+                notResponding: aggregator.sleepFlag.notResponding,
+                repairTried: aggregator.sleepFlag.repairTried,
                 canSetUp: aggregator.canSetUpHelper,
                 needsSudoersCleanup: aggregator.sleepFlag.needsSudoersCleanup,
                 error: aggregator.helperError,
                 setUp: aggregator.setUpHelper,
                 remove: aggregator.removeHelper,
+                tryAgain: aggregator.repairHelper,
                 openLoginItems: aggregator.sleepFlag.openLoginItemsSettings,
                 removeSudoersEntry: aggregator.removeSudoersEntry
             )
@@ -369,12 +372,17 @@ extension AgentRule {
 struct LidClosedPreferences: View {
     @Binding var settings: DetectionSettings
     let helper: HelperStatus
+    /// The helper is allowed and gives no answer.
+    var notResponding = false
+    /// The helper was registered again and still gives no answer.
+    var repairTried = false
     /// The helper is offered only from the Applications folder.
     let canSetUp: Bool
     let needsSudoersCleanup: Bool
     let error: String?
     let setUp: () -> Void
     let remove: () -> Void
+    var tryAgain: () -> Void = {}
     let openLoginItems: () -> Void
     let removeSudoersEntry: () -> Void
 
@@ -416,6 +424,15 @@ struct LidClosedPreferences: View {
     @ViewBuilder
     private var helperState: some View {
         switch helper {
+        case .enabled where notResponding:
+            Label(PanelText.helperNotResponding, systemImage: "exclamationmark.triangle.fill")
+                .foregroundStyle(.orange)
+            HStack {
+                Button(PanelText.title(of: .tryHelperAgain), action: tryAgain)
+                if repairTried {
+                    Button(PanelText.title(of: .openLoginItems), action: openLoginItems)
+                }
+            }
         case .enabled:
             HStack {
                 Label("The helper is set up", systemImage: "checkmark.circle.fill")
@@ -442,6 +459,7 @@ struct LidClosedPreferences: View {
 #if DEBUG
 private struct PreferencesPreview: View {
     var helper = HelperStatus.notRegistered
+    var notResponding = false
     var needsSudoersCleanup = false
     @State private var mode = AwakeMode.agentWorking
     @State private var settings = DetectionSettings()
@@ -457,7 +475,7 @@ private struct PreferencesPreview: View {
             )
                 .tabItem { Label("Agents", systemImage: "terminal") }
             LidClosedPreferences(
-                settings: $settings, helper: helper, canSetUp: true, needsSudoersCleanup: needsSudoersCleanup, error: nil,
+                settings: $settings, helper: helper, notResponding: notResponding, repairTried: true, canSetUp: true, needsSudoersCleanup: needsSudoersCleanup, error: nil,
                 setUp: {}, remove: {}, openLoginItems: {}, removeSudoersEntry: {}
             )
             .tabItem { Label("Lid closed", systemImage: "laptopcomputer") }
@@ -473,6 +491,10 @@ private struct PreferencesPreview: View {
 
 #Preview("Helper set up, old entry left") {
     PreferencesPreview(helper: .enabled, needsSudoersCleanup: true)
+}
+
+#Preview("Helper gives no answer") {
+    PreferencesPreview(helper: .enabled, notResponding: true)
 }
 
 #Preview("Helper waits for approval") {

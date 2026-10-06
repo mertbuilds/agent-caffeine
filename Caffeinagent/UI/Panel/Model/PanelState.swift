@@ -26,6 +26,7 @@ enum HeroPose: Equatable {
 /// Something the user can do from the menu.
 enum PanelAction: Equatable {
     case openLoginItems
+    case tryHelperAgain
     case buy
     case enterKey
     case checkLicense
@@ -42,6 +43,7 @@ struct PanelAttention: Equatable {
     enum Kind: Int, Equatable {
         case safetyStop
         case helperSwitchedOff
+        case helperNotResponding
         case license
         case lidClosedNotSetUp
     }
@@ -190,5 +192,10 @@ struct PanelInput: Equatable {
     /// A Mac with a battery whose helper is not allowed yet, while the
     /// setting asks for it.
     var lidClosedNeedsSetup = false
+    /// The helper is allowed and gives no answer, while the setting asks
+    /// for it on a Mac with a battery.
+    var helperNotResponding = false
+    /// The helper was registered again and still gives no answer.
+    var helperRepairTried = false
     var lidClosedHintDismissed = false
 }

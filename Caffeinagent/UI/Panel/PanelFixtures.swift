@@ -121,6 +121,14 @@ enum PanelFixtures {
         return state(input)
     }()
 
+    static let helperNotResponding: PanelState = {
+        var input = Self.input(.working(.one("Claude Code")), [
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 12, label: "wiki", cause: .working),
+        ])
+        input.helperNotResponding = true
+        return state(input)
+    }()
+
     static let trialEnding: PanelState = {
         var input = Self.input(.finishedRecently(.one("Claude Code")), [Agent(id: "claude", name: "Claude Code", minutes: 1)])
         input.entitlement = .trial(daysLeft: 2)
@@ -137,7 +145,7 @@ enum PanelFixtures {
     static let all: [(name: String, state: PanelState)] = [
         ("working", working), ("waiting", waiting), ("all-idle", allIdle), ("same-folder", sameFolder), ("no-agent", noAgent),
         ("off", off), ("safety-stop", safetyStop), ("too-hot", tooHot), ("lid-closed", lidClosedNotSetUp),
-        ("helper-off", helperSwitchedOff), ("trial-ending", trialEnding), ("trial-over", trialOver),
+        ("helper-off", helperSwitchedOff), ("helper-silent", helperNotResponding), ("trial-ending", trialEnding), ("trial-over", trialOver),
     ]
 
     /// One agent for each mark, to check the marks.

@@ -80,6 +80,7 @@ enum PanelText {
     static let buyToKeepAwake = "Buy a key to keep your Mac awake"
     static let connectAndCheck = "Connect to the internet, then check again"
     static let activateAgain = "Activate this Mac again to keep it awake"
+    static let helperNotResponding = "agent caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery"
     static let lidClosedNotSetUp = "Your Mac still sleeps with the lid closed on battery"
 
     static func trialEnds(inDays days: Int) -> String {
@@ -91,6 +92,7 @@ enum PanelText {
     static func title(of action: PanelAction) -> String {
         switch action {
         case .openLoginItems: return "Open System Settings"
+        case .tryHelperAgain: return "Try again"
         case .buy: return "Buy for $9"
         case .enterKey: return "Enter license key…"
         case .checkLicense: return "Check now"

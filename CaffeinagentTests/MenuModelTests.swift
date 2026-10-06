@@ -141,6 +141,21 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(MenuModel.state(stopped, now: now).pose, .safetyStop(.heat))
     }
 
+    /// The Mac still stays awake with the lid open, so the robot and the
+    /// headline stay as they are. Only the line below says it.
+    func testAHelperThatGivesNoAnswerKeepsTheRobotAndTheHeadline() {
+        for headline in [HoldHeadline.working(.one("Claude Code")), .working(.many(3)), .alwaysOn, .noAgents] {
+            let plain = MenuModel.state(input(headline), now: now)
+            var silent = input(headline)
+            silent.helperNotResponding = true
+            let state = MenuModel.state(silent, now: now)
+            XCTAssertEqual(state.pose, plain.pose, "\(headline)")
+            XCTAssertEqual(state.title, plain.title, "\(headline)")
+            XCTAssertEqual(state.subtitle, plain.subtitle, "\(headline)")
+            XCTAssertEqual(state.attention?.kind, .helperNotResponding, "\(headline)")
+        }
+    }
+
     func testTheHeadlineSaysThatTheMacMayNotSleepWhenTheHelperWasSwitchedOff() {
         for headline in [HoldHeadline.alwaysOn, .working(.one("Claude Code")), .noAgents, .switchedOff] {
             var input = input(headline)
@@ -255,6 +270,17 @@ final class MenuModelTests: XCTestCase {
             actions: [.openLoginItems]
         ))
 
+        var silent = input(.working(.one("Claude Code")))
+        silent.helperNotResponding = true
+        let cannotReach = "agent caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery"
+        XCTAssertEqual(MenuModel.attention(silent), PanelAttention(kind: .helperNotResponding, text: cannotReach, actions: [.tryHelperAgain]))
+        silent.helperRepairTried = true
+        XCTAssertEqual(MenuModel.attention(silent), PanelAttention(
+            kind: .helperNotResponding, text: cannotReach, actions: [.tryHelperAgain, .openLoginItems]
+        ))
+        silent.helperNotResponding = false
+        XCTAssertNil(MenuModel.attention(silent), "A repair that helped leaves no line")
+
         var lid = input(.noAgents)
         lid.lidClosedNeedsSetup = true
         XCTAssertEqual(MenuModel.attention(lid), PanelAttention(
@@ -288,6 +314,9 @@ final class MenuModelTests: XCTestCase {
         input.decision.headline = .notEntitled(.trialOver)
         XCTAssertEqual(MenuModel.attention(input)?.kind, .helperSwitchedOff)
         input.flagLeftOn = false
+        input.helperNotResponding = true
+        XCTAssertEqual(MenuModel.attention(input)?.kind, .helperNotResponding)
+        input.helperNotResponding = false
         XCTAssertEqual(MenuModel.attention(input)?.kind, .license)
         input.entitlement = .trial(daysLeft: 6)
         XCTAssertEqual(MenuModel.attention(input)?.kind, .lidClosedNotSetUp)
@@ -302,6 +331,13 @@ final class MenuModelTests: XCTestCase {
         XCTAssertFalse(MenuModel.lidClosedNeedsSetup(helper: .enabled, wanted: true, hasBattery: true))
     }
 
+    func testAHelperThatGivesNoAnswerIsToldOnlyWhereItCanMatter() {
+        XCTAssertTrue(MenuModel.helperNotResponding(notResponding: true, wanted: true, hasBattery: true))
+        XCTAssertFalse(MenuModel.helperNotResponding(notResponding: false, wanted: true, hasBattery: true))
+        XCTAssertFalse(MenuModel.helperNotResponding(notResponding: true, wanted: false, hasBattery: true), "The user switched it off")
+        XCTAssertFalse(MenuModel.helperNotResponding(notResponding: true, wanted: true, hasBattery: false), "No battery")
+    }
+
     func testLicenseItemsOfTheGearMenu() {
         var input = input(.noAgents)
         XCTAssertEqual(MenuModel.state(input, now: now).licenseActions, [])
@@ -314,7 +350,7 @@ final class MenuModelTests: XCTestCase {
 
     func testActionTitles() {
         let titles: [(PanelAction, String)] = [
-            (.openLoginItems, "Open System Settings"), (.buy, "Buy for $9"), (.enterKey, "Enter license key…"),
+            (.openLoginItems, "Open System Settings"), (.tryHelperAgain, "Try again"), (.buy, "Buy for $9"), (.enterKey, "Enter license key…"),
             (.checkLicense, "Check now"), (.activateAgain, "Activate again"), (.setUpLidClosed, "Set up…"),
             (.dismissLidClosedHint, "Dismiss"),
         ]
