@@ -81,8 +81,23 @@ struct CaffeinagentApp: App {
     @StateObject private var updater = Updater()
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
+    /// `MenuBarExtra` must not get `$aggregator.showMenuBarIcon`. On macOS 26
+    /// every update of the scenes sets the status item's visibility again,
+    /// also to the value it has, and SwiftUI's observer of it writes that
+    /// value back through this binding. A binding that publishes on such a
+    /// write updates the scenes again, for ever, on the main thread: the
+    /// app uses a whole core and its icon is blank and dead. `@AppStorage`
+    /// publishes on every write too and hangs the same way, so it is no
+    /// fix. Here a write of the same value goes nowhere.
+    static func menuBarIconInserted(_ aggregator: StateAggregator) -> Binding<Bool> {
+        Binding(
+            get: { aggregator.showMenuBarIcon },
+            set: { if $0 != aggregator.showMenuBarIcon { aggregator.showMenuBarIcon = $0 } }
+        )
+    }
+
     var body: some Scene {
-        MenuBarExtra(isInserted: $aggregator.showMenuBarIcon) {
+        MenuBarExtra(isInserted: Self.menuBarIconInserted(aggregator)) {
             MenuBarView(aggregator: aggregator)
         } label: {
             MenuBarLabel(look: MenuBarLook(pose: MenuModel.pose(aggregator.panelInput)))

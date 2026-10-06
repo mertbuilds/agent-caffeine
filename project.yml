@@ -190,6 +190,7 @@ targets:
       - CaffeinagentTests
       - Caffeinagent/Models/AwakeMode.swift
       - Caffeinagent/Models/AppVersion.swift
+      - Caffeinagent/Models/PublishedOnChange.swift
       - Caffeinagent/License/Entitlement.swift
       - Caffeinagent/License/LicenseClient.swift
       - Caffeinagent/License/LicenseConfig.swift

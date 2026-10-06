@@ -5,11 +5,15 @@ import Foundation
 enum HiddenNotice: Equatable {
     /// The sleep flag is on and the helper was switched off in Login Items.
     case helperSwitchedOff
+    /// The helper is enabled and gives no answer, so the lid closed on
+    /// battery puts the Mac to sleep.
+    case helperNotResponding
     case licenseExpired(ExpiredReason)
 
     var notificationText: String {
         switch self {
         case .helperSwitchedOff: return "agent caffeine cannot let your Mac sleep because it was switched off in Login Items"
+        case .helperNotResponding: return PanelText.helperNotResponding
         case .licenseExpired(.trialOver): return "agent caffeine cannot keep your Mac awake because your trial has ended"
         case .licenseExpired(.unverified): return "agent caffeine cannot keep your Mac awake because your license was not checked for 30 days"
         case .licenseExpired(.activationRemoved): return "agent caffeine cannot keep your Mac awake because this Mac is no longer activated"
@@ -17,8 +21,9 @@ enum HiddenNotice: Equatable {
     }
 
     /// One at a time, in the order of the menu: the helper comes first.
-    static func current(flagLeftOn: Bool, entitlement: Entitlement) -> HiddenNotice? {
+    static func current(flagLeftOn: Bool, helperNotResponding: Bool, entitlement: Entitlement) -> HiddenNotice? {
         if flagLeftOn { return .helperSwitchedOff }
+        if helperNotResponding { return .helperNotResponding }
         if case .expired(let reason) = entitlement { return .licenseExpired(reason) }
         return nil
     }

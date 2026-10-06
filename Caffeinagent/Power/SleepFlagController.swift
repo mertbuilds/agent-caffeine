@@ -100,15 +100,15 @@ struct SleepFlagRequest: Equatable {
 
 @MainActor
 final class SleepFlagController: ObservableObject, SleepFlagControlling {
-    @Published private(set) var helperStatus: HelperStatus
+    @PublishedOnChange private(set) var helperStatus: HelperStatus
     // The last value the helper confirmed.
-    @Published private(set) var sleepDisabled = false
-    @Published private(set) var needsSudoersCleanup = false
+    @PublishedOnChange private(set) var sleepDisabled = false
+    @PublishedOnChange private(set) var needsSudoersCleanup = false
     /// The helper is enabled in System Settings, and for some time it gave
     /// no answer or did not set the flag the app asked for.
-    @Published private(set) var notResponding = false
+    @PublishedOnChange private(set) var notResponding = false
     /// The helper was registered again in this launch.
-    @Published private(set) var repairTried = false
+    @PublishedOnChange private(set) var repairTried = false
     /// The last try to set the flag ended without an answer.
     private(set) var lastSetFailed = false
 

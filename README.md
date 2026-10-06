@@ -20,7 +20,7 @@ macOS menu bar app that keeps your Mac awake while AI coding agents work. By def
 - While keeping the Mac awake it holds `PreventUserIdleSystemSleep` and `PreventSystemSleep` assertions, and releases them as soon as the mode no longer calls for them. The assertions carry a 2 minute timeout that every decision renews, so a hung app cannot keep the Mac awake.
 - Lets the Mac sleep when the battery is low (20 percent by default) or the Mac gets too hot, and says so in a notification.
 - Surfaces state in the menu bar with a small version of the robot of the app icon, in the same pose as the robot in the menu: a solid head with smiling eyes when keeping the Mac awake, round eyes while an agent is waiting for you, an outline with closed eyes when the Mac can sleep, dimmed when off, and red crosses for eyes after a safety stop. The menu names what keeps the Mac awake and lists each agent with its state and the reason.
-- "Show agent caffeine in the menu bar" (Preferences > General, on by default) hides the icon. The app keeps your Mac awake the same way without it. To open Preferences again, open agent caffeine from Applications or Spotlight. While the icon is hidden, a notification says when the trial has ended or the helper was switched off.
+- "Show agent caffeine in the menu bar" (Preferences > General, on by default) hides the icon. The app keeps your Mac awake the same way without it. To open Preferences again, open agent caffeine from Applications or Spotlight. While the icon is hidden, a notification says when the trial has ended, the helper was switched off or the helper cannot be reached.
 
 - On power, stays awake while a tool's phone access is on, also when no agent works (see Phone access below).
 

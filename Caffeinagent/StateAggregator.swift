@@ -7,22 +7,27 @@ import os
 /// state the menu and Preferences show.
 @MainActor
 final class StateAggregator: ObservableObject {
+    // Every property is published only when it changes: a sample that
+    // changes nothing must not make SwiftUI work out the scenes and the
+    // menu bar label again.
     /// One for the app: the scenes and the setup window share it.
     static let shared = StateAggregator()
 
-    @Published var enabled: Bool {
+    @PublishedOnChange var enabled: Bool {
         didSet {
+            guard enabled != oldValue else { return }
             UserDefaults.standard.set(enabled, forKey: Self.enabledKey)
             engine.enabled = enabled
         }
     }
-    @Published var mode: AwakeMode {
+    @PublishedOnChange var mode: AwakeMode {
         didSet {
+            guard mode != oldValue else { return }
             UserDefaults.standard.set(mode.rawValue, forKey: Self.modeKey)
             engine.mode = mode
         }
     }
-    @Published var settings: DetectionSettings {
+    @PublishedOnChange var settings: DetectionSettings {
         didSet {
             guard settings != oldValue else { return }
             DetectionSettingsStore.save(settings, to: .standard)
@@ -30,32 +35,40 @@ final class StateAggregator: ObservableObject {
             engine.settings = settings
         }
     }
-    /// The robot in the menu bar. Hiding it changes nothing else.
-    @Published var showMenuBarIcon: Bool {
-        didSet { MenuBarVisibility.set(showMenuBarIcon, in: .standard) }
+    /// The robot in the menu bar. Hiding it changes nothing else. The
+    /// menu bar scene writes this back all the time, so a write of the
+    /// same value must publish nothing and save nothing.
+    @PublishedOnChange var showMenuBarIcon: Bool {
+        didSet {
+            guard showMenuBarIcon != oldValue else { return }
+            MenuBarVisibility.set(showMenuBarIcon, in: .standard)
+        }
     }
     /// The tab Preferences shows, so the menu can open one.
-    @Published var preferencesTab = PreferencesTab.general
-    @Published private(set) var decision: HoldDecision
+    @PublishedOnChange var preferencesTab = PreferencesTab.general
+    @PublishedOnChange private(set) var decision: HoldDecision
     /// The folder of each session that works or waits, for the menu.
-    @Published private(set) var sessionLabels: [ProcessIdentity: String] = [:]
+    @PublishedOnChange private(set) var sessionLabels: [ProcessIdentity: String] = [:]
     /// What tells sessions with the same name and folder apart, for the
     /// menu. It is shown only, never logged.
-    @Published private(set) var sessionHints: [ProcessIdentity: SessionHint] = [:]
+    @PublishedOnChange private(set) var sessionHints: [ProcessIdentity: SessionHint] = [:]
     /// Since when each agent is in its state, for the menu.
-    @Published private(set) var stateClock = StateClock()
+    @PublishedOnChange private(set) var stateClock = StateClock()
     /// The user closed the menu's hint to set up "lid closed on battery".
-    @Published var lidClosedHintDismissed: Bool {
-        didSet { UserDefaults.standard.set(lidClosedHintDismissed, forKey: Self.lidClosedHintKey) }
+    @PublishedOnChange var lidClosedHintDismissed: Bool {
+        didSet {
+            guard lidClosedHintDismissed != oldValue else { return }
+            UserDefaults.standard.set(lidClosedHintDismissed, forKey: Self.lidClosedHintKey)
+        }
     }
-    @Published private(set) var entitlement: Entitlement
+    @PublishedOnChange private(set) var entitlement: Entitlement
     /// False on a Mac without a battery, where a closed lid needs no helper.
-    @Published private(set) var hasBattery = true
-    @Published private(set) var helperError: String?
+    @PublishedOnChange private(set) var hasBattery = true
+    @PublishedOnChange private(set) var helperError: String?
     /// By hook agent id. Read at launch and when Preferences opens, and
     /// never changed without the user's word.
-    @Published private(set) var hookStatuses: [String: HookStatus] = [:]
-    @Published private(set) var hookErrors: [String: String] = [:]
+    @PublishedOnChange private(set) var hookStatuses: [String: HookStatus] = [:]
+    @PublishedOnChange private(set) var hookErrors: [String: String] = [:]
 
     let license: LicenseManager
     let sleepFlag: SleepFlagController
@@ -204,7 +217,13 @@ final class StateAggregator: ObservableObject {
     /// With the icon hidden, the menu's word that agent caffeine cannot do
     /// its work reaches nobody, so it is told once as a notification.
     private func announceHiddenNotice() {
-        let current = HiddenNotice.current(flagLeftOn: sleepFlag.flagLeftOn, entitlement: entitlement)
+        let current = HiddenNotice.current(
+            flagLeftOn: sleepFlag.flagLeftOn,
+            helperNotResponding: MenuModel.helperNotResponding(
+                notResponding: sleepFlag.notResponding, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
+            ),
+            entitlement: entitlement
+        )
         if let begun = HiddenNotice.toAnnounce(previous: hiddenNotice, current: current, iconHidden: !showMenuBarIcon) {
             SafetyNotifier.post(begun.notificationText)
         }
