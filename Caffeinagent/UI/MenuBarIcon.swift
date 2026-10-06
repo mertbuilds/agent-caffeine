@@ -54,8 +54,8 @@ enum MenuBarIcon {
         let head = CGRect(x: 2, y: 5, width: 15, height: 12)
         let visor = CGRect(x: 4, y: 8, width: 11, height: 6)
         // The ball of the antenna and its stem.
-        context.fillEllipse(in: CGRect(x: 8, y: 0, width: 3, height: 3))
-        context.fill(CGRect(x: 9, y: 3, width: 1, height: 2))
+        context.fillEllipse(in: CGRect(x: 8, y: 1, width: 3, height: 3))
+        context.fill(CGRect(x: 9, y: 4, width: 1, height: 1))
         // The ear pads reach out from behind the head.
         for x in [0.0, 16.0] { fill(CGRect(x: x, y: 8.5, width: 3, height: 5), radius: 1.5, in: context) }
 
