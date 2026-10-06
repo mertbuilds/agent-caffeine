@@ -5,6 +5,7 @@ import { Analytics } from "@/components/analytics";
 import { DevKnobs } from "@/components/dev-knobs";
 import { Header } from "@/components/header";
 import { agentsMoreThan } from "@/lib/agents";
+import { PRICE } from "@/lib/pricing";
 import { THEME_SCRIPT } from "@/lib/theme";
 
 const suisse = localFont({
@@ -22,11 +23,11 @@ export const metadata: Metadata = {
   alternates: { canonical: "/" },
   title: "agent caffeine · Keep your Mac awake while AI agents work",
   description:
-    `Agent-aware sleep prevention for macOS. Detects Claude Code, Codex, OpenCode and more than ${agentsMoreThan} AI coding agents. Lets the Mac sleep when they are idle. $9 once.`,
+    `Agent-aware sleep prevention for macOS. Detects Claude Code, Codex, OpenCode and more than ${agentsMoreThan} AI coding agents. Lets the Mac sleep when they are idle or wait for you. ${PRICE} once.`,
   openGraph: {
     title: "agent caffeine",
     description:
-      "Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. 7 day free trial, then $9 once.",
+      `Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. 7 day free trial, then ${PRICE} once.`,
     type: "website",
     url: "/",
     images: [
@@ -42,7 +43,7 @@ export const metadata: Metadata = {
     card: "summary_large_image",
     title: "agent caffeine",
     description:
-      "Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. 7 day free trial, then $9 once.",
+      `Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. 7 day free trial, then ${PRICE} once.`,
     images: ["/og.png"],
   },
 };

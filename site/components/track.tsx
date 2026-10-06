@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
+import type { Plan } from "@/lib/pricing";
 
 type Placement = "header" | "hero" | "pricing" | "blog";
 
@@ -11,21 +12,22 @@ function fire(event: string, props?: Record<string, unknown>) {
   window.op("track", event, props);
 }
 
+/** A link to a plan's checkout. The click is counted with the plan and its price. */
 export function BuyCta({
-  href,
+  plan,
   placement,
   className,
   children,
 }: {
-  href: string;
+  plan: Plan;
   placement: Placement;
   className?: string;
   children: ReactNode;
 }) {
   return (
     <Link
-      href={href}
-      onClick={() => fire("buy_clicked", { placement })}
+      href={plan.checkoutUrl}
+      onClick={() => fire("buy_clicked", { placement, plan: plan.id, price: plan.price })}
       className={className}
     >
       {children}

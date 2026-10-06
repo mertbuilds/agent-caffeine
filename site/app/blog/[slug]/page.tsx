@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BuyButton } from "@/components/buy-button";
+import { PRICE } from "@/lib/pricing";
 import { DownloadButton } from "@/components/download-button";
 import { Footer } from "@/components/footer";
 import { JsonLd } from "@/components/json-ld";
@@ -117,17 +118,17 @@ export default async function BlogPost({ params }: Props) {
             We built agent caffeine to keep a Mac awake while coding agents work, also with
             the lid closed.{" "}
             {release === null
-              ? "$9 once. macOS 13 or later, Apple silicon and Intel."
-              : "7 day free trial, then $9 once per Mac. macOS 13 or later, Apple silicon and Intel."}
+              ? `${PRICE} once. macOS 13 or later, Apple silicon and Intel.`
+              : `7 day free trial, then ${PRICE} once. macOS 13 or later, Apple silicon and Intel.`}
           </p>
           {release === null ? (
             <BuyButton placement="blog" size="small">
-              Buy for $9
+              Buy for {PRICE}
             </BuyButton>
           ) : (
             <div className="flex shrink-0 items-center gap-4">
               <BuyButton placement="blog" variant="text">
-                Buy for $9
+                Buy for {PRICE}
               </BuyButton>
               <DownloadButton release={release} placement="blog" size="small">
                 Download

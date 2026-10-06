@@ -19,13 +19,19 @@ export const LIFT = 0.15;
 const PERSPECTIVE = 200;
 const ORIGIN = 0.22 * 70;
 const ANCHOR = 0.78 * 70;
-// The corners of both slabs, the lid's corners at the hinge, the aluminium
-// rim round the display glass, and the hinge barrel under the display.
+// The corners of both slabs, and the aluminium rim round the display glass.
 export const ROUND = 2.1;
-const HINGE_ROUND = 0.4;
 const RIM = 0.25;
-const HINGE = 0.8;
-const HINGE_SPAN = 26.4;
+// The lid turns about an axis 2.9 mm in from the base's back edge and 4.6 mm
+// under the shut lid's face, so open its chin drops behind the base towards
+// the table. The hinge fills a cut 237.6 mm wide and 4.5 mm deep in the
+// base's back edge, between shoulders of 37.5 mm: an aluminium barrel 15 mm
+// long at each end and the dark cover between them.
+const PIVOT: Flat = [0.62, -0.98];
+const CUT = 50.16;
+const CUT_DEPTH = 0.94;
+const CUT_ROUND = 0.12;
+const BARREL = 3.16;
 
 type Flat = readonly [number, number];
 type Solid = readonly [number, number, number];
@@ -80,12 +86,14 @@ function quarter(radius: number): Flat[] {
 /**
  * The outline of a rounded rectangle from (left, top) to (right, bottom),
  * clockwise from its top right corner, with radii for the top and the bottom
- * corners, and `bottomEdge` run along the bottom from right to left.
+ * corners, `bottomEdge` run along the bottom from right to left and `topEdge`
+ * along the top from left to right.
  */
 function rounded(
   [left, top, right, bottom]: readonly [number, number, number, number],
   [high, low]: readonly [number, number],
   bottomEdge: readonly Flat[] = [],
+  topEdge: readonly Flat[] = [],
 ): Flat[] {
   const [up, down] = [quarter(high), quarter(low)];
   return [
@@ -94,6 +102,7 @@ function rounded(
     ...bottomEdge,
     ...down.map(([c, s]): Flat => [left + low - low * s, bottom - low + low * c]),
     ...up.map(([c, s]): Flat => [left + high - high * c, top + high - high * s]),
+    ...topEdge,
   ];
 }
 
@@ -128,9 +137,9 @@ const DIP = 0.76;
 const FILLET = 0.15;
 const END = 0.6;
 
-/** The slot's outline from left to right, as (across, how far in from the edge). */
-function slot(depth: number, end: number): Flat[] {
-  const side = NOTCH / 2 - FILLET;
+/** A slot's outline from left to right, as (across, how far in from the edge). */
+function slot(width: number, depth: number, end: number): Flat[] {
+  const side = width / 2 - FILLET;
   const fillet = quarter(FILLET);
   const bend = quarter(end);
   const left: Flat[] = [
@@ -145,22 +154,30 @@ const HALF_DEPTH = DEPTH / 2;
 const onDeck = ([x, y]: Flat, z = 0) => project([x, y, z]);
 
 // The body of the base: its outline on screen, the deck's top with the slot
-// cut into its front edge, and the slot's dip down the front face.
+// cut into its front edge and the hinge's cut into its back edge, and the
+// slot's dip down the front face.
 const SLAB: readonly [number, number, number, number] = [-HALF_WIDTH, -HALF_DEPTH, HALF_WIDTH, HALF_DEPTH];
 const PLAIN = rounded(SLAB, [ROUND, ROUND]);
-const SCOOP_EDGE = slot(SCOOP, SCOOP - FILLET).map(([x, y]): Flat => [x, HALF_DEPTH - y]);
-const DIP_EDGE = slot(DIP, END).map(([x, w]) => project([x, HALF_DEPTH, -w]));
-const DECK_RING = rounded(SLAB, [ROUND, ROUND], [...SCOOP_EDGE].reverse()).map((point) => onDeck(point));
+const SCOOP_EDGE = slot(NOTCH, SCOOP, SCOOP - FILLET).map(([x, y]): Flat => [x, HALF_DEPTH - y]);
+const DIP_EDGE = slot(NOTCH, DIP, END).map(([x, w]) => project([x, HALF_DEPTH, -w]));
+const CUT_EDGE = slot(CUT, CUT_DEPTH, CUT_ROUND).map(([x, y]): Flat => [x, y - HALF_DEPTH]);
+const DECK_RING = rounded(SLAB, [ROUND, ROUND], [...SCOOP_EDGE].reverse(), CUT_EDGE).map((point) => onDeck(point));
 const BASE_HULL = hull([...PLAIN.map((point) => onDeck(point)), ...PLAIN.map((point) => onDeck(point, -BASE))]);
+// The base's outline without its back edge, which the deck's top draws with the cut.
+const BACK_EDGE = BASE_HULL.reduce(
+  (back, [, y], index) => (y + BASE_HULL[(index + 1) % BASE_HULL.length][1] < BASE_HULL[back][1] + BASE_HULL[(back + 1) % BASE_HULL.length][1] ? index : back),
+  0,
+);
+const BASE_LINE = [...BASE_HULL.slice(BACK_EDGE + 1), ...BASE_HULL.slice(0, BACK_EDGE + 1)];
 
 /** A rounded rectangle on the deck. */
 const patch = (box: readonly [number, number, number, number], radius: number) =>
   shape(rounded(box, [radius, radius]).map((point) => onDeck(point)));
 
 // The keyboard well and its keys, in key units across; every row adds up to
-// 14.5 with the arrow keys. The well is 58.5 by 23.2, 2.76 behind the deck's
-// back edge, and the keys stand 0.44 apart.
-const WELL: readonly [number, number, number, number] = [-29.238, -20.595, 29.238, 2.615];
+// 14.5 with the arrow keys. The well is 279.6 by 114.9 mm, 16.6 mm in from the
+// deck's back edge, and the keys stand 0.44 apart.
+const WELL: readonly [number, number, number, number] = [-29.516, -19.845, 29.516, 4.435];
 const ROWS: readonly (readonly number[])[] = [
   [1.5, ...Array(12).fill(1), 1],
   [...Array(13).fill(1), 1.5],
@@ -200,37 +217,29 @@ const ARROWS: Box[] = [
 });
 const TOUCH_ID = KEYS[ROWS[0].length - 1];
 
-// The speaker grilles beside the keyboard, and the trackpad, 27.5 by 17.1.
-const GRILLE = 1.1;
-const GRILLE_GAP = 0.3;
-const GRILLES: Box[] = [-1, 1].map((side) => {
-  const inner = side * (WELL[2] + GRILLE_GAP);
-  const outer = inner + side * GRILLE;
-  return [Math.min(inner, outer), WELL[1] + 0.15, Math.max(inner, outer), WELL[3] - 0.15];
-});
-const TRACKPAD: Box = [-13.728, 5.23, 13.728, 22.323];
+// The trackpad, 129.6 by 80.9 mm, 3 mm under the well.
+const TRACKPAD: Box = [-13.68, 5.07, 13.68, 22.17];
 
-// The grilles' holes, drawn as dotted lines down each grille, HOLE apart on
-// screen, every other line half a step lower.
-export const HOLE = 0.22;
-function holes([left, top, right, bottom]: Box): string {
-  const columns = Math.round((right - left) / 0.3);
-  return Array.from({ length: columns }, (_, column) => {
-    const across = left + (right - left) * ((column + 0.5) / columns);
-    const [from, to] = [onDeck([across, top + 0.25]), onDeck([across, bottom - 0.25])];
-    const length = Math.hypot(to[0] - from[0], to[1] - from[1]);
-    const shift = (column % 2) * (HOLE / 2) / length;
-    return line([[from[0] + (to[0] - from[0]) * shift, from[1] + (to[1] - from[1]) * shift], to]);
-  }).join("");
+// The speaker grilles' holes, a square grid centred in the deck beside the
+// keyboard, 1.6 mm from its side edge and from the well and 4.5 mm short of
+// the well's ends. The machine has 15 holes across at 0.93 mm; down the deck,
+// which the eye sees foreshortened, they stand 2.3 mm apart so they are as far
+// apart on screen. Each is one dot HOLE wide.
+export const HOLE = 0.085;
+const GRILLE_GAP = 0.34;
+const GRILLE_END = 0.95;
+function holes(columns: number, rows: number): string {
+  return [-1, 1]
+    .flatMap((side) =>
+      Array.from({ length: rows * columns }, (_, index) => {
+        const across = WELL[2] + GRILLE_GAP + ((HALF_WIDTH - WELL[2] - 2 * GRILLE_GAP) * (index % columns)) / (columns - 1);
+        const along = WELL[1] + GRILLE_END + ((WELL[3] - WELL[1] - 2 * GRILLE_END) * Math.floor(index / columns)) / (rows - 1);
+        const [x, y] = onDeck([side * across, along]);
+        return `M${cut(x)} ${cut(y)}h0`;
+      }),
+    )
+    .join("");
 }
-
-// The hinge barrel behind the deck, which shows between the deck and the lid.
-const BARREL_FACE = [
-  [-HINGE_SPAN, 0.3],
-  [HINGE_SPAN, 0.3],
-  [HINGE_SPAN, -0.2],
-  [-HINGE_SPAN, -0.2],
-].map(([x, z]) => project([x, -HALF_DEPTH - 0.05, z]));
 
 // The shadow on the ground: the base's footprint, a little in from its edge.
 const FOOTPRINT = (spread: number, ahead: number) =>
@@ -244,7 +253,7 @@ const FOOTPRINT = (spread: number, ahead: number) =>
 export const DECK = {
   hull: shape(BASE_HULL),
   top: shape(DECK_RING),
-  lines: `${shape(BASE_HULL)}${shape(DECK_RING)}${line(DIP_EDGE)}`,
+  lines: `${line(BASE_LINE)}${shape(DECK_RING)}${line(DIP_EDGE)}`,
   scoop: shape([...SCOOP_EDGE.map((point) => onDeck(point)), ...[...DIP_EDGE].reverse()]),
   well: patch(WELL, 0.8),
   keys: [...KEYS.filter((key) => key !== TOUCH_ID), ...ARROWS]
@@ -252,31 +261,128 @@ export const DECK = {
     .join(""),
   touchId: patch(TOUCH_ID, 0.38),
   touchIdRing: patch([TOUCH_ID[0] + 0.45, TOUCH_ID[1] + 0.45, TOUCH_ID[2] - 0.45, TOUCH_ID[3] - 0.45], 0.3),
-  grilles: GRILLES.map((box) => patch(box, 0.3)).join(""),
-  holes: GRILLES.map(holes).join(""),
+  // The same field of holes at full, half and quarter density, for scenes
+  // too small to keep the finer ones apart.
+  holes: [holes(15, 47), holes(8, 24), holes(4, 12)],
   trackpad: patch(TRACKPAD, 1),
-  barrel: shape(BARREL_FACE),
+  // The hinge in its cut, a little past the cut's edges so the deck's top and
+  // the lid overlap it.
+  hinge: patch([-CUT / 2, -HALF_DEPTH - 0.15, CUT / 2, -HALF_DEPTH + CUT_DEPTH + 0.3], 0),
+  barrels: [-CUT / 2, CUT / 2 - BARREL]
+    .map((left) => patch([left, -HALF_DEPTH - 0.15, left + BARREL, -HALF_DEPTH + CUT_DEPTH + 0.3], 0))
+    .join(""),
   contact: FOOTPRINT(0, 0.3),
   ground: FOOTPRINT(0.8, 1.2),
 };
 
-// The lid's outline in its own plane, x across and d up from the hinge.
-const LID_RING = rounded([-HALF_WIDTH, -DEPTH, HALF_WIDTH, 0], [ROUND, HINGE_ROUND]);
-const BEZEL_RING = rounded(
-  [-HALF_WIDTH + RIM, -DEPTH + RIM, HALF_WIDTH - RIM, -RIM],
-  [ROUND - RIM, HINGE_ROUND - RIM],
-);
-const HINGE_RING = rounded([-HINGE_SPAN, -HINGE, HINGE_SPAN, 0], [HINGE / 2, HINGE / 2]);
+/**
+ * The part of a closed outline where `side` is not above 0, cut where it
+ * crosses, with `between` the point a share of the way from one point to the
+ * next.
+ */
+function keep<P extends readonly number[]>(
+  points: readonly P[],
+  side: (point: P) => number,
+  between: (from: P, to: P, share: number) => P,
+): P[] {
+  return points.flatMap((point, index) => {
+    const next = points[(index + 1) % points.length];
+    const [here, there] = [side(point), side(next)];
+    const kept = here <= 0 ? [point] : [];
+    return here * there < 0 ? [...kept, between(point, next, here / (here - there))] : kept;
+  });
+}
+const flatToward = ([x, y]: Flat, [tx, ty]: Flat, share: number): Flat => [x + (tx - x) * share, y + (ty - y) * share];
+const solidToward = ([x, y, z]: Solid, [tx, ty, tz]: Solid, share: number): Solid => [
+  x + (tx - x) * share,
+  y + (ty - y) * share,
+  z + (tz - z) * share,
+];
 
-/** The lid's angle at the hinge in degrees, from OPEN to -180 when shut. */
-export const lidAngle = (closed: number) => OPEN - (180 + OPEN) * closed;
+// Which way round `hull` runs, as the sign of its outlines' area.
+const TURN = Math.sign(
+  BASE_HULL.reduce((sum, [x, y], index) => {
+    const [nx, ny] = BASE_HULL[(index + 1) % BASE_HULL.length];
+    return sum + x * ny - nx * y;
+  }, 0),
+);
+
+/** A hull's outline moved out by `distance` all round. */
+function grow(points: readonly Flat[], distance: number): Flat[] {
+  const out = ([ax, ay]: Flat, [bx, by]: Flat): Flat => {
+    const length = Math.hypot(bx - ax, by - ay);
+    return [(TURN * (by - ay)) / length, (-TURN * (bx - ax)) / length];
+  };
+  return points.map((point, index) => {
+    const first = out(points[(index + points.length - 1) % points.length], point);
+    const second = out(point, points[(index + 1) % points.length]);
+    const [mx, my] = [first[0] + second[0], first[1] + second[1]];
+    const length = Math.hypot(mx, my);
+    const reach = distance / ((mx * first[0] + my * first[1]) / length);
+    return [point[0] + (mx / length) * reach, point[1] + (my / length) * reach];
+  });
+}
+
+// The base's outline on screen grown by half a hairline, so the lid stops at
+// the deck's line instead of covering half of it.
+const GROWN_HULL = grow(BASE_HULL, 0.06);
+
+/** What of a hull on screen, grown past its hairline, the base covers. */
+function behindBase(points: readonly Flat[]): Flat[] {
+  return GROWN_HULL.reduce<Flat[]>((kept, [ax, ay], index) => {
+    const [bx, by] = GROWN_HULL[(index + 1) % GROWN_HULL.length];
+    return keep(kept, ([x, y]) => -TURN * ((bx - ax) * (y - ay) - (by - ay) * (x - ax)), flatToward);
+  }, grow(points, 0.2));
+}
+
+// The lid's outline in its own plane, x across and d up from the hinge.
+const LID_RING = rounded([-HALF_WIDTH, -DEPTH, HALF_WIDTH, 0], [ROUND, ROUND]);
+const BEZEL_RING = rounded([-HALF_WIDTH + RIM, -DEPTH + RIM, HALF_WIDTH - RIM, -RIM], [ROUND - RIM, ROUND - RIM]);
+
+/**
+ * The lid's place for one frame, `closed` from 0 (open) to 1 (shut on the
+ * base): its angle in degrees, from OPEN to -180 when shut, about the back
+ * edge of the shut lid's face, then how far it moves along the deck and up
+ * for the hinge's real axis.
+ */
+export function lidPose(closed: number) {
+  const angle = OPEN - (180 + OPEN) * closed;
+  const turn = (angle + 180) * RADIAN;
+  const [y, z] = PIVOT;
+  return {
+    angle,
+    along: y * (1 - Math.cos(turn)) + z * Math.sin(turn),
+    up: z * (1 - Math.cos(turn)) - y * Math.sin(turn),
+  };
+}
+
+/** Degrees between the lid and the keyboard, from 105 open to 0 shut. */
+export function lidDegrees(closed: number): number {
+  return (180 + OPEN) * (1 - closed);
+}
+
+/**
+ * The share of its brightness the display keeps at a lid angle, as the app
+ * sets it while it keeps the Mac awake (`Power/LidDimming.swift`, `curve`):
+ * all of it at 45 degrees and above, none at 3 degrees and below, and a
+ * smoothstep between them.
+ */
+export function lidBrightness(degrees: number): number {
+  const share = Math.min(1, Math.max(0, (degrees - 3) / (45 - 3)));
+  return share * share * (3 - 2 * share);
+}
 
 /** The lid's paths for one frame, `closed` from 0 (open) to 1 (shut on the base). */
 export function lidArt(closed: number) {
-  const angle = lidAngle(closed) * RADIAN;
+  const pose = lidPose(closed);
+  const angle = pose.angle * RADIAN;
   const [cos, sin] = [Math.cos(angle), Math.sin(angle)];
   // A point `behind` the display's face, at (x, -d) in the lid's plane.
-  const at = (behind: number) => ([x, up]: Flat): Solid => [x, -HALF_DEPTH + up * cos + behind * sin, LIFT + up * sin - behind * cos];
+  const at = (behind: number) => ([x, up]: Flat): Solid => [
+    x,
+    -HALF_DEPTH + pose.along + up * cos + behind * sin,
+    LIFT + pose.up + up * sin - behind * cos,
+  ];
   const flat = (behind: number, ring: readonly Flat[]) => ring.map((point) => project(at(behind)(point)));
   // Shut, the lid's sides reach down to the deck, so the seam is one line.
   const skirt = LIFT * Math.min(1, Math.max(0, (closed - 0.9) / 0.1));
@@ -285,6 +391,12 @@ export function lidArt(closed: number) {
   const outline = hull([...front, ...back, ...(skirt > 0 ? flat(-skirt, LID_RING) : [])]);
   const facing = facesEye(at(0)([0, -DEPTH / 2]), [0, -sin, cos]);
   const face = facing ? front : back;
+  // The chin below the deck drops behind the base, which hides it where the
+  // rest of the lid does not stand in front.
+  const part = (side: number) =>
+    [0, LID].flatMap((behind) => keep(LID_RING.map(at(behind)), ([, , z]) => side * z, solidToward).map(project));
+  const sunk = part(1);
+  const hidden = sunk.length > 2 ? behindBase(hull(sunk)) : [];
   // How far over the deck the lid reaches, as a share of its depth, for its shadow.
   const reach = Math.max(0, -cos);
   return {
@@ -292,7 +404,7 @@ export function lidArt(closed: number) {
     hull: shape(outline),
     face: shape(face),
     bezel: facing ? shape(flat(0, BEZEL_RING)) : null,
-    hinge: facing ? shape(flat(0, HINGE_RING)) : null,
+    cut: hidden.length > 2 ? { hidden: shape(hidden), clear: shape(grow(hull(part(-1)), 0.08)) } : null,
     lines: `${shape(outline)}${shape(face)}`,
     shadow:
       closed > 0

@@ -1,9 +1,10 @@
 import { LegalPage, legalMetadata } from "@/components/legal-page";
+import { PLANS, PRICE_LIST, dollars, macs } from "@/lib/pricing";
 import { CONTACT_EMAIL, TERMS_UPDATED } from "@/lib/site";
 
 export const metadata = legalMetadata(
   "Terms",
-  "The terms for agent caffeine: one Mac per license key, a 7 day free trial, $9 once through Polar, and what the app does and does not promise.",
+  `The terms for agent caffeine: what a license key covers, a 7 day free trial, ${PRICE_LIST}, paid once through Polar, and what the app does and does not promise.`,
   "/terms"
 );
 
@@ -17,9 +18,11 @@ export default function Terms() {
 
       <h2>What you get</h2>
       <p>
-        A license key lets you use agent caffeine on one Mac at a time. To move it to another Mac,
-        deactivate it on the first one, in the app or in your Polar purchases, then enter it on the
-        new one.
+        {PLANS.length === 1
+          ? "A license key lets you use agent caffeine on one Mac at a time."
+          : "A license key lets you use agent caffeine on one Mac at a time, or on up to three Macs at a time, depending on the plan you buy."}{" "}
+        To move it to another Mac, deactivate it on a Mac you no longer use, in the app or in your
+        Polar purchases, then enter it on the new one.
       </p>
       <p>
         Your key includes updates for as long as the app is developed. I do not promise any future
@@ -34,7 +37,12 @@ export default function Terms() {
 
       <h2>Price and payment</h2>
       <p>
-        A key costs $9, paid once. <a href="https://polar.sh">Polar</a> sells it as the merchant of
+        {PLANS.map((plan, index) => (
+          <span key={plan.id}>
+            {index === 0 ? "A key" : " A key"} for {macs(plan)} costs {dollars(plan)}, paid once.
+          </span>
+        ))}{" "}
+        <a href="https://polar.sh">Polar</a> sells it as the merchant of
         record: Polar takes the payment, adds taxes where they apply and sends the invoice.
       </p>
 

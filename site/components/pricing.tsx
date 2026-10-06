@@ -1,6 +1,6 @@
 import Image from "next/image";
-import { BuyButton } from "@/components/buy-button";
 import { DownloadButton } from "@/components/download-button";
+import { PlanCard } from "@/components/plan-card";
 import { getLatestRelease, releaseDetails } from "@/lib/release";
 
 const GRID_LINE = "rgba(255, 255, 255, 0.07)";
@@ -23,36 +23,30 @@ export async function Pricing() {
         <div className="relative grid justify-items-center gap-8 px-6 pb-10 text-center md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:justify-items-start md:gap-10 md:py-14 md:pl-14 md:pr-12 md:text-left">
           <div className="relative -mt-14 md:order-last md:-mt-24 md:self-start">
             <Image
-              src="/icon-512.png"
+              src="/icon-1024.png"
               alt=""
-              width={512}
-              height={512}
+              width={1024}
+              height={1024}
               sizes="(min-width: 1024px) 260px, (min-width: 768px) 200px, 120px"
               className="relative size-[120px] rotate-[5deg] drop-shadow-[0_18px_22px_rgba(6,24,74,0.5)] md:size-[200px] lg:size-[260px]"
             />
           </div>
-          <div className="flex flex-col items-center gap-8 md:items-start">
-            <div className="flex flex-col gap-3">
-              <p className="text-7xl font-medium tabular-nums leading-none tracking-[-0.02em] md:text-8xl">$9</p>
-              <p className="text-balance text-lg">Once per Mac. Lifetime updates. No subscription</p>
-              {release === null ? null : <p>Try it free for 7 days first</p>}
-            </div>
-            {release === null ? (
-              <BuyButton placement="pricing" variant="brand">
-                Buy agent caffeine
-              </BuyButton>
-            ) : (
-              <div className="flex flex-wrap items-center justify-center gap-3 md:justify-start">
-                <DownloadButton release={release} placement="pricing" variant="brand">
+          <PlanCard
+            download={
+              release === null ? null : (
+                <DownloadButton release={release} placement="pricing" variant="brandOutline">
                   Download free trial
                 </DownloadButton>
-                <BuyButton placement="pricing" variant="brandOutline">
-                  Buy a key
-                </BuyButton>
-              </div>
+              )
+            }
+          >
+            {release === null ? null : (
+              <>
+                <p>Try it free for 7 days first</p>
+                <p className="text-balance pt-2 text-sm">{releaseDetails(release)}</p>
+              </>
             )}
-            {release === null ? null : <p className="text-balance text-sm">{releaseDetails(release)}</p>}
-          </div>
+          </PlanCard>
         </div>
       </div>
     </section>

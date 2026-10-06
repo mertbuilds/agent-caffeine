@@ -5,8 +5,11 @@ import { Hero } from "@/components/hero";
 import { HowItWorks } from "@/components/how-it-works";
 import { JsonLd } from "@/components/json-ld";
 import { Pricing } from "@/components/pricing";
+import { SleepScenes } from "@/components/sleep-scenes";
+import { SmallThings } from "@/components/small-things";
 import { agentsMoreThan } from "@/lib/agents";
 import { answerText, faqItems } from "@/lib/faq";
+import { PLANS, macs } from "@/lib/pricing";
 import { ORGANIZATION, SITE_URL } from "@/lib/site";
 
 const structuredData = {
@@ -19,8 +22,25 @@ const structuredData = {
       applicationCategory: "UtilitiesApplication",
       url: SITE_URL,
       image: `${SITE_URL}/icon.png`,
-      description: `A macOS menu bar app that keeps the Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are idle. Detects Claude Code, Codex, OpenCode and more than ${agentsMoreThan} AI coding agents.`,
-      offers: { "@type": "Offer", price: "9", priceCurrency: "USD" },
+      description: `A macOS menu bar app that keeps the Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are idle or wait for you. Detects Claude Code, Codex, OpenCode and more than ${agentsMoreThan} AI coding agents.`,
+      featureList: [
+        "Keeps the Mac awake while an AI coding agent works, also with the lid closed",
+        "Lets the Mac sleep when agents are idle or wait for you",
+        "Dims the built-in display as the lid closes and keeps it dark while the lid is shut",
+        "Pause for 30 minutes, 1 hour or until tomorrow",
+        "Stay reachable for 1, 2 or 4 hours, so a message from your phone reaches your agent",
+        "Notifications when an agent waits for your answer or finishes",
+        "Battery bar in the menu, and sleep at a battery level you set",
+        "Keyboard shortcuts that work in every app",
+        "The menu bar icon can be hidden",
+      ],
+      offers: PLANS.map((plan) => ({
+        "@type": "Offer",
+        name: `agent caffeine for ${macs(plan)}`,
+        price: String(plan.price),
+        priceCurrency: "USD",
+        url: SITE_URL,
+      })),
     },
     {
       "@type": "FAQPage",
@@ -40,6 +60,8 @@ export default function Home() {
     <main className="relative isolate flex min-h-screen flex-col gap-24 overflow-x-clip px-4 pt-14 md:px-6">
       <Hero />
       <HowItWorks />
+      <SleepScenes />
+      <SmallThings />
       <AgentsSection />
       <Pricing />
       <Faq />

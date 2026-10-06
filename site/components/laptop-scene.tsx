@@ -2,6 +2,7 @@
 
 import { easeInOut } from "motion/react";
 import { useRef, useState } from "react";
+import { lidBrightness, lidDegrees } from "@/components/laptop/geometry";
 import { Laptop } from "@/components/laptop/laptop";
 import { Pill } from "@/components/laptop/pill";
 import { spinnerAt, Terminal } from "@/components/laptop/terminal";
@@ -15,7 +16,7 @@ type Span = readonly [from: number, to: number];
 const linear = (share: number) => share;
 
 /** Seconds of work the timer shows when the lid shuts, and when the work is done. */
-const AT_CLOSE = 140;
+const AT_CLOSE = 45;
 const AT_DONE = 842;
 
 /** How many times a second the pill's timer steps, so each roll has time to read. */
@@ -52,11 +53,11 @@ export function LaptopScene() {
     <div
       ref={ref}
       role="img"
-      aria-label="A laptop runs Claude Code on a refactor. The lid closes and Claude Code keeps working for 14 minutes. The lid opens on the finished work, with all tests passing"
+      aria-label="A laptop runs Claude Code on a refactor. The lid closes one second after the prompt is sent, the display goes dark with it, and Claude Code keeps working for 14 minutes. The lid opens on the finished work, with all tests passing"
       className="relative aspect-[10/7] w-full [container-type:inline-size]"
     >
       <div className="absolute inset-0" style={{ perspective: "200cqw", perspectiveOrigin: "50% 22%" }}>
-        <Laptop closed={closed} display={1 - stretch(closed, 0.2, 0.45, linear)}>
+        <Laptop closed={closed} display={lidBrightness(lidDegrees(closed))}>
           <Terminal
             session={{
               welcome: span(laptop.welcome),

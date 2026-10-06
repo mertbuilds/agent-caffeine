@@ -11,11 +11,12 @@ import {
   type SyntheticEvent,
 } from "react";
 import { AgentIcon } from "@/components/agent-icons";
-import { AgentsPanel } from "@/components/agents-panel";
+import { AgentsPanel, Flow, shape } from "@/components/agents-panel";
 import { MenuIcon } from "@/components/menu-icon";
 import { duration, easing } from "@/lib/motion";
 import {
   AGENTS,
+  BATTERY_LEVELS,
   DEMO,
   DEMO_MOVE,
   DEMO_PRESS,
@@ -23,25 +24,27 @@ import {
   INITIAL,
   PRESETS,
   advance,
+  allowHelper,
+  choiceOf,
   cueTarget,
   cueTime,
-  demo,
-  graceLeft,
-  iconLabel,
-  installOverride,
+  dismissHint,
   nextCue,
   preset,
+  resume,
+  setBattery,
+  setChoice,
   setEnabled,
+  setLid,
   setMode,
   setPower,
-  setWorking,
-  start,
-  stop,
+  startPause,
+  startReachable,
+  stopReachable,
   tickEvery,
-  upcoming,
   view,
+  type Choice,
   type Cue,
-  type DemoAction,
   type PresetId,
   type SimState,
 } from "@/lib/simulator";
@@ -56,7 +59,7 @@ const CHIP =
   "rounded-full border px-3 py-1.5 text-sm leading-tight transition-colors duration-fast ease-smooth-out motion-reduce:transition-none";
 const CHIP_ON = "border-fg bg-fg text-bg";
 const CHIP_OFF = "border-border text-fg hover:border-fg";
-const SEGMENT = "h-7 rounded-full px-2.5 text-sm transition-colors duration-fast ease-smooth-out motion-reduce:transition-none";
+const SEGMENT = "h-7 whitespace-nowrap rounded-full px-2.5 text-sm transition-colors duration-fast ease-smooth-out motion-reduce:transition-none";
 const SEGMENT_ON = "bg-bg text-fg shadow-[0_1px_2px_var(--shadow)]";
 const SEGMENT_OFF = "text-muted hover:text-fg";
 
@@ -106,25 +109,6 @@ function pointAt(root: HTMLElement, name: string, middle = false): Point | null 
     return { x: box.left - origin.left + box.width / 2, y: box.top - origin.top + box.height / 2 };
   }
   return { x: box.right - origin.left - Math.min(10, box.width / 3), y: box.bottom - origin.top - 4 };
-}
-
-function presetOf(action: DemoAction): PresetId | null {
-  return action.use === "preset" ? action.id : null;
-}
-
-/** Both icon states stacked, so a change crossfades. */
-function HeldIcon({ className, held }: { className: string; held: boolean }) {
-  return (
-    <span className={`grid ${className}`}>
-      {[true, false].map((state) => (
-        <MenuIcon
-          key={String(state)}
-          className={`size-full transition-opacity duration-fast ease-smooth-out [grid-area:1/1] motion-reduce:transition-none ${held === state ? "opacity-100" : "opacity-0"}`}
-          held={state}
-        />
-      ))}
-    </span>
-  );
 }
 
 type Fill = { key: string; ms: number } | "full" | null;
@@ -221,19 +205,18 @@ function Segmented({ children, label }: { children: ReactNode; label: string }) 
   );
 }
 
-function Grace({ left }: { left: number }) {
+const CHOICES: readonly { choice: Choice; title: string; spoken: string }[] = [
+  { choice: "working", title: "Working", spoken: "working" },
+  { choice: "waiting", title: "Waiting", spoken: "waiting for you" },
+  { choice: "idle", title: "Idle", spoken: "idle" },
+  { choice: "closed", title: "Closed", spoken: "closed" },
+];
+
+function Setting({ children, label }: { children: ReactNode; label: string }) {
   return (
-    <div className="flex min-w-0 items-center gap-2 text-sm text-muted">
-      <span className="h-1 w-6 shrink-0 sm:w-8 overflow-hidden rounded-full bg-surface">
-        <span
-          className="block h-full origin-left rounded-full bg-accent transition-transform duration-[250ms] ease-linear motion-reduce:transition-none"
-          style={{ transform: `scaleX(${left})` }}
-        />
-      </span>
-      <span className="truncate">
-        <span className="hidden sm:inline">Still counts</span>
-        <span className="sm:hidden">Counts</span> as working
-      </span>
+    <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+      <span className="text-sm text-muted">{label}</span>
+      <Segmented label={label}>{children}</Segmented>
     </div>
   );
 }
@@ -246,25 +229,23 @@ export function MenuBarSimulator() {
   const lessMotion = useLessMotion();
   const wide = useWide();
   const [sim, setSim] = useState<SimState>(INITIAL);
-  const [chosen, setChosen] = useState<PresetId | null>(presetOf(DEMO[0].action));
+  const [chosen, setChosen] = useState<PresetId | null>(DEMO[0].preset);
   const [autoplay, setAutoplay] = useState(true);
   const [cue, setCue] = useState<Cue>(DEMO_START);
   const [point, setPoint] = useState<Point | null>(null);
   const [ring, setRing] = useState<{ id: number; at: Point } | null>(null);
   const demoing = autoplay && !lessMotion;
   const playing = demoing && seen && !hidden;
-  const marked = demoing ? presetOf(DEMO[cue.step].action) : chosen;
+  const marked = demoing ? DEMO[cue.step].preset : chosen;
   const shown = view(sim);
   const every = tickEvery(sim);
   const target = cueTarget(cue) ?? "tag";
-  const next = upcoming(cue);
-  // The demo opens the mode picker with its first press and highlights the mode with its second.
-  const menu = demoing && next.use === "mode" && cue.target > 0 ? (cue.phase === "press" ? next.mode : sim.mode) : null;
   const waiting = cue.phase === "lead" || cue.phase === "hold";
   const fill: Fill = !waiting ? "full" : playing ? { key: `${cue.step}-${cue.phase}`, ms: cueTime(cue) } : null;
-  const outcomeKey = `${shown.outcome.title} ${shown.outcome.reason} ${shown.outcome.hint}`;
+  const outcomeKey = shape(`${shown.outcome.lead} ${shown.outcome.rest} ${shown.outcome.hint}`);
   const swaps = useChanges(outcomeKey);
   const flips = useChanges(String(shown.held));
+  const onBattery = sim.power === "battery";
 
   function press(name: string) {
     const root = ref.current;
@@ -272,12 +253,17 @@ export function MenuBarSimulator() {
     if (root === null || !(element instanceof HTMLElement)) {
       return;
     }
+    // On a narrow screen the situations are one row that scrolls: the one being pressed comes into it.
+    const row = element.closest("[data-scroller]");
+    if (row instanceof HTMLElement && row.scrollWidth > row.clientWidth) {
+      row.scrollTo({ left: element.offsetLeft - (row.clientWidth - element.offsetWidth) / 2, behavior: "smooth" });
+    }
     element.animate([{ transform: "scale(1)" }, { transform: "scale(0.94)" }, { transform: "scale(1)" }], {
       duration: 2 * DEMO_PRESS,
       easing: `cubic-bezier(${easing.smoothOut.join(",")})`,
     });
     const at = pointAt(root, name, !wide);
-    if (at !== null) {
+    if (at !== null && wide) {
       setRing((last) => ({ id: (last?.id ?? 0) + 1, at }));
     }
   }
@@ -292,7 +278,7 @@ export function MenuBarSimulator() {
         press(target);
       }
       if (after.phase === "hold") {
-        setSim((state) => demo(state, DEMO[after.step].action));
+        setSim((state) => preset(state, DEMO[after.step].preset));
       }
       setCue(after);
     }, cueTime(cue));
@@ -304,7 +290,6 @@ export function MenuBarSimulator() {
     if (!demoing || root === null) {
       return;
     }
-    // A control that is gone, like a closed menu's option, leaves the pointer where it was.
     const place = () => setPoint((last) => pointAt(root, target) ?? last);
     place();
     window.addEventListener("resize", place);
@@ -326,7 +311,7 @@ export function MenuBarSimulator() {
   function stopDemo() {
     if (demoing) {
       setAutoplay(false);
-      setChosen(presetOf(DEMO[cue.step].action));
+      setChosen(DEMO[cue.step].preset);
       setPoint(null);
       setRing(null);
     }
@@ -340,7 +325,7 @@ export function MenuBarSimulator() {
   return (
     <div
       ref={ref}
-      className="relative grid w-full max-w-[36rem] gap-8 lg:max-w-none lg:grid-cols-[minmax(0,22rem)_minmax(0,36rem)] lg:justify-center lg:gap-16"
+      className="relative flex w-full max-w-[36rem] flex-col gap-8 lg:max-w-none lg:gap-10"
       onClickCapture={(event) => {
         if (!fromPause(event)) {
           stopDemo();
@@ -353,105 +338,83 @@ export function MenuBarSimulator() {
         }
       }}
     >
-      <div className="flex min-w-0 flex-col gap-8">
-        <div className="flex flex-col gap-3">
-          <div className="flex min-h-6 items-center justify-between gap-4">
-            <h3 className="text-sm text-muted">Try a situation</h3>
-            {!lessMotion && (
-              <Playing
-                fill={fill}
-                live={playing}
-                on={demoing}
-                ref={pauseRef}
-                onToggle={() => {
-                  if (demoing) {
-                    stopDemo();
-                    return;
-                  }
-                  setSim((state) => demo(state, DEMO[0].action));
-                  setCue(DEMO_START);
-                  setAutoplay(true);
-                }}
-              />
-            )}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {PRESETS.map((entry) => (
-              <button
-                key={entry.id}
-                aria-pressed={marked === entry.id}
-                className={`${CHIP} ${marked === entry.id ? CHIP_ON : CHIP_OFF}`}
-                data-demo={`preset-${entry.id}`}
-                onClick={() => {
-                  setSim((state) => preset(state, entry.id));
-                  setChosen(entry.id);
-                }}
-                type="button"
-              >
-                {entry.title}
-              </button>
-            ))}
-          </div>
+      <div className="flex flex-col gap-3 lg:items-center">
+        <div className="flex min-h-6 items-center justify-between gap-4">
+          <h3 className="text-sm text-muted">Try a situation</h3>
+          {!lessMotion && (
+            <Playing
+              fill={fill}
+              live={playing}
+              on={demoing}
+              ref={pauseRef}
+              onToggle={() => {
+                if (demoing) {
+                  stopDemo();
+                  return;
+                }
+                setSim((state) => preset(state, DEMO[0].preset));
+                setCue(DEMO_START);
+                setAutoplay(true);
+              }}
+            />
+          )}
         </div>
-        <div className="flex flex-col gap-3">
-          <h3 className="text-sm text-muted">Or run the agents yourself</h3>
-          <ul className="flex flex-col divide-y divide-border border-y border-border">
-            {AGENTS.map((agent) => {
-              const run = sim.runs.find((candidate) => candidate.id === agent.id);
-              const left = run === undefined ? null : graceLeft(run, sim.now);
-              return (
-                <li key={agent.id} className="flex flex-col gap-1.5 py-3">
-                  <div className="flex items-center gap-3">
-                    <span className="flex min-w-0 flex-1 items-center gap-2">
+        <div
+          className="-mx-4 flex gap-2 overflow-x-auto px-4 py-0.5 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 lg:justify-center [&::-webkit-scrollbar]:hidden"
+          data-scroller
+        >
+          {PRESETS.map((entry) => (
+            <button
+              key={entry.id}
+              aria-pressed={marked === entry.id}
+              className={`${CHIP} shrink-0 whitespace-nowrap ${marked === entry.id ? CHIP_ON : CHIP_OFF}`}
+              data-demo={`preset-${entry.id}`}
+              onClick={() => {
+                setSim((state) => preset(state, entry.id));
+                setChosen(entry.id);
+              }}
+              type="button"
+            >
+              {entry.title}
+            </button>
+          ))}
+        </div>
+      </div>
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,24rem)_minmax(0,36rem)] lg:justify-center lg:gap-16">
+        <div className="flex min-w-0 flex-col gap-6">
+          <div className="flex flex-col gap-3">
+            <h3 className="text-sm text-muted">Or set it yourself</h3>
+            <ul className="flex flex-col divide-y divide-border border-y border-border">
+              {AGENTS.map((agent) => {
+                const now = choiceOf(sim, agent.id);
+                return (
+                  <li key={agent.id} className="flex flex-col items-start gap-2 py-3">
+                    <span className="flex min-w-0 items-center gap-2">
                       <AgentIcon className="size-5 shrink-0" name={agent.icon} />
                       <span className="truncate">{agent.name}</span>
                     </span>
-                    <button
-                      aria-label={`${run === undefined ? "Start" : "Stop"} ${agent.name}`}
-                      className={`h-7 w-14 shrink-0 rounded-full border text-sm transition-colors duration-fast ease-smooth-out motion-reduce:transition-none ${run === undefined ? "border-fg" : "border-border text-muted hover:border-fg hover:text-fg"}`}
-                      data-demo={`run-${agent.id}`}
-                      onClick={() => change((state) => (run === undefined ? start(state, agent.id) : stop(state, agent.id)))}
-                      type="button"
-                    >
-                      {run === undefined ? "Start" : "Stop"}
-                    </button>
-                  </div>
-                  <div className="flex h-7 items-center gap-3 sm:pl-7">
-                    {run === undefined ? (
-                      <p className="text-sm text-muted">Not running</p>
-                    ) : (
-                      <>
-                        <Segmented label={`What ${agent.name} does`}>
-                          {[true, false].map((working) => (
-                            <button
-                              key={String(working)}
-                              aria-label={`Set ${agent.name} to ${working ? "working" : "idle"}`}
-                              aria-pressed={run.working === working}
-                              className={`${SEGMENT} ${run.working === working ? SEGMENT_ON : SEGMENT_OFF}`}
-                              data-demo={`${working ? "working" : "idle"}-${agent.id}`}
-                              onClick={() => change((state) => setWorking(state, agent.id, working))}
-                              type="button"
-                            >
-                              {working ? "Working" : "Idle"}
-                            </button>
-                          ))}
-                        </Segmented>
-                        {left !== null &&
-                          (left > 0 ? (
-                            <Grace left={left} />
-                          ) : (
-                            <p className="min-w-0 truncate text-sm text-muted">Waiting at its prompt</p>
-                          ))}
-                      </>
-                    )}
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <span className="text-sm text-muted">Power</span>
-            <Segmented label="Power">
+                    <Segmented label={`What ${agent.name} does`}>
+                      {CHOICES.map((entry) => (
+                        <button
+                          key={entry.choice}
+                          aria-label={`Set ${agent.name} to ${entry.spoken}`}
+                          aria-pressed={now === entry.choice}
+                          className={`${SEGMENT} ${now === entry.choice ? SEGMENT_ON : SEGMENT_OFF}`}
+                          data-demo={`${entry.choice}-${agent.id}`}
+                          onClick={() => change((state) => setChoice(state, agent.id, entry.choice))}
+                          type="button"
+                        >
+                          {entry.title}
+                        </button>
+                      ))}
+                    </Segmented>
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+          <div className="flex flex-col gap-3">
+            <Setting label="Power">
               {(["adapter", "battery"] as const).map((power) => (
                 <button
                   key={power}
@@ -464,79 +427,118 @@ export function MenuBarSimulator() {
                   {power === "adapter" ? "Power adapter" : "Battery"}
                 </button>
               ))}
-            </Segmented>
+            </Setting>
+            <Setting label="Lid">
+              {(["open", "closed"] as const).map((lid) => (
+                <button
+                  key={lid}
+                  aria-pressed={sim.lid === lid}
+                  className={`${SEGMENT} ${sim.lid === lid ? SEGMENT_ON : SEGMENT_OFF}`}
+                  data-demo={`lid-${lid}`}
+                  onClick={() => change((state) => setLid(state, lid))}
+                  type="button"
+                >
+                  {lid === "open" ? "Open" : "Closed"}
+                </button>
+              ))}
+            </Setting>
+            <div className={`transition-opacity duration-fast motion-reduce:transition-none ${onBattery ? "" : "opacity-40"}`}>
+              <Setting label="Battery level">
+                {BATTERY_LEVELS.map((level) => (
+                  <button
+                    key={level}
+                    aria-pressed={onBattery && sim.battery === level}
+                    className={`${SEGMENT} tabular-nums ${onBattery && sim.battery === level ? SEGMENT_ON : SEGMENT_OFF}`}
+                    data-demo={`battery-${level}`}
+                    disabled={!onBattery}
+                    onClick={() => change((state) => setBattery(state, level))}
+                    type="button"
+                  >
+                    {level}%
+                  </button>
+                ))}
+              </Setting>
+            </div>
           </div>
+          <p className="text-pretty text-sm leading-normal text-muted">
+            Time runs faster here. In the app an agent that waits for you keeps your Mac awake for 5 minutes, and you can change that time
+          </p>
         </div>
-        <p className="text-pretty text-sm leading-normal text-muted">
-          Time runs faster here. In the app an idle agent stops holding the Mac after 2 minutes
-        </p>
-      </div>
-      <div className="order-first flex min-w-0 flex-col gap-6 lg:order-none lg:gap-8">
-        <div className="flex w-full flex-col items-end gap-1 rounded-xl border border-border p-1 pb-6">
-          <div className="flex h-6 w-full items-center justify-end rounded-md bg-[color-mix(in_srgb,var(--surface)_85%,transparent)] px-1.5 text-[13px] text-fg backdrop-blur">
-            {GLYPHS.map((width, index) => (
-              <span key={index} aria-hidden="true" className="flex h-[22px] items-center px-2">
-                <span className="h-3.5 rounded-[3px] bg-current opacity-30" style={{ width }} />
-              </span>
-            ))}
-            <span
-              aria-label={iconLabel(shown.held)}
-              className="relative flex h-[22px] items-center rounded-[5px] bg-[color-mix(in_srgb,var(--fg)_14%,transparent)] px-2"
-              role="img"
-            >
-              {flips > 0 && (
-                <span key={flips} aria-hidden="true" className="demo-pulse absolute inset-0 rounded-[5px] bg-accent opacity-0" />
-              )}
-              <HeldIcon className="relative size-[18px]" held={shown.held} />
-            </span>
-            <span aria-hidden="true" className="w-14 text-center tabular-nums">
-              9:41
-            </span>
-          </div>
-          <div className="min-h-[18.75rem] w-[320px] max-w-full sm:mr-[3.875rem]">
-            <AgentsPanel
-              enabled={sim.enabled}
-              menu={menu}
-              mode={sim.mode}
-              onEnabled={(enabled) => change((state) => setEnabled(state, enabled))}
-              onMode={(mode) => change((state) => setMode(state, mode))}
-              onOverride={() => change(installOverride)}
-              view={shown}
-            />
-          </div>
-        </div>
-        <div aria-live={demoing ? "off" : "polite"} className="flex min-h-24 items-start gap-3">
-          <HeldIcon
-            className={`mt-0.5 size-7 shrink-0 transition-colors duration-fast motion-reduce:transition-none ${shown.held ? "text-accent" : "text-muted"}`}
-            held={shown.held}
-          />
-          <div className="relative grid min-w-0 flex-1 overflow-hidden">
-            <AnimatePresence initial={false}>
-              <motion.div
-                key={outcomeKey}
-                animate={{ opacity: 1, y: 0 }}
-                className="flex flex-col gap-1 [grid-area:1/1]"
-                exit={{ opacity: 0, y: -6 }}
-                initial={lessMotion ? false : { opacity: 0, y: 6 }}
-                transition={{ duration: lessMotion ? 0 : duration.fast, ease: easing.smoothOut }}
-              >
-                <p className={`text-xl font-medium leading-snug ${shown.held ? "text-fg" : "text-muted"}`}>
-                  {shown.outcome.title} <span className="font-normal text-muted">{shown.outcome.reason}</span>
-                </p>
-                {shown.outcome.hint !== "" && <p className="text-sm text-muted">{shown.outcome.hint}</p>}
-              </motion.div>
-            </AnimatePresence>
-            {swaps > 0 && (
+        <div className="order-first flex min-w-0 flex-col gap-6 lg:order-none lg:gap-8">
+          <div className="flex w-full flex-col items-end gap-1 rounded-xl border border-border p-1 pb-6">
+            <div className="flex h-6 w-full items-center justify-end rounded-md bg-[color-mix(in_srgb,var(--surface)_85%,transparent)] px-1.5 text-[13px] text-fg backdrop-blur">
+              {GLYPHS.map((width, index) => (
+                <span key={index} aria-hidden="true" className="flex h-[22px] items-center px-2">
+                  <span className="h-3.5 rounded-[3px] bg-current opacity-30" style={{ width }} />
+                </span>
+              ))}
               <span
-                key={swaps}
-                aria-hidden="true"
-                className="demo-sweep pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,transparent,color-mix(in_srgb,var(--accent)_16%,transparent),transparent)] opacity-0"
+                aria-label={shown.iconLabel}
+                className="relative flex h-[22px] items-center rounded-[5px] bg-[color-mix(in_srgb,var(--fg)_14%,transparent)] px-2"
+                role="img"
+              >
+                {flips > 0 && (
+                  <span key={flips} aria-hidden="true" className="demo-pulse absolute inset-0 rounded-[5px] bg-accent opacity-0" />
+                )}
+                <MenuIcon className="relative h-5 w-[21px]" look={shown.look} />
+              </span>
+              <span aria-hidden="true" className="w-14 text-center tabular-nums">
+                {shown.clock}
+              </span>
+            </div>
+            <div className="min-h-[25.5rem] w-full sm:mr-[3.875rem] sm:w-[320px]">
+              <AgentsPanel
+                enabled={sim.enabled}
+                mode={sim.mode}
+                onDismiss={() => change(dismissHint)}
+                onEnabled={(enabled) => change((state) => setEnabled(state, enabled))}
+                onHelper={() => change(allowHelper)}
+                onMode={(mode) => change((state) => setMode(state, mode))}
+                onPause={(choice) => change((state) => startPause(state, choice))}
+                onReachable={(choice) => change((state) => startReachable(state, choice))}
+                onResume={() => change(resume)}
+                onStopReachable={() => change(stopReachable)}
+                paused={!seen || hidden}
+                view={shown}
               />
-            )}
+            </div>
+          </div>
+          <div aria-live={demoing ? "off" : "polite"} className="flex min-h-28 items-start gap-3 sm:min-h-24">
+            <MenuIcon
+              className={`mt-0.5 h-[27px] w-7 shrink-0 transition-colors duration-fast motion-reduce:transition-none ${shown.held ? "text-accent" : "text-muted"}`}
+              look={shown.look}
+            />
+            <div className="relative grid min-w-0 flex-1 overflow-hidden">
+              <AnimatePresence initial={false}>
+                <motion.div
+                  key={outcomeKey}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="flex flex-col gap-1 [grid-area:1/1]"
+                  exit={{ opacity: 0, y: -6 }}
+                  initial={lessMotion ? false : { opacity: 0, y: 6 }}
+                  transition={{ duration: lessMotion ? 0 : duration.fast, ease: easing.smoothOut }}
+                >
+                  <p className={`text-pretty text-xl font-medium leading-snug ${shown.held ? "text-fg" : "text-muted"}`}>
+                    {shown.outcome.lead}{" "}
+                    <span className="font-normal text-muted">
+                      <Flow>{shown.outcome.rest}</Flow>
+                    </span>
+                  </p>
+                  {shown.outcome.hint !== "" && <p className="text-sm text-muted">{shown.outcome.hint}</p>}
+                </motion.div>
+              </AnimatePresence>
+              {swaps > 0 && (
+                <span
+                  key={swaps}
+                  aria-hidden="true"
+                  className="demo-sweep pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,transparent,color-mix(in_srgb,var(--accent)_16%,transparent),transparent)] opacity-0"
+                />
+              )}
+            </div>
           </div>
         </div>
       </div>
-      {demoing && ring !== null && (
+      {demoing && wide && ring !== null && (
         <span
           key={ring.id}
           aria-hidden="true"

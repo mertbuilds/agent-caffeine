@@ -4,12 +4,48 @@ import type { ReactNode } from "react";
 /** The home page questions, rendered by the FAQ and read as plain text for structured data. */
 export const faqItems: { question: string; answer: ReactNode }[] = [
   {
+    question: "How does it know that an agent is working?",
+    answer: (
+      <>
+        Claude Code and Codex say what they do: working, waiting for you, or idle. agent caffeine
+        reads that on your Mac. It also watches the commands an agent started, so a build that is
+        still busy keeps your Mac awake after the agent is done. For other agents it watches signs
+        of work, such as a running command or a write to the session file. For Claude Code, Codex,
+        Droid and opencode you can switch on better detection in Preferences. The agent then tells
+        agent caffeine its state directly, and you can switch it off again at any time.
+      </>
+    ),
+  },
+  {
+    question: "What happens when an agent waits for my answer?",
+    answer: (
+      <>
+        Your Mac stays awake for 5 minutes, so you can answer. After that it can sleep. An idle
+        agent does not keep your Mac awake in the default mode. You can change the times in
+        Preferences.
+      </>
+    ),
+  },
+  {
     question: "Does it work with the lid closed on battery?",
     answer: (
       <>
-        Yes. With the lid closed on power it works from the start. On battery it works after you
-        allow one admin prompt. That installs a small sudoers entry, and agent caffeine then turns
-        on <code>pmset disablesleep</code> only while it keeps the Mac awake.
+        Yes. With the lid closed on power it works from the start. On battery it needs a small
+        helper that you allow once in System Settings. When the battery is at 20%, or your
+        Mac gets too hot, agent caffeine lets your Mac sleep and tells you why in a notification.
+        You can change this level or turn it off in Preferences.
+      </>
+    ),
+  },
+  {
+    question: "Can I reach my agent from my phone while the lid is closed?",
+    answer: (
+      <>
+        Yes, while your Mac is awake. Choose Stay reachable in the menu, and your Mac stays awake
+        for 1, 2 or 4 hours, also when no agent works. A message from your phone, with Claude Code
+        Remote Control or Codex remote, then reaches your agent. On battery with the lid closed
+        this needs the helper, and it uses about 1% of battery per hour. A message cannot
+        wake a Mac that sleeps.
       </>
     ),
   },

@@ -39,12 +39,12 @@ export const drawing = {
 } as const;
 
 /**
- * The hero laptop, in seconds into its loop: the prompt is typed and sent,
- * tool calls come in, the lid closes while the agent works on, and the lid
+ * The hero laptop, in seconds into its loop: the prompt is typed and sent, the
+ * lid starts to close one second later while the agent works on, and the lid
  * opens on the finished work.
  */
 export const laptop = {
-  loop: 11,
+  loop: 8.45,
   rest: 2.5,
   welcome: [0, 0.3],
   type: [0.15, 0.95],
@@ -52,15 +52,15 @@ export const laptop = {
   steps: [
     [1.5, 1.8],
     [1.9, 2.2],
-    [2.6, 2.9],
-    [3.0, 3.3],
-    [3.7, 4.0],
-    [4.0, 4.3],
+    [2.45, 2.75],
+    [2.85, 3.15],
+    [3.5, 3.8],
+    [3.8, 4.1],
   ],
-  work: [1.05, 5.7],
-  close: [4.6, 5.7],
-  pillIn: [5.9, 6.3],
-  race: [6.0, 8.6],
-  pillOut: [8.45, 8.8],
-  open: [8.9, 10.0],
+  work: [1.05, 3.15],
+  close: [2.05, 3.15],
+  pillIn: [3.35, 3.75],
+  race: [3.45, 6.05],
+  pillOut: [5.9, 6.25],
+  open: [6.35, 7.45],
 } as const;

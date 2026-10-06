@@ -4,7 +4,7 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FocusEvent, type RefObject } from "react";
 import { BuyCta } from "@/components/track";
-import { BUY_URL } from "@/lib/buy";
+import { BASE_PLAN, PRICE } from "@/lib/pricing";
 import { distance, duration, easing, scale } from "@/lib/motion";
 import { useLessMotion } from "@/lib/use-less-motion";
 
@@ -162,8 +162,8 @@ export function SiteMenu({
                   onClick={() => close(false)}
                   style={{ animationDelay: `${links.length * duration.stagger}s` }}
                 >
-                  <BuyCta href={BUY_URL} placement="header" className={ROW}>
-                    Buy for $9
+                  <BuyCta plan={BASE_PLAN} placement="header" className={ROW}>
+                    Buy for {PRICE}
                   </BuyCta>
                 </div>
               </>

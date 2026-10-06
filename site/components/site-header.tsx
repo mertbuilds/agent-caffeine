@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { BuyButton } from "@/components/buy-button";
+import { PRICE } from "@/lib/pricing";
 import { DownloadButton } from "@/components/download-button";
 import { SiteMenu } from "@/components/site-menu";
 import { morph } from "@/lib/morph";
@@ -135,14 +136,14 @@ export function SiteHeader({ release }: { release: Release | null }) {
           {release === null ? (
             <span {...morphName("header-primary")} className="inline-flex">
               <BuyButton placement="header" size="compact">
-                Buy for $9
+                Buy for {PRICE}
               </BuyButton>
             </span>
           ) : (
             <>
               <span {...morphName("header-buy")} className="hidden md:inline-flex">
                 <BuyButton placement="header" variant="text">
-                  Buy for $9
+                  Buy for {PRICE}
                 </BuyButton>
               </span>
               <span {...morphName("header-primary")} className="inline-flex">

@@ -11,21 +11,24 @@ import {
   ROUND,
   WIDTH,
   fixed,
-  lidAngle,
   lidArt,
+  lidPose,
 } from "./geometry";
 
 const cq = (size: number) => `${fixed(size)}cqw`;
 
 // Anodised aluminium in close tones, lit from above: the tops are the page's
 // surface, the sides a step darker under the page's shadow, the rim round the
-// glass a step towards the border, and the shut lid a faint sheen. The glass,
-// the hinge barrel and the keyboard are near black, as on the machine.
+// glass a step towards the border, and the shut lid an even tone. The glass,
+// the hinge cover and the keyboard are near black, as on the machine, and the
+// hinge's barrels a darker aluminium in the shade of the lid.
 const SURFACE: CSSProperties = { fill: "var(--surface)" };
 const shade = (share: number): CSSProperties => ({ fill: "var(--shadow)", fillOpacity: share });
 const SIDE = 0.45;
 const RIM_TONE = "color-mix(in srgb, var(--surface) 60%, var(--border))";
-const BARREL = "color-mix(in srgb, var(--hairline) 15%, black)";
+const LENS = "color-mix(in srgb, var(--hairline) 15%, black)";
+const HINGE = "color-mix(in srgb, var(--hairline) 6%, black)";
+const BARREL = "color-mix(in srgb, var(--surface) 78%, black)";
 const WELL = "color-mix(in srgb, var(--surface) 10%, black)";
 const KEY = `color-mix(in srgb, var(--hairline) 22%, ${WELL})`;
 const TOUCH_ID = `color-mix(in srgb, var(--hairline) 12%, ${WELL})`;
@@ -38,25 +41,35 @@ const stroke = {
   strokeLinecap: "round",
 } as const;
 
+// Which field of holes shows: the full one where a hole is about a device
+// pixel (a scene 560px wide at two pixels a px), the half one down to half
+// that, the quarter one below.
+const HOLES_SHOWN = [
+  "hidden [@media(min-resolution:2dppx)]:[@container(min-width:560px)]:inline",
+  "[@media(min-resolution:2dppx)]:[@container(min-width:560px)]:hidden [@media(max-resolution:1.99dppx)]:[@container(max-width:559.98px)]:hidden [@container(max-width:279.98px)]:hidden",
+  "hidden [@media(max-resolution:1.99dppx)]:[@container(max-width:559.98px)]:inline [@container(max-width:279.98px)]:inline",
+];
+
 /** The base, which never changes as the lid moves. */
 const BASE = (
   <>
     <path d={DECK.ground} filter="url(#laptop-far)" style={shade(1)} />
     <path d={DECK.contact} filter="url(#laptop-near)" style={shade(1)} />
-    <path d={DECK.barrel} style={{ fill: BARREL }} />
     <path d={DECK.hull} style={SURFACE} />
     <path d={DECK.hull} style={shade(SIDE)} />
+    <path d={DECK.hinge} style={{ fill: HINGE }} />
+    <path d={DECK.barrels} style={{ fill: BARREL }} />
     <path d={DECK.top} style={SURFACE} />
-    <path d={DECK.grilles} style={shade(0.6)} />
-    {/* Too small to read as holes on a narrow scene, where the grilles are a tone. */}
-    <path
-      d={DECK.holes}
-      className="[@container(max-width:480px)]:hidden"
-      strokeWidth={HOLE / 2}
-      strokeLinecap="round"
-      strokeDasharray={`0 ${HOLE}`}
-      style={{ stroke: WELL, strokeOpacity: 0.55, fill: "none" }}
-    />
+    {DECK.holes.map((holes, coarser) => (
+      <path
+        key={coarser}
+        d={holes}
+        className={HOLES_SHOWN[coarser]}
+        strokeWidth={HOLE * 2 ** coarser}
+        strokeLinecap="round"
+        style={{ stroke: WELL, fill: "none" }}
+      />
+    ))}
     <path d={DECK.well} style={{ fill: WELL }} />
     <path d={DECK.keys} style={{ fill: KEY }} />
     <path d={DECK.touchId} style={{ fill: TOUCH_ID }} />
@@ -77,13 +90,8 @@ const DEFS = (
       <feGaussianBlur stdDeviation="2 0.9" />
     </filter>
     <linearGradient id="laptop-sheen" x1="0" y1="0" x2="0.35" y2="1">
-      <stop offset="0" style={{ stopColor: "color-mix(in srgb, var(--surface) 25%, var(--bg))" }} />
-      <stop offset="0.55" style={{ stopColor: "var(--surface)" }} />
-      <stop offset="1" style={{ stopColor: "color-mix(in srgb, var(--surface) 50%, var(--bg))" }} />
-    </linearGradient>
-    <linearGradient id="laptop-barrel" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" style={{ stopColor: "color-mix(in srgb, var(--hairline) 45%, black)" }} />
-      <stop offset="1" style={{ stopColor: BARREL }} />
+      <stop offset="0" style={{ stopColor: "color-mix(in srgb, var(--surface) 70%, var(--bg))" }} />
+      <stop offset="1" style={{ stopColor: "var(--surface)" }} />
     </linearGradient>
   </>
 );
@@ -103,6 +111,7 @@ type LaptopProps = {
  */
 export function Laptop({ closed, display, children }: LaptopProps) {
   const lid = useMemo(() => lidArt(closed), [closed]);
+  const pose = lidPose(closed);
 
   return (
     <>
@@ -115,21 +124,28 @@ export function Laptop({ closed, display, children }: LaptopProps) {
               <stop offset="1" style={{ stopColor: "var(--shadow)", stopOpacity: 0 }} />
             </linearGradient>
           )}
+          {lid.cut && (
+            <clipPath id="laptop-lid-cut">
+              <path d={`M-50 -50H150V120H-50Z${lid.cut.hidden}`} clipRule="evenodd" />
+              <path d={lid.cut.clear} />
+            </clipPath>
+          )}
         </defs>
         {BASE}
         {lid.shadow && <path d={DECK.top} fill="url(#laptop-lid-shadow)" opacity={fixed(closed)} />}
-        <path d={lid.hull} style={SURFACE} />
-        <path d={lid.hull} style={shade(SIDE)} />
-        {lid.facing ? (
-          <>
-            <path d={lid.face} style={{ fill: RIM_TONE }} />
-            {lid.bezel && <path d={lid.bezel} fill="black" />}
-            {lid.hinge && <path d={lid.hinge} fill="url(#laptop-barrel)" />}
-          </>
-        ) : (
-          <path d={lid.face} fill="url(#laptop-sheen)" />
-        )}
-        <path d={lid.lines} {...stroke} style={hairline("var(--hairline)")} />
+        <g clipPath={lid.cut ? "url(#laptop-lid-cut)" : undefined}>
+          <path d={lid.hull} style={SURFACE} />
+          <path d={lid.hull} style={shade(SIDE)} />
+          {lid.facing ? (
+            <>
+              <path d={lid.face} style={{ fill: RIM_TONE }} />
+              {lid.bezel && <path d={lid.bezel} fill="black" />}
+            </>
+          ) : (
+            <path d={lid.face} fill="url(#laptop-sheen)" />
+          )}
+          <path d={lid.lines} {...stroke} style={hairline("var(--hairline)")} />
+        </g>
       </svg>
       <div
         className="absolute left-1/2 top-[78%] [transform-style:preserve-3d]"
@@ -152,7 +168,7 @@ export function Laptop({ closed, display, children }: LaptopProps) {
               width: cq(WIDTH),
               height: cq(DEPTH),
               transformOrigin: "bottom",
-              transform: `translateZ(${cq(LIFT)}) rotateX(${fixed(lidAngle(closed))}deg)`,
+              transform: `translate3d(0, ${cq(pose.along)}, ${cq(LIFT + pose.up)}) rotateX(${fixed(pose.angle)}deg)`,
             }}
           >
             <div
@@ -170,7 +186,7 @@ export function Laptop({ closed, display, children }: LaptopProps) {
                 style={{ background: "linear-gradient(110deg, color-mix(in srgb, var(--hairline) 9%, transparent), transparent 35%)" }}
               />
               <div className="absolute left-1/2 top-0 flex h-[3.6%] w-[12.5%] -translate-x-1/2 items-center justify-center rounded-b-[0.8cqw] bg-black">
-                <div className="size-[0.7cqw] rounded-full" style={{ background: BARREL }} />
+                <div className="size-[0.7cqw] rounded-full" style={{ background: LENS }} />
               </div>
             </div>
           </div>

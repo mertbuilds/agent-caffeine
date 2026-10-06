@@ -4,6 +4,7 @@ import { DownloadButton } from "@/components/download-button";
 import { GridTexture } from "@/components/grid-texture";
 import { LaptopScene } from "@/components/laptop-scene";
 import { agents, markedAgents } from "@/lib/agents";
+import { PRICE } from "@/lib/pricing";
 import { getLatestRelease, releaseDetails } from "@/lib/release";
 
 const SHOWN = markedAgents.slice(0, 7);
@@ -12,14 +13,14 @@ const MORE = agents.length - SHOWN.length;
 export async function Hero() {
   const release = await getLatestRelease();
   return (
-    <section className="relative isolate mx-auto grid w-full max-w-[1120px] items-center gap-10 py-12 text-center md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] md:gap-6 md:py-20 md:text-left">
+    <section className="relative isolate mx-auto grid w-full max-w-[1120px] items-center gap-10 py-12 text-center md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] md:min-h-[calc(100svh-3.5rem)] md:gap-12 md:py-20 md:text-left">
       <GridTexture />
-      <div className="flex flex-col items-center gap-7 md:items-start">
+      <div className="relative z-10 flex flex-col items-center gap-7 md:items-start">
         <div className="flex flex-col items-center gap-5 md:items-start">
-          <h1 className="max-w-[16ch] text-balance text-[clamp(2.25rem,9vw,2.75rem)] font-medium leading-[1.1] tracking-[-0.02em] md:text-[clamp(2.5rem,4.2vw,3.25rem)]">
+          <h1 className="max-w-[16ch] text-balance text-[clamp(2.25rem,9vw,2.75rem)] font-medium leading-[1.1] tracking-[-0.02em] md:max-w-none md:text-[clamp(2.5rem,4.2vw,3.25rem)]">
             Your agents keep working <span className="text-accent">with the lid closed</span>
           </h1>
-          <p className="max-w-[26rem] text-pretty text-lg leading-relaxed text-muted">
+          <p className="max-w-[26rem] text-pretty text-lg leading-relaxed text-muted md:max-w-[30rem]">
             agent caffeine keeps your Mac awake while they work, and lets it sleep when they are done
           </p>
         </div>
@@ -42,7 +43,7 @@ export async function Hero() {
         </div>
         {release === null ? (
           <div className="flex flex-col items-center gap-3 md:items-start">
-            <BuyButton placement="hero">Buy agent caffeine for $9</BuyButton>
+            <BuyButton placement="hero">Buy for {PRICE}</BuyButton>
             <p className="text-sm text-muted">Pay once. No subscription · macOS 13 or later, Apple silicon and Intel</p>
           </div>
         ) : (
@@ -52,17 +53,20 @@ export async function Hero() {
                 Download free trial
               </DownloadButton>
               <BuyButton placement="hero" variant="outline">
-                Buy a key for $9
+                Buy for {PRICE}
               </BuyButton>
             </div>
             <div className="flex flex-col gap-1 text-sm text-muted">
-              <p>7 day free trial. Then $9 once, no subscription</p>
+              <p>7 day free trial. Then {PRICE} once, no subscription</p>
               <p>{releaseDetails(release)}</p>
             </div>
           </div>
         )}
       </div>
-      <LaptopScene />
+      {/* The base fills 68.28% of the scene, so the scene runs 23.23% of its column past each side and the base spans the column exactly. */}
+      <div className="md:-mx-[23.23%]">
+        <LaptopScene />
+      </div>
     </section>
   );
 }

@@ -107,7 +107,7 @@ If you would rather click than type, these menu bar apps do the job. Each is goo
 
 **Caffeine.** A coffee cup in the menu bar. Click the cup and the Mac will not sleep, dim the screen, or start the screen saver. Click it again to stop. It does one thing and stays out of the way.
 
-**agent caffeine.** Our app, for people who run AI coding agents like Claude Code, Codex or opencode. It detects more than 40 agents by process name, plus Claude Code session files, and keeps the Mac awake in one of three modes: always, while an agent is open, or while an agent is working. In the last mode the Mac can sleep again when every agent is idle. A closed lid on power works out of the box; on battery it needs a one-time admin prompt. It has a 7 day free trial, then costs $9 once per Mac, and needs macOS 13 or later. See [agent caffeine](/) for details. If you do not run agents, one of the apps above is the better fit.
+**agent caffeine.** Our app, for people who run AI coding agents like Claude Code, Codex or opencode. It detects more than 40 agents, and reads from Claude Code and Codex whether they work, wait for you or are idle. It keeps the Mac awake in one of three modes: always, while an agent is open, or while an agent is working. In the last mode the Mac can sleep again when every agent is idle, or has waited 5 minutes for your answer. A closed lid on power works out of the box; on battery it needs a small helper that you allow once. It has a 7 day free trial, then costs {{price}} once, and needs macOS 13 or later. See [agent caffeine](/) for details. If you do not run agents, one of the apps above is the better fit.
 
 ## 6. Mac mini and other desktop Macs
 

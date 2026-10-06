@@ -13,7 +13,7 @@ export function DownloadButton({
   release: Release;
   placement: "header" | "hero" | "pricing" | "blog";
   size?: keyof typeof SIZES;
-  variant?: "solid" | "brand";
+  variant?: "solid" | "brand" | "brandOutline";
   children: ReactNode;
 }) {
   return (
@@ -21,7 +21,7 @@ export function DownloadButton({
       href={release.href}
       filename={release.filename}
       placement={placement}
-      className={variant === "brand" ? BRAND_VARIANTS.brand(size) : `${PILL} bg-fg text-bg ${SIZES[size]}`}
+      className={variant === "solid" ? `${PILL} bg-fg text-bg ${SIZES[size]}` : BRAND_VARIANTS[variant](size)}
     >
       {children}
     </DownloadCta>

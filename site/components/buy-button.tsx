@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { BuyCta } from "@/components/track";
-import { BUY_URL } from "@/lib/buy";
+import { BASE_PLAN, type Plan } from "@/lib/pricing";
 
 export const SIZES = {
   compact: "h-7 px-3.5 text-[0.8rem] leading-7",
@@ -32,17 +32,20 @@ const VARIANTS = {
 
 export function BuyButton({
   placement,
+  plan = BASE_PLAN,
   size = "large",
   variant = "solid",
   children,
 }: {
   placement: "header" | "hero" | "pricing" | "blog";
+  /** The plan the button sells. */
+  plan?: Plan;
   size?: keyof typeof SIZES;
   variant?: keyof typeof VARIANTS;
   children: ReactNode;
 }) {
   return (
-    <BuyCta href={BUY_URL} placement={placement} className={VARIANTS[variant](size)}>
+    <BuyCta plan={plan} placement={placement} className={VARIANTS[variant](size)}>
       {children}
     </BuyCta>
   );

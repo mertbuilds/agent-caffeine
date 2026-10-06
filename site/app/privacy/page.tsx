@@ -19,8 +19,20 @@ export default function Privacy() {
       <h2>The app</h2>
       <p>
         The app has no telemetry, no analytics and no account. To see whether an agent is working,
-        it reads the list of running processes and the Claude Code session files in{" "}
-        <code>~/.claude/projects</code> on your Mac. None of that leaves your Mac.
+        it reads the list of running processes on your Mac, the state and session files that Claude
+        Code and Codex keep in <code>~/.claude</code> and <code>~/.codex</code>, and the times at
+        which other agents write their session files. From those files it takes only the state of
+        a session (working, waiting for you or idle), its folder and its name, and shows them in
+        the menu. It also reads the battery level and the lid angle of your Mac, to let it sleep
+        when the battery is low and to dim the display as the lid closes. None of that leaves your
+        Mac.
+      </p>
+      <p>
+        Better detection is off until you switch it on for an agent. agent caffeine then adds a few
+        lines to that agent&apos;s own settings file and keeps a backup next to it. The agent
+        writes its state to a small file in agent caffeine&apos;s folder on your Mac. That file
+        holds the state and the name of the event, and nothing you or the agent typed. When you
+        switch better detection off, agent caffeine removes its lines again.
       </p>
       <p>It makes two kinds of network request:</p>
       <ul>
