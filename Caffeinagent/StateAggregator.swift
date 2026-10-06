@@ -11,6 +11,7 @@ struct AggregatorParts {
     var license: LicenseManager
     var sleepFlag: SleepFlagController
     var power: PowerHolding
+    var hotKeys: HotKeyRegistering
     var notify: (String) -> Void
 
     static func system() -> AggregatorParts {
@@ -19,6 +20,7 @@ struct AggregatorParts {
             license: LicenseManager(client: LicenseClient(), store: KeychainLicenseStore()),
             sleepFlag: SleepFlagController(),
             power: PowerKeeper(),
+            hotKeys: GlobalHotKey(),
             notify: SafetyNotifier.post
         )
     }
@@ -82,6 +84,11 @@ final class StateAggregator: ObservableObject {
             MenuBarVisibility.set(showMenuBarIcon, in: defaults)
         }
     }
+    /// The keyboard shortcuts that work in every app. None until the user
+    /// records one.
+    @PublishedOnChange private(set) var shortcuts: [ShortcutAction: Shortcut]
+    /// Why the shortcut of an action was not taken or does not work.
+    @PublishedOnChange private(set) var shortcutProblems: [ShortcutAction: ShortcutProblem] = [:]
     /// The tab Preferences shows, so the menu can open one.
     @PublishedOnChange var preferencesTab = PreferencesTab.general
     @PublishedOnChange private(set) var decision: HoldDecision
@@ -117,6 +124,7 @@ final class StateAggregator: ObservableObject {
     private(set) var samples = 0
     private let defaults: UserDefaults
     private let power: PowerHolding
+    private let hotKeys: HotKeyRegistering
     private let notify: (String) -> Void
     private let openFiles = SystemOpenFiles()
     private var safetyMonitor = SafetyMonitor()
@@ -151,11 +159,13 @@ final class StateAggregator: ObservableObject {
         self.sleepFlag = parts.sleepFlag
         self.defaults = defaults
         self.power = parts.power
+        self.hotKeys = parts.hotKeys
         self.notify = parts.notify
         self.engine = engine
         self.entitlement = license.entitlement
         self.enabled = enabled
         self.pause = pause
+        self.shortcuts = ShortcutStore.load(from: defaults)
         self.mode = mode
         self.settings = settings
         self.lidClosedHintDismissed = defaults.bool(forKey: Self.lidClosedHintKey)
@@ -222,6 +232,7 @@ final class StateAggregator: ObservableObject {
         engine.start()
         refreshHookStatuses()
         syncSleepFlag()
+        registerShortcuts()
         // On its own, so a helper that gives no answer holds nothing up.
         Task { await sleepFlag.replaceHelper(ifNot: AppVersion.helperForm) }
     }
@@ -287,6 +298,58 @@ final class StateAggregator: ObservableObject {
         }
         RunLoop.main.add(timer, forMode: .common)
         pauseTimer = timer
+    }
+
+    // MARK: Shortcuts
+
+    /// The same as the switch, from the keyboard. A pause ends.
+    func toggleEnabled() {
+        var state = PauseSwitch(enabled: enabled, pause: pause)
+        state.toggle(now: Date())
+        if state.enabled != enabled {
+            enabled = state.enabled
+        } else {
+            pause = state.pause
+        }
+    }
+
+    /// Nil clears the shortcut. One that cannot be taken leaves the old
+    /// one as it is, and Preferences says why.
+    func setShortcut(_ shortcut: Shortcut?, for action: ShortcutAction) {
+        if let shortcut {
+            let others = shortcuts.filter { $0.key != action }.map(\.value)
+            if let problem = ShortcutRules.problem(shortcut, system: hotKeys.systemShortcuts, others: others) {
+                shortcutProblems[action] = problem
+                return
+            }
+        }
+        shortcuts[action] = shortcut
+        ShortcutStore.save(shortcuts, to: defaults)
+        register(action)
+    }
+
+    /// While Preferences records a shortcut, none of them is registered.
+    func setShortcutRecording(_ recording: Bool) {
+        if recording {
+            hotKeys.unregisterAll()
+            shortcutProblems = [:]
+        } else {
+            registerShortcuts()
+        }
+    }
+
+    private func registerShortcuts() {
+        ShortcutAction.allCases.forEach(register)
+    }
+
+    private func register(_ action: ShortcutAction) {
+        let registered = hotKeys.register(shortcuts[action], for: action) { [weak self] in
+            switch action {
+            case .toggle: self?.toggleEnabled()
+            case .pauseOneHour: self?.startPause(.oneHour)
+            }
+        }
+        shortcutProblems[action] = registered ? nil : .usedByAnotherApp
     }
 
     // MARK: Engine
@@ -457,6 +520,7 @@ final class StateAggregator: ObservableObject {
     func shutdown() {
         engine.stop()
         pauseTimer?.invalidate()
+        hotKeys.unregisterAll()
         sleepFlag.clearForQuit(timeout: 2)
         power.release()
         if let napActivity {

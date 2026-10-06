@@ -212,6 +212,8 @@ targets:
       - Caffeinagent/UI/MenuBarIcon.swift
       - Caffeinagent/UI/OnboardingModel.swift
       - Caffeinagent/UI/HookPreferences.swift
+      # The shortcut as a value and its rules. Without the Carbon part.
+      - Caffeinagent/Shortcut/Shortcut.swift
       - CaffeinagentHelper/HelperCore.swift
       - CaffeinagentHelper/HelperService.swift
       - CaffeinagentHelper/SleepFlagWatchdog.swift

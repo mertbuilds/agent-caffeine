@@ -18,9 +18,13 @@ struct PreferencesView: View {
 
     var body: some View {
         TabView(selection: $aggregator.preferencesTab) {
-            GeneralPreferences(mode: $aggregator.mode, settings: $aggregator.settings, showMenuBarIcon: $aggregator.showMenuBarIcon)
-                .tabItem { Label("General", systemImage: "gearshape") }
-                .tag(PreferencesTab.general)
+            GeneralPreferences(
+                mode: $aggregator.mode, settings: $aggregator.settings, showMenuBarIcon: $aggregator.showMenuBarIcon,
+                shortcuts: aggregator.shortcuts, shortcutProblems: aggregator.shortcutProblems,
+                setShortcut: aggregator.setShortcut, setShortcutRecording: aggregator.setShortcutRecording
+            )
+            .tabItem { Label("General", systemImage: "gearshape") }
+            .tag(PreferencesTab.general)
             AgentPreferences(
                 settings: $aggregator.settings,
                 foundIDs: Set(aggregator.decision.perAgent.map(\.reading.agentID)),
@@ -201,6 +205,10 @@ struct GeneralPreferences: View {
     @Binding var mode: AwakeMode
     @Binding var settings: DetectionSettings
     @Binding var showMenuBarIcon: Bool
+    var shortcuts: [ShortcutAction: Shortcut] = [:]
+    var shortcutProblems: [ShortcutAction: ShortcutProblem] = [:]
+    var setShortcut: (Shortcut?, ShortcutAction) -> Void = { _, _ in }
+    var setShortcutRecording: (Bool) -> Void = { _ in }
 
     /// From 30 seconds to 30 minutes.
     private static let durations: [TimeInterval] = [30, 60, 120, 180, 300, 600, 900, 1200, 1800]
@@ -240,6 +248,17 @@ struct GeneralPreferences: View {
                     "While an agent is waiting for you", $settings.waitingHold,
                     help: "Your Mac stays awake this long while an agent is waiting for your answer. After that it can sleep."
                 )
+            }
+            Section("Keyboard shortcuts") {
+                ForEach(ShortcutAction.allCases, id: \.self) { action in
+                    ShortcutRecorder(
+                        title: action.title, shortcut: shortcuts[action], problem: shortcutProblems[action],
+                        set: { setShortcut($0, action) }, setRecording: setShortcutRecording
+                    )
+                }
+                Text("The shortcuts work in every app. Click a field, then press the keys you want.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Show agent caffeine in the menu bar", isOn: $showMenuBarIcon)

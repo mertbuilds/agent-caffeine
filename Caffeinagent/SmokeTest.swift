@@ -9,7 +9,7 @@ import SwiftUI
 /// unit tests never start the app, so they pass on a build that hangs.
 ///
 /// It runs next to a copy that is installed and touches nothing of it. It
-/// takes no power assertion, never reaches or registers the helper, reads
+/// takes no power assertion, registers no keyboard shortcut, never reaches or registers the helper, reads
 /// no license from the Keychain and never calls Polar, starts no Sparkle,
 /// shows no setup window and no offer to move, sends no notification, and
 /// keeps its settings, and those AppKit writes for it, under a bundle
@@ -41,6 +41,7 @@ enum SmokeTest {
             license: LicenseManager(client: NoLicenseAPI(), store: MemoryStore(), defaults: defaults),
             sleepFlag: SleepFlagController(service: NoHelperService(), helper: NoHelper(), sudoers: NoSudoers(), defaults: defaults),
             power: NoPower(),
+            hotKeys: NoHotKeys(),
             notify: { _ in }
         )
         meter.start()
@@ -335,6 +336,13 @@ private struct NoHelper: SleepFlagHelperConnecting {
 private struct NoSudoers: SudoersCleaning {
     var entryExists: Bool { false }
     func remove() async throws {}
+}
+
+@MainActor
+private final class NoHotKeys: HotKeyRegistering {
+    var systemShortcuts: Set<Shortcut.Keys> { [] }
+    func register(_ shortcut: Shortcut?, for action: ShortcutAction, onPress: @escaping () -> Void) -> Bool { true }
+    func unregisterAll() {}
 }
 
 /// Remembers what was asked, and holds nothing.
