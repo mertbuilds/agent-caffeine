@@ -4,23 +4,29 @@ import SwiftUI
 /// The quiet controls: the mode, the gear menu, the timer menu and the
 /// switch. While agent caffeine is paused, the end of the pause stands in
 /// place of the mode, and while the Mac stays reachable, the end of that.
-struct BottomBar: View {
+///
+/// SwiftUI closes the open submenu of a `Menu` when it works the menu out
+/// again. So the bar is worked out again only when what it shows changed:
+/// put it in the menu with `.equatable()`.
+struct BottomBar: View, Equatable {
+    let bar: PanelBar
     @Binding var enabled: Bool
     @Binding var mode: AwakeMode
-    var pausedLabel: String?
-    var reachableLabel: String?
-    var reachableActions: [PanelAction] = []
-    var reachableCost: String?
-    let licenseActions: [PanelAction]
     let perform: (PanelAction) -> Void
     let openPreferences: () -> Void
     let quit: () -> Void
 
+    /// The bindings and the actions reach the same objects whenever they
+    /// were made, so the values alone tell two bars apart.
+    static func == (a: BottomBar, b: BottomBar) -> Bool {
+        a.bar == b.bar
+    }
+
     var body: some View {
         HStack(spacing: 8) {
-            if let pausedLabel {
+            if let pausedLabel = bar.pausedLabel {
                 timed(pausedLabel, end: PanelText.resume, action: .resume)
-            } else if let reachableLabel {
+            } else if let reachableLabel = bar.reachableLabel {
                 timed(reachableLabel, end: PanelText.stop, action: .stopReachable)
             } else {
                 Menu {
@@ -43,15 +49,15 @@ struct BottomBar: View {
 
             Menu {
                 Button(PanelText.preferences, action: openPreferences)
-                if pausedLabel != nil {
+                if bar.pausedLabel != nil {
                     Button(PanelAction.resume.title) { perform(.resume) }
                 } else if enabled {
                     Menu(PanelText.pauseMenu) { pauseChoices }
                 }
-                if enabled, !reachableActions.isEmpty {
+                if enabled, !bar.reachableActions.isEmpty {
                     Menu(PanelText.reachableMenu) { reachableChoices }
                 }
-                ForEach(licenseActions, id: \.title) { action in
+                ForEach(bar.licenseActions, id: \.title) { action in
                     Button(action == .buy ? PanelText.buyInMenu : action.title) { perform(action) }
                 }
                 Divider()
@@ -69,10 +75,10 @@ struct BottomBar: View {
             // One click from the switch: a pause, and its opposite. Off
             // and paused have nothing to pause, and while the Mac stays
             // reachable the bar needs the room for the time and "Stop".
-            if enabled, pausedLabel == nil, reachableLabel == nil {
+            if enabled, bar.pausedLabel == nil, bar.reachableLabel == nil {
                 Menu {
                     Section { pauseChoices }
-                    if !reachableActions.isEmpty {
+                    if !bar.reachableActions.isEmpty {
                         Section { reachableChoices }
                     }
                 } label: {
@@ -120,13 +126,13 @@ struct BottomBar: View {
     /// With what it costs on battery, as a line that is no choice.
     @ViewBuilder
     private var reachableChoices: some View {
-        if reachableLabel != nil {
+        if bar.reachableLabel != nil {
             Button(PanelAction.stopReachable.title) { perform(.stopReachable) }
         }
-        ForEach(reachableActions, id: \.title) { action in
+        ForEach(bar.reachableActions, id: \.title) { action in
             Button(action.title) { perform(action) }
         }
-        if let reachableCost {
+        if let reachableCost = bar.reachableCost {
             Text(reachableCost)
         }
     }

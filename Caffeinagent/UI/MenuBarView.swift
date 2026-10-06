@@ -8,17 +8,17 @@ struct MenuBarView: View {
 
     var body: some View {
         PreferencesOpener { openPreferences in
-            PanelClock(isOpen: isOpen) { now in
-                PanelView(
-                    state: MenuModel.state(aggregator.panelInput, now: now),
-                    enabled: $aggregator.enabled,
-                    mode: $aggregator.mode,
-                    busy: aggregator.license.busy,
-                    perform: { perform($0, openPreferences: openPreferences) },
-                    openPreferences: openPreferences,
-                    quit: { NSApp.terminate(nil) }
-                )
-            }
+            let input = aggregator.panelInput
+            PanelView(
+                state: { MenuModel.state(input, now: $0) },
+                bar: MenuModel.bar(input),
+                enabled: $aggregator.enabled,
+                mode: $aggregator.mode,
+                busy: aggregator.license.busy,
+                perform: { perform($0, openPreferences: openPreferences) },
+                openPreferences: openPreferences,
+                quit: { NSApp.terminate(nil) }
+            )
         }
         .environment(\.panelIsOpen, isOpen)
         .background(WindowVisibility(isVisible: $isOpen))

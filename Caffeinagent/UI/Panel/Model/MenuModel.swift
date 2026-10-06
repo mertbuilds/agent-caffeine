@@ -23,6 +23,7 @@ enum MenuModel {
                 now: now, calendar: input.calendar, locale: input.locale
             )
         let (groups, moreIdle) = groups(input, now: now)
+        let bar = bar(input)
         return PanelState(
             pose: pose,
             title: title,
@@ -32,12 +33,28 @@ enum MenuModel {
             groups: groups,
             moreIdle: moreIdle,
             emptyText: input.decision.perAgent.isEmpty ? PanelText.empty(mode: input.mode) : nil,
-            licenseActions: licenseActions(input),
+            licenseActions: bar.licenseActions,
+            pausedLabel: bar.pausedLabel,
+            reachableLabel: bar.reachableLabel,
+            reachableActions: bar.reachableActions,
+            reachableCost: bar.reachableCost,
+            menuBarAccessibilityLabel: menuBarAccessibilityLabel(input)
+        )
+    }
+
+    // MARK: Bar
+
+    /// The bar at the bottom. It takes no time: the end of a pause is a
+    /// time of day, which changes only when the pause does.
+    static func bar(_ input: PanelInput) -> PanelBar {
+        PanelBar(
+            enabled: input.enabled,
+            mode: input.mode,
             pausedLabel: input.pausedUntil.map { PanelText.pausedUntil($0, calendar: input.calendar, locale: input.locale) },
             reachableLabel: reachableLabel(input),
             reachableActions: canStayReachable(input) ? ReachableChoice.allCases.map(PanelAction.stayReachable) : [],
             reachableCost: input.onBattery && input.batteryPercent != nil ? PanelText.reachableCost : nil,
-            menuBarAccessibilityLabel: menuBarAccessibilityLabel(input)
+            licenseActions: licenseActions(input)
         )
     }
 

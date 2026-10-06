@@ -305,6 +305,36 @@ struct PanelState: Equatable {
     }
 }
 
+/// What the bar at the bottom shows. Nothing in it follows the time or
+/// what the agents do, so the bar and its menus stay as they are while
+/// the rest of the menu counts on.
+struct PanelBar: Equatable {
+    /// The switch.
+    var enabled = true
+    var mode = AwakeMode.agentWorking
+    /// "Paused until 15:30". Nil when not paused.
+    var pausedLabel: String?
+    /// "Reachable until 18:30". Nil when not on.
+    var reachableLabel: String?
+    /// The choices of "stay reachable". Empty while agent caffeine may
+    /// not keep the Mac awake.
+    var reachableActions: [PanelAction] = []
+    /// What "stay reachable" costs, below its choices. Only on battery.
+    var reachableCost: String?
+    /// License items of the gear menu.
+    var licenseActions: [PanelAction] = []
+}
+
+extension PanelBar {
+    /// The bar of a state, for a menu that is drawn from one.
+    init(_ state: PanelState, enabled: Bool, mode: AwakeMode) {
+        self.init(
+            enabled: enabled, mode: mode, pausedLabel: state.pausedLabel, reachableLabel: state.reachableLabel,
+            reachableActions: state.reachableActions, reachableCost: state.reachableCost, licenseActions: state.licenseActions
+        )
+    }
+}
+
 /// When each agent instance entered the state it is in now.
 struct StateClock: Equatable {
     struct Entry: Equatable {

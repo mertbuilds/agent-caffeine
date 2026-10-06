@@ -19,8 +19,8 @@ struct PanelPreview: View {
 
     var body: some View {
         PanelView(
-            state: state, enabled: $enabled, mode: $mode, startsExpanded: startsExpanded, startsToggled: startsToggled,
-            perform: { _ in }, openPreferences: {}, quit: {}
+            state: { _ in state }, bar: PanelBar(state, enabled: enabled, mode: mode), enabled: $enabled, mode: $mode,
+            startsExpanded: startsExpanded, startsToggled: startsToggled, perform: { _ in }, openPreferences: {}, quit: {}
         )
     }
 }

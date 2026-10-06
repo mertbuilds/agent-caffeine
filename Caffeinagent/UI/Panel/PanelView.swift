@@ -2,7 +2,10 @@ import SwiftUI
 
 /// The menu, drawn from plain values so a preview needs no running app.
 struct PanelView: View {
-    let state: PanelState
+    /// What the menu shows at a moment. Asked again once a second while
+    /// the menu is open, so the durations count on.
+    let state: (Date) -> PanelState
+    let bar: PanelBar
     @Binding var enabled: Bool
     @Binding var mode: AwakeMode
     /// A license check is under way.
@@ -13,6 +16,33 @@ struct PanelView: View {
     let perform: (PanelAction) -> Void
     let openPreferences: () -> Void
     let quit: () -> Void
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // The clock stops above the bar. A tick that reached the bar
+            // would close the submenu the user has open.
+            PanelClock { now in
+                PanelStateView(
+                    state: state(now), busy: busy, startsExpanded: startsExpanded, startsToggled: startsToggled, perform: perform
+                )
+            }
+            Divider()
+            BottomBar(bar: bar, enabled: $enabled, mode: $mode, perform: perform, openPreferences: openPreferences, quit: quit)
+                .equatable()
+        }
+        .frame(width: PanelMetrics.width)
+        .tint(.brand)
+    }
+}
+
+/// The part of the menu that follows the time and the agents: the glance
+/// and the list.
+private struct PanelStateView: View {
+    let state: PanelState
+    let busy: Bool
+    let startsExpanded: Bool
+    let startsToggled: Set<String>
+    let perform: (PanelAction) -> Void
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
@@ -38,15 +68,7 @@ struct PanelView: View {
                 groups: state.groups, moreIdle: state.moreIdle, moreIdleTitle: state.moreIdleTitle,
                 emptyText: state.emptyText, startsExpanded: startsExpanded, startsToggled: startsToggled
             )
-            Divider()
-            BottomBar(
-                enabled: $enabled, mode: $mode, pausedLabel: state.pausedLabel, reachableLabel: state.reachableLabel,
-                reachableActions: state.reachableActions, reachableCost: state.reachableCost, licenseActions: state.licenseActions,
-                perform: perform, openPreferences: openPreferences, quit: quit
-            )
         }
-        .frame(width: PanelMetrics.width)
-        .tint(.brand)
         .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.attention)
         .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.battery == nil)
         .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.groups.map { [$0.id] + $0.children.map(\.id) })
