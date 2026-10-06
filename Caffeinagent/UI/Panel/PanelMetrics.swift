@@ -36,6 +36,11 @@ enum PanelMetrics {
     /// Nested corners share one centre.
     static var ringRadius: CGFloat { logoBoxRadius + ringGap }
 
+    static func disclosure(opening: Bool) -> Animation { opening ? disclose : conceal }
+
     static let stateChange = Animation.spring(response: 0.35, dampingFraction: 0.86)
+    /// A part that opens below its header, and one that closes a little faster.
+    static let disclose = Animation.easeOut(duration: 0.26)
+    static let conceal = Animation.easeInOut(duration: 0.22)
     static let waitingAmber = Color(red: 0.96, green: 0.62, blue: 0.04)
 }

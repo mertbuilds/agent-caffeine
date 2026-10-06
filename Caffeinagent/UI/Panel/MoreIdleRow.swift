@@ -31,6 +31,6 @@ struct MoreIdleRow: View {
     }
 
     private func toggle() {
-        withAnimation(reduceMotion ? nil : PanelMetrics.stateChange) { isExpanded.toggle() }
+        withAnimation(reduceMotion ? nil : PanelMetrics.disclosure(opening: !isExpanded)) { isExpanded.toggle() }
     }
 }

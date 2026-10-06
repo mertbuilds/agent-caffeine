@@ -1,12 +1,12 @@
 import SwiftUI
 
 /// One agent: its header, and its sessions below it when the group is
-/// open. A header with sessions below it is a button.
+/// open. A header with sessions below it is a button. The sessions are
+/// always there, in a box that is as tall as the group is open.
 struct AgentGroupView: View {
     let group: PanelGroup
     let isOpen: Bool
     let toggle: () -> Void
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let layout = Self.childLayout(of: group)
@@ -22,14 +22,14 @@ struct AgentGroupView: View {
             } else {
                 AgentRowView(row: group.header, summary: Self.summaryPlace(group))
             }
-            if isOpen {
-                VStack(alignment: .leading, spacing: 0) {
-                    ForEach(group.children) { AgentChildView(child: $0, layout: layout) }
-                }
-                .padding(.bottom, PanelMetrics.childrenBottom)
-                .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: layout)
-                .transition(.opacity.combined(with: .move(edge: .top)))
+            VStack(alignment: .leading, spacing: 0) {
+                ForEach(group.children) { AgentChildView(child: $0, layout: layout) }
             }
+            // The sessions take their new places at once when one comes,
+            // goes or changes shape, so no text crosses another on its way.
+            // The height of the group is what moves, and it cuts them.
+            .transaction { $0.animation = nil }
+            .reveal(isOpen: isOpen, height: Self.childrenHeight(of: group))
         }
     }
 
@@ -46,9 +46,13 @@ struct AgentGroupView: View {
 
     /// For the height of the list before the layout.
     static func height(of group: PanelGroup, isOpen: Bool) -> CGFloat {
-        let header = AgentRowView.height(of: group.header, summary: summaryPlace(group))
-        guard isOpen else { return header }
+        AgentRowView.height(of: group.header, summary: summaryPlace(group)) + (isOpen ? childrenHeight(of: group) : 0)
+    }
+
+    /// Of the open sessions, with the room below the last one.
+    static func childrenHeight(of group: PanelGroup) -> CGFloat {
+        guard group.canToggle else { return 0 }
         let layout = childLayout(of: group)
-        return group.children.reduce(header + PanelMetrics.childrenBottom) { $0 + AgentChildView.height(of: $1, layout: layout) }
+        return group.children.reduce(PanelMetrics.childrenBottom) { $0 + AgentChildView.height(of: $1, layout: layout) }
     }
 }

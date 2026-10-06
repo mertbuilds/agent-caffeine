@@ -14,7 +14,7 @@ struct AgentChildView: View {
                     .foregroundStyle(.secondary)
                     .frame(height: PanelMetrics.childRowHeight)
             } else {
-                // One stack for both shapes, so the texts move when the shape changes.
+                // One stack for both shapes.
                 stack {
                     label.frame(maxWidth: .infinity, alignment: .leading)
                     // A long state gets smaller before it is cut.
