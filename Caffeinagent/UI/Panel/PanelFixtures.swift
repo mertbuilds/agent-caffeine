@@ -150,6 +150,27 @@ enum PanelFixtures {
         return state(input)
     }
 
+    /// The Mac stays reachable with no agent at work, on battery.
+    static let reachable = reachable(lidClosedNeedsSetup: false)
+    static let reachableNoHelper = reachable(lidClosedNeedsSetup: true)
+
+    private static func reachable(lidClosedNeedsSetup: Bool) -> PanelState {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let until = now.addingTimeInterval(2 * 3600)
+        var input = Self.input(.reachable(until: until), [
+            Agent(id: "claude", name: "Claude Code", minutes: 12),
+            Agent(id: "codex", name: "Codex", minutes: 82),
+        ])
+        input.reachableUntil = until
+        input.calendar = calendar
+        input.locale = Locale(identifier: "en_GB")
+        input.onBattery = true
+        input.batteryPercent = 58
+        input.lidClosedNeedsSetup = lidClosedNeedsSetup
+        return state(input)
+    }
+
     static let safetyStop: PanelState = {
         var input = Self.input(.safetyStop(.batteryLow(percent: 20)), [
             Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 48, label: "wiki"),
@@ -224,7 +245,8 @@ enum PanelFixtures {
         ("working", working), ("waiting", waiting), ("all-idle", allIdle), ("same-folder", sameFolder), ("no-agent", noAgent),
         ("grouped", grouped), ("mixed", mixed), ("idle-groups", idleGroups), ("long-label", longLabel),
         ("off", off), ("paused", paused), ("safety-stop", safetyStop), ("too-hot", tooHot),
-        ("on-battery", onBattery), ("on-battery-near-floor", onBatteryNearFloor), ("on-battery-stopped", onBatteryStopped), ("lid-closed", lidClosedNotSetUp),
+        ("on-battery", onBattery), ("on-battery-near-floor", onBatteryNearFloor), ("on-battery-stopped", onBatteryStopped),
+        ("reachable", reachable), ("reachable-no-helper", reachableNoHelper), ("lid-closed", lidClosedNotSetUp),
         ("helper-off", helperSwitchedOff), ("helper-silent", helperNotResponding), ("trial-ending", trialEnding), ("trial-over", trialOver),
     ]
 

@@ -97,6 +97,92 @@ final class HoldPolicyTests: XCTestCase {
         }
     }
 
+    // MARK: Stay reachable
+
+    private func reachable(
+        _ readings: [AgentReading], until: TimeInterval = 3600, at seconds: TimeInterval = 0, mode: AwakeMode = .agentWorking, enabled: Bool = true,
+        pausedUntil: TimeInterval? = nil, entitlement: Entitlement? = .licensed, safety: SafetyStop? = nil,
+        settings: DetectionSettings = DetectionSettings(), context: FrameContext = FrameContext()
+    ) -> HoldDecision {
+        HoldPolicy.decide(
+            readings: readings, memory: PolicyMemory(), mode: mode, enabled: enabled, pausedUntil: pausedUntil.map(at), reachableUntil: at(until),
+            entitlement: entitlement, safety: safety, settings: settings, context: context, now: at(seconds)
+        ).0
+    }
+
+    func testStayReachableHoldsWithNoAgentAtWork() {
+        for readings in [[], [claude(.idle)], [claude(.idle), codex(.idle)]] {
+            let decision = reachable(readings)
+            XCTAssertTrue(decision.hold)
+            XCTAssertTrue(decision.lidClosedFlag, "With the helper it lasts over a closed lid")
+            XCTAssertEqual(decision.headline, .reachable(until: at(3600)))
+            XCTAssertEqual(decision.perAgent.map(\.cause), readings.map { _ in nil })
+        }
+        XCTAssertEqual(HoldHeadline.reachable(until: at(3600)).text, "Awake: stays reachable")
+    }
+
+    func testStayReachableWorksOnBattery() {
+        let decision = reachable([], context: FrameContext(onBattery: true, batteryPercent: 60))
+        XCTAssertTrue(decision.hold)
+        XCTAssertTrue(decision.lidClosedFlag)
+    }
+
+    func testTheLidClosedFlagFollowsTheSetting() {
+        var settings = DetectionSettings()
+        settings.stayAwakeLidClosedOnBattery = false
+        let decision = reachable([], settings: settings)
+        XCTAssertTrue(decision.hold)
+        XCTAssertFalse(decision.lidClosedFlag)
+    }
+
+    func testAnAgentThatHoldsIsNamedBeforeStayReachable() {
+        XCTAssertEqual(reachable([claude(.working)]).headline, .working(.one("Claude Code")))
+        XCTAssertEqual(reachable([codex(.waitingForUser)]).headline, .waitingHeld(.one("Codex")))
+        XCTAssertEqual(reachable([], mode: .always).headline, .alwaysOn)
+        XCTAssertEqual(reachable([claude(.idle)], mode: .agentOpen).headline, .open(.one("Claude Code")))
+        // After the waiting hold ran out the Mac still stays awake.
+        var memory = PolicyMemory()
+        var last: HoldDecision?
+        for seconds in stride(from: 0.0, through: 400, by: 100) {
+            let (decision, next) = HoldPolicy.decide(
+                readings: [codex(.waitingForUser)], memory: memory, mode: .agentWorking, enabled: true, reachableUntil: at(3600),
+                entitlement: .licensed, safety: nil, settings: DetectionSettings(), context: FrameContext(), now: at(seconds)
+            )
+            (memory, last) = (next, decision)
+        }
+        XCTAssertEqual(last?.headline, .reachable(until: at(3600)))
+        XCTAssertEqual(last?.hold, true)
+    }
+
+    func testStayReachableIsOverAtItsTime() {
+        XCTAssertTrue(reachable([], at: 3599).hold)
+        let after = reachable([], at: 3600)
+        XCTAssertFalse(after.hold)
+        XCTAssertFalse(after.lidClosedFlag)
+        XCTAssertEqual(after.headline, .noAgents)
+    }
+
+    func testEveryStopEndsTheHoldOfStayReachable() {
+        let stops: [(HoldDecision, HoldHeadline)] = [
+            (reachable([], safety: .batteryLow(percent: 20)), .safetyStop(.batteryLow(percent: 20))),
+            (reachable([], safety: .tooHot), .safetyStop(.tooHot)),
+            (reachable([], enabled: false), .switchedOff),
+            (reachable([], pausedUntil: 1800), .paused(until: at(1800))),
+            (reachable([], entitlement: .expired(.trialOver)), .notEntitled(.trialOver)),
+        ]
+        for (decision, headline) in stops {
+            XCTAssertEqual(decision.headline, headline)
+            XCTAssertFalse(decision.hold, "\(headline)")
+            XCTAssertFalse(decision.lidClosedFlag, "\(headline)")
+        }
+        XCTAssertTrue(reachable([], entitlement: .trial(daysLeft: 3)).hold)
+    }
+
+    func testWithoutStayReachableNothingChanges() {
+        XCTAssertEqual(decide([]).headline, .noAgents)
+        XCTAssertEqual(decide([claude(.idle)]).headline, .idle(.one("Claude Code")))
+    }
+
     // MARK: While an agent is working
 
     func testStateAgentHoldsForTheReleaseTime() {
@@ -397,6 +483,7 @@ final class HoldPolicyTests: XCTestCase {
             (.open(.many(4)), "Awake: 4 agents are open"),
             (.alwaysOn, "Awake: always on"),
             (.remoteAccess, "Awake: phone access is on"),
+            (.reachable(until: Self.start), "Awake: stays reachable"),
             (.idle(.one("opencode")), "Mac can sleep: opencode is idle"),
             (.idle(.many(2)), "Mac can sleep: all agents are idle"),
             (.waitingReleased(.one("Codex")), "Mac can sleep: Codex is waiting for you"),

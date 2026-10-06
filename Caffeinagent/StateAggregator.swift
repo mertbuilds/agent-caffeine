@@ -53,6 +53,7 @@ final class StateAggregator: ObservableObject {
             engine.enabled = enabled
             // Off ends a pause. See `PauseSwitch`.
             resumeNow()
+            if !enabled { stopReachable() }
         }
     }
     /// Until when agent caffeine acts as if it were off. The end is saved,
@@ -67,6 +68,20 @@ final class StateAggregator: ObservableObject {
             }
             engine.pausedUntil = pause.until
             armPauseTimer()
+        }
+    }
+    /// Until when the Mac stays awake with no agent at work. Saved like
+    /// the end of a pause.
+    @PublishedOnChange private(set) var reachable: Reachable {
+        didSet {
+            guard reachable != oldValue else { return }
+            if let until = reachable.until {
+                defaults.set(until, forKey: Self.reachableUntilKey)
+            } else {
+                defaults.removeObject(forKey: Self.reachableUntilKey)
+            }
+            engine.reachableUntil = reachable.until
+            armReachableTimer()
         }
     }
     @PublishedOnChange var mode: AwakeMode {
@@ -160,11 +175,13 @@ final class StateAggregator: ObservableObject {
     private var lastHelperRefresh = Date.distantPast
     private var napActivity: NSObjectProtocol?
     private var pauseTimer: Timer?
+    private var reachableTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private var sigtermSource: DispatchSourceSignal?
     private static let enabledKey = "StateAggregator.enabled"
     private static let modeKey = "StateAggregator.mode"
     private static let pausedUntilKey = "StateAggregator.pausedUntil"
+    private static let reachableUntilKey = "StateAggregator.reachableUntil"
     private static let lidClosedHintKey = "StateAggregator.lidClosedHintDismissed"
     /// System Settings tells nobody when the user allows or removes the
     /// helper, so its state is read again this often.
@@ -179,8 +196,13 @@ final class StateAggregator: ObservableObject {
         LegacyBatteryOverride.clearLeftover(defaults: defaults)
         let pause = Pause(stored: defaults.object(forKey: Self.pausedUntilKey) as? Date, now: Date())
         if pause.until == nil { defaults.removeObject(forKey: Self.pausedUntilKey) }
+        // A pause that was saved wins: the two never run together.
+        let reachable = pause.until == nil && enabled
+            ? Reachable(stored: defaults.object(forKey: Self.reachableUntilKey) as? Date, now: Date()) : Reachable()
+        if reachable.until == nil { defaults.removeObject(forKey: Self.reachableUntilKey) }
         let engine = DetectionEngine.system(
-            mode: mode, enabled: enabled, pausedUntil: pause.until, entitlement: license.entitlement, settings: settings
+            mode: mode, enabled: enabled, pausedUntil: pause.until, reachableUntil: reachable.until,
+            entitlement: license.entitlement, settings: settings
         )
         self.license = license
         self.sleepFlag = parts.sleepFlag
@@ -194,6 +216,7 @@ final class StateAggregator: ObservableObject {
         self.entitlement = license.entitlement
         self.enabled = enabled
         self.pause = pause
+        self.reachable = reachable
         self.shortcuts = ShortcutStore.load(from: defaults)
         self.mode = mode
         self.settings = settings
@@ -238,6 +261,7 @@ final class StateAggregator: ObservableObject {
             .sink { [weak self] _ in self?.settlePause() }
             .store(in: &cancellables)
         armPauseTimer()
+        armReachableTimer()
 
         NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)
             .sink { [weak self] _ in self?.shutdown() }
@@ -294,6 +318,7 @@ final class StateAggregator: ObservableObject {
                 setup: sleepFlag.setup, wasSetUp: sleepFlag.wasSetUp, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
             ),
             lidClosedHintDismissed: lidClosedHintDismissed,
+            reachableUntil: reachable.until,
             enabled: enabled,
             onBattery: onBattery,
             batteryPercent: batteryPercent
@@ -302,12 +327,28 @@ final class StateAggregator: ObservableObject {
 
     // MARK: Pause
 
-    /// Nothing to pause while agent caffeine is off.
+    /// Nothing to pause while agent caffeine is off. A pause ends "stay
+    /// reachable". See `TimedModes`.
     func startPause(_ choice: PauseChoice) {
         guard enabled else { return }
-        var next = pause
-        next.start(choice, now: Date(), calendar: .current)
-        pause = next
+        var next = TimedModes(pause: pause, reachable: reachable)
+        next.startPause(choice, now: Date(), calendar: .current)
+        (reachable, pause) = (next.reachable, next.pause)
+    }
+
+    /// Not while agent caffeine is off or may not keep the Mac awake.
+    /// "Stay reachable" ends a pause.
+    func startReachable(_ choice: ReachableChoice) {
+        guard enabled, entitlement.allowsHolding else { return }
+        var next = TimedModes(pause: pause, reachable: reachable)
+        next.startReachable(choice, now: Date())
+        (pause, reachable) = (next.pause, next.reachable)
+    }
+
+    func stopReachable() {
+        var next = reachable
+        next.stop()
+        reachable = next
     }
 
     func resumeNow() {
@@ -316,13 +357,25 @@ final class StateAggregator: ObservableObject {
         pause = next
     }
 
-    /// Ends a pause whose time has come, and sets the timer for one that
-    /// goes on: after a sleep the old timer is late.
+    /// Ends a pause and a "stay reachable" whose time has come, and sets
+    /// the timers for what goes on: after a sleep the old timer is late.
     private func settlePause() {
-        var next = pause
+        var next = TimedModes(pause: pause, reachable: reachable)
         next.settle(now: Date())
-        pause = next
+        (pause, reachable) = (next.pause, next.reachable)
         armPauseTimer()
+        armReachableTimer()
+    }
+
+    private func armReachableTimer() {
+        reachableTimer?.invalidate()
+        reachableTimer = nil
+        guard let until = reachable.until else { return }
+        let timer = Timer(fire: until, interval: 0, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.settlePause() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        reachableTimer = timer
     }
 
     private func armPauseTimer() {
@@ -409,13 +462,21 @@ final class StateAggregator: ObservableObject {
             notify(begun.notificationText)
         }
         engine.safety = stop
+        // The notification above says why. The time does not come back
+        // with the power.
+        if stop != nil, reachable.until != nil {
+            var next = TimedModes(pause: pause, reachable: reachable)
+            next.safetyStopped()
+            reachable = next.reachable
+        }
         announceHiddenNotice()
         announceAgents(sample)
         display?.update(
             lidClosed: context.lidClosed, holding: sample.decision.hold, enabled: settings.displayOffLidClosed, now: sample.frame.at
         )
-        // In case the timer of the pause is late.
+        // In case a timer is late.
         if pause.until != nil, !pause.isPaused(now: Date()) { settlePause() }
+        if reachable.until != nil, !reachable.isOn(now: Date()) { settlePause() }
         // Also keeps the assertions for another timeout.
         updatePower()
         sleepFlag.refreshHealth()
@@ -478,9 +539,13 @@ final class StateAggregator: ObservableObject {
             settings: notices,
             active: enabled && pause.until == nil && entitlement.allowsHolding
         )
-        // In the other modes, and after a stop, the waiting hold does not
-        // decide when the Mac sleeps.
-        let waitingHold = mode == .agentWorking && sample.decision.hold ? settings.waitingHold : nil
+        // In the other modes, after a stop, and while the Mac stays awake
+        // for phone access, the waiting hold does not decide when the Mac
+        // sleeps.
+        let context = sample.frame.context
+        let staysAwake = reachable.until != nil
+            || settings.stayAwakeForRemoteAccess && context.remoteAccessDetected && !context.onBattery
+        let waitingHold = mode == .agentWorking && sample.decision.hold && !staysAwake ? settings.waitingHold : nil
         for notice in agentNotices.update(input, now: sample.frame.at) {
             notifier.post(AgentNoticeText.content(notice, waitingHold: waitingHold, now: sample.frame.at))
         }
@@ -612,6 +677,7 @@ final class StateAggregator: ObservableObject {
     func shutdown() {
         engine.stop()
         pauseTimer?.invalidate()
+        reachableTimer?.invalidate()
         hotKeys.unregisterAll()
         display?.stop()
         sleepFlag.clearForQuit(timeout: 2)

@@ -53,6 +53,7 @@ final class MenuModelTests: XCTestCase {
             (.open(.many(4)), awake, "4 agents are open"),
             (.alwaysOn, awake, "Until you switch it off"),
             (.remoteAccess, awake, "Phone access is on"),
+            (.reachable(until: now.addingTimeInterval(3600)), awake, "Reachable until \(PanelText.time(now.addingTimeInterval(3600)))"),
             (.idle(.one("Codex")), canSleep, "Codex is idle"),
             (.idle(.many(5)), canSleep, "All agents are idle"),
             (.waitingReleased(.one("Codex")), canSleep, "Codex is waiting for your answer"),
@@ -117,6 +118,7 @@ final class MenuModelTests: XCTestCase {
             (.open(.many(4)), .awake(wisps: 2)),
             (.alwaysOn, .awake(wisps: 2)),
             (.remoteAccess, .awake(wisps: 2)),
+            (.reachable(until: now), .reachable),
             (.waitingHeld(.one("Codex")), .attentive),
             (.idle(.many(3)), .asleep),
             (.waitingReleased(.one("Codex")), .asleep),
@@ -220,6 +222,115 @@ final class MenuModelTests: XCTestCase {
         let state = MenuModel.state(stopped, now: now)
         XCTAssertEqual(state.title, "Your Mac can sleep")
         XCTAssertEqual(state.pausedLabel, "Paused until 13:56")
+    }
+
+    // MARK: Stay reachable
+
+    private func reachableInput(until: Date, _ perAgent: [AgentHold] = [], locale: String = "en_GB") -> PanelInput {
+        var input = input(.reachable(until: until), perAgent)
+        input.reachableUntil = until
+        input.calendar = Calendar(identifier: .gregorian)
+        input.calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        input.locale = Locale(identifier: locale)
+        return input
+    }
+
+    /// `now` is 13:46 on a day in 1970, in the time zone of the test.
+    func testTheReachableHeadlineSaysUntilWhen() {
+        let state = MenuModel.state(reachableInput(until: now.addingTimeInterval(284 * 60)), now: now)
+        XCTAssertEqual(state.pose, .reachable)
+        XCTAssertEqual(state.title, "Your Mac stays awake")
+        XCTAssertEqual(state.subtitle, "Reachable until 18:30")
+        XCTAssertEqual(state.reachableLabel, "Reachable until 18:30")
+        XCTAssertEqual(state.menuBarAccessibilityLabel, "agent caffeine, reachable until 18:30")
+        XCTAssertNil(state.pausedLabel)
+        XCTAssertNil(state.attention)
+        func plain(_ text: String?) -> String? { text?.replacingOccurrences(of: "\u{202F}", with: " ") }
+        let twelve = MenuModel.state(reachableInput(until: now.addingTimeInterval(284 * 60), locale: "en_US"), now: now)
+        XCTAssertEqual(plain(twelve.subtitle), "Reachable until 6:30 PM")
+        // Over midnight the time alone says it.
+        XCTAssertEqual(MenuModel.state(reachableInput(until: now.addingTimeInterval(13 * 3600)), now: now).subtitle, "Reachable until 02:46")
+    }
+
+    func testAnAgentAtWorkKeepsItsHeadlineWhileTheBarSaysReachable() {
+        var input = reachableInput(until: now.addingTimeInterval(284 * 60), [claude(pid: 1, .working, .reportsBusy)])
+        input.decision.headline = .working(.one("Claude Code"))
+        let state = MenuModel.state(input, now: now)
+        XCTAssertEqual(state.subtitle, "Claude Code is working")
+        XCTAssertEqual(state.pose, .awake(wisps: 2))
+        XCTAssertEqual(state.reachableLabel, "Reachable until 18:30")
+        XCTAssertNil(state.menuBarAccessibilityLabel, "The pose says it")
+    }
+
+    func testOnlyStayReachableHasItsLabel() {
+        XCTAssertNil(MenuModel.state(input(.working(.one("Claude Code"))), now: now).reachableLabel)
+        XCTAssertNil(MenuModel.state(input(.noAgents), now: now).menuBarAccessibilityLabel)
+    }
+
+    func testTheReachableActionsReadAsWholePhrases() {
+        XCTAssertEqual(
+            ReachableChoice.allCases.map { PanelAction.stayReachable($0).title },
+            ["Stay reachable for 1 hour", "Stay reachable for 2 hours", "Stay reachable for 4 hours"]
+        )
+        XCTAssertEqual(PanelAction.stopReachable.title, "Stop staying reachable")
+        XCTAssertEqual(PanelText.stop, "Stop")
+        XCTAssertEqual(MenuModel.state(input(.noAgents), now: now).reachableActions, ReachableChoice.allCases.map(PanelAction.stayReachable))
+    }
+
+    func testStayReachableIsOfferedOnlyWhileAgentCaffeineCouldHold() {
+        var off = input(.switchedOff)
+        off.enabled = false
+        XCTAssertEqual(MenuModel.state(off, now: now).reachableActions, [])
+        var expired = input(.notEntitled(.trialOver))
+        expired.entitlement = .expired(.trialOver)
+        XCTAssertEqual(MenuModel.state(expired, now: now).reachableActions, [])
+        XCTAssertEqual(MenuModel.state(input(.safetyStop(.batteryLow(percent: 20))), now: now).reachableActions, [])
+        var trial = input(.noAgents)
+        trial.entitlement = .trial(daysLeft: 5)
+        XCTAssertEqual(MenuModel.state(trial, now: now).reachableActions.count, 3)
+    }
+
+    func testTheCostIsSaidOnBatteryOnly() {
+        XCTAssertNil(MenuModel.state(input(.noAgents), now: now).reachableCost)
+        var onBattery = input(.noAgents)
+        onBattery.onBattery = true
+        onBattery.batteryPercent = 80
+        XCTAssertEqual(MenuModel.state(onBattery, now: now).reachableCost, "Uses about 1 percent of battery per hour")
+    }
+
+    func testOnBatteryWithoutTheHelperTheLineSaysTheLidStillSleeps() {
+        var input = reachableInput(until: now.addingTimeInterval(3600))
+        input.onBattery = true
+        input.batteryPercent = 80
+        input.lidClosedNeedsSetup = true
+        input.lidClosedHintDismissed = true
+        let attention = MenuModel.state(input, now: now).attention
+        XCTAssertEqual(attention?.kind, .reachableNeedsLidClosed)
+        XCTAssertEqual(attention?.text, "Close the lid and your Mac still sleeps. Set up lid closed to stay reachable")
+        XCTAssertEqual(attention?.actions, [.setUpLidClosed])
+        XCTAssertEqual(attention?.actions.map(\.title), ["Set up…"])
+        // On wall power a closed lid does not put the Mac to sleep.
+        input.onBattery = false
+        XCTAssertNil(MenuModel.state(input, now: now).attention)
+        // With the helper set up there is nothing to say.
+        input.onBattery = true
+        input.lidClosedNeedsSetup = false
+        XCTAssertNil(MenuModel.state(input, now: now).attention)
+        // Without "stay reachable" the old hint stands, and can be dismissed.
+        input.lidClosedNeedsSetup = true
+        input.reachableUntil = nil
+        XCTAssertNil(MenuModel.state(input, now: now).attention)
+        input.lidClosedHintDismissed = false
+        XCTAssertEqual(MenuModel.state(input, now: now).attention?.kind, .lidClosedNotSetUp)
+    }
+
+    func testTheReachableRobotIsCalm() {
+        let look = RobotLook(pose: .reachable)
+        XCTAssertEqual(look.eyes, .happy)
+        XCTAssertEqual(look.wisps, 1)
+        XCTAssertEqual(look.antenna, .steady)
+        XCTAssertTrue(look.blinks)
+        XCTAssertEqual(MenuBarLook(pose: .reachable), MenuBarLook(eyes: .happy, solid: true), "The solid awake look")
     }
 
     func testThePauseActionsReadAsWholePhrases() {

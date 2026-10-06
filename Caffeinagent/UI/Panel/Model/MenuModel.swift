@@ -33,7 +33,11 @@ enum MenuModel {
             moreIdle: moreIdle,
             emptyText: input.decision.perAgent.isEmpty ? PanelText.empty(mode: input.mode) : nil,
             licenseActions: licenseActions(input),
-            pausedLabel: input.pausedUntil.map { PanelText.pausedUntil($0, calendar: input.calendar, locale: input.locale) }
+            pausedLabel: input.pausedUntil.map { PanelText.pausedUntil($0, calendar: input.calendar, locale: input.locale) },
+            reachableLabel: reachableLabel(input),
+            reachableActions: canStayReachable(input) ? ReachableChoice.allCases.map(PanelAction.stayReachable) : [],
+            reachableCost: input.onBattery && input.batteryPercent != nil ? PanelText.reachableCost : nil,
+            menuBarAccessibilityLabel: menuBarAccessibilityLabel(input)
         )
     }
 
@@ -51,6 +55,7 @@ enum MenuModel {
         switch headline {
         case .working(.many(let count)) where count >= 3: return .awake(wisps: 3)
         case .working, .finishedRecently, .open, .alwaysOn, .remoteAccess: return .awake(wisps: 2)
+        case .reachable: return .reachable
         case .waitingHeld: return .attentive
         case .idle, .waitingReleased, .noAgents: return .asleep
         case .safetyStop(.batteryLow): return .safetyStop(.battery)
@@ -68,6 +73,28 @@ enum MenuModel {
             .compactMap { input.clock.since($0.reading.identity) }
             .map { $0.addingTimeInterval(input.settings.waitingHold).timeIntervalSince(now) }
             .max()
+    }
+
+    // MARK: Stay reachable
+
+    /// The time counts while it holds nothing too, as behind a pause it
+    /// could not be. Not after a stop: the switch and a safety stop end it.
+    private static func reachableLabel(_ input: PanelInput) -> String? {
+        guard input.pausedUntil == nil else { return nil }
+        return input.reachableUntil.map { PanelText.reachableUntil($0, calendar: input.calendar, locale: input.locale) }
+    }
+
+    /// Offered while agent caffeine could keep the Mac awake.
+    static func canStayReachable(_ input: PanelInput) -> Bool {
+        guard input.enabled, input.entitlement.allowsHolding else { return false }
+        if case .safetyStop = input.decision.headline { return false }
+        return true
+    }
+
+    /// Nil when the pose says it all. See `MenuBarLook`.
+    static func menuBarAccessibilityLabel(_ input: PanelInput) -> String? {
+        guard pose(input) == .reachable, case .reachable(let until) = input.decision.headline else { return nil }
+        return PanelText.menuBarReachable(until, calendar: input.calendar, locale: input.locale)
     }
 
     // MARK: Attention
@@ -116,6 +143,10 @@ enum MenuModel {
             )
         case .trial, .licensed:
             break
+        }
+        // Not to be dismissed: the user asked for what the lid takes away.
+        if input.reachableUntil != nil, input.pausedUntil == nil, input.onBattery, input.lidClosedNeedsSetup {
+            return PanelAttention(kind: .reachableNeedsLidClosed, text: PanelText.reachableNeedsLidClosed, actions: [.setUpLidClosed])
         }
         if input.lidClosedNeedsSetup && !input.lidClosedHintDismissed {
             return PanelAttention(

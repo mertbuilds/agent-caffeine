@@ -54,6 +54,10 @@ struct MenuBarView: View {
             aggregator.startPause(choice)
         case .resume:
             aggregator.resumeNow()
+        case .stayReachable(let choice):
+            aggregator.startReachable(choice)
+        case .stopReachable:
+            aggregator.stopReachable()
         }
     }
 }

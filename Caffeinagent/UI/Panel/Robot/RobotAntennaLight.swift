@@ -20,6 +20,8 @@ struct RobotAntennaLight: View {
             ZStack {
                 halo(Self.blue, strength: 0.75 * pulse, radius: radius)
                     .opacity(antenna == .glowing ? 1 : 0)
+                halo(Self.blue, strength: 0.75 * Self.rest, radius: radius)
+                    .opacity(antenna == .steady ? 1 : 0)
                 Group {
                     halo(Self.amber, strength: 0.5 + 0.5 * pulse, radius: radius)
                     ball([Color(red: 1.0, green: 0.93, blue: 0.68), Self.amber, Color(red: 0.92, green: 0.56, blue: 0.08)], radius: radius)
@@ -53,9 +55,12 @@ struct RobotAntennaLight: View {
             .frame(width: 2.04 * radius, height: 2.04 * radius)
     }
 
+    /// The middle of the breath, where a light that does not breathe stays.
+    private static let rest = 0.65
+
     /// Between 0.3 and 1, once in about three seconds.
     private var pulse: Double {
-        guard let time else { return 0.65 }
-        return 0.65 + 0.35 * sin(time * 2 * .pi / Self.pulsePeriod)
+        guard let time else { return Self.rest }
+        return Self.rest + 0.35 * sin(time * 2 * .pi / Self.pulsePeriod)
     }
 }

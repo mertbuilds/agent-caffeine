@@ -264,6 +264,24 @@ final class DetectionEngineTests: XCTestCase {
         XCTAssertEqual(collector.samples, 4, "One timer runs, not two")
     }
 
+    func testStayReachableChangesTheDecisionAtOnce() {
+        state = .idle
+        engine.start()
+        scheduler.advance(by: 0)
+        XCTAssertFalse(engine.decision.hold)
+        let until = Date.distantFuture
+        engine.reachableUntil = until
+        XCTAssertEqual(engine.decision.headline, .reachable(until: until))
+        XCTAssertTrue(engine.decision.hold)
+        XCTAssertTrue(engine.decision.lidClosedFlag)
+        engine.pausedUntil = until
+        XCTAssertEqual(engine.decision.headline, .paused(until: until))
+        engine.pausedUntil = nil
+        engine.reachableUntil = nil
+        XCTAssertFalse(engine.decision.hold)
+        XCTAssertEqual(collector.samples, 1, "No input took a sample")
+    }
+
     func testInputsChangeTheDecisionAtOnce() {
         state = .working
         engine.start()

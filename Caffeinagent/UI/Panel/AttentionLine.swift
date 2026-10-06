@@ -61,13 +61,13 @@ struct AttentionLine: View {
         switch attention.kind {
         case .safetyStop, .helperSwitchedOff, .helperNotResponding, .helperLost: return "exclamationmark.triangle.fill"
         case .license: return "key.fill"
-        case .lidClosedNotSetUp: return "laptopcomputer"
+        case .lidClosedNotSetUp, .reachableNeedsLidClosed: return "laptopcomputer"
         }
     }
 
     private var tint: Color {
         switch attention.kind {
-        case .safetyStop, .helperNotResponding, .helperLost, .license: return .orange
+        case .safetyStop, .helperNotResponding, .helperLost, .license, .reachableNeedsLidClosed: return .orange
         case .helperSwitchedOff: return .red
         case .lidClosedNotSetUp: return .secondary
         }

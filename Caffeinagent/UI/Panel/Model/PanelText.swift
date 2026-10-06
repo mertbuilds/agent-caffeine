@@ -44,6 +44,8 @@ enum PanelText {
             return (awakeTitle, "Until you switch it off")
         case .remoteAccess:
             return (awakeTitle, "Phone access is on")
+        case .reachable(let until):
+            return (awakeTitle, reachableUntil(until, calendar: calendar, locale: locale))
         case .idle(.one(let name)):
             return (canSleepTitle, "\(name) is idle")
         case .idle(.many):
@@ -99,6 +101,22 @@ enum PanelText {
     static func pausedUntil(_ date: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
         "Paused until \(time(date, calendar: calendar, locale: locale))"
     }
+
+    // MARK: Stay reachable
+
+    /// Below the headline, and in the bar at the bottom in place of the mode.
+    static func reachableUntil(_ date: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
+        "Reachable until \(time(date, calendar: calendar, locale: locale))"
+    }
+
+    /// For VoiceOver, on the item in the menu bar.
+    static func menuBarReachable(_ date: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
+        "agent caffeine, reachable until \(time(date, calendar: calendar, locale: locale))"
+    }
+
+    /// Below the choices, on battery.
+    static let reachableCost = "Uses about \(Reachable.batteryPercentPerHour) percent of battery per hour"
+    static let reachableNeedsLidClosed = "Close the lid and your Mac still sleeps. Set up lid closed to stay reachable"
 
     // MARK: Attention
 
@@ -158,6 +176,10 @@ enum PanelText {
         case .pause(.oneHour): return "Pause for 1 hour"
         case .pause(.untilTomorrow): return "Pause until tomorrow"
         case .resume: return "Resume now"
+        case .stayReachable(.oneHour): return "Stay reachable for 1 hour"
+        case .stayReachable(.twoHours): return "Stay reachable for 2 hours"
+        case .stayReachable(.fourHours): return "Stay reachable for 4 hours"
+        case .stopReachable: return "Stop staying reachable"
         }
     }
 
@@ -246,6 +268,9 @@ enum PanelText {
     static let gearMenu = "Preferences and more"
     static let pauseMenu = "Pause"
     static let resume = "Resume"
+    static let reachableMenu = "Stay reachable"
+    static let timerMenu = "Pause or stay reachable"
+    static let stop = "Stop"
     static let mainSwitch = "agent caffeine"
     static let expanded = "Expanded"
     static let collapsed = "Collapsed"

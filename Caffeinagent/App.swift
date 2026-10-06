@@ -109,7 +109,8 @@ struct CaffeinagentApp: App {
         MenuBarExtra(isInserted: Self.menuBarIconInserted(aggregator)) {
             MenuBarView(aggregator: aggregator)
         } label: {
-            MenuBarLabel(look: MenuBarLook(pose: MenuModel.pose(aggregator.panelInput)))
+            let input = aggregator.panelInput
+            MenuBarLabel(look: MenuBarLook(pose: MenuModel.pose(input)), spoken: MenuModel.menuBarAccessibilityLabel(input))
         }
         .menuBarExtraStyle(.window)
 
@@ -122,9 +123,11 @@ struct CaffeinagentApp: App {
 /// The robot in the menu bar. It takes the pose of the robot in the menu.
 struct MenuBarLabel: View {
     let look: MenuBarLook
+    /// In place of what the look says, when the state says more.
+    var spoken: String?
 
     var body: some View {
         Image(nsImage: MenuBarIcon.image(for: look))
-            .accessibilityLabel(look.accessibilityLabel)
+            .accessibilityLabel(spoken ?? look.accessibilityLabel)
     }
 }

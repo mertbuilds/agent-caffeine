@@ -20,6 +20,8 @@ struct RobotLook: Equatable {
     enum Antenna: Equatable {
         /// The light blue of the icon, it breathes.
         case glowing
+        /// The light blue of the icon, and still.
+        case steady
         /// It breathes in amber.
         case amber
         case dark
@@ -48,6 +50,11 @@ struct RobotLook: Equatable {
         switch pose {
         case .awake(let count):
             wisps = count
+            blinks = true
+            bob = RobotFloat.travel
+        case .reachable:
+            antenna = .steady
+            wisps = 1
             blinks = true
             bob = RobotFloat.travel
         case .attentive:

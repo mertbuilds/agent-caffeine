@@ -1,13 +1,16 @@
 import AppKit
 import SwiftUI
 
-/// The quiet controls: the mode, the gear menu, the pause and the switch.
-/// While agent caffeine is paused, the end of the pause stands in place of
-/// the mode.
+/// The quiet controls: the mode, the gear menu, the timer menu and the
+/// switch. While agent caffeine is paused, the end of the pause stands in
+/// place of the mode, and while the Mac stays reachable, the end of that.
 struct BottomBar: View {
     @Binding var enabled: Bool
     @Binding var mode: AwakeMode
     var pausedLabel: String?
+    var reachableLabel: String?
+    var reachableActions: [PanelAction] = []
+    var reachableCost: String?
     let licenseActions: [PanelAction]
     let perform: (PanelAction) -> Void
     let openPreferences: () -> Void
@@ -16,13 +19,9 @@ struct BottomBar: View {
     var body: some View {
         HStack(spacing: 8) {
             if let pausedLabel {
-                Text(pausedLabel)
-                    .monospacedDigit()
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                Button(PanelText.resume) { perform(.resume) }
-                    .buttonStyle(.link)
-                    .frame(minHeight: PanelMetrics.controlHeight)
+                timed(pausedLabel, end: PanelText.resume, action: .resume)
+            } else if let reachableLabel {
+                timed(reachableLabel, end: PanelText.stop, action: .stopReachable)
             } else {
                 Menu {
                     Picker(PanelText.modePicker, selection: $mode) {
@@ -49,6 +48,9 @@ struct BottomBar: View {
                 } else if enabled {
                     Menu(PanelText.pauseMenu) { pauseChoices }
                 }
+                if enabled, !reachableActions.isEmpty {
+                    Menu(PanelText.reachableMenu) { reachableChoices }
+                }
                 ForEach(licenseActions, id: \.title) { action in
                     Button(action == .buy ? PanelText.buyInMenu : action.title) { perform(action) }
                 }
@@ -64,12 +66,17 @@ struct BottomBar: View {
             .fixedSize()
             .frame(minWidth: PanelMetrics.controlHeight, minHeight: PanelMetrics.controlHeight)
 
-            // One click from the switch. Off and paused have nothing to pause.
-            if enabled, pausedLabel == nil {
+            // One click from the switch: a pause, and its opposite. Off
+            // and paused have nothing to pause, and while the Mac stays
+            // reachable the bar needs the room for the time and "Stop".
+            if enabled, pausedLabel == nil, reachableLabel == nil {
                 Menu {
-                    pauseChoices
+                    Section { pauseChoices }
+                    if !reachableActions.isEmpty {
+                        Section { reachableChoices }
+                    }
                 } label: {
-                    Label(PanelText.pauseMenu, systemImage: "pause.circle")
+                    Label(PanelText.timerMenu, systemImage: "timer")
                         .labelStyle(.iconOnly)
                 }
                 .menuStyle(.borderlessButton)
@@ -90,9 +97,37 @@ struct BottomBar: View {
         .padding(.vertical, 8)
     }
 
+    /// Until when, and the way out.
+    @ViewBuilder
+    private func timed(_ label: String, end: String, action: PanelAction) -> some View {
+        Text(label)
+            .monospacedDigit()
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .minimumScaleFactor(0.9)
+            .layoutPriority(1)
+        Button(end) { perform(action) }
+            .buttonStyle(.link)
+            .frame(minHeight: PanelMetrics.controlHeight)
+    }
+
     private var pauseChoices: some View {
         ForEach(PauseChoice.allCases, id: \.self) { choice in
             Button(PanelAction.pause(choice).title) { perform(.pause(choice)) }
+        }
+    }
+
+    /// With what it costs on battery, as a line that is no choice.
+    @ViewBuilder
+    private var reachableChoices: some View {
+        if reachableLabel != nil {
+            Button(PanelAction.stopReachable.title) { perform(.stopReachable) }
+        }
+        ForEach(reachableActions, id: \.title) { action in
+            Button(action.title) { perform(action) }
+        }
+        if let reachableCost {
+            Text(reachableCost)
         }
     }
 }

@@ -10,6 +10,9 @@ enum HeroPose: Equatable {
     /// Keeps the Mac awake. Two wisps of steam, as the icon has them, and
     /// three when three or more agents work.
     case awake(wisps: Int)
+    /// Keeps the Mac awake so it stays reachable, with no agent at work.
+    /// Calm: one wisp of steam, and a light that does not breathe.
+    case reachable
     /// Keeps the Mac awake for an agent that waits for the user.
     case attentive
     /// On, and the Mac can sleep.
@@ -38,6 +41,8 @@ enum PanelAction: Equatable {
     case dismissLidClosedHint
     case pause(PauseChoice)
     case resume
+    case stayReachable(ReachableChoice)
+    case stopReachable
 
     var title: String { PanelText.title(of: self) }
 }
@@ -51,6 +56,9 @@ struct PanelAttention: Equatable {
         case helperNotResponding
         case helperLost
         case license
+        /// "Stay reachable" is on, and a closed lid on battery still
+        /// puts the Mac to sleep.
+        case reachableNeedsLidClosed
         case lidClosedNotSetUp
     }
 
@@ -256,6 +264,15 @@ struct PanelState: Equatable {
     var licenseActions: [PanelAction] = []
     /// "Paused until 15:30" for the bar at the bottom. Nil when not paused.
     var pausedLabel: String?
+    /// "Reachable until 18:30" for the bar at the bottom. Nil when not on.
+    var reachableLabel: String?
+    /// The choices of "stay reachable". Empty while agent caffeine may
+    /// not keep the Mac awake.
+    var reachableActions: [PanelAction] = []
+    /// What "stay reachable" costs, below its choices. Only on battery.
+    var reachableCost: String?
+    /// For the item in the menu bar, when it says more than the pose.
+    var menuBarAccessibilityLabel: String?
 
     var moreIdleTitle: String? {
         moreIdle.isEmpty ? nil : PanelText.moreIdle(moreIdle.count)
@@ -338,6 +355,8 @@ struct PanelInput: Equatable {
     /// for it on a Mac with a battery.
     var helperLost = false
     var lidClosedHintDismissed = false
+    /// Nil when the user did not ask the Mac to stay reachable.
+    var reachableUntil: Date?
     /// The switch. A pause does not change it.
     var enabled = true
     var onBattery = false

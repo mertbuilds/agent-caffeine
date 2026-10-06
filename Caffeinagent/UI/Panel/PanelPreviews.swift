@@ -38,6 +38,8 @@ struct PanelPreview: View {
 #Preview("Off") { PanelPreview(state: PanelFixtures.off, enabled: false) }
 #Preview("Paused") { PanelPreview(state: PanelFixtures.paused) }
 #Preview("Paused until tomorrow") { PanelPreview(state: PanelFixtures.pausedUntilTomorrow) }
+#Preview("Reachable") { PanelPreview(state: PanelFixtures.reachable) }
+#Preview("Reachable, lid closed not set up") { PanelPreview(state: PanelFixtures.reachableNoHelper) }
 #Preview("Safety stop") { PanelPreview(state: PanelFixtures.safetyStop) }
 #Preview("Too hot") { PanelPreview(state: PanelFixtures.tooHot) }
 #Preview("On battery") { PanelPreview(state: PanelFixtures.onBattery) }
@@ -51,7 +53,7 @@ struct PanelPreview: View {
 
 #Preview("Robot poses") {
     HStack(spacing: 16) {
-        ForEach(Array([HeroPose.awake(wisps: 2), .attentive, .asleep, .paused, .off, .safetyStop(.battery), .safetyStop(.heat), .helperOff].enumerated()), id: \.offset) { _, pose in
+        ForEach(Array([HeroPose.awake(wisps: 2), .reachable, .attentive, .asleep, .paused, .off, .safetyStop(.battery), .safetyStop(.heat), .helperOff].enumerated()), id: \.offset) { _, pose in
             RobotHero(pose: pose)
         }
     }

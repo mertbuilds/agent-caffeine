@@ -37,6 +37,9 @@ enum HoldHeadline: Equatable {
     case open(HoldSubject)
     case alwaysOn
     case remoteAccess
+    /// The user asked the Mac to stay reachable until this time, and no
+    /// agent keeps it awake.
+    case reachable(until: Date)
     case idle(HoldSubject)
     case waitingReleased(HoldSubject)
     case noAgents
@@ -48,7 +51,7 @@ enum HoldHeadline: Equatable {
 
     var keepsAwake: Bool {
         switch self {
-        case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess: return true
+        case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess, .reachable: return true
         case .idle, .waitingReleased, .noAgents, .safetyStop, .switchedOff, .paused, .notEntitled: return false
         }
     }
@@ -63,13 +66,14 @@ enum HoldHeadline: Equatable {
         case .open(let subject): return Self.phrase(subject, one: "is open", many: "are open")
         case .alwaysOn: return "always on"
         case .remoteAccess: return "phone access is on"
+        case .reachable: return "stays reachable"
         case .idle, .waitingReleased, .noAgents, .safetyStop, .switchedOff, .paused, .notEntitled: return nil
         }
     }
 
     var text: String {
         switch self {
-        case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess: return "Awake: \(awakeReason ?? "")"
+        case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess, .reachable: return "Awake: \(awakeReason ?? "")"
         case .idle(.one(let name)): return "Mac can sleep: \(name) is idle"
         case .idle(.many): return "Mac can sleep: all agents are idle"
         case .waitingReleased(let subject): return "Mac can sleep: \(Self.phrase(subject, one: "is waiting for you", many: "are waiting for you"))"
@@ -116,6 +120,7 @@ struct PolicyMemory: Equatable {
 enum HoldPolicy {
     static func decide(
         readings: [AgentReading], memory: PolicyMemory, mode: AwakeMode, enabled: Bool, pausedUntil: Date? = nil,
+        reachableUntil: Date? = nil,
         entitlement: Entitlement?, safety: SafetyStop?, settings: DetectionSettings, context: FrameContext, now: Date
     ) -> (HoldDecision, PolicyMemory) {
         let memory = remember(readings, memory: memory, settings: settings, now: now)
@@ -126,7 +131,8 @@ enum HoldPolicy {
             let released = perAgent.map { AgentHold(reading: $0.reading, cause: nil) }
             return (HoldDecision(hold: false, lidClosedFlag: false, headline: stop, perAgent: released), memory)
         }
-        let headline = headline(perAgent, mode: mode, settings: settings, context: context)
+        let reachable = reachableUntil.flatMap { now < $0 ? $0 : nil }
+        let headline = headline(perAgent, mode: mode, reachableUntil: reachable, settings: settings, context: context)
         let hold = headline.keepsAwake
         // Set with the hold, also on wall power: unplugging with the lid
         // closed must not race the flag. With the setting off the power
@@ -190,7 +196,11 @@ enum HoldPolicy {
         return nil
     }
 
-    private static func headline(_ perAgent: [AgentHold], mode: AwakeMode, settings: DetectionSettings, context: FrameContext) -> HoldHeadline {
+    /// An agent that keeps the Mac awake is named before "stay
+    /// reachable": its reason is the one that counts while it works.
+    private static func headline(
+        _ perAgent: [AgentHold], mode: AwakeMode, reachableUntil: Date?, settings: DetectionSettings, context: FrameContext
+    ) -> HoldHeadline {
         if mode == .always { return .alwaysOn }
         func subject(_ cause: HoldCause) -> HoldSubject? {
             HoldSubject(names: perAgent.filter { $0.cause == cause }.map(\.reading.displayName))
@@ -199,6 +209,7 @@ enum HoldPolicy {
         if let waiting = subject(.waitingForUser) { return .waitingHeld(waiting) }
         if let finished = subject(.finishedRecently) { return .finishedRecently(finished) }
         if let open = subject(.open) { return .open(open) }
+        if let reachableUntil { return .reachable(until: reachableUntil) }
         if settings.stayAwakeForRemoteAccess && context.remoteAccessDetected && !context.onBattery { return .remoteAccess }
         let counted = perAgent.map(\.reading).filter { settings.rule(for: $0.agentID) != .ignore }
         if let waiting = HoldSubject(names: counted.filter { $0.verdict.state == .waitingForUser }.map(\.displayName)) {

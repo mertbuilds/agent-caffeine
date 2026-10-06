@@ -237,7 +237,7 @@ struct GeneralPreferences: View {
             if !RemoteAccessDetector.detectedTools.isEmpty {
                 Section {
                     Toggle("Stay awake for phone access while plugged in", isOn: $settings.stayAwakeForRemoteAccess)
-                    Text("This is for Claude Code Remote Control. While your Mac is plugged in and Remote Control is on, your Mac stays awake, even when no agent is working.")
+                    Text("This is for Claude Code Remote Control. While your Mac is plugged in and Remote Control is on, your Mac stays awake, even when no agent is working. On battery, choose \"Stay reachable\" in the menu to keep your Mac awake for a set time.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
