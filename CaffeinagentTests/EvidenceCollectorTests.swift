@@ -135,6 +135,29 @@ final class EvidenceCollectorTests: XCTestCase {
         XCTAssertEqual(sample.roots, [ProcessIdentity(pid: 100, startTime: processStart), ProcessIdentity(pid: 200, startTime: processStart)])
     }
 
+    func testASessionNameStaysBesideTheFrameAndOutOfIt() throws {
+        let terminal: Int32 = 0x1000_0004
+        census.rows = [
+            .fixture(10, path: "/bin/zsh", args: ["-zsh"]),
+            .fixture(100, ppid: 10, start: processStart, path: claudeBinary, args: ["claude"], tty: terminal),
+            claude(200, ppid: 10),
+        ]
+        try writeSession(100, status: "busy", extra: #","name":"plan the secret launch","nameSource":"auto""#)
+        try writeSession(200, status: "idle")
+
+        let sample = sample(at: 0)
+        let named = try XCTUnwrap(sample.sessionHints[ProcessIdentity(pid: 100, startTime: processStart)])
+        XCTAssertEqual(named.name, "plan the secret launch")
+        XCTAssertEqual(named.terminal, SessionHint.terminalName(device: terminal))
+        XCTAssertNil(sample.sessionHints[ProcessIdentity(pid: 200, startTime: processStart)], "No name and no terminal")
+
+        let frame = String(decoding: try LabFormat.encoder().encode(sample.frame), as: UTF8.self)
+        XCTAssertTrue(frame.contains("claudeSession"))
+        for word in ["secret", "plan the", "launch"] { XCTAssertFalse(frame.contains(word), frame) }
+        XCTAssertFalse(String(describing: sample).contains("secret"))
+        XCTAssertFalse(String(reflecting: sample.sessionHints).contains("secret"))
+    }
+
     func testRemoteAccessComesFromTheHook() {
         XCTAssertFalse(sample(at: 0).frame.context.remoteAccessDetected)
         collector.remoteAccessProbe = { true }

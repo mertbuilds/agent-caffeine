@@ -11,6 +11,9 @@ struct EvidenceSample: Equatable {
     var roots: Set<ProcessIdentity> = []
     /// Seconds the sample took to collect.
     var cost: TimeInterval = 0
+    /// For the menu only, beside the frame and never in it: a session name
+    /// must not reach a recording or a log.
+    var sessionHints: [ProcessIdentity: SessionHint] = [:]
 }
 
 protocol EvidenceCollecting: AnyObject {
@@ -159,6 +162,8 @@ final class EvidenceCollector: EvidenceCollecting {
     private var transcriptChoices: [ProcessIdentity: (at: Date, path: String?)] = [:]
     private var activityReaders: [String: FileActivityReader] = [:]
     private var hookReader: HookStateReader?
+    /// The session names of the sample that is being collected.
+    private var sessionNames: [ProcessIdentity: String] = [:]
     private var claudeSettingsFiles = FileCache<RemoteAccessDetector.ClaudeSettings>()
 
     init(sources: Sources = .system()) {
@@ -201,7 +206,13 @@ final class EvidenceCollector: EvidenceCollecting {
             noteHooks(of: instance, matches: matches, states: hookStates, in: &evidence, watched: &sample.watchedFiles)
             sample.frame.agents.append(evidence)
             sample.roots.insert(instance.identity)
+            let hint = SessionHint(
+                name: sessionNames[instance.identity],
+                terminal: instance.rows.first.flatMap { SessionHint.terminalName(device: $0.tty) }
+            )
+            if !hint.isEmpty { sample.sessionHints[instance.identity] = hint }
         }
+        sessionNames.removeAll(keepingCapacity: true)
 
         previous = time
         previousRows = rows
@@ -381,6 +392,7 @@ final class EvidenceCollector: EvidenceCollecting {
         if instance.role == .helperMaybeSession, state.kind == .spare, state.state == .idle { return false }
         state.observedAt = now
         evidence.reported = state.report
+        sessionNames[instance.identity] = state.name
         if let jobID = state.jobID {
             let reader = sources.claudeJobs
             let path = reader.jobsDirectory.appendingPathComponent(jobID).appendingPathComponent("state.json").path

@@ -25,6 +25,14 @@ final class ClaudeSessionStateReaderTests: XCTestCase {
         }
     }
 
+    func testSessionName() throws {
+        let named = try XCTUnwrap(ClaudeSessionStateReader.parse(session(status: "busy", extra: #","name":" wiki-1d\n","nameSource":"derived""#), now: now))
+        XCTAssertEqual(named.name, "wiki-1d")
+        XCTAssertNil(named.report.detail?.range(of: "wiki-1d"), "A report never carries the name")
+        XCTAssertNil(ClaudeSessionStateReader.parse(session(status: "busy"), now: now)?.name)
+        XCTAssertNil(ClaudeSessionStateReader.parse(session(status: "busy", extra: #","name":7"#), now: now)?.name)
+    }
+
     func testFullFile() throws {
         let parsed = try XCTUnwrap(ClaudeSessionStateReader.parse(session(status: "busy"), now: now))
         XCTAssertEqual(parsed.pid, 4242)

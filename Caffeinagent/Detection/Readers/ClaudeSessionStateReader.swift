@@ -26,6 +26,9 @@ struct ClaudeSessionState: Equatable {
     var jobID: String?
     var cwd: String?
     var version: String?
+    /// `name`: the session's own name. It can come from what the user
+    /// typed, so it is for the menu only and never part of a report.
+    var name: String?
     var observedAt: Date
 
     var report: StateReport {
@@ -100,6 +103,7 @@ struct ClaudeSessionStateReader {
             jobID: object["jobId"] as? String,
             cwd: object["cwd"] as? String,
             version: object["version"] as? String,
+            name: SessionHint.cleaned(name: object["name"] as? String),
             observedAt: now
         )
     }
