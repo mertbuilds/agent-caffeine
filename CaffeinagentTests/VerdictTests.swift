@@ -527,7 +527,7 @@ final class VerdictTests: XCTestCase {
             (.noActivity(minutes: 0), "No activity"),
             (.noActivity(minutes: 1), "No activity for 1 minute"),
             (.noActivity(minutes: 45), "No activity for 45 minutes"),
-            (.noActivity(minutes: 395), "No activity for 6 hours"),
+            (.noActivity(minutes: 395), "No activity for 6 hours 35 minutes"),
             (.noActivity(minutes: 3 * 24 * 60), "No activity for 3 days"),
             (.onlyWeakSigns(minutes: 30), "Using the processor for 30 minutes with no other sign of work"),
             (.onlyWeakSigns(minutes: 120), "Using the processor for 2 hours with no other sign of work"),

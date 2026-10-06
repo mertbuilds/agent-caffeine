@@ -558,7 +558,7 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(groups.map(\.header.name), ["Pi", "Codex", "opencode", "Claude Code", "Goose", "Amp"])
         XCTAssertEqual(groups.map(\.header.state), [.waiting, .waiting, .working, .working, .idle, .idle])
         XCTAssertEqual(groups.map(\.header.detail), [
-            "Waiting for your answer for 10 minutes", "1 working, 1 waiting for you", "Working for 1 hour", "2 working", "Idle for 5 minutes", "2 idle sessions",
+            "Waiting for your answer for 10 minutes", "1 working, 1 waiting for you", "Working for 1 hour 35 minutes", "2 working", "Idle for 5 minutes", "2 idle sessions",
         ])
         XCTAssertEqual(groups.map(\.opensByDefault), [true, true, true, true, false, false])
         XCTAssertEqual(groups.map(\.canToggle), [false, true, false, true, false, true])
@@ -622,9 +622,9 @@ final class MenuModelTests: XCTestCase {
         input.clock = clock(perAgent, secondsAgo: [1: 30, 2: 30, 3: 30])
         let rows = headers(input)
         XCTAssertEqual(rows.map(\.title), ["Codex", "Amp", "opencode"], "The one that was active last is on top")
-        XCTAssertEqual(rows.map(\.detail), ["Idle", "Idle", "Idle for 6 hours"])
-        XCTAssertEqual(rows[2].hint, "No activity for 6 hours")
-        XCTAssertEqual(rows[2].accessibilityLabel, "opencode, idle for 6 hours")
+        XCTAssertEqual(rows.map(\.detail), ["Idle", "Idle", "Idle for 6 hours 35 minutes"])
+        XCTAssertEqual(rows[2].hint, "No activity for 6 hours 35 minutes")
+        XCTAssertEqual(rows[2].accessibilityLabel, "opencode, idle for 6 hours 35 minutes")
     }
 
     func testIdleAgentsBeyondFourGoBehindMoreIdleAgents() {
@@ -638,7 +638,7 @@ final class MenuModelTests: XCTestCase {
         input.clock = clock(perAgent, secondsAgo: ages)
         let state = MenuModel.state(input, now: now)
         XCTAssertEqual(state.groups.map(\.header.title), ["Claude Code", "Codex", "opencode", "Amp"])
-        XCTAssertEqual(state.groups.map(\.header.detail), ["8 idle sessions", "Idle for 3 hours", "Idle for 3 hours", "Idle for 3 hours"])
+        XCTAssertEqual(state.groups.map(\.header.detail), ["8 idle sessions", "Idle for 3 hours 20 minutes", "Idle for 3 hours 30 minutes", "Idle for 3 hours 40 minutes"])
         XCTAssertEqual(state.moreIdle.map(\.header.title), ["Goose", "Pi", "Grok"])
         XCTAssertEqual(state.moreIdleTitle, "3 more idle agents")
         XCTAssertEqual(Set((state.groups + state.moreIdle).map(\.id)).count, 7)

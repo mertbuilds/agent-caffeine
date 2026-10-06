@@ -45,7 +45,27 @@ final class ChildLayoutTests: XCTestCase {
         }
         XCTAssertEqual(shape("Working for 9 minutes", reserve: false), .oneLine)
         XCTAssertEqual(shape("Working for 10 minutes", reserve: false), .twoLines)
-        let shapes = (2...89).map { shape("Working for \($0) minutes", reserve: true) }
+        let shapes = (1...59).map { shape("Working for \($0) minutes".replacingOccurrences(of: "for 1 minutes", with: "for 1 minute"), reserve: true) }
         XCTAssertEqual(Set(shapes), [.twoLines])
+    }
+
+    func testHoursAndMinutesAreMeasuredInTheirLongestForm() {
+        XCTAssertEqual(ChildLayout.reserved("Working for 1 hour"), "Working for 1 hours 59 minutes")
+        XCTAssertEqual(ChildLayout.reserved("Working for 1 hour 1 minute"), "Working for 1 hours 59 minutes")
+        XCTAssertEqual(ChildLayout.reserved("Idle for 3 hours 5 minutes"), "Idle for 3 hours 59 minutes")
+        XCTAssertEqual(ChildLayout.reserved("Running 3 commands for 2 hours"), "Running 33 commands for 2 hours 59 minutes")
+        XCTAssertEqual(ChildLayout.reserved("Working for 1 minute"), "Working for 11 minutes")
+        XCTAssertEqual(ChildLayout.reserved("Idle for 13 hours"), "Idle for 13 hours")
+        XCTAssertEqual(ChildLayout.reserved("Idle for 1 day"), "Idle for 11 days")
+        XCTAssertEqual(ChildLayout.reserved("Idle for 3 days"), "Idle for 33 days")
+    }
+
+    /// Every minute from one hour to ten: the measured text has one length,
+    /// so the group keeps its shape while the duration counts.
+    func testADurationInHoursAndMinutesKeepsTheShape() {
+        let lengths = (60..<600).map { ChildLayout.reserved("Working \(HumaneDuration.lasting(minutes: $0) ?? "")").count }
+        XCTAssertEqual(Set(lengths).count, 1)
+        let minutes = (1..<60).map { ChildLayout.reserved("Working \(HumaneDuration.lasting(minutes: $0) ?? "")").count }
+        XCTAssertEqual(Set(minutes).count, 1)
     }
 }
