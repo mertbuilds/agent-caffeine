@@ -46,16 +46,17 @@ enum VerdictReason: Equatable {
         case .reportsBusy: return "Working on a task"
         case .runningCommand(let count): return "Running \(Self.counted(count, "command"))"
         case .backgroundJob(let count): return "Running \(Self.counted(count, "background task"))"
-        case .holdsSleepAssertion: return "Asks the Mac to stay awake"
+        case .holdsSleepAssertion: return "Asking your Mac to stay awake"
         case .writingSessionFile(let seconds): return "Wrote to its session \(Self.ago(seconds))"
-        case .workedRecently(let seconds): return "Worked \(Self.ago(seconds))"
-        case .cpuActivity: return "Uses the processor"
-        case .asksPermission: return "Waits for your answer"
+        case .workedRecently(let seconds): return "Last worked \(Self.ago(seconds))"
+        case .cpuActivity: return "Using the processor"
+        case .asksPermission: return "Waiting for your answer"
         case .atPrompt: return "Ready for your next message"
-        case .noActivity(let minutes): return minutes < 1 ? "No activity" : "No activity for \(HumaneDuration.text(minutes: minutes))"
-        case .onlyWeakSigns(let minutes): return "No clear sign of work for \(HumaneDuration.text(minutes: minutes))"
-        case .alwaysWorkingByRule: return "Counts as working while it is open"
-        case .ignoredByRule: return "Ignored by agent caffeine"
+        case .noActivity(let minutes): return ["No activity", HumaneDuration.lasting(minutes: minutes)].compactMap { $0 }.joined(separator: " ")
+        case .onlyWeakSigns(let minutes):
+            return ["Using the processor", HumaneDuration.lasting(minutes: minutes), "with no other sign of work"].compactMap { $0 }.joined(separator: " ")
+        case .alwaysWorkingByRule: return "You set this agent to always count as working"
+        case .ignoredByRule: return "You set agent caffeine to ignore this agent"
         }
     }
 
@@ -64,7 +65,7 @@ enum VerdictReason: Equatable {
     }
 
     private static func ago(_ seconds: Int) -> String {
-        "\(HumaneDuration.text(seconds: TimeInterval(seconds))) ago"
+        HumaneDuration.ago(seconds: TimeInterval(seconds))
     }
 }
 

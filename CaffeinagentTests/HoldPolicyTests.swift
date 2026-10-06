@@ -92,11 +92,11 @@ final class HoldPolicyTests: XCTestCase {
                 XCTAssertEqual(decision.headline.text, "Awake: Codex is working", "at \(seconds) s")
             case 10..<310, 410..<710:
                 XCTAssertTrue(decision.hold, "at \(seconds) s")
-                XCTAssertEqual(decision.headline.text, "Awake: Codex waits for you", "at \(seconds) s")
+                XCTAssertEqual(decision.headline.text, "Awake: Codex is waiting for you", "at \(seconds) s")
                 XCTAssertEqual(decision.perAgent.map(\.cause), [.waitingForUser], "at \(seconds) s")
             default:
                 XCTAssertFalse(decision.hold, "at \(seconds) s")
-                XCTAssertEqual(decision.headline.text, "Mac can sleep: Codex waits for you", "at \(seconds) s")
+                XCTAssertEqual(decision.headline.text, "Mac can sleep: Codex is waiting for you", "at \(seconds) s")
             }
         }
     }
@@ -212,7 +212,7 @@ final class HoldPolicyTests: XCTestCase {
                 }
             }
         }
-        XCTAssertEqual(decide([claude(.working)], entitlement: .expired(.trialOver)).headline.text, "Trial ended. agent caffeine is not keeping your Mac awake")
+        XCTAssertEqual(decide([claude(.working)], entitlement: .expired(.trialOver)).headline.text, "Your trial has ended. agent caffeine is not keeping your Mac awake.")
         XCTAssertTrue(decide([claude(.working)], entitlement: nil).hold)
     }
 
@@ -344,8 +344,8 @@ final class HoldPolicyTests: XCTestCase {
         let cases: [(headline: HoldHeadline, text: String)] = [
             (.working(.one("Claude Code")), "Awake: Claude Code is working"),
             (.working(.many(2)), "Awake: 2 agents are working"),
-            (.waitingHeld(.one("Codex")), "Awake: Codex waits for you"),
-            (.waitingHeld(.many(2)), "Awake: 2 agents wait for you"),
+            (.waitingHeld(.one("Codex")), "Awake: Codex is waiting for you"),
+            (.waitingHeld(.many(2)), "Awake: 2 agents are waiting for you"),
             (.finishedRecently(.one("Codex")), "Awake: Codex finished a moment ago"),
             (.finishedRecently(.many(3)), "Awake: 3 agents finished a moment ago"),
             (.open(.one("Antigravity")), "Awake: Antigravity is open"),
@@ -354,13 +354,13 @@ final class HoldPolicyTests: XCTestCase {
             (.remoteAccess, "Awake: phone access is on"),
             (.idle(.one("opencode")), "Mac can sleep: opencode is idle"),
             (.idle(.many(2)), "Mac can sleep: all agents are idle"),
-            (.waitingReleased(.one("Codex")), "Mac can sleep: Codex waits for you"),
-            (.waitingReleased(.many(2)), "Mac can sleep: 2 agents wait for you"),
+            (.waitingReleased(.one("Codex")), "Mac can sleep: Codex is waiting for you"),
+            (.waitingReleased(.many(2)), "Mac can sleep: 2 agents are waiting for you"),
             (.noAgents, "Mac can sleep: no agent is open"),
             (.safetyStop(.batteryLow(percent: 20)), "Sleeping allowed: battery at 20 percent"),
             (.safetyStop(.tooHot), "Sleeping allowed: the Mac is too hot"),
             (.switchedOff, "Mac can sleep: agent caffeine is off"),
-            (.notEntitled(.unverified), "License not checked for 30 days. Connect to the internet to keep your Mac awake"),
+            (.notEntitled(.unverified), "Your license was not checked for 30 days. Connect to the internet to keep your Mac awake."),
         ]
         for c in cases {
             XCTAssertEqual(c.headline.text, c.text)

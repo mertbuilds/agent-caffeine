@@ -17,7 +17,7 @@ enum SleepFlagError: LocalizedError, Equatable {
         case .requiresApproval:
             return "Allow agent caffeine in System Settings > General > Login Items."
         case .flagNotCleared:
-            return "The sleep override could not be turned off, so the helper was not removed. Try again."
+            return "agent caffeine could not let your Mac sleep again, so the helper was not removed. Try again."
         }
     }
 }

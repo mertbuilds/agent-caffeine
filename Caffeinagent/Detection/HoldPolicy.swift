@@ -56,7 +56,7 @@ enum HoldHeadline: Equatable {
     var awakeReason: String? {
         switch self {
         case .working(let subject): return Self.phrase(subject, one: "is working", many: "are working")
-        case .waitingHeld(let subject): return Self.phrase(subject, one: "waits for you", many: "wait for you")
+        case .waitingHeld(let subject): return Self.phrase(subject, one: "is waiting for you", many: "are waiting for you")
         case .finishedRecently(let subject): return Self.phrase(subject, one: "finished a moment ago", many: "finished a moment ago")
         case .open(let subject): return Self.phrase(subject, one: "is open", many: "are open")
         case .alwaysOn: return "always on"
@@ -70,7 +70,7 @@ enum HoldHeadline: Equatable {
         case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess: return "Awake: \(awakeReason ?? "")"
         case .idle(.one(let name)): return "Mac can sleep: \(name) is idle"
         case .idle(.many): return "Mac can sleep: all agents are idle"
-        case .waitingReleased(let subject): return "Mac can sleep: \(Self.phrase(subject, one: "waits for you", many: "wait for you"))"
+        case .waitingReleased(let subject): return "Mac can sleep: \(Self.phrase(subject, one: "is waiting for you", many: "are waiting for you"))"
         case .noAgents: return "Mac can sleep: no agent is open"
         case .safetyStop(.batteryLow(let percent)): return "Sleeping allowed: battery at \(percent) percent"
         case .safetyStop(.tooHot): return "Sleeping allowed: the Mac is too hot"

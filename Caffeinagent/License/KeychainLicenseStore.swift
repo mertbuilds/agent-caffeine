@@ -50,6 +50,6 @@ final class KeychainLicenseStore: LicenseStore {
 
     private static func error(_ status: OSStatus) -> LicenseStoreError {
         let reason = SecCopyErrorMessageString(status, nil) as String? ?? "error \(status)"
-        return LicenseStoreError(message: "The Keychain could not be used: \(reason)")
+        return LicenseStoreError(message: "agent caffeine could not use the Keychain: \(reason)")
     }
 }

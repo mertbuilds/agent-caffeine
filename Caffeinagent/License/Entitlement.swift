@@ -25,9 +25,9 @@ enum ExpiredReason: Equatable {
 
     var text: String {
         switch self {
-        case .trialOver: return "Trial ended. agent caffeine is not keeping your Mac awake"
-        case .unverified: return "License not checked for 30 days. Connect to the internet to keep your Mac awake"
-        case .activationRemoved: return "This Mac is no longer activated for this key"
+        case .trialOver: return "Your trial has ended. agent caffeine is not keeping your Mac awake."
+        case .unverified: return "Your license was not checked for 30 days. Connect to the internet to keep your Mac awake."
+        case .activationRemoved: return "This Mac is no longer activated for this key."
         }
     }
 }

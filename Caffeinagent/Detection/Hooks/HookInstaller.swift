@@ -22,10 +22,10 @@ enum HookInstallError: Error, Equatable {
     /// One plain line for Preferences. `file` is the path as the user knows it.
     func message(file: String) -> String {
         switch self {
-        case .configMissing: return "This agent is not set up on this Mac. \(file) is not there."
+        case .configMissing: return "This agent is not set up on this Mac. \(file) does not exist."
         case .unreadable: return "agent caffeine could not read \(file), so it did not change it. Check that the file is valid JSON."
-        case .unexpectedShape: return "\(file) has a form agent caffeine does not know, so it did not change it."
-        case .changedWhileEditing: return "\(file) changed while agent caffeine worked on it. Nothing was written. Try again."
+        case .unexpectedShape: return "\(file) has a layout agent caffeine does not recognize, so it did not change it."
+        case .changedWhileEditing: return "\(file) changed while agent caffeine was working on it. Nothing was written. Try again."
         case .notOurFile: return "\(file) was not written by agent caffeine, so it did not change it."
         case .writeFailed: return "agent caffeine could not write \(file). Nothing was changed."
         }

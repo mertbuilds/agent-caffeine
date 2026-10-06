@@ -35,7 +35,8 @@ struct AgentRowView: View {
         Text(row.title)
             .font(.body)
             .lineLimit(1)
-            .truncationMode(.middle)
+            // A session name is cut at its end, so the folder stays.
+            .truncationMode(row.distinction == nil ? .middle : .tail)
     }
 
     private var detail: some View {

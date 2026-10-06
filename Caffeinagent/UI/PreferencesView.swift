@@ -118,7 +118,7 @@ struct PreferencesView: View {
                         Task { await license.deactivate() }
                     }
                 } message: {
-                    Text("The key becomes free for another Mac. agent caffeine stops keeping this Mac awake until a key is activated again.")
+                    Text("You can then use the key on another Mac. agent caffeine stops keeping this Mac awake until you activate a key again.")
                 }
             } else if aggregator.entitlement == .expired(.unverified) {
                 Text(ExpiredReason.unverified.text)
@@ -162,7 +162,7 @@ struct PreferencesView: View {
                 }
             }
             if let error = license.storageError {
-                Text("\(error) agent caffeine keeps your trial and your last license check in its preferences until it can read the Keychain again.")
+                Text("\(error.hasSuffix(".") ? error : error + ".") agent caffeine keeps your trial and your last license check in its preferences until it can read the Keychain again.")
                     .font(.caption)
                     .foregroundStyle(.red)
             }
@@ -175,7 +175,7 @@ struct PreferencesView: View {
     private var licenseStatus: String {
         switch aggregator.entitlement {
         case .trial(let daysLeft):
-            return "Trial: \(daysLeft) \(daysLeft == 1 ? "day" : "days") left"
+            return "Your trial has \(HumaneDuration.counted(daysLeft, "day")) left"
         case .expired(let reason):
             return reason.text
         case .licensed:
@@ -203,8 +203,8 @@ struct GeneralPreferences: View {
 
     var body: some View {
         Form {
-            Section("Keep the Mac awake") {
-                Picker("Keep the Mac awake", selection: $mode) {
+            Section("Keep your Mac awake") {
+                Picker("Keep your Mac awake", selection: $mode) {
                     ForEach(AwakeMode.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.menu)
@@ -217,24 +217,24 @@ struct GeneralPreferences: View {
             }
             if !RemoteAccessDetector.detectedTools.isEmpty {
                 Section {
-                    Toggle("Stay awake on power while phone access is on", isOn: $settings.stayAwakeForRemoteAccess)
-                    Text("For Claude Code Remote Control. While the Mac is on power and Remote Control is on, the Mac stays awake, also when no agent works.")
+                    Toggle("Stay awake for phone access while plugged in", isOn: $settings.stayAwakeForRemoteAccess)
+                    Text("This is for Claude Code Remote Control. While your Mac is plugged in and Remote Control is on, your Mac stays awake, even when no agent is working.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
             }
-            Section("Let the Mac sleep after") {
+            Section("How long your Mac stays awake") {
                 duration(
-                    "An agent finishes", $settings.releaseAfterState,
-                    help: "Claude Code and Codex tell when they finish. The Mac stays awake this long after that, so a short break between two tasks does not let it sleep."
+                    "After an agent finishes", $settings.releaseAfterState,
+                    help: "Claude Code and Codex say when they finish. Your Mac stays awake this long afterwards, so it does not sleep in a short break between two tasks."
                 )
                 duration(
-                    "The last sign of work", $settings.releaseAfterActivity,
-                    help: "For agents that do not report their state. agent caffeine looks for signs of work, such as a running command, and waits this long after the last one."
+                    "After other agents go quiet", $settings.releaseAfterActivity,
+                    help: "Other agents do not say when they finish. For those, agent caffeine watches for activity, such as a running command, and your Mac stays awake this long after the last of it."
                 )
                 duration(
-                    "An agent waits for you", $settings.waitingHold,
-                    help: "The Mac stays awake this long while an agent waits for your answer."
+                    "While an agent is waiting for you", $settings.waitingHold,
+                    help: "Your Mac stays awake this long while an agent is waiting for your answer. After that it can sleep."
                 )
             }
         }
@@ -276,7 +276,7 @@ struct AgentPreferences: View {
 
     var body: some View {
         Form {
-            Section("Found on this Mac now") {
+            Section("Open on this Mac now") {
                 let found = Self.definitions.filter { foundIDs.contains($0.id) }
                 if found.isEmpty {
                     Text("No agent is open")
@@ -291,7 +291,7 @@ struct AgentPreferences: View {
                 ForEach(Self.definitions.filter { !foundIDs.contains($0.id) }, id: \.id, content: row)
             }
             Section("Other tools") {
-                Text("Add the process name of a tool that is not in the list. It counts as working while it uses the processor.")
+                Text("Add the process name of a tool that is not in the list. It counts as working while it is using the processor.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 ForEach(settings.userAgentNames, id: \.self) { name in
@@ -324,7 +324,7 @@ struct AgentPreferences: View {
         } label: {
             Text(definition.kind == .desktop ? "\(definition.displayName) app" : definition.displayName)
             if !definition.verified {
-                Text("not tested yet")
+                Text("Not tested yet")
             }
         }
     }
@@ -353,7 +353,7 @@ extension AgentRule {
     var title: String {
         switch self {
         case .automatic: return "Automatic"
-        case .alwaysWorkingWhileOpen: return "Always counts as working while open"
+        case .alwaysWorkingWhileOpen: return "Always counts as working"
         case .ignore: return "Ignore"
         }
     }
@@ -374,7 +374,7 @@ struct LidClosedPreferences: View {
     var body: some View {
         Form {
             Section("Lid closed") {
-                Text("On battery, macOS puts the Mac to sleep when you close the lid, also while an agent works. agent caffeine can stop that with a small helper that you allow one time.")
+                Text("On battery, macOS puts your Mac to sleep when you close the lid, even while an agent is working. agent caffeine can prevent that with a small helper that you allow once.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 helperState
@@ -388,9 +388,9 @@ struct LidClosedPreferences: View {
                 Toggle("Stay awake with the lid closed on battery", isOn: $settings.stayAwakeLidClosedOnBattery)
                     .disabled(helper != .enabled)
                 Stepper(value: $settings.batteryFloorPercent, in: 5...50, step: 5) {
-                    Text("Let the Mac sleep under \(settings.batteryFloorPercent) percent battery")
+                    Text("Let your Mac sleep below \(settings.batteryFloorPercent) percent battery")
                 }
-                Text("agent caffeine also lets the Mac sleep when it gets too hot")
+                Text("agent caffeine also lets your Mac sleep when it gets too hot.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -399,7 +399,7 @@ struct LidClosedPreferences: View {
                     Text("An older version of agent caffeine added an admin entry to this Mac. It is no longer used.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                    Button("Remove old admin entry", action: removeSudoersEntry)
+                    Button("Remove the old admin entry", action: removeSudoersEntry)
                 }
             }
         }

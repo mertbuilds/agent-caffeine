@@ -86,7 +86,7 @@ enum AppRelocator {
 
     private static func showError(_ msg: String) {
         let alert = NSAlert()
-        alert.messageText = "Move failed"
+        alert.messageText = "agent caffeine could not be moved"
         alert.informativeText = msg
         alert.alertStyle = .warning
         alert.runModal()

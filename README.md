@@ -10,7 +10,7 @@ macOS menu bar app that keeps your Mac awake while AI coding agents work. By def
 
 ## What it does
 
-- Finds the agents that run on the Mac from the process table and a built-in catalog (Claude Code, Codex, opencode, Antigravity and about 45 more). Preferences has one rule per agent (automatic, always counts as working while open, ignore) and a list for process names of tools that are not in the catalog.
+- Finds the agents that run on the Mac from the process table and a built-in catalog (Claude Code, Codex, opencode, Antigravity and about 45 more). Preferences has one rule per agent (automatic, always counts as working, ignore) and a list for process names of tools that are not in the catalog.
 - Reads what each agent says about itself where it can: Claude Code's session state files and Codex's session logs give working, waiting for you, or idle. Other agents are judged by signs of work: a running command, a background task, a power assertion of their own, writes to their session files and, as weak evidence, processor use.
 - Takes the state from an agent's hooks when you switch them on (see Hooks below). A fresh hook state comes before everything else.
 - Three modes, picked in the menu or in Preferences:
@@ -29,7 +29,7 @@ The detection code is in `Caffeinagent/Detection/`, and the research behind it i
 
 Some agents can run a command when their state changes. With hooks on, an agent tells agent caffeine when it works, waits for you or is done, so nothing has to be inferred. Hooks are off until you switch them on, per agent, in Preferences > Agents > Better detection or in the setup window.
 
-- Supported: Claude Code and Codex (adds "waits for your permission"), Droid and opencode (adds working, waiting and done). `Caffeinagent/Detection/Hooks/HookCatalog.swift` holds the list, what each entry was confirmed by, and the agents that are left out and why.
+- Supported: Claude Code and Codex (adds "waiting for your permission"), Droid and opencode (adds working, waiting and done). `Caffeinagent/Detection/Hooks/HookCatalog.swift` holds the list, what each entry was confirmed by, and the agents that are left out and why.
 - Switching hooks on adds a few lines to the agent's own config file (`~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.factory/settings.json`), or writes one plugin file for opencode. The rest of the file stays as it is, a backup is kept next to it, and switching hooks off removes exactly those lines again.
 - The lines run `CaffeinagentHook`, a small command inside the app in `/Applications`, never the app itself. It reads the event, writes one small state file per agent process to `~/Library/Application Support/com.caffeinagent.app/hooks/`, prints nothing and always exits 0. It keeps the state and the name of the event, and nothing you or the agent typed. The app does not have to run, and the lines do nothing when the app is gone.
 - Hooks need the app in `/Applications`, because the lines point there.
@@ -40,7 +40,7 @@ The first launch opens a setup window once. It names the agents it found, offers
 
 ## Phone access
 
-Claude Code Remote Control lets you work with a session on this Mac from a phone or the web, and that only works while the Mac is awake. With "Stay awake on power while phone access is on" (Preferences > General, on by default), the Mac stays awake on power while Remote Control is on, also when no agent works. The menu then says "Phone access is on". On battery this does not hold the Mac awake.
+Claude Code Remote Control lets you work with a session on this Mac from a phone or the web, and that only works while the Mac is awake. With "Stay awake for phone access while plugged in" (Preferences > General, on by default), the Mac stays awake on power while Remote Control is on, also when no agent works. The menu then says "Phone access is on". On battery this does not hold the Mac awake.
 
 Remote Control counts as on for a `claude remote-control` server, for a session started with `--remote-control` or `--rc`, and for every interactive session when `remoteControlAtStartup` is true in `~/.claude/settings.json`. A session that turns it on later with `/remote-control` is not seen. No other tool has a detector yet (`Caffeinagent/Detection/RemoteAccessDetector.swift`).
 

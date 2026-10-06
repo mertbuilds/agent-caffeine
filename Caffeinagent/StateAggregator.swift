@@ -35,6 +35,9 @@ final class StateAggregator: ObservableObject {
     @Published private(set) var decision: HoldDecision
     /// The folder of each session that works or waits, for the menu.
     @Published private(set) var sessionLabels: [ProcessIdentity: String] = [:]
+    /// What tells sessions with the same name and folder apart, for the
+    /// menu. It is shown only, never logged.
+    @Published private(set) var sessionHints: [ProcessIdentity: SessionHint] = [:]
     /// Since when each agent is in its state, for the menu.
     @Published private(set) var stateClock = StateClock()
     /// The user closed the menu's hint to set up "lid closed on battery".
@@ -154,6 +157,7 @@ final class StateAggregator: ObservableObject {
             entitlement: entitlement,
             hasLicenseKey: license.record.key != nil,
             labels: sessionLabels,
+            hints: sessionHints,
             clock: stateClock,
             settings: settings,
             flagLeftOn: sleepFlag.flagLeftOn,
@@ -175,6 +179,7 @@ final class StateAggregator: ObservableObject {
 
     private func sampled(_ sample: DetectionSample) {
         let context = sample.frame.context
+        if sessionHints != sample.sessionHints { sessionHints = sample.sessionHints }
         if hasBattery != (context.batteryPercent != nil) { hasBattery = context.batteryPercent != nil }
         let stop = safetyMonitor.update(context.safetyInputs)
         if let begun = SafetyStop.toAnnounce(previous: engine.safety, current: stop, wasHolding: power.held) {

@@ -40,7 +40,7 @@ struct HookPreferencesSection: View {
 
     var body: some View {
         Section("Better detection") {
-            Text("An agent can tell agent caffeine what it does. For that, agent caffeine adds a few lines to the settings file of the agent. It reads nothing you type.")
+            Text("An agent can tell agent caffeine what it is doing. To make that work, agent caffeine adds a few lines to the agent's settings file. It never reads what you type.")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             if !available {
@@ -114,9 +114,9 @@ struct HookRow: View {
     private var changeSummary: String {
         switch row.entry.format {
         case .pluginFile:
-            return "agent caffeine writes this file: \(path). Off removes the file."
+            return "agent caffeine writes this file: \(path). Switching this off removes the file."
         case .jsonHookGroups:
-            return "agent caffeine adds these lines to \(path) and saves a copy of the file next to it first. Off removes the lines and nothing else. When agent caffeine made the file and nothing else is in it, off removes the file too."
+            return "agent caffeine adds these lines to \(path) and saves a copy of the file next to it first. Switching this off removes the lines and nothing else. If agent caffeine created the file and nothing else is in it, the file is removed too."
         }
     }
 }

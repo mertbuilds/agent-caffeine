@@ -27,7 +27,7 @@ struct MoreIdleRow: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
-        .accessibilityValue(isExpanded ? "Expanded" : "Collapsed")
+        .accessibilityValue(isExpanded ? PanelText.expanded : PanelText.collapsed)
     }
 
     private func toggle() {

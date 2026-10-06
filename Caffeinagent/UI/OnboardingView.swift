@@ -71,11 +71,11 @@ struct OnboardingView: View {
     @ViewBuilder
     private var welcome: some View {
         title("agent caffeine keeps your Mac awake while your agents work")
-        paragraph("When the last agent is done, your Mac can sleep again. agent caffeine is in the menu bar and needs no window.")
+        paragraph("When the last agent is done, your Mac can sleep again. agent caffeine lives in the menu bar and needs no window.")
         VStack(alignment: .leading, spacing: 6) {
-            Text("Found on this Mac now")
+            Text("Open on this Mac now")
             if foundAgents.isEmpty {
-                paragraph("No agent is open now. agent caffeine finds an agent when it starts.")
+                paragraph("No agent is open right now. agent caffeine notices an agent as soon as it starts.")
             }
             ForEach(foundAgents, id: \.self) { name in
                 Label(name, systemImage: "checkmark.circle")
@@ -93,8 +93,8 @@ struct OnboardingView: View {
 
     @ViewBuilder
     private var hooks: some View {
-        title("See your agents more exactly")
-        paragraph("An agent can tell agent caffeine when it works, when it waits for you and when it is done. For that, agent caffeine adds a few lines to the settings file of each agent. It saves a copy of the file first, and it reads nothing you type.")
+        title("See exactly what your agents are doing")
+        paragraph("An agent can tell agent caffeine when it is working, when it is waiting for you and when it is done. To make that work, agent caffeine adds a few lines to each agent's settings file. It saves a copy of the file first, and it never reads what you type.")
         VStack(alignment: .leading, spacing: 12) {
             ForEach(hookRows) { row in
                 VStack(alignment: .leading, spacing: 3) {
@@ -136,8 +136,8 @@ struct OnboardingView: View {
     @ViewBuilder
     private var lidClosed: some View {
         title("Keep working with the lid closed")
-        paragraph("On battery, macOS puts the Mac to sleep when you close the lid, also while an agent works. agent caffeine can stop that with a small helper that you allow one time.")
-        paragraph("The Mac still sleeps under \(batteryFloorPercent) percent battery and when it gets too hot")
+        paragraph("On battery, macOS puts your Mac to sleep when you close the lid, even while an agent is working. agent caffeine can prevent that with a small helper that you allow once.")
+        paragraph("Your Mac still sleeps below \(batteryFloorPercent) percent battery and when it gets too hot.")
         if helper == .enabled {
             Label("The helper is set up", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
@@ -175,7 +175,7 @@ struct OnboardingView: View {
     @ViewBuilder
     private var done: some View {
         title("agent caffeine is ready")
-        paragraph("It is in the menu bar. You can change everything in Preferences, and open this setup again in Preferences > About.")
+        paragraph("It lives in the menu bar. You can change everything in Preferences, and open this setup again in Preferences > About.")
         buttons {
             EmptyView()
         } trailing: {

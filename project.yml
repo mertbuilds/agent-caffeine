@@ -204,6 +204,9 @@ targets:
           - SafetyInputsReader.swift
       # The menu's model, the agent marks and the path reader. No SwiftUI.
       - Caffeinagent/UI/Panel/Model
+      # The states the previews show, so the tests cover every one of them.
+      - Caffeinagent/UI/Panel/PanelFixtures.swift
+      - Caffeinagent/UI/MenuBarIcon.swift
       - Caffeinagent/UI/OnboardingModel.swift
       - Caffeinagent/UI/HookPreferences.swift
       - CaffeinagentHelper/HelperCore.swift

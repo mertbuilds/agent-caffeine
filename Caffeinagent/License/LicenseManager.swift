@@ -11,10 +11,10 @@ enum LicenseMessage: Equatable {
 
     var text: String {
         switch self {
-        case .limitReached: return "This key is already active on a Mac. If an earlier try on this Mac did not finish, free the key in your Polar purchases, then try again."
-        case .notFound: return "Polar does not know this key. Check it for typos."
+        case .limitReached: return "This key is already in use on a Mac. If an earlier attempt on this Mac did not finish, release the key in your Polar purchases, then try again."
+        case .notFound: return "Polar does not recognize this key. Check it for typos."
         case .revoked: return "This key was turned off. Contact support."
-        case .unavailable: return "Could not reach Polar. Check your connection and try again."
+        case .unavailable: return "agent caffeine could not reach Polar. Check your connection and try again."
         case .activationGone: return "This Mac is no longer activated for this key. Activate it again."
         }
     }

@@ -13,7 +13,7 @@ struct BottomBar: View {
     var body: some View {
         HStack(spacing: 8) {
             Menu {
-                Picker("Keep the Mac awake", selection: $mode) {
+                Picker(PanelText.modePicker, selection: $mode) {
                     ForEach(AwakeMode.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.inline)
@@ -24,20 +24,20 @@ struct BottomBar: View {
             .tint(.secondary)
             .fixedSize()
             .frame(minHeight: PanelMetrics.controlHeight)
-            .accessibilityLabel("Keep the Mac awake")
+            .accessibilityLabel(PanelText.modePicker)
             .accessibilityValue(mode.title)
 
             Spacer(minLength: 8)
 
             Menu {
-                Button("Preferences…", action: openPreferences)
+                Button(PanelText.preferences, action: openPreferences)
                 ForEach(licenseActions, id: \.title) { action in
-                    Button(action == .buy ? "Buy agent caffeine for $9" : action.title) { perform(action) }
+                    Button(action == .buy ? PanelText.buyInMenu : action.title) { perform(action) }
                 }
                 Divider()
-                Button("Quit agent caffeine", action: quit)
+                Button(PanelText.quit, action: quit)
             } label: {
-                Label("Preferences and more", systemImage: "gearshape")
+                Label(PanelText.gearMenu, systemImage: "gearshape")
                     .labelStyle(.iconOnly)
             }
             .menuStyle(.borderlessButton)
@@ -46,7 +46,7 @@ struct BottomBar: View {
             .fixedSize()
             .frame(minWidth: PanelMetrics.controlHeight, minHeight: PanelMetrics.controlHeight)
 
-            Toggle("agent caffeine", isOn: $enabled)
+            Toggle(PanelText.mainSwitch, isOn: $enabled)
                 .labelsHidden()
                 .toggleStyle(.switch)
                 .controlSize(.small)

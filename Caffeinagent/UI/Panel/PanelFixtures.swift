@@ -13,14 +13,17 @@ enum PanelFixtures {
         var minutes: Double = 0
         var label: String?
         var cause: HoldCause?
+        var hint: SessionHint?
     }
 
     static func input(_ headline: HoldHeadline, _ agents: [Agent] = []) -> PanelInput {
         var labels: [ProcessIdentity: String] = [:]
+        var hints: [ProcessIdentity: SessionHint] = [:]
         var holds: [AgentHold] = []
         for (index, agent) in agents.enumerated() {
             let identity = ProcessIdentity(pid: Int32(100 + index), startTime: 0)
             labels[identity] = agent.label
+            hints[identity] = agent.hint
             holds.append(AgentHold(
                 reading: AgentReading(
                     agentID: agent.id, displayName: agent.name, level: .state, identity: identity,
@@ -36,6 +39,7 @@ enum PanelFixtures {
         }
         var input = PanelInput(decision: HoldDecision(hold: headline.keepsAwake, lidClosedFlag: false, headline: headline, perAgent: holds))
         input.labels = labels
+        input.hints = hints
         input.clock = clock
         return input
     }
@@ -71,6 +75,17 @@ enum PanelFixtures {
         Agent(id: "claude", name: "Claude Code", minutes: 25),
         Agent(id: "codex", name: "Codex", minutes: 395),
         Agent(id: "gemini", name: "Gemini CLI", minutes: 0.2),
+    ]))
+
+    /// Sessions of one agent in one folder, and an agent with a long name.
+    static let sameFolder = state(input(.working(.many(3)), [
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 14, label: "wiki", cause: .working, hint: SessionHint(name: "wiki-1d", terminal: "ttys001")),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .backgroundJob(1), minutes: 89, label: "wiki", cause: .working, hint: SessionHint(name: "speaker-grille-spacing")),
+        Agent(id: "claude", name: "Claude Code", state: .waitingForUser, reason: .asksPermission, minutes: 89, label: "wiki", hint: SessionHint(terminal: "ttys004")),
+        Agent(id: "claude", name: "Claude Code", state: .waitingForUser, reason: .asksPermission, minutes: 0.2, label: "wiki"),
+        Agent(id: "user:tool", name: "twenty-character-cli", state: .working, reason: .runningCommand(12), minutes: 89, label: "caffeinagent", cause: .working),
+        Agent(id: "user:other", name: "twenty-character-two", minutes: 0.2),
+        Agent(id: "codex", name: "Codex", minutes: 13),
     ]))
 
     static let noAgent = state(input(.noAgents))
@@ -117,6 +132,13 @@ enum PanelFixtures {
         input.entitlement = .expired(.trialOver)
         return state(input)
     }()
+
+    /// Every state by name, for the tests and the offscreen pictures.
+    static let all: [(name: String, state: PanelState)] = [
+        ("working", working), ("waiting", waiting), ("all-idle", allIdle), ("same-folder", sameFolder), ("no-agent", noAgent),
+        ("off", off), ("safety-stop", safetyStop), ("too-hot", tooHot), ("lid-closed", lidClosedNotSetUp),
+        ("helper-off", helperSwitchedOff), ("trial-ending", trialEnding), ("trial-over", trialOver),
+    ]
 
     /// One agent for each mark, to check the marks.
     static let everyMark = state(input(.idle(.many(26)), AgentLogo.markByAgentID.keys.sorted().map { Agent(id: $0, name: $0) }))

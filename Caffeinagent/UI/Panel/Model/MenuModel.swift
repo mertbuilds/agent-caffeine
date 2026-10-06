@@ -8,25 +8,13 @@ enum MenuModel {
     /// The trial is named in the menu from this many days left.
     static let trialWarningDays = 2
 
-    static let awakeTitle = "Your Mac stays awake"
-    static let canSleepTitle = "Your Mac can sleep"
-    static let offTitle = "agent caffeine is off"
-    static let helperOffTitle = "Your Mac may not sleep"
-    static let helperOffReason = "agent caffeine was switched off in Login Items"
-
-    /// In place of the list when no agent is open. In the mode "always"
-    /// the Mac stays awake without one.
-    static func emptyText(mode: AwakeMode) -> String {
-        mode == .always ? "No agent is open" : "Start an agent and agent caffeine keeps your Mac awake while it works"
-    }
-
     static func state(_ input: PanelInput, now: Date) -> PanelState {
         let pose = pose(input)
         // The sleep flag is on with no helper to clear it, whatever the
         // decision says.
         let (title, subtitle) = pose == .helperOff
-            ? (helperOffTitle, helperOffReason)
-            : headlineTexts(input.decision.headline, waitingFor: waitingHoldLeft(input, now: now))
+            ? (PanelText.helperOffTitle, PanelText.helperOffReason)
+            : PanelText.headline(input.decision.headline, waitingFor: waitingHoldLeft(input, now: now))
         let (rows, moreIdle) = rows(input, now: now)
         return PanelState(
             pose: pose,
@@ -35,7 +23,7 @@ enum MenuModel {
             attention: attention(input),
             rows: rows,
             moreIdle: moreIdle,
-            emptyText: input.decision.perAgent.isEmpty ? emptyText(mode: input.mode) : nil,
+            emptyText: input.decision.perAgent.isEmpty ? PanelText.empty(mode: input.mode) : nil,
             licenseActions: licenseActions(input)
         )
     }
@@ -62,56 +50,6 @@ enum MenuModel {
         }
     }
 
-    /// The outcome, then the reason.
-    /// - Parameter waitingFor: how long the Mac still stays awake for an
-    ///   agent that waits, when that is known.
-    static func headlineTexts(_ headline: HoldHeadline, waitingFor: TimeInterval? = nil) -> (title: String, subtitle: String) {
-        switch headline {
-        case .working(let subject):
-            return (awakeTitle, phrase(subject, one: "is working", many: "are working"))
-        case .waitingHeld(let subject):
-            let waits = phrase(subject, one: "waits for you", many: "wait for you")
-            guard let waitingFor else { return (awakeTitle, waits) }
-            let minutes = max(1, Int((waitingFor / 60).rounded(.up)))
-            return (awakeTitle, "\(waits), for \(minutes) more \(minutes == 1 ? "minute" : "minutes")")
-        case .finishedRecently(let subject):
-            return (awakeTitle, phrase(subject, one: "finished a moment ago", many: "finished a moment ago"))
-        case .open(let subject):
-            return (awakeTitle, phrase(subject, one: "is open", many: "are open"))
-        case .alwaysOn:
-            return (awakeTitle, "Until you switch it off")
-        case .remoteAccess:
-            return (awakeTitle, "Phone access is on")
-        case .idle(.one(let name)):
-            return (canSleepTitle, "\(name) is idle")
-        case .idle(.many):
-            return (canSleepTitle, "All agents are idle")
-        case .waitingReleased(let subject):
-            return (canSleepTitle, phrase(subject, one: "waits for your answer", many: "wait for your answer"))
-        case .noAgents:
-            return (canSleepTitle, "No agent is open")
-        case .safetyStop(.batteryLow(let percent)):
-            return (canSleepTitle, "Battery at \(percent) percent")
-        case .safetyStop(.tooHot):
-            return (canSleepTitle, "It got too hot")
-        case .switchedOff:
-            return (offTitle, "Your Mac sleeps as usual")
-        case .notEntitled(.trialOver):
-            return (canSleepTitle, "The trial ended")
-        case .notEntitled(.unverified):
-            return (canSleepTitle, "License not checked for 30 days")
-        case .notEntitled(.activationRemoved):
-            return (canSleepTitle, "This Mac is no longer activated")
-        }
-    }
-
-    private static func phrase(_ subject: HoldSubject, one: String, many: String) -> String {
-        switch subject {
-        case .one(let name): return "\(name) \(one)"
-        case .many(let count): return "\(count) agents \(many)"
-        }
-    }
-
     /// Until the last waiting hold runs out. Nil when no agent holds by
     /// waiting, or when its start is not known.
     private static func waitingHoldLeft(_ input: PanelInput, now: Date) -> TimeInterval? {
@@ -130,29 +68,29 @@ enum MenuModel {
             switch stop {
             case .batteryLow:
                 let recovery = input.settings.batteryFloorPercent + SafetyMonitor.batteryRecoveryPoints
-                return PanelAttention(kind: .safetyStop, text: "Starts again when the battery is at \(recovery) percent")
+                return PanelAttention(kind: .safetyStop, text: PanelText.startsAgain(atBatteryPercent: recovery))
             case .tooHot:
-                return PanelAttention(kind: .safetyStop, text: "Starts again when your Mac has cooled down")
+                return PanelAttention(kind: .safetyStop, text: PanelText.startsAgainWhenCool)
             }
         }
         if input.flagLeftOn {
             return PanelAttention(
                 kind: .helperSwitchedOff,
-                text: "Allow it again and your Mac sleeps as usual",
+                text: PanelText.allowHelperAgain,
                 actions: [.openLoginItems]
             )
         }
         switch input.entitlement {
         case .expired(.trialOver):
-            return PanelAttention(kind: .license, text: "Buy a key to keep your Mac awake", actions: [.buy, .enterKey])
+            return PanelAttention(kind: .license, text: PanelText.buyToKeepAwake, actions: [.buy, .enterKey])
         case .expired(.unverified):
-            return PanelAttention(kind: .license, text: "Connect to the internet, then check again", actions: [.checkLicense])
+            return PanelAttention(kind: .license, text: PanelText.connectAndCheck, actions: [.checkLicense])
         case .expired(.activationRemoved):
-            return PanelAttention(kind: .license, text: "Activate this Mac again to keep it awake", actions: [.activateAgain, .enterKey])
+            return PanelAttention(kind: .license, text: PanelText.activateAgain, actions: [.activateAgain, .enterKey])
         case .trial(let daysLeft) where daysLeft <= trialWarningDays:
             return PanelAttention(
                 kind: .license,
-                text: "The trial ends in \(HumaneDuration.counted(daysLeft, "day"))",
+                text: PanelText.trialEnds(inDays: daysLeft),
                 actions: input.hasLicenseKey ? [.enterKey] : [.buy]
             )
         case .trial, .licensed:
@@ -161,7 +99,7 @@ enum MenuModel {
         if input.lidClosedNeedsSetup && !input.lidClosedHintDismissed {
             return PanelAttention(
                 kind: .lidClosedNotSetUp,
-                text: "Lid closed on battery is not set up",
+                text: PanelText.lidClosedNotSetUp,
                 actions: [.setUpLidClosed, .dismissLidClosedHint]
             )
         }
@@ -188,48 +126,50 @@ enum MenuModel {
     /// behind "more idle".
     static func rows(_ input: PanelInput, now: Date) -> (inView: [PanelRow], moreIdle: [PanelRow]) {
         let readings = input.decision.perAgent.map(\.reading)
-        var rows: [PanelRow] = []
+        var active: [SingleRow] = []
         for state in [WorkState.working, .waitingForUser] {
-            let active = readings.filter { $0.verdict.state == state }
+            let found = readings.filter { $0.verdict.state == state }
                 .map { (reading: $0, since: input.clock.since($0.identity)) }
             // Stable: instances with the same start keep the order of the readings.
-            let ordered = active.enumerated().sorted {
+            let ordered = found.enumerated().sorted {
                 let (a, b) = ($0.element.since ?? .distantFuture, $1.element.since ?? .distantFuture)
                 return a == b ? $0.offset < $1.offset : a < b
             }
-            rows += ordered.map { activeRow($0.element.reading, since: $0.element.since, label: input.labels[$0.element.reading.identity], now: now) }
+            active += ordered.map { SingleRow(row: activeRow($0.element.reading, input: input, now: now), identity: $0.element.reading.identity) }
         }
-        let idle = idleRows(readings.filter { $0.verdict.state == .idle }, clock: input.clock, now: now)
+        let all = distinguished(active + idleRows(readings.filter { $0.verdict.state == .idle }, clock: input.clock, now: now), input: input)
+        let idle = Array(all.dropFirst(active.count))
         // A line that only hides one agent is no shorter than the agent.
         let inView = idle.count <= idleRowsInView + 1 ? idle.count : idleRowsInView
-        return (rows + idle.prefix(inView), Array(idle.dropFirst(inView)))
+        return (Array(all.prefix(active.count + inView)), Array(idle.dropFirst(inView)))
     }
 
-    private static func activeRow(_ reading: AgentReading, since: Date?, label: String?, now: Date) -> PanelRow {
-        let byRule = reading.verdict.reason == .alwaysWorkingByRule
+    /// A line, and the one session it stands for. A line for several
+    /// sessions has none.
+    private struct SingleRow {
+        var row: PanelRow
+        var identity: ProcessIdentity?
+    }
+
+    private static func activeRow(_ reading: AgentReading, input: PanelInput, now: Date) -> PanelRow {
+        let seconds = input.clock.since(reading.identity).map { now.timeIntervalSince($0) }
+        // An instance that was first seen in this state began before that.
+        let startSeen = input.clock.before(reading.identity) != nil
+        let working = reading.verdict.state == .working
         return PanelRow(
             id: "\(reading.identity.pid):\(reading.identity.startTime)",
             agentID: reading.agentID,
             name: reading.displayName,
-            label: label,
-            state: reading.verdict.state == .working ? .working : .waiting,
-            status: activeStatus(reading.verdict),
-            // The rule says nothing about when work began.
-            duration: byRule ? nil : since.map { HumaneDuration.text(seconds: now.timeIntervalSince($0)) },
+            label: input.labels[reading.identity],
+            state: working ? .working : .waiting,
+            detail: working
+                ? PanelText.working(reading.verdict.reason, seconds: seconds, startSeen: startSeen)
+                : PanelText.waiting(seconds: seconds, startSeen: startSeen),
             hint: reading.verdict.reason.text
         )
     }
 
-    private static func activeStatus(_ verdict: AgentVerdict) -> String {
-        if verdict.state == .waitingForUser { return "Waits for your answer" }
-        switch verdict.reason {
-        case .runningCommand, .backgroundJob: return verdict.reason.text
-        case .alwaysWorkingByRule: return "Counts as working while it is open"
-        default: return "Working"
-        }
-    }
-
-    private static func idleRows(_ idle: [AgentReading], clock: StateClock, now: Date) -> [PanelRow] {
+    private static func idleRows(_ idle: [AgentReading], clock: StateClock, now: Date) -> [SingleRow] {
         var groups: [(readings: [AgentReading], since: Date?)] = []
         var index: [String: Int] = [:]
         for reading in idle {
@@ -254,18 +194,50 @@ enum MenuModel {
             let count = group.readings.count
             var row = PanelRow(
                 id: "idle:\(first.agentID)", agentID: first.agentID, name: first.displayName, label: nil, state: .idle,
-                status: "Idle", duration: nil, hint: first.verdict.reason.text
+                detail: PanelText.idle(
+                    seconds: group.since.map { now.timeIntervalSince($0) },
+                    finished: clock.before(first.identity) == .working
+                ),
+                hint: first.verdict.reason.text
             )
             if isIgnored(first) {
-                row.status = "Ignored"
+                row.detail = PanelText.ignored
             } else if count > 1 {
-                row.status = "\(count) idle sessions"
-                row.hint = row.status
-            } else if let since = group.since, now.timeIntervalSince(since) >= 60 {
-                row.duration = HumaneDuration.text(seconds: now.timeIntervalSince(since))
+                row.detail = PanelText.idleSessions(count)
+                row.hint = row.detail
             }
-            return row
+            return SingleRow(row: row, identity: count == 1 ? first.identity : nil)
         }
+    }
+
+    // MARK: Same title
+
+    /// Lines that would read the same get what tells them apart: the name
+    /// of the session, else its terminal, else when it started.
+    private static func distinguished(_ rows: [SingleRow], input: PanelInput) -> [PanelRow] {
+        var result = rows.map(\.row)
+        let sameTitle = Dictionary(grouping: rows.indices.filter { rows[$0].identity != nil }, by: { rows[$0].row.title })
+        for indices in sameTitle.values where indices.count > 1 {
+            let hints = indices.map { rows[$0].identity.flatMap { input.hints[$0] } }
+            let names = hints.map { $0?.name }
+            let terminals = hints.map { $0?.terminal }
+            for (place, index) in indices.enumerated() {
+                guard let identity = rows[index].identity else { continue }
+                result[index].distinction = unique(names, at: place) ?? unique(terminals, at: place) ?? started(identity, calendar: input.calendar)
+            }
+        }
+        return result
+    }
+
+    /// The value at `place` when no other place has the same one.
+    private static func unique(_ values: [String?], at place: Int) -> String? {
+        guard let value = values[place], values.filter({ $0 == value }).count == 1 else { return nil }
+        return value
+    }
+
+    private static func started(_ identity: ProcessIdentity, calendar: Calendar) -> String {
+        let parts = calendar.dateComponents([.hour, .minute], from: Date(timeIntervalSince1970: identity.startTime))
+        return PanelText.started(hour: parts.hour ?? 0, minute: parts.minute ?? 0)
     }
 
     private static func isIgnored(_ reading: AgentReading) -> Bool {

@@ -74,7 +74,7 @@ final class SafetyMonitorTests: XCTestCase {
     }
 
     func testNotificationText() {
-        XCTAssertEqual(SafetyStop.batteryLow(percent: 20).notificationText, "agent caffeine let your Mac sleep: battery at 20 percent")
-        XCTAssertEqual(SafetyStop.tooHot.notificationText, "agent caffeine let your Mac sleep: the Mac is too hot")
+        XCTAssertEqual(SafetyStop.batteryLow(percent: 20).notificationText, "agent caffeine let your Mac sleep because the battery is at 20 percent")
+        XCTAssertEqual(SafetyStop.tooHot.notificationText, "agent caffeine let your Mac sleep because it got too hot")
     }
 }

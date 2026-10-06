@@ -9,8 +9,8 @@ extension SafetyStop {
     /// The text of the notification that tells the user why the Mac slept.
     var notificationText: String {
         switch self {
-        case .batteryLow(let percent): return "agent caffeine let your Mac sleep: battery at \(percent) percent"
-        case .tooHot: return "agent caffeine let your Mac sleep: the Mac is too hot"
+        case .batteryLow(let percent): return "agent caffeine let your Mac sleep because the battery is at \(percent) percent"
+        case .tooHot: return "agent caffeine let your Mac sleep because it got too hot"
         }
     }
 

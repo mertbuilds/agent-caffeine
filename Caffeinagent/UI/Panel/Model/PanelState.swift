@@ -33,17 +33,7 @@ enum PanelAction: Equatable {
     case setUpLidClosed
     case dismissLidClosedHint
 
-    var title: String {
-        switch self {
-        case .openLoginItems: return "Open System Settings"
-        case .buy: return "Buy for $9"
-        case .enterKey: return "Enter key…"
-        case .checkLicense: return "Check now"
-        case .activateAgain: return "Activate again"
-        case .setUpLidClosed: return "Set up…"
-        case .dismissLidClosedHint: return "Dismiss"
-        }
-    }
+    var title: String { PanelText.title(of: self) }
 }
 
 /// The one line below the headline that asks for the user's attention.
@@ -75,30 +65,44 @@ struct PanelRow: Equatable, Identifiable {
     var name: String
     /// The project folder of a session that works or waits.
     var label: String?
+    /// What tells this line from another one with the same name and
+    /// folder: the session's name, its terminal, or when it started.
+    var distinction: String?
     var state: State
-    /// "Working", "Running 3 commands", "Idle", "8 idle sessions".
-    var status: String
-    /// How long the state has lasted, in words. Nil when it is not known
-    /// or says nothing.
-    var duration: String?
+    /// A whole phrase: "Working for 14 minutes", "Idle for 6 hours",
+    /// "8 idle sessions". Below the title for an agent that works or
+    /// waits, at the trailing edge for an idle one.
+    var detail: String
     /// The evidence, for the tooltip.
     var hint: String
 
+    /// A title up to this long fits the menu on one line.
+    static let titleFit = 36
+
+    /// "Claude Code · wiki". With a distinction the agent's name gives
+    /// way when the line would not fit, because the mark already shows
+    /// the agent: "wiki · speaker-grille-spacing".
     var title: String {
-        label.map { "\(name) · \($0)" } ?? name
+        let full = ([name] + place).joined(separator: " · ")
+        guard distinction != nil, full.count > Self.titleFit else { return full }
+        return place.joined(separator: " · ")
     }
 
-    /// Below the title for an agent that works or waits, at the trailing
-    /// edge for an idle one.
-    var detail: String {
-        guard let duration else { return status }
-        return state == .idle ? "\(status) \(duration)" : "\(status) · \(duration)"
+    /// The folder and the distinction. A session name that begins with
+    /// the folder says both: "wiki-1d".
+    private var place: [String] {
+        guard let distinction else { return label.map { [$0] } ?? [] }
+        guard let label else { return [distinction] }
+        let rest = distinction.lowercased().hasPrefix(label.lowercased()) ? distinction.dropFirst(label.count) : nil
+        // "wiki-1d" in the folder "wiki", and not "about" in the folder "a".
+        if let rest, rest.first.map({ !$0.isLetter && !$0.isNumber }) ?? true { return [distinction] }
+        return [label, distinction]
     }
 
-    /// "Claude Code, wiki, working, 12 minutes".
+    /// "Claude Code, wiki, working for 12 minutes".
     var accessibilityLabel: String {
-        let spoken = status.prefix(1).lowercased() + status.dropFirst()
-        return [name, label, spoken, duration].compactMap { $0 }.joined(separator: ", ")
+        let spoken = detail.prefix(1).lowercased() + detail.dropFirst()
+        return ([name] + place + [spoken]).joined(separator: ", ")
     }
 }
 
@@ -119,7 +123,7 @@ struct PanelState: Equatable {
     var licenseActions: [PanelAction] = []
 
     var moreIdleTitle: String? {
-        moreIdle.isEmpty ? nil : "\(moreIdle.count) more idle"
+        moreIdle.isEmpty ? nil : PanelText.moreIdle(moreIdle.count)
     }
 
     /// One reading for VoiceOver.
@@ -133,6 +137,9 @@ struct StateClock: Equatable {
     struct Entry: Equatable {
         var state: WorkState
         var since: Date
+        /// The state it left. Nil when the app first saw it in this one,
+        /// so `since` is not when the state began.
+        var before: WorkState?
     }
 
     private(set) var entries: [ProcessIdentity: Entry] = [:]
@@ -148,7 +155,7 @@ struct StateClock: Equatable {
             if let entry = entries[reading.identity], entry.state == reading.verdict.state {
                 next.entries[reading.identity] = entry
             } else {
-                next.entries[reading.identity] = Entry(state: reading.verdict.state, since: now)
+                next.entries[reading.identity] = Entry(state: reading.verdict.state, since: now, before: entries[reading.identity]?.state)
             }
         }
         return next
@@ -156,6 +163,10 @@ struct StateClock: Equatable {
 
     func since(_ identity: ProcessIdentity) -> Date? {
         entries[identity]?.since
+    }
+
+    func before(_ identity: ProcessIdentity) -> WorkState? {
+        entries[identity]?.before
     }
 }
 
@@ -168,6 +179,10 @@ struct PanelInput: Equatable {
     var hasLicenseKey = false
     /// The project folder of each session that works or waits.
     var labels: [ProcessIdentity: String] = [:]
+    /// What tells sessions with the same name and folder apart.
+    var hints: [ProcessIdentity: SessionHint] = [:]
+    /// For the start time of a session, when nothing else tells it apart.
+    var calendar = Calendar.current
     var clock = StateClock()
     var settings = DetectionSettings()
     /// The sleep flag is on and the helper was switched off in Login Items.
