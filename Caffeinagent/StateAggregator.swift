@@ -67,8 +67,6 @@ final class StateAggregator: ObservableObject {
     private var safetyMonitor = SafetyMonitor()
     private var flagRequest = SleepFlagRequest()
     private var hiddenNotice: HiddenNotice?
-    /// The helper gets no call before its version was checked at launch.
-    private var helperChecked = false
     private var lastHelperRefresh = Date.distantPast
     private var napActivity: NSObjectProtocol?
     private var cancellables = Set<AnyCancellable>()
@@ -148,11 +146,9 @@ final class StateAggregator: ObservableObject {
         license.start()
         engine.start()
         refreshHookStatuses()
-        Task {
-            await sleepFlag.replaceHelper(ifNot: AppVersion.helperForm)
-            helperChecked = true
-            syncSleepFlag()
-        }
+        syncSleepFlag()
+        // On its own, so a helper that gives no answer holds nothing up.
+        Task { await sleepFlag.replaceHelper(ifNot: AppVersion.helperForm) }
     }
 
     /// What the menu is worked out from.
@@ -195,6 +191,9 @@ final class StateAggregator: ObservableObject {
         announceHiddenNotice()
         // Also keeps the assertions for another timeout.
         updatePower()
+        sleepFlag.refreshHealth()
+        // Sends again what did not get through.
+        syncSleepFlag()
         if sample.frame.at.timeIntervalSince(lastHelperRefresh) >= Self.helperRefreshInterval { refreshHelperStatus() }
     }
 
@@ -240,12 +239,23 @@ final class StateAggregator: ObservableObject {
     }
 
     /// The controller's heartbeat keeps the flag alive, so the helper is
-    /// called only when the wanted value changes.
+    /// called only when the wanted value changes, and again after a call
+    /// that did not get through.
     private func syncSleepFlag() {
-        guard helperChecked,
-              let value = flagRequest.next(wanted: decision.lidClosedFlag, helperEnabled: sleepFlag.helperStatus == .enabled)
-        else { return }
-        Task { _ = await sleepFlag.setSleepDisabled(value) }
+        guard let value = flagRequest.next(
+            wanted: decision.lidClosedFlag, helperEnabled: sleepFlag.helperStatus == .enabled, now: Self.uptime
+        ) else { return }
+        Task {
+            _ = await sleepFlag.setSleepDisabled(value)
+            if sleepFlag.lastSetFailed { flagRequest.didFail(now: Self.uptime) }
+        }
+    }
+
+    private static var uptime: TimeInterval { ProcessInfo.processInfo.systemUptime }
+
+    /// "Try again" in the menu and in Preferences.
+    func repairHelper() {
+        runHelperAction { await self.sleepFlag.repairHelper() }
     }
 
     func setUpHelper() {

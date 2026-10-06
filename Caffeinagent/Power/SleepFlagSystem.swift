@@ -36,40 +36,77 @@ struct DaemonService: HelperServiceManaging {
 final class XPCSleepFlagHelper: SleepFlagHelperConnecting {
     private let lock = NSLock()
     private var connection: NSXPCConnection?
+    /// The calls that wait for an answer, each with its connection.
+    private var pending: [UUID: (connection: ObjectIdentifier, fail: (Error) -> Void)] = [:]
+    private var lostHandler: (() -> Void)?
+
+    func onConnectionLost(_ handler: @escaping () -> Void) {
+        lock.lock()
+        lostHandler = handler
+        lock.unlock()
+    }
 
     func setSleepDisabled(_ on: Bool) async throws -> Bool {
         try await call { proxy, done in
-            proxy.setSleepDisabled(on) { done(.success($0)) }
+            proxy.setSleepDisabled(on) { done($0) }
         }
     }
 
     func status() async throws -> (sleepDisabled: Bool, setByHelper: Bool, version: String) {
         try await call { proxy, done in
             proxy.status { sleepDisabled, setByHelper, version in
-                done(.success((sleepDisabled, setByHelper, version)))
+                done((sleepDisabled, setByHelper, version))
             }
         }
     }
 
     func heartbeat() async throws -> Bool {
         try await call { proxy, done in
-            proxy.heartbeat { done(.success($0)) }
+            proxy.heartbeat { done($0) }
         }
     }
 
-    // NSXPC calls either the reply block or the error handler, once.
-    private func call<T>(_ body: @escaping (SleepFlagHelperProtocol, @escaping (Result<T, Error>) -> Void) -> Void) async throws -> T {
+    // The reply, the error handler, the end of the connection or the
+    // timeout answers the call, whichever is first. A connection that
+    // gave no answer in time is dropped, and the next call makes a new one.
+    private func call<T>(_ body: @escaping (SleepFlagHelperProtocol, @escaping (T) -> Void) -> Void) async throws -> T {
         let connection = currentConnection()
-        return try await withCheckedThrowingContinuation { continuation in
-            let proxy = connection.remoteObjectProxyWithErrorHandler { error in
-                continuation.resume(throwing: error)
-            }
+        let id = UUID()
+        defer { forget(id) }
+        return try await HelperCall.run(onTimeout: { connection.invalidate() }) { (answer: OneAnswer<T>) in
+            remember(id, on: connection) { answer.give(.failure($0)) }
+            let proxy = connection.remoteObjectProxyWithErrorHandler { answer.give(.failure($0)) }
             guard let helper = proxy as? SleepFlagHelperProtocol else {
-                continuation.resume(throwing: CocoaError(.xpcConnectionInvalid))
+                answer.give(.failure(CocoaError(.xpcConnectionInvalid)))
                 return
             }
-            body(helper) { continuation.resume(with: $0) }
+            body(helper) { answer.give(.success($0)) }
         }
+    }
+
+    private func remember(_ id: UUID, on connection: NSXPCConnection, fail: @escaping (Error) -> Void) {
+        lock.lock()
+        pending[id] = (ObjectIdentifier(connection), fail)
+        lock.unlock()
+    }
+
+    private func forget(_ id: UUID) {
+        lock.lock()
+        pending[id] = nil
+        lock.unlock()
+    }
+
+    // The helper exited or was stopped (interrupted), or the connection is
+    // of no more use (invalid). Either way no reply comes for its calls.
+    private func lost(_ connection: NSXPCConnection, invalid: Bool) {
+        lock.lock()
+        if invalid, self.connection === connection { self.connection = nil }
+        let failed = pending.filter { $0.value.connection == ObjectIdentifier(connection) }
+        failed.keys.forEach { pending[$0] = nil }
+        let handler = lostHandler
+        lock.unlock()
+        failed.values.forEach { $0.fail(HelperCallError.connectionLost) }
+        handler?()
     }
 
     private func currentConnection() -> NSXPCConnection {
@@ -81,10 +118,12 @@ final class XPCSleepFlagHelper: SleepFlagHelperConnecting {
         // The app talks only to the helper this team signed.
         connection.setCodeSigningRequirement(SleepFlagHelper.requirement(identifier: SleepFlagHelper.label))
         connection.invalidationHandler = { [weak self, weak connection] in
-            guard let self else { return }
-            self.lock.lock()
-            if self.connection === connection { self.connection = nil }
-            self.lock.unlock()
+            guard let self, let connection else { return }
+            self.lost(connection, invalid: true)
+        }
+        connection.interruptionHandler = { [weak self, weak connection] in
+            guard let self, let connection else { return }
+            self.lost(connection, invalid: false)
         }
         connection.resume()
         self.connection = connection
