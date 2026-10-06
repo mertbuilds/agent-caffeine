@@ -43,7 +43,8 @@ enum SmokeTest {
             power: NoPower(),
             hotKeys: NoHotKeys(),
             display: nil,
-            notify: { _ in }
+            notify: { _ in },
+            notifier: nil
         )
         meter.start()
         every(SmokeHealth.tickInterval) { meter.tick() }

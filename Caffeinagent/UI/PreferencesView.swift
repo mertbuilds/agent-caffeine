@@ -2,6 +2,8 @@ import SwiftUI
 
 enum PreferencesTab: Hashable {
     case general
+    case alerts
+    case shortcuts
     case agents
     case lidClosed
     case license
@@ -18,13 +20,21 @@ struct PreferencesView: View {
 
     var body: some View {
         TabView(selection: $aggregator.preferencesTab) {
-            GeneralPreferences(
-                mode: $aggregator.mode, settings: $aggregator.settings, showMenuBarIcon: $aggregator.showMenuBarIcon,
+            GeneralPreferences(mode: $aggregator.mode, settings: $aggregator.settings, showMenuBarIcon: $aggregator.showMenuBarIcon)
+                .tabItem { Label("General", systemImage: "gearshape") }
+                .tag(PreferencesTab.general)
+            AlertPreferences(
+                notices: $aggregator.notices, denied: aggregator.notificationPermission == .denied,
+                openSystemSettings: aggregator.openNotificationSettings
+            )
+            .tabItem { Label("Alerts", systemImage: "bell") }
+            .tag(PreferencesTab.alerts)
+            ShortcutPreferences(
                 shortcuts: aggregator.shortcuts, shortcutProblems: aggregator.shortcutProblems,
                 setShortcut: aggregator.setShortcut, setShortcutRecording: aggregator.setShortcutRecording
             )
-            .tabItem { Label("General", systemImage: "gearshape") }
-            .tag(PreferencesTab.general)
+            .tabItem { Label("Shortcuts", systemImage: "keyboard") }
+            .tag(PreferencesTab.shortcuts)
             AgentPreferences(
                 settings: $aggregator.settings,
                 foundIDs: Set(aggregator.decision.perAgent.map(\.reading.agentID)),
@@ -64,6 +74,7 @@ struct PreferencesView: View {
         .onAppear {
             aggregator.refreshHelperStatus()
             aggregator.refreshHookStatuses()
+            aggregator.refreshNotificationPermission()
         }
     }
 
@@ -205,10 +216,6 @@ struct GeneralPreferences: View {
     @Binding var mode: AwakeMode
     @Binding var settings: DetectionSettings
     @Binding var showMenuBarIcon: Bool
-    var shortcuts: [ShortcutAction: Shortcut] = [:]
-    var shortcutProblems: [ShortcutAction: ShortcutProblem] = [:]
-    var setShortcut: (Shortcut?, ShortcutAction) -> Void = { _, _ in }
-    var setShortcutRecording: (Bool) -> Void = { _ in }
 
     /// From 30 seconds to 30 minutes.
     private static let durations: [TimeInterval] = [30, 60, 120, 180, 300, 600, 900, 1200, 1800]
@@ -249,17 +256,6 @@ struct GeneralPreferences: View {
                     help: "Your Mac stays awake this long while an agent is waiting for your answer. After that it can sleep."
                 )
             }
-            Section("Keyboard shortcuts") {
-                ForEach(ShortcutAction.allCases, id: \.self) { action in
-                    ShortcutRecorder(
-                        title: action.title, shortcut: shortcuts[action], problem: shortcutProblems[action],
-                        set: { setShortcut($0, action) }, setRecording: setShortcutRecording
-                    )
-                }
-                Text("The shortcuts work in every app. Click a field, then press the keys you want.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
             Section {
                 Toggle("Show agent caffeine in the menu bar", isOn: $showMenuBarIcon)
                 Text("When hidden, open agent caffeine again from Applications or Spotlight to see this window.")
@@ -288,6 +284,86 @@ struct GeneralPreferences: View {
         let seconds = Int(seconds)
         if seconds < 60 || seconds % 60 != 0 { return "\(seconds) seconds" }
         return seconds == 60 ? "1 minute" : "\(seconds / 60) minutes"
+    }
+}
+
+/// The notifications about agents. The ones about a safety stop have no
+/// switch: nobody should miss why the Mac slept.
+struct AlertPreferences: View {
+    @Binding var notices: AgentNoticeSettings
+    /// Notifications are switched off for agent caffeine in System Settings.
+    var denied = false
+    var openSystemSettings: () -> Void = {}
+
+    var body: some View {
+        Form {
+            if denied {
+                Section {
+                    HStack {
+                        Label("Notifications are off for agent caffeine in System Settings", systemImage: "bell.slash")
+                            .foregroundStyle(.orange)
+                        Spacer()
+                        Button("Open System Settings", action: openSystemSettings)
+                    }
+                }
+            }
+            Section("Notify me when") {
+                toggle(
+                    "An agent is waiting for your answer", $notices.waiting,
+                    help: "You get a notification when an agent asks you a question or needs your permission."
+                )
+                toggle(
+                    "An agent finished", $notices.finished,
+                    help: "You get a notification when an agent finishes work that took 30 seconds or longer."
+                )
+            }
+            Section {
+                toggle(
+                    "Only notify when the agent's window is not in front", $notices.onlyWhenAway,
+                    help: "You get no notification while you use the app the agent runs in."
+                )
+                .disabled(!notices.wantsAny)
+            }
+            Section {
+                Text("agent caffeine always tells you when it lets your Mac sleep because the battery is low or your Mac got too hot. These notifications have no switch, so you do not miss them.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func toggle(_ title: String, _ value: Binding<Bool>, help: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Toggle(title, isOn: value)
+            Text(help)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+struct ShortcutPreferences: View {
+    var shortcuts: [ShortcutAction: Shortcut] = [:]
+    var shortcutProblems: [ShortcutAction: ShortcutProblem] = [:]
+    var setShortcut: (Shortcut?, ShortcutAction) -> Void = { _, _ in }
+    var setShortcutRecording: (Bool) -> Void = { _ in }
+
+    var body: some View {
+        Form {
+            Section("Keyboard shortcuts") {
+                ForEach(ShortcutAction.allCases, id: \.self) { action in
+                    ShortcutRecorder(
+                        title: action.title, shortcut: shortcuts[action], problem: shortcutProblems[action],
+                        set: { setShortcut($0, action) }, setRecording: setShortcutRecording
+                    )
+                }
+                Text("The shortcuts work in every app. Click a field, then press the keys you want.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 
@@ -504,11 +580,16 @@ private struct PreferencesPreview: View {
     @State private var mode = AwakeMode.agentWorking
     @State private var settings = DetectionSettings()
     @State private var showMenuBarIcon = true
+    @State private var notices = AgentNoticeSettings()
 
     var body: some View {
         TabView {
             GeneralPreferences(mode: $mode, settings: $settings, showMenuBarIcon: $showMenuBarIcon)
                 .tabItem { Label("General", systemImage: "gearshape") }
+            AlertPreferences(notices: $notices, denied: true)
+                .tabItem { Label("Alerts", systemImage: "bell") }
+            ShortcutPreferences()
+                .tabItem { Label("Shortcuts", systemImage: "keyboard") }
             AgentPreferences(
                 settings: $settings, foundIDs: ["claude", "codex-desktop"],
                 hookRows: HookRowModel.rows(statuses: ["claude": .installed(version: 1), "codex": .outdated, "droid": .notInstalled])

@@ -15,6 +15,8 @@ struct AggregatorParts {
     /// Nil leaves the displays alone.
     var display: DisplayController?
     var notify: (String) -> Void
+    /// Nil sends no agent notification and asks macOS nothing.
+    var notifier: AgentNotifying?
 
     static func system() -> AggregatorParts {
         AggregatorParts(
@@ -27,7 +29,8 @@ struct AggregatorParts {
                 reader: SystemDisplayReader(), sleeper: SystemDisplaySleep(),
                 dimmer: BuiltinDimmer(methods: BuiltinDimmer.systemMethods, defaults: .standard), watcher: SystemDisplayWatcher()
             ),
-            notify: SafetyNotifier.post
+            notify: Notifier.post,
+            notifier: Notifier.shared
         )
     }
 }
@@ -81,6 +84,16 @@ final class StateAggregator: ObservableObject {
             engine.settings = settings
         }
     }
+    /// Which agent notifications the user wants. Switching one on asks
+    /// macOS for permission, so the question comes with a reason.
+    @PublishedOnChange var notices: AgentNoticeSettings {
+        didSet {
+            guard notices != oldValue else { return }
+            notices.save(to: defaults)
+            if notices.waiting && !oldValue.waiting || notices.finished && !oldValue.finished { notifier?.requestPermission() }
+        }
+    }
+    @PublishedOnChange private(set) var notificationPermission = NotificationPermission.notAsked
     /// The robot in the menu bar. Hiding it changes nothing else. The
     /// menu bar scene writes this back all the time, so a write of the
     /// same value must publish nothing and save nothing.
@@ -136,6 +149,10 @@ final class StateAggregator: ObservableObject {
     private let hotKeys: HotKeyRegistering
     private let display: DisplayController?
     private let notify: (String) -> Void
+    private let notifier: AgentNotifying?
+    private var agentNotices = AgentNoticeReducer()
+    /// The app each session runs in, looked up once. 0 for none.
+    private var sessionOwners: [ProcessIdentity: Int32] = [:]
     private let openFiles = SystemOpenFiles()
     private var safetyMonitor = SafetyMonitor()
     private var flagRequest = SleepFlagRequest()
@@ -172,6 +189,7 @@ final class StateAggregator: ObservableObject {
         self.hotKeys = parts.hotKeys
         self.display = parts.display
         self.notify = parts.notify
+        self.notifier = parts.notifier
         self.engine = engine
         self.entitlement = license.entitlement
         self.enabled = enabled
@@ -179,6 +197,7 @@ final class StateAggregator: ObservableObject {
         self.shortcuts = ShortcutStore.load(from: defaults)
         self.mode = mode
         self.settings = settings
+        self.notices = AgentNoticeSettings.load(from: defaults)
         self.lidClosedHintDismissed = defaults.bool(forKey: Self.lidClosedHintKey)
         self.showMenuBarIcon = MenuBarVisibility.isShown(in: defaults)
         self.decision = engine.decision
@@ -189,6 +208,7 @@ final class StateAggregator: ObservableObject {
             .sink { [weak self] decision in self?.apply(decision) }
             .store(in: &cancellables)
         engine.onSample = { [weak self] sample in self?.sampled(sample) }
+        notifier?.onPermission = { [weak self] permission in self?.notificationPermission = permission }
 
         // An expired trial goes through the same release path as switching off,
         // so the assertions and the sleep flag both end.
@@ -390,6 +410,7 @@ final class StateAggregator: ObservableObject {
         }
         engine.safety = stop
         announceHiddenNotice()
+        announceAgents(sample)
         display?.update(
             lidClosed: context.lidClosed, holding: sample.decision.hold, enabled: settings.displayOffLidClosed, now: sample.frame.at
         )
@@ -423,6 +444,56 @@ final class StateAggregator: ObservableObject {
             notify(begun.notificationText)
         }
         hiddenNotice = current
+    }
+
+    /// An agent that waits for the user or finished, as a notification.
+    /// The names of the sessions are shown there and go nowhere else.
+    private func announceAgents(_ sample: DetectionSample) {
+        guard let notifier else { return }
+        guard notices.wantsAny else {
+            // What is there when a switch goes on is no news.
+            agentNotices = AgentNoticeReducer()
+            sessionOwners = [:]
+            return
+        }
+        var owners: [ProcessIdentity: Int32] = [:]
+        var apps: Set<Int32>?
+        for reading in sample.readings {
+            if let known = sessionOwners[reading.identity] {
+                owners[reading.identity] = known
+            } else {
+                let running = apps ?? AgentOwner.runningApps()
+                apps = running
+                owners[reading.identity] = AgentOwner.resolve(pid: reading.identity.pid, apps: running) ?? 0
+            }
+        }
+        sessionOwners = owners
+        let away = notices.onlyWhenAway
+        let input = AgentNoticeInput(
+            readings: sample.readings,
+            labels: sessionLabels.merging(sample.sessionHints.compactMapValues(\.name)) { _, name in name },
+            owners: owners.filter { $0.value > 0 },
+            frontmostPid: away ? NSWorkspace.shared.frontmostApplication?.processIdentifier : nil,
+            userActive: away && AgentOwner.userIsActive(),
+            settings: notices,
+            active: enabled && pause.until == nil && entitlement.allowsHolding
+        )
+        // In the other modes, and after a stop, the waiting hold does not
+        // decide when the Mac sleeps.
+        let waitingHold = mode == .agentWorking && sample.decision.hold ? settings.waitingHold : nil
+        for notice in agentNotices.update(input, now: sample.frame.at) {
+            notifier.post(AgentNoticeText.content(notice, waitingHold: waitingHold, now: sample.frame.at))
+        }
+    }
+
+    /// Called when Preferences opens: the user can change the permission
+    /// in System Settings at any time.
+    func refreshNotificationPermission() {
+        notifier?.readPermission()
+    }
+
+    func openNotificationSettings() {
+        notifier?.openSystemSettings()
     }
 
     private func updatePower() {

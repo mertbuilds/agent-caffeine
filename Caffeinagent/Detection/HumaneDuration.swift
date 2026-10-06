@@ -22,6 +22,12 @@ enum HumaneDuration {
         "\(units(seconds: seconds) ?? "a moment") ago"
     }
 
+    /// "1 hour 22 minutes", with no "for" and no "ago", for a sentence
+    /// that brings its own. Nil under a minute.
+    static func length(seconds: TimeInterval) -> String? {
+        units(seconds: seconds)
+    }
+
     static func counted(_ count: Int, _ noun: String) -> String {
         count == 1 ? "1 \(noun)" : "\(count) \(noun)s"
     }
