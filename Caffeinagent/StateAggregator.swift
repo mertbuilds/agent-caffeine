@@ -207,12 +207,15 @@ final class StateAggregator: ObservableObject {
             settings: settings,
             flagLeftOn: sleepFlag.flagLeftOn,
             lidClosedNeedsSetup: MenuModel.lidClosedNeedsSetup(
-                helper: sleepFlag.helperStatus, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
+                setup: sleepFlag.setup, wasSetUp: sleepFlag.wasSetUp, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
             ),
             helperNotResponding: MenuModel.helperNotResponding(
-                notResponding: sleepFlag.notResponding, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
+                notResponding: sleepFlag.setup == .notResponding, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
             ),
             helperRepairTried: sleepFlag.repairTried,
+            helperLost: MenuModel.helperLost(
+                setup: sleepFlag.setup, wasSetUp: sleepFlag.wasSetUp, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
+            ),
             lidClosedHintDismissed: lidClosedHintDismissed
         )
     }
@@ -240,6 +243,12 @@ final class StateAggregator: ObservableObject {
         // Also keeps the assertions for another timeout.
         updatePower()
         sleepFlag.refreshHealth()
+        if sleepFlag.repairIsDue {
+            Task {
+                await sleepFlag.retryRepairIfDue()
+                syncSleepFlag()
+            }
+        }
         // Sends again what did not get through.
         syncSleepFlag()
         if sample.frame.at.timeIntervalSince(lastHelperRefresh) >= Self.helperRefreshInterval { refreshHelperStatus() }
@@ -251,7 +260,7 @@ final class StateAggregator: ObservableObject {
         let current = HiddenNotice.current(
             flagLeftOn: sleepFlag.flagLeftOn,
             helperNotResponding: MenuModel.helperNotResponding(
-                notResponding: sleepFlag.notResponding, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
+                notResponding: sleepFlag.setup == .notResponding, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
             ),
             entitlement: entitlement
         )

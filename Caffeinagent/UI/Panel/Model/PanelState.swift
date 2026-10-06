@@ -44,6 +44,7 @@ struct PanelAttention: Equatable {
         case safetyStop
         case helperSwitchedOff
         case helperNotResponding
+        case helperLost
         case license
         case lidClosedNotSetUp
     }
@@ -197,5 +198,8 @@ struct PanelInput: Equatable {
     var helperNotResponding = false
     /// The helper was registered again and still gives no answer.
     var helperRepairTried = false
+    /// The helper was set up before and is gone, while the setting asks
+    /// for it on a Mac with a battery.
+    var helperLost = false
     var lidClosedHintDismissed = false
 }

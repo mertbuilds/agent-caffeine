@@ -46,6 +46,21 @@ final class XPCSleepFlagHelper: SleepFlagHelperConnecting {
         lock.unlock()
     }
 
+    // The calls that wait on the old connection end here, and its handlers
+    // are taken off first: this is no loss of the helper.
+    func reconnect() {
+        lock.lock()
+        let old = connection
+        connection = nil
+        let failed = old.map { old in pending.filter { $0.value.connection == ObjectIdentifier(old) } } ?? [:]
+        failed.keys.forEach { pending[$0] = nil }
+        lock.unlock()
+        old?.invalidationHandler = nil
+        old?.interruptionHandler = nil
+        old?.invalidate()
+        failed.values.forEach { $0.fail(HelperCallError.connectionLost) }
+    }
+
     func setSleepDisabled(_ on: Bool) async throws -> Bool {
         try await call { proxy, done in
             proxy.setSleepDisabled(on) { done($0) }

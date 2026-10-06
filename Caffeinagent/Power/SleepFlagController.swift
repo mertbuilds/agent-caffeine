@@ -49,6 +49,8 @@ protocol HelperServiceManaging {
 protocol SleepFlagHelperConnecting {
     // The handler runs when the helper went away, on any thread.
     func onConnectionLost(_ handler: @escaping () -> Void)
+    // Drops the connection, so the next call makes a new one.
+    func reconnect()
     func setSleepDisabled(_ on: Bool) async throws -> Bool
     func status() async throws -> (sleepDisabled: Bool, setByHelper: Bool, version: String)
     func heartbeat() async throws -> Bool
@@ -109,34 +111,52 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
     @PublishedOnChange private(set) var notResponding = false
     /// The helper was registered again in this launch.
     @PublishedOnChange private(set) var repairTried = false
+    /// What Preferences and the menu say about the helper.
+    @PublishedOnChange private(set) var setup = HelperSetup.notSetUp
     /// The last try to set the flag ended without an answer.
     private(set) var lastSetFailed = false
+    /// "On" went out and no answer came back. The helper may hold the flag
+    /// all the same: the app's signing check is on the answer only.
+    private(set) var flagUnconfirmed = false
 
     private let service: HelperServiceManaging
     private let helper: SleepFlagHelperConnecting
     private let sudoers: SudoersCleaning
     private let heartbeatInterval: TimeInterval
+    private let defaults: UserDefaults
     private let now: () -> TimeInterval
+    private let sleep: (TimeInterval) async -> Void
     private var health = HelperHealth()
     private var wanted = false
     private var sending = false
     private var sendAgain = false
+    private var repairing = false
+    /// A repair took the helper away and did not bring it back.
+    private var lostByRepair = false
+    private var slowRetriesLeft = HelperRepair.slowRetries
+    private var lastRepairEnd = -TimeInterval.infinity
     private var lastSendAfterLoss = -TimeInterval.infinity
     private var heartbeatTask: Task<Void, Never>?
     private let log = Logger(subsystem: "com.caffeinagent.app", category: "SleepFlagController")
+
+    static let wasSetUpKey = "SleepFlagController.helperWasSetUp"
 
     init(
         service: HelperServiceManaging,
         helper: SleepFlagHelperConnecting,
         sudoers: SudoersCleaning,
         heartbeatInterval: TimeInterval = SleepFlagHelper.heartbeatInterval,
-        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime }
+        defaults: UserDefaults = .standard,
+        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        sleep: @escaping (TimeInterval) async -> Void = { try? await Task.sleep(nanoseconds: UInt64($0 * 1_000_000_000)) }
     ) {
         self.service = service
         self.helper = helper
         self.sudoers = sudoers
         self.heartbeatInterval = heartbeatInterval
+        self.defaults = defaults
         self.now = now
+        self.sleep = sleep
         self.helperStatus = service.status
         refreshStatus()
         helper.onConnectionLost { [weak self] in
@@ -144,10 +164,23 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         }
     }
 
+    /// The helper was enabled on this Mac at some time, and the user did
+    /// not remove it.
+    var wasSetUp: Bool { defaults.bool(forKey: Self.wasSetUpKey) }
+
     // The user can allow or remove the helper in System Settings at any time.
     func refreshStatus() {
         let status = service.status
         if helperStatus != status { helperStatus = status }
+        switch status {
+        case .enabled:
+            lostByRepair = false
+            if !wasSetUp { defaults.set(true, forKey: Self.wasSetUpKey) }
+        case .requiresApproval:
+            lostByRepair = false
+        case .notRegistered, .notFound:
+            break
+        }
         let cleanup = sudoers.entryExists
         if needsSudoersCleanup != cleanup { needsSudoersCleanup = cleanup }
         refreshHealth()
@@ -160,6 +193,22 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         let silent = health.notResponding(now: now())
         if notResponding != silent { notResponding = silent }
         if repairTried != health.repairTried { repairTried = health.repairTried }
+        let next = currentSetup
+        if setup != next { setup = next }
+    }
+
+    private var currentSetup: HelperSetup {
+        if repairing { return .repairing }
+        switch helperStatus {
+        case .enabled:
+            return notResponding ? .notResponding : .ready
+        case .requiresApproval:
+            return .requiresApproval
+        case .notRegistered, .notFound:
+            // While agent caffeine still tries, the user has nothing to set up.
+            if lostByRepair, slowRetriesLeft > 0 { return .notResponding }
+            return lostByRepair || wasSetUp ? .lost : .notSetUp
+        }
     }
 
     func install() async throws {
@@ -168,7 +217,7 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         } catch {
             refreshStatus()
             if helperStatus == .requiresApproval { throw SleepFlagError.requiresApproval }
-            log.error("register failed: \(error.localizedDescription, privacy: .public)")
+            log.error("register failed: \(HelperRepair.describe(error), privacy: .public)")
             throw error
         }
         refreshStatus()
@@ -183,10 +232,14 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         stopHeartbeat()
         refreshStatus()
         if helperStatus == .enabled {
+            logSend(false, .remove)
             sleepDisabled = try await helper.setSleepDisabled(false)
             if try await helper.status().setByHelper { throw SleepFlagError.flagNotCleared }
+            flagUnconfirmed = false
         }
         try await service.unregister()
+        defaults.removeObject(forKey: Self.wasSetUpKey)
+        lostByRepair = false
         refreshStatus()
     }
 
@@ -200,25 +253,34 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
 
     /// After an update the helper that runs can still be the old binary:
     /// launchd keeps the process it started. Registering again makes it
-    /// start the new one. A helper that gives no version is registered
-    /// again too, once in a launch. Not tested with a real update yet:
-    /// check that the approval in Login Items survives it.
+    /// start the new one. A helper that gives no version gets a new
+    /// connection first, and is registered again when that does not help,
+    /// once in a launch.
     func replaceHelper(ifNot appVersion: String) async {
         refreshStatus()
-        guard helperStatus == .enabled else { return }
+        guard helperStatus == .enabled, !repairing else { return }
+        var running: String?
         do {
-            let running = try await helperVersion()
-            guard running != appVersion else { return }
-            log.info("helper is \(running, privacy: .public), app is \(appVersion, privacy: .public): registering again")
-            // So the helper that is stopped has no flag to clear on its way out.
-            _ = try? await helper.setSleepDisabled(false)
+            running = try await helperVersion()
         } catch {
             log.error("the helper gave no version: \(String(describing: error), privacy: .public)")
             health.failed(now: now())
             guard health.takeRepair(atOnce: true) else { return refreshHealth() }
         }
-        await registerAgain()
-        await send()
+        guard running != appVersion, !repairing else { return }
+        _ = await duringRepair {
+            var running = running
+            if running == nil { running = await self.versionOnANewConnection() }
+            if running == appVersion { return true }
+            if let running {
+                self.log.info("helper is \(running, privacy: .public), app is \(appVersion, privacy: .public): registering again")
+                // So the helper that is stopped has no flag to clear on its way out.
+                self.logSend(false, .replace)
+                _ = try? await self.helper.setSleepDisabled(false)
+            }
+            return await self.registerAgain()
+        }
+        await send(.repair)
     }
 
     /// "Try again" in the menu and in Preferences. A helper that answers is
@@ -226,10 +288,34 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
     /// the user's approval, the helper's state says so.
     func repairHelper() async {
         refreshStatus()
-        guard helperStatus == .enabled else { return }
-        health.repairAsked()
-        if (try? await helperVersion()) == nil { await registerAgain() }
-        await send()
+        guard !repairing else { return }
+        switch helperStatus {
+        case .enabled:
+            health.repairAsked()
+            _ = await repair()
+        case .notRegistered, .notFound:
+            guard lostByRepair else { return }
+            _ = await duringRepair { await self.registerAndWait() }
+        case .requiresApproval:
+            return
+        }
+        await send(.repair)
+    }
+
+    /// A repair took the helper away and could not register it again.
+    /// Later the system lets it pass, so it is tried again now and then.
+    var repairIsDue: Bool {
+        lostByRepair && !repairing && slowRetriesLeft > 0 && now() - lastRepairEnd >= HelperRepair.slowRetryInterval
+    }
+
+    func retryRepairIfDue() async {
+        guard repairIsDue else { return }
+        refreshStatus()
+        guard repairIsDue else { return }
+        slowRetriesLeft -= 1
+        log.info("registering the helper again, \(self.slowRetriesLeft) more tries after this one")
+        _ = await duringRepair { await self.registerAndWait() }
+        await send(.repair)
     }
 
     // A helper that went away while the call was under way was started
@@ -242,32 +328,129 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         }
     }
 
+    // MARK: Repair
+
+    /// First a new connection. Only when the signing check fails again, or
+    /// two tries got no answer, the helper is registered again. True when
+    /// the helper answers afterwards.
+    private func repair() async -> Bool {
+        guard !repairing else { return false }
+        return await duringRepair {
+            if await self.versionOnANewConnection() != nil { return true }
+            return await self.registerAgain()
+        }
+    }
+
+    private func duringRepair(_ work: () async -> Bool) async -> Bool {
+        repairing = true
+        refreshHealth()
+        let answers = await work()
+        repairing = false
+        lastRepairEnd = now()
+        refreshHealth()
+        return answers
+    }
+
+    private func versionOnANewConnection() async -> String? {
+        for _ in 1...HelperRepair.reconnectTries {
+            helper.reconnect()
+            do {
+                return try await helper.status().version
+            } catch {
+                log.error("no answer on a new connection: \(String(describing: error), privacy: .public)")
+                if HelperCall.isSigningFailure(error) { return nil }
+            }
+        }
+        return nil
+    }
+
     // unregister() stops the helper, and a helper that is stopped clears a
-    // flag it owns. True when the helper is enabled afterwards.
-    @discardableResult
+    // flag it owns. True when the new helper answers.
     private func registerAgain() async -> Bool {
         log.info("registering the helper again")
         do {
             try await service.unregister()
-            try service.register()
+            let gone = await waitForStatus(patience: HelperRepair.removalPatience) { $0 == .notRegistered || $0 == .notFound }
+            if !gone { log.error("the helper is still registered after it was removed") }
         } catch {
-            log.error("registering the helper again failed: \(error.localizedDescription, privacy: .public)")
+            log.error("removing the helper failed: \(HelperRepair.describe(error), privacy: .public)")
         }
         // The flag went with the old helper, whatever a call under way says.
         sendAgain = sending
-        refreshStatus()
-        log.info("the helper is \(self.helperStatus == .enabled ? "enabled" : "not enabled", privacy: .public) after registering again")
-        return helperStatus == .enabled
+        return await registerAndWait()
     }
+
+    /// Registers the helper, waits until it is enabled and until it gives
+    /// its first answer. True when it answers.
+    private func registerAndWait() async -> Bool {
+        var backoff = HelperRepair.registerBackoff[...]
+        var registered = false
+        while !registered {
+            do {
+                try service.register()
+                registered = true
+            } catch {
+                log.error("registering the helper failed: \(HelperRepair.describe(error), privacy: .public)")
+                let status = service.status
+                if status == .enabled { break }
+                guard status != .requiresApproval, HelperRepair.isNotPermitted(error), let delay = backoff.popFirst() else {
+                    return finishRegistering(answers: false)
+                }
+                await sleep(delay)
+            }
+        }
+        _ = await waitForStatus(patience: HelperRepair.enablePatience) { $0 == .enabled || $0 == .requiresApproval }
+        guard service.status == .enabled else { return finishRegistering(answers: false) }
+        helper.reconnect()
+        for attempt in 1...HelperRepair.firstAnswerTries {
+            do {
+                _ = try await helper.status()
+                return finishRegistering(answers: true)
+            } catch {
+                log.error("the new helper gave no answer: \(String(describing: error), privacy: .public)")
+                if attempt < HelperRepair.firstAnswerTries { await sleep(HelperRepair.firstAnswerInterval) }
+            }
+        }
+        return finishRegistering(answers: false)
+    }
+
+    private func finishRegistering(answers: Bool) -> Bool {
+        refreshStatus()
+        switch helperStatus {
+        case .enabled:
+            if !answers { health.repairDidFail() }
+        case .requiresApproval:
+            break
+        case .notRegistered, .notFound:
+            lostByRepair = true
+            health.repairDidFail()
+        }
+        let state = helperStatus == .enabled ? (answers ? "enabled and answers" : "enabled and gives no answer") : "not enabled"
+        log.info("the helper is \(state, privacy: .public) after registering again")
+        return answers
+    }
+
+    private func waitForStatus(patience: TimeInterval, _ reached: (HelperStatus) -> Bool) async -> Bool {
+        var polls = Int(patience / HelperRepair.pollInterval)
+        while !reached(service.status) {
+            guard polls > 0 else { return false }
+            polls -= 1
+            await sleep(HelperRepair.pollInterval)
+        }
+        return true
+    }
+
+    // MARK: Flag
 
     /// For quitting, where nothing can await: blocks the caller for at most
     /// `timeout` seconds. When the call is late or lost, the heartbeats
     /// have stopped and the helper's watchdog clears the flag.
     func clearForQuit(timeout: TimeInterval) {
-        let owed = wanted || sleepDisabled
+        let owed = wanted || sleepDisabled || flagUnconfirmed
         wanted = false
         stopHeartbeat()
         guard owed, helperStatus == .enabled else { return }
+        logSend(false, .quit)
         let done = DispatchSemaphore(value: 0)
         let helper = helper
         Task.detached {
@@ -278,21 +461,28 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
     }
 
     func setSleepDisabled(_ on: Bool) async -> Bool {
+        let reason: FlagReason = lastSetFailed && on == wanted ? .retry : .decision
         wanted = on
         if on { startHeartbeat() } else { stopHeartbeat() }
-        await send()
+        await send(reason)
         return sleepDisabled
+    }
+
+    /// Every value the app sends is in the log with its reason.
+    private func logSend(_ value: Bool, _ reason: FlagReason) {
+        log.info("sending SleepDisabled \(value) to the helper: \(reason.rawValue, privacy: .public)")
     }
 
     /// Brings the helper to the wanted value. One call at a time: a value
     /// that changes while a call is under way is sent after it.
-    private func send() async {
-        guard !sending else { return }
+    private func send(_ reason: FlagReason) async {
+        guard !sending, !repairing else { return }
         sending = true
         defer {
             sending = false
             refreshHealth()
         }
+        var reason = reason
         var triedAfterLoss = false
         while true {
             refreshStatus()
@@ -300,25 +490,36 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
                 lastSetFailed = false
                 return
             }
+            // The one who repairs sends the value when the helper is back.
+            guard !repairing else { return }
             let value = wanted
             sendAgain = false
+            logSend(value, reason)
             do {
                 sleepDisabled = try await helper.setSleepDisabled(value)
                 lastSetFailed = false
+                flagUnconfirmed = false
                 health.answered(confirmed: sleepDisabled, wanted: value, now: now())
             } catch {
                 // When an off request is lost the heartbeats have stopped too, so
                 // the helper's watchdog clears the flag within its timeout.
                 log.error("helper call failed: \(String(describing: error), privacy: .public)")
+                if value { flagUnconfirmed = true }
                 if HelperCall.isConnectionLoss(error), !triedAfterLoss {
                     triedAfterLoss = true
+                    reason = .retry
                     continue
                 }
                 lastSetFailed = true
                 health.failed(now: now())
-                if health.takeRepair(), await registerAgain() { continue }
+                // A helper whose signature does not pass is not waited for.
+                if health.takeRepair(atOnce: HelperCall.isSigningFailure(error)), await repair() {
+                    reason = .repair
+                    continue
+                }
             }
             if wanted == value, !sendAgain { return }
+            reason = wanted == value ? .repair : .decision
         }
     }
 
@@ -326,9 +527,9 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
     // the flag of the one before it, so the wanted value is sent at once,
     // and not more often than the heartbeats would.
     func connectionLost() async {
-        guard wanted, !sending, now() - lastSendAfterLoss >= heartbeatInterval else { return }
+        guard wanted, !sending, !repairing, now() - lastSendAfterLoss >= heartbeatInterval else { return }
         lastSendAfterLoss = now()
-        await send()
+        await send(.connectionLost)
     }
 
     func removeSudoersEntry() async throws {
@@ -339,11 +540,12 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
     // Also puts the flag back when the helper restarted and cleared it, and
     // tries again when the helper gave no answer before.
     func sendHeartbeat() async {
-        guard wanted, !sending else { return }
+        guard wanted, !sending, !repairing else { return }
         do {
             if try await helper.heartbeat() {
                 guard wanted else { return }
                 sleepDisabled = true
+                flagUnconfirmed = false
                 health.answered(confirmed: true, wanted: true, now: now())
                 return refreshHealth()
             }
@@ -351,7 +553,7 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
             log.error("heartbeat failed: \(String(describing: error), privacy: .public)")
         }
         guard wanted else { return }
-        await send()
+        await send(.heartbeat)
     }
 
     private func startHeartbeat() {

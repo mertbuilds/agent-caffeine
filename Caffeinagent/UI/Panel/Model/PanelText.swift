@@ -81,6 +81,8 @@ enum PanelText {
     static let connectAndCheck = "Connect to the internet, then check again"
     static let activateAgain = "Activate this Mac again to keep it awake"
     static let helperNotResponding = "agent caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery"
+    static let helperRepairing = "Setting up the helper again…"
+    static let helperLost = "agent caffeine has to set up its helper again"
     static let lidClosedNotSetUp = "Your Mac still sleeps with the lid closed on battery"
 
     static func trialEnds(inDays days: Int) -> String {

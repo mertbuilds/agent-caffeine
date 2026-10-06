@@ -70,4 +70,13 @@ enum HelperCall {
         return error.domain == NSCocoaErrorDomain
             && [NSXPCConnectionInterrupted, NSXPCConnectionInvalid].contains(error.code)
     }
+
+    /// The answer came from a helper whose signature does not pass the
+    /// app's requirement. Seen with a helper that still runs from a bundle
+    /// that was replaced: it has to start again from the bundle in place.
+    /// The check is on the answer only, so the helper did what was asked.
+    static func isSigningFailure(_ error: Error) -> Bool {
+        let error = error as NSError
+        return error.domain == NSCocoaErrorDomain && error.code == NSXPCConnectionCodeSigningRequirementFailure
+    }
 }

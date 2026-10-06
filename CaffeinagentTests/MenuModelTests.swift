@@ -323,12 +323,35 @@ final class MenuModelTests: XCTestCase {
     }
 
     func testLidClosedNeedsSetupOnlyWhereItCanMatter() {
-        for helper in [HelperStatus.notRegistered, .requiresApproval, .notFound] {
-            XCTAssertTrue(MenuModel.lidClosedNeedsSetup(helper: helper, wanted: true, hasBattery: true))
-            XCTAssertFalse(MenuModel.lidClosedNeedsSetup(helper: helper, wanted: false, hasBattery: true), "The user switched it off")
-            XCTAssertFalse(MenuModel.lidClosedNeedsSetup(helper: helper, wanted: true, hasBattery: false), "No battery")
+        for setup in [HelperSetup.notSetUp, .requiresApproval] {
+            XCTAssertTrue(MenuModel.lidClosedNeedsSetup(setup: setup, wasSetUp: false, wanted: true, hasBattery: true))
+            XCTAssertFalse(MenuModel.lidClosedNeedsSetup(setup: setup, wasSetUp: false, wanted: false, hasBattery: true), "The user switched it off")
+            XCTAssertFalse(MenuModel.lidClosedNeedsSetup(setup: setup, wasSetUp: false, wanted: true, hasBattery: false), "No battery")
         }
-        XCTAssertFalse(MenuModel.lidClosedNeedsSetup(helper: .enabled, wanted: true, hasBattery: true))
+        for setup in [HelperSetup.ready, .repairing, .notResponding, .lost] {
+            XCTAssertFalse(MenuModel.lidClosedNeedsSetup(setup: setup, wasSetUp: false, wanted: true, hasBattery: true), "\(setup)")
+        }
+    }
+
+    func testAHelperThatWasSetUpBeforeNeverGetsTheHintOfTheFirstTime() {
+        for setup in [HelperSetup.notSetUp, .requiresApproval, .ready, .repairing, .notResponding, .lost] {
+            XCTAssertFalse(MenuModel.lidClosedNeedsSetup(setup: setup, wasSetUp: true, wanted: true, hasBattery: true), "\(setup)")
+        }
+        XCTAssertTrue(MenuModel.helperLost(setup: .lost, wasSetUp: true, wanted: true, hasBattery: true))
+        XCTAssertTrue(MenuModel.helperLost(setup: .requiresApproval, wasSetUp: true, wanted: true, hasBattery: true))
+        XCTAssertFalse(MenuModel.helperLost(setup: .requiresApproval, wasSetUp: false, wanted: true, hasBattery: true))
+        XCTAssertFalse(MenuModel.helperLost(setup: .repairing, wasSetUp: true, wanted: true, hasBattery: true), "agent caffeine is still at it")
+        XCTAssertFalse(MenuModel.helperLost(setup: .notResponding, wasSetUp: true, wanted: true, hasBattery: true))
+        XCTAssertFalse(MenuModel.helperLost(setup: .lost, wasSetUp: true, wanted: false, hasBattery: true), "The user switched it off")
+        XCTAssertFalse(MenuModel.helperLost(setup: .lost, wasSetUp: true, wanted: true, hasBattery: false), "No battery")
+
+        var lost = input(.working(.one("Claude Code")))
+        lost.helperLost = true
+        lost.lidClosedHintDismissed = true
+        XCTAssertEqual(MenuModel.attention(lost), PanelAttention(
+            kind: .helperLost, text: "agent caffeine has to set up its helper again", actions: [.setUpLidClosed]
+        ))
+        XCTAssertEqual(PanelText.helperRepairing, "Setting up the helper again…")
     }
 
     func testAHelperThatGivesNoAnswerIsToldOnlyWhereItCanMatter() {

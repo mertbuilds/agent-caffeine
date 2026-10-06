@@ -2,25 +2,65 @@ import XCTest
 
 private struct FakeError: Error {}
 
+/// What the service and the helper were asked, in order.
+private final class Journal {
+    var entries: [String] = []
+}
+
+/// "Operation not permitted" as ServiceManagement gives it.
+private let notPermitted = NSError(domain: "SMAppServiceErrorDomain", code: 1)
+private let signingFailed = NSError(domain: NSCocoaErrorDomain, code: NSXPCConnectionCodeSigningRequirementFailure)
+
 private final class FakeService: HelperServiceManaging {
     var status: HelperStatus
     var statusAfterRegister: HelperStatus = .enabled
     var registerError: Error?
+    /// Thrown by the next calls of register(), one each, and nothing is registered.
+    var registerFailures: [Error] = []
+    var registerAlwaysFails: Error?
+    /// How long the system takes to drop the registration, and to enable a new one.
+    var removalTime: TimeInterval = 0
+    var enableTime: TimeInterval = 0
     var unregistered = false
     var registrations = 0
     var openedSettings = false
+    var journal: Journal?
+    var onUnregister: () -> Void = {}
+    var onRegistered: () -> Void = {}
+    private var pending: (left: TimeInterval, status: HelperStatus)?
 
     init(status: HelperStatus) { self.status = status }
 
+    /// Time passes: the sleeper of the test calls this.
+    func advance(by seconds: TimeInterval) {
+        guard var waiting = pending else { return }
+        waiting.left -= seconds
+        pending = waiting
+        if waiting.left <= 0 {
+            status = waiting.status
+            pending = nil
+        }
+    }
+
+    private func change(to next: HelperStatus, after time: TimeInterval) {
+        if time > 0 { pending = (time, next) } else { status = next }
+    }
+
     func register() throws {
         registrations += 1
-        status = statusAfterRegister
+        journal?.entries.append("register")
+        if !registerFailures.isEmpty { throw registerFailures.removeFirst() }
+        if let registerAlwaysFails { throw registerAlwaysFails }
+        change(to: statusAfterRegister, after: enableTime)
+        onRegistered()
         if let registerError { throw registerError }
     }
 
     func unregister() async throws {
         unregistered = true
-        status = .notRegistered
+        journal?.entries.append("unregister")
+        onUnregister()
+        change(to: .notRegistered, after: removalTime)
     }
 
     func openLoginItemsSettings() { openedSettings = true }
@@ -35,6 +75,9 @@ private final class FakeHelper: SleepFlagHelperConnecting {
     var error: Error = FakeError()
     /// Thrown by the next calls, one each, before anything else.
     var failures: [Error] = []
+    /// A helper from a bundle that was replaced: it does what it is asked,
+    /// and the app refuses its answer.
+    var stale = false
     var clearFails = false
     /// A helper that answers and does not set the flag.
     var setFails = false
@@ -42,9 +85,21 @@ private final class FakeHelper: SleepFlagHelperConnecting {
     var holdsNextSet = false
     var held: CheckedContinuation<Void, Never>?
     var calls: [String] = []
+    var reconnects = 0
+    var journal: Journal?
     var lostHandler: (() -> Void)?
 
     func onConnectionLost(_ handler: @escaping () -> Void) { lostHandler = handler }
+
+    func reconnect() {
+        reconnects += 1
+        journal?.entries.append("reconnect")
+    }
+
+    private func called(_ name: String) {
+        calls.append(name)
+        journal?.entries.append(name)
+    }
 
     private func fail() throws {
         if !failures.isEmpty { throw failures.removeFirst() }
@@ -52,7 +107,7 @@ private final class FakeHelper: SleepFlagHelperConnecting {
     }
 
     func setSleepDisabled(_ on: Bool) async throws -> Bool {
-        calls.append("set \(on)")
+        called("set \(on)")
         if holdsNextSet {
             holdsNextSet = false
             await withCheckedContinuation { held = $0 }
@@ -62,18 +117,21 @@ private final class FakeHelper: SleepFlagHelperConnecting {
             flag = on
             setByHelper = on
         }
+        if stale { throw signingFailed }
         return flag
     }
 
     func status() async throws -> (sleepDisabled: Bool, setByHelper: Bool, version: String) {
-        calls.append("status")
+        called("status")
         try fail()
+        if stale { throw signingFailed }
         return (flag, setByHelper, "1.0 (1)")
     }
 
     func heartbeat() async throws -> Bool {
-        calls.append("heartbeat")
+        called("heartbeat")
         try fail()
+        if stale { throw signingFailed }
         return flag
     }
 }
@@ -89,14 +147,57 @@ private final class FakeSudoers: SudoersCleaning {
 @MainActor
 final class SleepFlagControllerTests: XCTestCase {
     private var now: TimeInterval = 1_000
+    private var slept: [TimeInterval] = []
+    private var journal = Journal()
+    /// Runs in every wait of the repair.
+    private var whileWaiting: () -> Void = {}
+    private var suite = ""
+    private var defaults: UserDefaults!
+
+    override func setUp() {
+        super.setUp()
+        suite = "SleepFlagControllerTests.\(UUID().uuidString)"
+        defaults = UserDefaults(suiteName: suite)
+    }
+
+    override func tearDown() {
+        defaults.removePersistentDomain(forName: suite)
+        super.tearDown()
+    }
 
     private func makeController(
         _ service: FakeService,
         _ helper: FakeHelper = FakeHelper(),
         _ sudoers: FakeSudoers = FakeSudoers()
     ) -> SleepFlagController {
+        service.journal = journal
+        helper.journal = journal
         // An hour, so the timer never fires in a test; heartbeats are sent by hand.
-        SleepFlagController(service: service, helper: helper, sudoers: sudoers, heartbeatInterval: 3600, now: { self.now })
+        // No wait is real: the sleeper moves the clock and the service.
+        return SleepFlagController(
+            service: service, helper: helper, sudoers: sudoers, heartbeatInterval: 3600, defaults: defaults,
+            now: { self.now },
+            sleep: { seconds in
+                self.now += seconds
+                self.slept.append(seconds)
+                self.journal.entries.append("sleep \(seconds)")
+                service.advance(by: seconds)
+                self.whileWaiting()
+            }
+        )
+    }
+
+    /// A stale helper and the service that stops and starts it.
+    private func staleHelper(on service: FakeService) -> FakeHelper {
+        let helper = FakeHelper()
+        helper.stale = true
+        // A helper that is stopped clears the flag it owns.
+        service.onUnregister = {
+            helper.flag = false
+            helper.setByHelper = false
+        }
+        service.onRegistered = { helper.stale = false }
+        return helper
     }
 
     /// A helper that gives no answer: the real connection ends such a call
@@ -367,14 +468,27 @@ final class SleepFlagControllerTests: XCTestCase {
         XCTAssertEqual(service.registrations, 1, "Once in a launch")
     }
 
-    func testAHelperThatThrowsOnItsVersionIsRegisteredAgain() async {
+    func testAHelperThatGivesItsVersionOnANewConnectionIsLeftAlone() async {
         let service = FakeService(status: .enabled)
         let helper = FakeHelper()
         helper.failures = [FakeError()]
         let controller = makeController(service, helper)
         await controller.replaceHelper(ifNot: "1.0 (1)")
+        XCTAssertEqual(helper.reconnects, 1)
+        XCTAssertEqual(helper.calls, ["status", "status", "set false"], "The wanted value goes over the new connection")
+        XCTAssertFalse(service.unregistered)
+        XCTAssertEqual(service.registrations, 0)
+        XCTAssertEqual(controller.setup, .ready)
+    }
+
+    func testAnOutdatedHelperOnANewConnectionIsRegisteredAgain() async {
+        let service = FakeService(status: .enabled)
+        let helper = FakeHelper()
+        helper.failures = [FakeError()]
+        let controller = makeController(service, helper)
+        await controller.replaceHelper(ifNot: "1.1 (2)")
         XCTAssertEqual(service.registrations, 1)
-        XCTAssertEqual(helper.calls, ["status", "set false"], "The wanted value goes to the new helper")
+        XCTAssertEqual(helper.calls, ["status", "status", "set false", "status", "set false"], "The wanted value goes to the new helper")
     }
 
     func testAHelperThatWentAwayIsAskedForItsVersionAgain() async {
@@ -394,7 +508,7 @@ final class SleepFlagControllerTests: XCTestCase {
         let controller = makeController(service, helper)
         _ = await controller.setSleepDisabled(true)
         await controller.replaceHelper(ifNot: "1.1 (2)")
-        XCTAssertEqual(helper.calls, ["set true", "status", "set false", "set true"])
+        XCTAssertEqual(helper.calls, ["set true", "status", "set false", "status", "set true"])
         XCTAssertTrue(controller.sleepDisabled)
         XCTAssertFalse(controller.repairTried, "Another version is no failure")
     }
@@ -442,7 +556,13 @@ final class SleepFlagControllerTests: XCTestCase {
         await controller.sendHeartbeat()
         XCTAssertTrue(service.unregistered)
         XCTAssertEqual(service.registrations, 1)
-        XCTAssertEqual(helper.calls, ["set true", "heartbeat", "set true", "set true"], "The new helper gets the value at once")
+        XCTAssertEqual(helper.reconnects, 3, "Two for the old helper, one for the new")
+        XCTAssertEqual(
+            helper.calls, ["set true", "heartbeat", "set true", "status", "status", "status", "status", "status", "set true"],
+            "Two tries on a new connection, three for the first answer of the new helper, and the value once more"
+        )
+        XCTAssertTrue(controller.notResponding, "A repair that did not help is told at once")
+        XCTAssertEqual(controller.setup, .notResponding)
         for _ in 1...3 { await controller.sendHeartbeat() }
         XCTAssertEqual(service.registrations, 1, "Once in a launch")
     }
@@ -450,12 +570,14 @@ final class SleepFlagControllerTests: XCTestCase {
     func testRegisteringAgainBringsTheFlagBack() async {
         let service = FakeService(status: .enabled)
         let helper = silentHelper()
-        helper.failures = [HelperCallError.timedOut, HelperCallError.timedOut, HelperCallError.timedOut]
+        // The set, the heartbeat, the set again, and two tries on a new connection.
+        helper.failures = Array(repeating: HelperCallError.timedOut, count: 5)
         helper.unreachable = false
         let controller = makeController(service, helper)
         _ = await controller.setSleepDisabled(true)
         await controller.sendHeartbeat()
         XCTAssertEqual(service.registrations, 1)
+        XCTAssertEqual(controller.setup, .ready)
         XCTAssertTrue(controller.sleepDisabled)
         now += 60
         controller.refreshHealth()
@@ -594,10 +716,259 @@ final class SleepFlagControllerTests: XCTestCase {
         await controller.sendHeartbeat()
         XCTAssertEqual(service.registrations, 1, "The repair of this launch")
         helper.unreachable = false
-        helper.failures = [HelperCallError.timedOut]
+        helper.failures = [HelperCallError.timedOut, HelperCallError.timedOut]
         await controller.repairHelper()
         XCTAssertEqual(service.registrations, 2, "The user can ask as often as they like")
         XCTAssertTrue(controller.sleepDisabled)
+    }
+
+    // MARK: The repair
+
+    /// The log of 2026-10-06: the app was replaced, the helper of the old
+    /// bundle still ran, and register() right after unregister() was not
+    /// permitted.
+    func testAStaleHelperIsStartedAgainFromTheLog() async {
+        let service = FakeService(status: .enabled)
+        service.removalTime = 0.5
+        service.registerFailures = [notPermitted, notPermitted]
+        let helper = staleHelper(on: service)
+        let controller = makeController(service, helper)
+        var seen: Set<HelperSetup> = []
+        whileWaiting = { seen.insert(controller.setup) }
+
+        let on = await controller.setSleepDisabled(true)
+
+        XCTAssertEqual(journal.entries, [
+            "set true", "reconnect", "status",
+            "unregister", "sleep 0.25", "sleep 0.25",
+            "register", "sleep 0.5", "register", "sleep 1.0", "register",
+            "reconnect", "status", "set true",
+        ])
+        XCTAssertTrue(on)
+        XCTAssertTrue(helper.flag)
+        XCTAssertFalse(controller.flagUnconfirmed)
+        XCTAssertEqual(controller.helperStatus, .enabled)
+        XCTAssertEqual(seen, [.repairing], "Never the hint of the first time")
+        XCTAssertEqual(controller.setup, .ready)
+        XCTAssertFalse(controller.notResponding)
+    }
+
+    func testAStaleHelperAtLaunchIsStartedAgain() async {
+        let service = FakeService(status: .enabled)
+        service.registerFailures = [notPermitted]
+        let helper = staleHelper(on: service)
+        let controller = makeController(service, helper)
+        await controller.replaceHelper(ifNot: "1.0 (1)")
+        XCTAssertEqual(journal.entries, ["status", "reconnect", "status", "unregister", "register", "sleep 0.5", "register", "reconnect", "status", "set false"])
+        XCTAssertEqual(controller.setup, .ready)
+    }
+
+    func testASetWhoseAnswerIsLostIsNotTakenForOff() async {
+        let helper = FakeHelper()
+        helper.failures = [HelperCallError.timedOut]
+        let controller = makeController(FakeService(status: .enabled), helper)
+        let on = await controller.setSleepDisabled(true)
+        XCTAssertFalse(on)
+        XCTAssertTrue(controller.flagUnconfirmed, "The helper may have set it")
+        await controller.sendHeartbeat()
+        XCTAssertFalse(controller.flagUnconfirmed)
+        XCTAssertTrue(controller.sleepDisabled)
+    }
+
+    func testTheStoppedHelperClearsAFlagItSetWithoutAnAnswer() async {
+        let service = FakeService(status: .enabled)
+        service.registerAlwaysFails = notPermitted
+        let helper = staleHelper(on: service)
+        let controller = makeController(service, helper)
+        _ = await controller.setSleepDisabled(true)
+        XCTAssertEqual(helper.calls.first, "set true", "The stale helper did what it was asked")
+        XCTAssertFalse(helper.flag, "And cleared it when it was stopped")
+        XCTAssertFalse(controller.sleepDisabled)
+    }
+
+    func testRegisterIsTriedAgainOnlyWhenItWasNotPermitted() async {
+        let service = FakeService(status: .enabled)
+        service.registerFailures = [FakeError()]
+        let controller = makeController(service, silentHelper())
+        await controller.replaceHelper(ifNot: "1.0 (1)")
+        XCTAssertEqual(service.registrations, 1)
+        XCTAssertEqual(slept, [])
+        XCTAssertEqual(controller.setup, .notResponding)
+    }
+
+    func testARepairThatCannotRegisterTellsItAndTriesAgainLater() async {
+        let service = FakeService(status: .enabled)
+        service.registerAlwaysFails = notPermitted
+        let helper = staleHelper(on: service)
+        let controller = makeController(service, helper)
+        _ = await controller.setSleepDisabled(true)
+        XCTAssertEqual(service.registrations, 5)
+        XCTAssertEqual(slept, [0.5, 1, 2, 4])
+        XCTAssertEqual(controller.helperStatus, .notRegistered)
+        XCTAssertEqual(controller.setup, .notResponding, "Not the hint of the first time")
+        XCTAssertTrue(controller.repairTried, "Open System Settings is offered")
+
+        XCTAssertFalse(controller.repairIsDue)
+        await controller.retryRepairIfDue()
+        XCTAssertEqual(service.registrations, 5, "Not before a minute is over")
+
+        now += 60
+        service.registerAlwaysFails = nil
+        XCTAssertTrue(controller.repairIsDue)
+        await controller.retryRepairIfDue()
+        XCTAssertEqual(service.registrations, 6)
+        XCTAssertEqual(controller.setup, .ready)
+        XCTAssertTrue(helper.flag, "The wanted value goes to the new helper")
+        XCTAssertFalse(controller.repairIsDue)
+    }
+
+    func testAfterTheLastTryTheUserIsAskedToSetUpAgain() async {
+        let service = FakeService(status: .enabled)
+        service.registerAlwaysFails = notPermitted
+        let controller = makeController(service, staleHelper(on: service))
+        _ = await controller.setSleepDisabled(true)
+        for _ in 1...HelperRepair.slowRetries {
+            XCTAssertEqual(controller.setup, .notResponding)
+            now += 60
+            await controller.retryRepairIfDue()
+        }
+        XCTAssertEqual(service.registrations, 5 * (1 + HelperRepair.slowRetries))
+        XCTAssertEqual(controller.setup, .lost)
+        now += 600
+        XCTAssertFalse(controller.repairIsDue, "So many times in a launch")
+    }
+
+    func testTryAgainRegistersAHelperTheRepairTookAway() async {
+        let service = FakeService(status: .enabled)
+        service.registerAlwaysFails = notPermitted
+        let helper = staleHelper(on: service)
+        let controller = makeController(service, helper)
+        _ = await controller.setSleepDisabled(true)
+        service.registerAlwaysFails = nil
+        await controller.repairHelper()
+        XCTAssertEqual(controller.setup, .ready)
+        XCTAssertTrue(helper.flag)
+    }
+
+    func testTryAgainSetsUpNoHelperThatWasNeverThere() async {
+        let service = FakeService(status: .notRegistered)
+        let controller = makeController(service)
+        await controller.repairHelper()
+        XCTAssertEqual(service.registrations, 0)
+        XCTAssertEqual(controller.setup, .notSetUp)
+    }
+
+    func testARepairThatEndsInApprovalSaysSo() async {
+        let service = FakeService(status: .enabled)
+        service.statusAfterRegister = .requiresApproval
+        service.registerError = notPermitted
+        let controller = makeController(service, staleHelper(on: service))
+        _ = await controller.setSleepDisabled(true)
+        XCTAssertEqual(service.registrations, 1, "Waiting does not allow it")
+        XCTAssertEqual(controller.setup, .requiresApproval)
+        now += 60
+        XCTAssertFalse(controller.repairIsDue)
+    }
+
+    func testTheNewHelperIsWaitedFor() async {
+        let service = FakeService(status: .enabled)
+        service.enableTime = 0.5
+        let helper = staleHelper(on: service)
+        let controller = makeController(service, helper)
+        // The first answer of the new helper is late.
+        service.onRegistered = {
+            helper.stale = false
+            helper.failures = [HelperCallError.connectionLost]
+        }
+        let on = await controller.setSleepDisabled(true)
+        XCTAssertTrue(on)
+        XCTAssertEqual(slept, [0.25, 0.25, 1])
+        XCTAssertEqual(controller.setup, .ready)
+    }
+
+    func testNothingIsSentToTheHelperWhileItIsRepaired() async {
+        let service = FakeService(status: .enabled)
+        service.registerFailures = [notPermitted]
+        let helper = staleHelper(on: service)
+        let controller = makeController(service, helper)
+        var asked = false
+        whileWaiting = {
+            guard !asked else { return }
+            asked = true
+            Task { @MainActor in
+                await controller.sendHeartbeat()
+                await controller.connectionLost()
+                await controller.repairHelper()
+            }
+        }
+        _ = await controller.setSleepDisabled(true)
+        XCTAssertEqual(service.registrations, 2)
+        XCTAssertFalse(helper.calls.contains("heartbeat"))
+    }
+
+    func testTheHelperThatWasSetUpIsRemembered() async throws {
+        let service = FakeService(status: .notRegistered)
+        let first = makeController(service)
+        XCTAssertEqual(first.setup, .notSetUp)
+        XCTAssertFalse(first.wasSetUp)
+        try await first.install()
+        XCTAssertEqual(first.setup, .ready)
+        XCTAssertTrue(first.wasSetUp)
+
+        // The next launch finds it gone.
+        let later = makeController(FakeService(status: .notRegistered))
+        XCTAssertEqual(later.setup, .lost)
+        let waiting = makeController(FakeService(status: .requiresApproval))
+        XCTAssertEqual(waiting.setup, .requiresApproval)
+        XCTAssertTrue(waiting.wasSetUp)
+
+        try await first.uninstall()
+        XCTAssertFalse(first.wasSetUp, "The user removed it")
+        XCTAssertEqual(first.setup, .notSetUp)
+    }
+
+    func testNoOffIsSentAfterTheHelperIsSetUpWhileTheMacIsHeld() async throws {
+        let service = FakeService(status: .enabled)
+        service.registerAlwaysFails = notPermitted
+        let helper = staleHelper(on: service)
+        let controller = makeController(service, helper)
+        var request = SleepFlagRequest()
+        // The aggregator's part: the decision asks for the flag all the time.
+        func sync() async {
+            guard let value = request.next(wanted: true, helperEnabled: controller.helperStatus == .enabled, now: now) else { return }
+            _ = await controller.setSleepDisabled(value)
+            if controller.lastSetFailed { request.didFail(now: now) }
+        }
+        await sync()
+        XCTAssertEqual(controller.helperStatus, .notRegistered, "The repair lost the helper")
+        await sync()
+
+        service.registerAlwaysFails = nil
+        try await controller.install()
+        let before = helper.calls.count
+        for _ in 1...4 {
+            await sync()
+            now += 15
+            await controller.sendHeartbeat()
+            controller.refreshStatus()
+            await controller.retryRepairIfDue()
+            await controller.connectionLost()
+        }
+        let after = Array(helper.calls.dropFirst(before))
+        XCTAssertEqual(after.first, "set true")
+        XCTAssertFalse(after.contains("set false"), "\(after)")
+        XCTAssertFalse(after.contains("status"), "The helper is not repaired: \(after)")
+        XCTAssertTrue(helper.flag)
+    }
+
+    func testWhichErrorsMeanNotPermittedAndStale() {
+        XCTAssertTrue(HelperRepair.isNotPermitted(notPermitted))
+        XCTAssertTrue(HelperRepair.isNotPermitted(POSIXError(.EPERM)))
+        XCTAssertFalse(HelperRepair.isNotPermitted(NSError(domain: "SMAppServiceErrorDomain", code: 3)))
+        XCTAssertFalse(HelperRepair.isNotPermitted(FakeError()))
+        XCTAssertTrue(HelperCall.isSigningFailure(NSError(domain: NSCocoaErrorDomain, code: 4102)))
+        XCTAssertFalse(HelperCall.isSigningFailure(HelperCallError.timedOut))
+        XCTAssertFalse(HelperCall.isConnectionLoss(signingFailed))
     }
 
     func testRepairIsTakenOnce() {

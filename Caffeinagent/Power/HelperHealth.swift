@@ -15,11 +15,15 @@ struct HelperHealth: Equatable {
     /// The helper was registered again in this launch. Once is enough: a
     /// second time would not do what the first did not.
     private(set) var repairTried = false
+    /// A repair ended and the helper still gives no answer. The user is
+    /// told at once.
+    private(set) var repairFailed = false
 
     /// The helper answered. A flag that is off while the app wants it on is
     /// trouble too. A flag that stays on is not: it is someone else's.
     mutating func answered(confirmed: Bool, wanted: Bool, now: TimeInterval) {
         failures = 0
+        repairFailed = false
         if wanted && !confirmed {
             troubleSince = troubleSince ?? now
         } else {
@@ -36,11 +40,12 @@ struct HelperHealth: Equatable {
     /// The helper is not enabled, so nothing is asked of it.
     mutating func helperIsOff() {
         failures = 0
+        repairFailed = false
         troubleSince = nil
     }
 
     func notResponding(now: TimeInterval) -> Bool {
-        troubleSince.map { now - $0 >= Self.patience } ?? false
+        repairFailed || troubleSince.map { now - $0 >= Self.patience } ?? false
     }
 
     /// True when the helper is to be registered again now, once in a launch.
@@ -49,6 +54,11 @@ struct HelperHealth: Equatable {
         guard !repairTried, atOnce || failures >= Self.failuresBeforeRepair else { return false }
         repairTried = true
         return true
+    }
+
+    mutating func repairDidFail() {
+        repairTried = true
+        repairFailed = true
     }
 
     /// The user asked for a repair.

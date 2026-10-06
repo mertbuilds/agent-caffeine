@@ -88,6 +88,9 @@ enum MenuModel {
                 actions: input.helperRepairTried ? [.tryHelperAgain, .openLoginItems] : [.tryHelperAgain]
             )
         }
+        if input.helperLost {
+            return PanelAttention(kind: .helperLost, text: PanelText.helperLost, actions: [.setUpLidClosed])
+        }
         switch input.entitlement {
         case .expired(.trialOver):
             return PanelAttention(kind: .license, text: PanelText.buyToKeepAwake, actions: [.buy, .enterKey])
@@ -114,8 +117,14 @@ enum MenuModel {
         return nil
     }
 
-    static func lidClosedNeedsSetup(helper: HelperStatus, wanted: Bool, hasBattery: Bool) -> Bool {
-        hasBattery && wanted && helper != .enabled
+    /// The hint of the first time. Not for a helper that was set up
+    /// before, and not while agent caffeine brings it back.
+    static func lidClosedNeedsSetup(setup: HelperSetup, wasSetUp: Bool, wanted: Bool, hasBattery: Bool) -> Bool {
+        hasBattery && wanted && !wasSetUp && (setup == .notSetUp || setup == .requiresApproval)
+    }
+
+    static func helperLost(setup: HelperSetup, wasSetUp: Bool, wanted: Bool, hasBattery: Bool) -> Bool {
+        hasBattery && wanted && (setup == .lost || (setup == .requiresApproval && wasSetUp))
     }
 
     static func helperNotResponding(notResponding: Bool, wanted: Bool, hasBattery: Bool) -> Bool {

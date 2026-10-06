@@ -33,7 +33,7 @@ struct PreferencesView: View {
             LidClosedPreferences(
                 settings: $aggregator.settings,
                 helper: aggregator.sleepFlag.helperStatus,
-                notResponding: aggregator.sleepFlag.notResponding,
+                setup: aggregator.sleepFlag.setup,
                 repairTried: aggregator.sleepFlag.repairTried,
                 canSetUp: aggregator.canSetUpHelper,
                 needsSudoersCleanup: aggregator.sleepFlag.needsSudoersCleanup,
@@ -372,8 +372,7 @@ extension AgentRule {
 struct LidClosedPreferences: View {
     @Binding var settings: DetectionSettings
     let helper: HelperStatus
-    /// The helper is allowed and gives no answer.
-    var notResponding = false
+    let setup: HelperSetup
     /// The helper was registered again and still gives no answer.
     var repairTried = false
     /// The helper is offered only from the Applications folder.
@@ -423,8 +422,14 @@ struct LidClosedPreferences: View {
 
     @ViewBuilder
     private var helperState: some View {
-        switch helper {
-        case .enabled where notResponding:
+        switch setup {
+        case .repairing:
+            HStack {
+                ProgressView()
+                    .controlSize(.small)
+                Text(PanelText.helperRepairing)
+            }
+        case .notResponding:
             Label(PanelText.helperNotResponding, systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             HStack {
@@ -433,7 +438,7 @@ struct LidClosedPreferences: View {
                     Button(PanelText.title(of: .openLoginItems), action: openLoginItems)
                 }
             }
-        case .enabled:
+        case .ready:
             HStack {
                 Label("The helper is set up", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
@@ -446,7 +451,17 @@ struct LidClosedPreferences: View {
                 Spacer()
                 Button("Open System Settings", action: openLoginItems)
             }
-        case .notRegistered, .notFound:
+        case .lost:
+            if canSetUp {
+                HStack {
+                    Text(PanelText.helperLost)
+                    Spacer()
+                    Button("Set up…", action: setUp)
+                }
+            } else {
+                Text("Move agent caffeine to the Applications folder to set this up")
+            }
+        case .notSetUp:
             if canSetUp {
                 Button("Set up…", action: setUp)
             } else {
@@ -459,7 +474,7 @@ struct LidClosedPreferences: View {
 #if DEBUG
 private struct PreferencesPreview: View {
     var helper = HelperStatus.notRegistered
-    var notResponding = false
+    var setup = HelperSetup.notSetUp
     var needsSudoersCleanup = false
     @State private var mode = AwakeMode.agentWorking
     @State private var settings = DetectionSettings()
@@ -475,7 +490,7 @@ private struct PreferencesPreview: View {
             )
                 .tabItem { Label("Agents", systemImage: "terminal") }
             LidClosedPreferences(
-                settings: $settings, helper: helper, notResponding: notResponding, repairTried: true, canSetUp: true, needsSudoersCleanup: needsSudoersCleanup, error: nil,
+                settings: $settings, helper: helper, setup: setup, repairTried: true, canSetUp: true, needsSudoersCleanup: needsSudoersCleanup, error: nil,
                 setUp: {}, remove: {}, openLoginItems: {}, removeSudoersEntry: {}
             )
             .tabItem { Label("Lid closed", systemImage: "laptopcomputer") }
@@ -490,14 +505,22 @@ private struct PreferencesPreview: View {
 }
 
 #Preview("Helper set up, old entry left") {
-    PreferencesPreview(helper: .enabled, needsSudoersCleanup: true)
+    PreferencesPreview(helper: .enabled, setup: .ready, needsSudoersCleanup: true)
 }
 
 #Preview("Helper gives no answer") {
-    PreferencesPreview(helper: .enabled, notResponding: true)
+    PreferencesPreview(helper: .enabled, setup: .notResponding)
 }
 
 #Preview("Helper waits for approval") {
-    PreferencesPreview(helper: .requiresApproval)
+    PreferencesPreview(helper: .requiresApproval, setup: .requiresApproval)
+}
+
+#Preview("Helper is set up again") {
+    PreferencesPreview(setup: .repairing)
+}
+
+#Preview("Helper lost") {
+    PreferencesPreview(setup: .lost)
 }
 #endif

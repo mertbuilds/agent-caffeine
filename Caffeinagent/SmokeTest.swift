@@ -39,7 +39,7 @@ enum SmokeTest {
         parts = AggregatorParts(
             defaults: defaults,
             license: LicenseManager(client: NoLicenseAPI(), store: MemoryStore(), defaults: defaults),
-            sleepFlag: SleepFlagController(service: NoHelperService(), helper: NoHelper(), sudoers: NoSudoers()),
+            sleepFlag: SleepFlagController(service: NoHelperService(), helper: NoHelper(), sudoers: NoSudoers(), defaults: defaults),
             power: NoPower(),
             notify: { _ in }
         )
@@ -326,6 +326,7 @@ private struct NoHelperService: HelperServiceManaging {
 
 private struct NoHelper: SleepFlagHelperConnecting {
     func onConnectionLost(_ handler: @escaping () -> Void) {}
+    func reconnect() {}
     func setSleepDisabled(_ on: Bool) async throws -> Bool { throw HelperCallError.connectionLost }
     func status() async throws -> (sleepDisabled: Bool, setByHelper: Bool, version: String) { throw HelperCallError.connectionLost }
     func heartbeat() async throws -> Bool { throw HelperCallError.connectionLost }
