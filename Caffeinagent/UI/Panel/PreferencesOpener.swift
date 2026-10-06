@@ -20,14 +20,30 @@ struct PreferencesOpener<Content: View>: View {
     }
 
     static func bringSettingsFront() {
-        DispatchQueue.main.async {
-            NSApp.activate(ignoringOtherApps: true)
-            if let window = NSApp.windows.first(where: {
+        PreferencesWindow.bringFront()
+    }
+}
+
+/// The window of the Settings scene.
+enum PreferencesWindow {
+    /// Seconds between the tries of `bringFront`.
+    static let tries: [TimeInterval] = [0, 0.1, 0.3]
+
+    /// Makes Preferences the key window of the active app. A window that
+    /// is not key draws its switches grey. The window can be made a turn of
+    /// the run loop later, and the menu that closes can take the key state
+    /// back, so this asks again until the window is key.
+    static func bringFront(try index: Int = 0) {
+        guard index < tries.count else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + tries[index]) {
+            let window = NSApp.windows.first {
                 $0.identifier?.rawValue == "com_apple_SwiftUI_Settings_window"
-            }) {
-                window.makeKeyAndOrderFront(nil)
-                window.orderFrontRegardless()
             }
+            if index > 0, NSApp.isActive, window?.isKeyWindow == true { return }
+            NSApp.activate(ignoringOtherApps: true)
+            window?.makeKeyAndOrderFront(nil)
+            window?.orderFrontRegardless()
+            bringFront(try: index + 1)
         }
     }
 }
