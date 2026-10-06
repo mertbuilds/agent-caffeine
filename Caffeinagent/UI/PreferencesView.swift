@@ -51,6 +51,7 @@ struct PreferencesView: View {
                 repairTried: aggregator.sleepFlag.repairTried,
                 canSetUp: aggregator.canSetUpHelper,
                 needsSudoersCleanup: aggregator.sleepFlag.needsSudoersCleanup,
+                hasLidAngleSensor: aggregator.hasLidAngleSensor,
                 error: aggregator.helperError,
                 setUp: aggregator.setUpHelper,
                 remove: aggregator.removeHelper,
@@ -473,6 +474,8 @@ struct LidClosedPreferences: View {
     /// The helper is offered only from the Applications folder.
     let canSetUp: Bool
     let needsSudoersCleanup: Bool
+    /// The fade is offered only on a Mac with a lid angle sensor.
+    var hasLidAngleSensor = false
     let error: String?
     let setUp: () -> Void
     let remove: () -> Void
@@ -508,6 +511,13 @@ struct LidClosedPreferences: View {
                 Text("With the lid closed, agent caffeine keeps the built-in display dark so it does not use the battery or warm your Mac.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                if hasLidAngleSensor {
+                    Toggle("Dim the display as the lid closes", isOn: $settings.dimAsLidCloses)
+                        .disabled(!settings.displayOffLidClosed)
+                    Text("The built-in display gets darker from 45 degrees and is off when the lid is shut. It gets bright again the same way when you open the lid. A lid that rests half open stays bright.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             }
             if needsSudoersCleanup {
                 Section {
@@ -596,7 +606,8 @@ private struct PreferencesPreview: View {
             )
                 .tabItem { Label("Agents", systemImage: "terminal") }
             LidClosedPreferences(
-                settings: $settings, helper: helper, setup: setup, repairTried: true, canSetUp: true, needsSudoersCleanup: needsSudoersCleanup, error: nil,
+                settings: $settings, helper: helper, setup: setup, repairTried: true, canSetUp: true, needsSudoersCleanup: needsSudoersCleanup,
+                hasLidAngleSensor: true, error: nil,
                 setUp: {}, remove: {}, openLoginItems: {}, removeSudoersEntry: {}
             )
             .tabItem { Label("Lid closed", systemImage: "laptopcomputer") }

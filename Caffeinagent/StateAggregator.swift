@@ -27,7 +27,8 @@ struct AggregatorParts {
             hotKeys: GlobalHotKey(),
             display: DisplayController(
                 reader: SystemDisplayReader(), sleeper: SystemDisplaySleep(),
-                dimmer: BuiltinDimmer(methods: BuiltinDimmer.systemMethods, defaults: .standard), watcher: SystemDisplayWatcher()
+                dimmer: BuiltinDimmer(methods: BuiltinDimmer.systemMethods, defaults: .standard), watcher: SystemDisplayWatcher(),
+                lid: SystemLidAngle(), ticker: SystemLidTicker()
             ),
             notify: Notifier.post,
             notifier: Notifier.shared
@@ -97,6 +98,10 @@ final class StateAggregator: ObservableObject {
             DetectionSettingsStore.save(settings, to: defaults)
             safetyMonitor.batteryFloorPercent = settings.batteryFloorPercent
             engine.settings = settings
+            // The display follows a switch at once, not at the next sample.
+            if settings.displayOffLidClosed != oldValue.displayOffLidClosed || settings.dimAsLidCloses != oldValue.dimAsLidCloses {
+                engine.requestSample()
+            }
         }
     }
     /// Which agent notifications the user wants. Switching one on asks
@@ -155,6 +160,9 @@ final class StateAggregator: ObservableObject {
     let license: LicenseManager
     let sleepFlag: SleepFlagController
     let canSetUpHelper = AppRelocator.isInSystemApplications
+    /// False on a Mac without a lid angle sensor, where the display cannot
+    /// follow the lid.
+    var hasLidAngleSensor: Bool { display?.hasLidAngleSensor ?? false }
     private let hookInstaller = HookInstaller()
     private let engine: DetectionEngine
     /// How many samples the engine gave. For the smoke test.
@@ -288,7 +296,8 @@ final class StateAggregator: ObservableObject {
         refreshHookStatuses()
         syncSleepFlag()
         registerShortcuts()
-        // A lid that closes is acted on at once, not at the next sample.
+        // The display controller acts on a lid that closes by itself and at
+        // once. The sample is for the rest of the app.
         display?.start { [weak self] in self?.engine.requestSample() }
         // On its own, so a helper that gives no answer holds nothing up.
         Task { await sleepFlag.replaceHelper(ifNot: AppVersion.helperForm) }
@@ -472,7 +481,8 @@ final class StateAggregator: ObservableObject {
         announceHiddenNotice()
         announceAgents(sample)
         display?.update(
-            lidClosed: context.lidClosed, holding: sample.decision.hold, enabled: settings.displayOffLidClosed, now: sample.frame.at
+            lidClosed: context.lidClosed, holding: sample.decision.hold, enabled: settings.displayOffLidClosed,
+            fade: settings.dimAsLidCloses, now: sample.frame.at
         )
         // In case a timer is late.
         if pause.until != nil, !pause.isPaused(now: Date()) { settlePause() }

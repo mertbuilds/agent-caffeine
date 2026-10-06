@@ -14,11 +14,14 @@ final class DisplayControllerTests: XCTestCase {
 
     private final class Sleeper: DisplaySleeping {
         var requests = 0
+        var wakes = 0
 
         func sleepDisplays() -> Bool {
             requests += 1
             return true
         }
+
+        func wakeDisplays() { wakes += 1 }
     }
 
     /// One way to set the brightness, over a panel the ways can share.
@@ -62,11 +65,40 @@ final class DisplayControllerTests: XCTestCase {
     }
 
     private final class Watcher: DisplayWatching {
-        var onChange: (() -> Void)?
+        var onChange: ((Bool?) -> Void)?
         var stopped = false
 
-        func start(onChange: @escaping () -> Void) { self.onChange = onChange }
+        func start(onChange: @escaping (Bool?) -> Void) { self.onChange = onChange }
         func stop() { stopped = true }
+    }
+
+    private final class Lid: LidAngleReading {
+        var isAvailable = true
+        var degrees: Double? = 110
+        var onPush: ((Double) -> Void)?
+        var reads = 0
+
+        func start(onPush: @escaping (Double) -> Void) { self.onPush = onPush }
+        func stop() { onPush = nil }
+
+        func angle() -> Double? {
+            reads += 1
+            return onPush == nil ? nil : degrees
+        }
+    }
+
+    private final class Ticker: LidTicking {
+        var interval: TimeInterval?
+        var work: (() -> Void)?
+
+        func tick(every interval: TimeInterval?, _ work: @escaping () -> Void) {
+            self.interval = interval
+            self.work = interval == nil ? nil : work
+        }
+    }
+
+    private final class Clock {
+        var now = Date(timeIntervalSince1970: 1_791_200_000)
     }
 
     private var defaults: UserDefaults!
@@ -85,8 +117,38 @@ final class DisplayControllerTests: XCTestCase {
         defaults.removePersistentDomain(forName: suite)
     }
 
+    private let lid = Lid()
+    /// The timer and the sensor hold the controller weakly.
+    private var kept: DisplayController?
+    private let ticker = Ticker()
+    private let clock = Clock()
+
     private func controller(_ methods: [Method], watcher: Watcher? = nil) -> DisplayController {
         DisplayController(reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: methods, defaults: defaults), watcher: watcher)
+    }
+
+    /// With the lid angle sensor, and agent caffeine holding.
+    private func fading(watcher: Watcher? = nil) -> DisplayController {
+        let controller = DisplayController(
+            reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: [Method("first", panel: panel)], defaults: defaults),
+            watcher: watcher, lid: lid, ticker: ticker, clock: { [clock] in clock.now }
+        )
+        controller.start(onChange: {})
+        controller.update(lidClosed: false, holding: true, enabled: true, fade: true, now: clock.now)
+        kept = controller
+        return controller
+    }
+
+    /// The timer fires: the lid is at this angle, one frame later.
+    private func tick(_ degrees: Double?, after seconds: TimeInterval = 1.0 / 60) {
+        clock.now += seconds
+        lid.degrees = degrees
+        ticker.work?()
+    }
+
+    private func move(from: Double, to: Double, over seconds: TimeInterval) {
+        let frames = Int(seconds * 60)
+        for frame in 1...frames { tick((from + (to - from) * Double(frame) / Double(frames)).rounded()) }
     }
 
     private func at(_ seconds: TimeInterval) -> Date { start.addingTimeInterval(seconds) }
@@ -247,5 +309,187 @@ final class DisplayControllerTests: XCTestCase {
         controller.update(lidClosed: false, holding: false, enabled: true, now: at(12))
         XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
         XCTAssertNil(saved)
+    }
+
+    // MARK: The lid angle
+
+    func testTheDimmerSetsALevelWithoutTouchingTheSavedValue() {
+        let pretends = Method("pretends", .pretends, panel: panel)
+        let works = Method("works", panel: panel)
+        let dimmer = BuiltinDimmer(methods: [Method("refuses", .refuses, panel: panel), pretends, works], defaults: defaults)
+        XCTAssertNil(dimmer.saved)
+        dimmer.save(0.6)
+        XCTAssertTrue(dimmer.set(0.3))
+        XCTAssertEqual(panel.level, 0.3)
+        XCTAssertEqual(dimmer.saved, 0.6)
+        XCTAssertTrue(dimmer.set(0.2))
+        XCTAssertEqual(pretends.sets.count, 1, "The way that was seen to work is used from then on")
+        XCTAssertTrue(dimmer.restore())
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+        XCTAssertFalse(BuiltinDimmer(methods: [pretends], defaults: defaults).set(0.1))
+    }
+
+    func testTheSensorIsAskedOnlyWhileAgentCaffeineHoldsAndTheFadeIsOn() {
+        let controller = controller([Method("first", panel: panel)])
+        controller.update(lidClosed: false, holding: true, enabled: true, fade: true, now: clock.now)
+        XCTAssertNil(lid.onPush, "A controller without a sensor asks none")
+
+        let withLid = DisplayController(
+            reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: [Method("first", panel: panel)], defaults: defaults),
+            lid: lid, ticker: ticker, clock: { [clock] in clock.now }
+        )
+        XCTAssertTrue(withLid.hasLidAngleSensor)
+        withLid.update(lidClosed: false, holding: false, enabled: true, fade: true, now: clock.now)
+        withLid.update(lidClosed: false, holding: true, enabled: true, fade: false, now: clock.now)
+        withLid.update(lidClosed: false, holding: true, enabled: false, fade: true, now: clock.now)
+        XCTAssertNil(lid.onPush)
+        XCTAssertNil(ticker.interval)
+        withLid.update(lidClosed: false, holding: true, enabled: true, fade: true, now: clock.now)
+        XCTAssertNotNil(lid.onPush)
+        XCTAssertEqual(ticker.interval, LidPoll.slow.interval)
+        XCTAssertEqual(reader.reads, 0, "With the lid wide open only the angle is read")
+        withLid.update(lidClosed: false, holding: false, enabled: true, fade: true, now: clock.now)
+        XCTAssertNil(lid.onPush, "The hold ended with the lid open")
+        XCTAssertNil(ticker.interval)
+    }
+
+    func testAMacWithoutTheSensorNeverStartsIt() {
+        lid.isAvailable = false
+        let controller = fading()
+        XCTAssertFalse(controller.hasLidAngleSensor)
+        XCTAssertNil(ticker.interval)
+        XCTAssertEqual(lid.reads, 0)
+        // The old way still works.
+        controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now)
+        XCTAssertEqual(sleeper.requests, 1)
+    }
+
+    func testTheBrightnessFollowsTheLidInTheSameTick() {
+        _ = fading()
+        tick(69, after: 0.5)
+        XCTAssertEqual(ticker.interval, LidPoll.fast.interval)
+        move(from: 69, to: 30, over: 0.5)
+        XCTAssertEqual(panel.level, 0.6 * Float(LidDimming.curve(30)), accuracy: 0.01)
+        XCTAssertEqual(saved ?? -1, 0.6, accuracy: 0.001)
+        tick(24)
+        XCTAssertEqual(panel.level, 0.3, accuracy: 0.01, "No sample of the engine in between")
+        move(from: 24, to: 0, over: 0.3)
+        XCTAssertEqual(panel.level, 0)
+        XCTAssertEqual(sleeper.requests, 1)
+        // The lid opens.
+        tick(5, after: 3)
+        XCTAssertEqual(sleeper.wakes, 1)
+        XCTAssertGreaterThan(panel.level, 0)
+        move(from: 5, to: 50, over: 0.5)
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+        XCTAssertNil(saved)
+        XCTAssertEqual(sleeper.wakes, 1)
+    }
+
+    func testAnAngleTheSensorSendsByItselfIsActedOnAtOnce() {
+        _ = fading()
+        clock.now += 0.1
+        lid.onPush?(0)
+        XCTAssertEqual(panel.level, 0)
+        XCTAssertEqual(sleeper.requests, 1)
+    }
+
+    func testASampleOfTheEngineDoesNotPutTheBrightnessBackInTheMiddleOfAFade() {
+        let controller = fading()
+        tick(60, after: 0.5)
+        move(from: 60, to: 0, over: 0.5)
+        // The clamshell switch says closed, then open at a few degrees.
+        controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now)
+        tick(10, after: 2)
+        let dim = panel.level
+        controller.update(lidClosed: false, holding: true, enabled: true, fade: true, now: clock.now)
+        XCTAssertEqual(panel.level, dim, accuracy: 0.01, "The angle decides, not the switch")
+        XCTAssertLessThan(panel.level, 0.1)
+        XCTAssertNotNil(saved)
+    }
+
+    func testNextToAnExternalDisplayTheFadeDoesNotSleepTheDisplays() {
+        reader.inputs.externalDisplay = true
+        _ = fading()
+        tick(60, after: 0.5)
+        move(from: 60, to: 0, over: 0.5)
+        XCTAssertEqual(panel.level, 0)
+        XCTAssertEqual(sleeper.requests, 0)
+    }
+
+    func testSwitchingTheFadeOffInTheMiddlePutsTheBrightnessBackAndStopsTheSensor() {
+        let controller = fading()
+        tick(60, after: 0.5)
+        move(from: 60, to: 20, over: 0.5)
+        XCTAssertLessThan(panel.level, 0.3)
+        controller.update(lidClosed: false, holding: true, enabled: true, fade: false, now: clock.now)
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+        XCTAssertNil(saved)
+        XCTAssertNil(lid.onPush)
+        XCTAssertNil(ticker.interval)
+    }
+
+    func testAHoldThatEndsInTheMiddleKeepsTheSensorUntilTheLidIsUp() {
+        let controller = fading()
+        tick(60, after: 0.5)
+        move(from: 60, to: 20, over: 0.5)
+        controller.update(lidClosed: false, holding: false, enabled: true, fade: true, now: clock.now)
+        XCTAssertNotNil(lid.onPush)
+        move(from: 20, to: 50, over: 0.5)
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+        controller.update(lidClosed: false, holding: false, enabled: true, fade: true, now: clock.now)
+        XCTAssertNil(lid.onPush)
+    }
+
+    func testQuitInTheMiddleOfAFadePutsTheBrightnessBack() {
+        let controller = fading()
+        tick(60, after: 0.5)
+        move(from: 60, to: 20, over: 0.5)
+        controller.stop()
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+        XCTAssertNil(saved)
+        XCTAssertNil(lid.onPush)
+        XCTAssertNil(ticker.interval)
+    }
+
+    func testASensorThatDiesInTheMiddleOfAFadePutsTheBrightnessBack() {
+        _ = fading()
+        tick(60, after: 0.5)
+        move(from: 60, to: 20, over: 0.5)
+        tick(nil, after: 0.2)
+        tick(nil, after: 0.2)
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+        XCTAssertNil(saved)
+    }
+
+    // MARK: Without the fade: at once, not at the next sample
+
+    func testTheLidThatClosesIsActedOnWhenTheSwitchSaysSo() {
+        let watcher = Watcher()
+        var samples = 0
+        let controller = controller([Method("first", panel: panel)], watcher: watcher)
+        controller.start { samples += 1 }
+        controller.update(lidClosed: false, holding: true, enabled: true, now: at(0))
+        watcher.onChange?(true)
+        XCTAssertEqual(sleeper.requests, 1, "No sample of the engine was needed")
+        XCTAssertEqual(samples, 1, "One is asked for, for the rest of the app")
+        watcher.onChange?(false)
+        XCTAssertEqual(sleeper.wakes, 1)
+    }
+
+    func testTheLidThatOpensGetsItsBrightnessBackWhenTheSwitchSaysSo() {
+        reader.inputs.externalDisplay = true
+        let watcher = Watcher()
+        let controller = controller([Method("first", panel: panel)], watcher: watcher)
+        controller.start(onChange: {})
+        controller.update(lidClosed: false, holding: true, enabled: true, now: at(0))
+        watcher.onChange?(true)
+        XCTAssertEqual(panel.level, 0)
+        watcher.onChange?(false)
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+        XCTAssertNil(saved)
+        // The list of displays changed: the lid is as it was.
+        watcher.onChange?(nil)
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
     }
 }

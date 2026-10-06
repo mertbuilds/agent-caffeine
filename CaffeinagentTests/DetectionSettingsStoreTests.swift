@@ -35,7 +35,9 @@ final class DetectionSettingsStoreTests: XCTestCase {
         want.waitingHold = 60
         XCTAssertEqual(DetectionSettingsStore.load(from: defaults), want)
         XCTAssertTrue(want.displayOffLidClosed, "On for settings of a build that did not have it")
+        XCTAssertTrue(want.dimAsLidCloses, "On for settings of a build that did not have it")
         want.displayOffLidClosed = false
+        want.dimAsLidCloses = false
         DetectionSettingsStore.save(want, to: defaults)
         XCTAssertEqual(DetectionSettingsStore.load(from: defaults), want)
     }

@@ -65,7 +65,18 @@ The app sets it through a small root helper (`CaffeinagentHelper/`), registered 
 - With an external display: display sleep would take the display you work on, so only the brightness of the built-in display goes to zero.
 - The brightness is set through the private `DisplayServices` framework, then IOKit's `IODisplaySetFloatParameter`, then `CoreDisplay`, whichever works first. Your value is saved before the display goes dark and put back when the lid opens, when the setting goes off, when agent caffeine quits, and at the next launch after a crash.
 
-`caffeinagent --display-probe <seconds>` prints once per second what the lid, each display, the brightness readers and the keyboard backlight say. It only reads, and starts no app.
+The lid and the list of displays are watched (`kIOPMMessageClamshellStateChange` of the power root domain and the display reconfiguration callback), and the rules run in that callback: the display goes off and comes back at once, not at the next sample of the engine.
+
+"Dim the display as the lid closes" (under it, on by default, shown only on a Mac with a lid angle sensor) makes the brightness follow the lid angle. The rules are `Caffeinagent/Power/LidDimming.swift`:
+
+- At 45 degrees and above the brightness is yours and is not touched. From 45 degrees down to 3 degrees it is your brightness times a smoothstep curve of the angle (half at 24 degrees). At 3 degrees and below it is zero, and without an external display the displays also go to sleep. Opening is the same curve the other way: the displays wake and the brightness rises at the first reading above 3 degrees.
+- Your brightness is read when the lid comes below 45 degrees. A brightness key that you press with the lid half open gives the new value.
+- A lid that rests between 20 and 45 degrees for 1.5 seconds is in use: your brightness comes back, and the fade starts again when the lid moves down.
+- It works while agent caffeine keeps the Mac awake. When it does not, the Mac sleeps at lid close and macOS turns the display off. A fade that started is finished the same way when the hold ends in the middle.
+- The sensor is a HID device of the Mac (vendor 0x05AC, product 0x8104, usage page 0x0020, usage 0x008A) that needs no permission. It is asked every 0.5 seconds while agent caffeine keeps the Mac awake, 60 times a second while the lid moves below 70 degrees, and not at all otherwise. The brightness is written in the same step that reads the angle. When the sensor gives no answer for 0.3 seconds, your brightness comes back.
+- With the setting off, or on a Mac without the sensor, the display goes off when the lid switch says closed.
+
+`caffeinagent --display-probe <seconds>` prints what the lid, the lid angle sensor, each display, the brightness readers and the keyboard backlight say: once per second, and 20 times a second while the lid is below 70 degrees. The `wouldSet` column is the brightness the fade would set. It only reads, and starts no app.
 
 Builds before the helper used a sudoers entry for `pmset -b disablesleep`. The app clears a flag such a build left on at first launch, and Preferences offers to remove the entry.
 
