@@ -35,7 +35,7 @@ final class PanelBatteryTests: XCTestCase {
         input.settings.batteryFloorPercent = 20
         let battery = try XCTUnwrap(MenuModel.battery(input))
         XCTAssertEqual(battery.fill, 0.58, accuracy: 0.0001)
-        XCTAssertEqual(battery.tick, 0.2, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(battery.tick), 0.2, accuracy: 0.0001)
         XCTAssertEqual(battery.level, .normal)
         XCTAssertEqual(battery.leading, "58 percent battery")
         XCTAssertEqual(battery.trailing, "Sleeps below 20 percent")
@@ -46,7 +46,7 @@ final class PanelBatteryTests: XCTestCase {
         var input = input()
         input.settings.batteryFloorPercent = 35
         let battery = try XCTUnwrap(MenuModel.battery(input))
-        XCTAssertEqual(battery.tick, 0.35, accuracy: 0.0001)
+        XCTAssertEqual(try XCTUnwrap(battery.tick), 0.35, accuracy: 0.0001)
         XCTAssertEqual(battery.trailing, "Sleeps below 35 percent")
     }
 
@@ -72,13 +72,40 @@ final class PanelBatteryTests: XCTestCase {
         XCTAssertEqual(MenuModel.battery(hot)?.level, .normal)
     }
 
+    func testWithTheFloorOffThereIsNoMark() throws {
+        var input = input()
+        input.settings.batteryFloorEnabled = false
+        let battery = try XCTUnwrap(MenuModel.battery(input))
+        XCTAssertNil(battery.tick)
+        XCTAssertEqual(battery.fill, 0.58, accuracy: 0.0001)
+        XCTAssertEqual(battery.leading, "58 percent battery")
+        XCTAssertEqual(battery.trailing, "No battery limit")
+        XCTAssertEqual(battery.accessibilityLabel, "Battery 58 percent, no battery limit")
+        XCTAssertEqual(battery.level, .normal)
+        XCTAssertNotNil(MenuModel.battery(self.input()).flatMap(\.tick), "The mark is there with the floor on")
+    }
+
+    func testWithTheFloorOffAmberAtTenAndRedAtFivePercent() {
+        var input = input()
+        input.settings.batteryFloorEnabled = false
+        let levels = [30, 21, 11, 10, 6, 5, 1].map { percent -> PanelBattery.Level? in
+            input.batteryPercent = percent
+            return MenuModel.battery(input)?.level
+        }
+        XCTAssertEqual(levels, [.normal, .normal, .normal, .nearFloor, .nearFloor, .nearEmpty, .nearEmpty])
+        input.batteryPercent = 3
+        XCTAssertEqual(MenuModel.battery(input)?.trailing, "No battery limit")
+    }
+
     func testAPercentOutOfRangeIsCut() {
         XCTAssertEqual(MenuModel.battery(input(percent: 104))?.fill, 1)
         XCTAssertEqual(MenuModel.battery(input(percent: -3))?.fill, 0)
     }
 
     func testNoLineEndsWithAPeriodOrAbbreviates() throws {
-        for input in [input(), input(.safetyStop(.batteryLow(percent: 19)), percent: 19)] {
+        var noLimit = input()
+        noLimit.settings.batteryFloorEnabled = false
+        for input in [input(), input(.safetyStop(.batteryLow(percent: 19)), percent: 19), noLimit] {
             let battery = try XCTUnwrap(MenuModel.battery(input))
             for text in [battery.leading, battery.trailing, battery.accessibilityLabel] {
                 XCTAssertFalse(text.hasSuffix("."), text)

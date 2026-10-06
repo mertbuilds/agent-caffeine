@@ -9,7 +9,8 @@ struct OnboardingView: View {
     let foundAgents: [String]
     /// The agents whose hooks can be turned on.
     let hookRows: [HookRowModel]
-    let batteryFloorPercent: Int
+    /// What still puts the Mac to sleep, from the real settings.
+    let safetyNote: String
     let helper: HelperStatus
     let helperError: String?
     /// True when every agent was changed.
@@ -137,7 +138,7 @@ struct OnboardingView: View {
     private var lidClosed: some View {
         title("Keep working with the lid closed")
         paragraph("On battery, macOS puts your Mac to sleep when you close the lid, even while an agent is working. agent caffeine can prevent that with a small helper that you allow once.")
-        paragraph("Your Mac still sleeps below \(batteryFloorPercent) percent battery and when it gets too hot.")
+        paragraph(safetyNote)
         if helper == .enabled {
             Label("The helper is set up", systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
@@ -200,7 +201,7 @@ private struct OnboardingContainer: View {
             steps: steps,
             foundAgents: Self.names(aggregator.decision.perAgent.map(\.reading.displayName)),
             hookRows: HookRowModel.rows(statuses: aggregator.hookStatuses, errors: aggregator.hookErrors).filter { offered.contains($0.id) },
-            batteryFloorPercent: aggregator.settings.batteryFloorPercent,
+            safetyNote: SafetyText.stillSleeps(aggregator.settings),
             helper: aggregator.sleepFlag.helperStatus,
             helperError: aggregator.helperError,
             turnOnHooks: { entries in
@@ -270,7 +271,7 @@ private struct OnboardingPreview: View {
     var body: some View {
         OnboardingView(
             steps: [.welcome, .hooks, .lidClosed, .done], foundAgents: ["Claude Code", "Codex"], hookRows: rows,
-            batteryFloorPercent: 20, helper: helper, helperError: nil,
+            safetyNote: SafetyText.stillSleeps(DetectionSettings()), helper: helper, helperError: nil,
             turnOnHooks: { _ in true }, setUpHelper: {}, openLoginItems: {}, finish: {}, index: index
         )
     }

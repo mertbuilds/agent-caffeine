@@ -45,6 +45,7 @@ struct PanelPreview: View {
 #Preview("On battery") { PanelPreview(state: PanelFixtures.onBattery) }
 #Preview("On battery, near the floor") { PanelPreview(state: PanelFixtures.onBatteryNearFloor) }
 #Preview("On battery, stopped") { PanelPreview(state: PanelFixtures.onBatteryStopped) }
+#Preview("On battery, no battery limit") { PanelPreview(state: PanelFixtures.onBatteryNoLimit) }
 #Preview("Lid closed not set up") { PanelPreview(state: PanelFixtures.lidClosedNotSetUp) }
 #Preview("Helper switched off") { PanelPreview(state: PanelFixtures.helperSwitchedOff, mode: .always) }
 #Preview("Helper gives no answer") { PanelPreview(state: PanelFixtures.helperNotResponding) }

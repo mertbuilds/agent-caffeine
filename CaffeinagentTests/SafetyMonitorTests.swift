@@ -73,6 +73,101 @@ final class SafetyMonitorTests: XCTestCase {
         XCTAssertNil(SafetyStop.toAnnounce(previous: nil, current: nil, wasHolding: true))
     }
 
+    func testWithTheFloorOffTheBatteryNeverStops() {
+        var monitor = SafetyMonitor()
+        monitor.batteryFloorEnabled = false
+        for percent in [20, 5, 1, 0] {
+            XCTAssertNil(monitor.update(SafetyInputs(batteryPercent: percent, onBattery: true, thermalState: .nominal)), "\(percent)")
+        }
+        // Heat has no switch.
+        XCTAssertEqual(monitor.update(SafetyInputs(batteryPercent: 1, onBattery: true, thermalState: .serious)), .tooHot)
+        XCTAssertEqual(monitor.update(SafetyInputs(batteryPercent: 80, onBattery: false, thermalState: .critical)), .tooHot)
+        XCTAssertNil(monitor.update(SafetyInputs(batteryPercent: 1, onBattery: true, thermalState: .fair)))
+        XCTAssertNil(SafetyMonitor.evaluate(SafetyInputs(batteryPercent: 1, onBattery: true, thermalState: .nominal), floor: nil, batteryStopped: true).stop)
+    }
+
+    func testSwitchingTheFloorOffEndsABatteryStop() {
+        var monitor = SafetyMonitor()
+        let low = SafetyInputs(batteryPercent: 18, onBattery: true, thermalState: .nominal)
+        XCTAssertEqual(monitor.update(low), .batteryLow(percent: 18))
+        monitor.batteryFloorEnabled = false
+        XCTAssertNil(monitor.update(low))
+        // Back on, the floor counts from new.
+        monitor.batteryFloorEnabled = true
+        XCTAssertNil(monitor.update(SafetyInputs(batteryPercent: 22, onBattery: true, thermalState: .nominal)))
+        XCTAssertEqual(monitor.update(low), .batteryLow(percent: 18))
+    }
+
+    // MARK: No battery limit
+
+    private func warn(_ warning: inout NoLimitBatteryWarning, _ percent: Int?, onBattery: Bool = true, floorEnabled: Bool = false, holding: Bool = true) -> Int? {
+        warning.update(SafetyInputs(batteryPercent: percent, onBattery: onBattery, thermalState: .nominal), floorEnabled: floorEnabled, holding: holding)
+    }
+
+    func testEachLevelIsToldOnce() {
+        var warning = NoLimitBatteryWarning()
+        let told = [58, 11, 10, 10, 9, 6, 5, 5, 4, 1].map { warn(&warning, $0) }
+        XCTAssertEqual(told, [nil, nil, 10, nil, nil, nil, 5, nil, nil, nil])
+    }
+
+    func testALevelThatWasPassedIsNotToldLater() {
+        var warning = NoLimitBatteryWarning()
+        // The hold began low: the level above is not told after it.
+        XCTAssertEqual(warn(&warning, 4), 4)
+        XCTAssertNil(warn(&warning, 8))
+        XCTAssertNil(warn(&warning, 10))
+        // A sample that skips a level tells the real number.
+        var skipped = NoLimitBatteryWarning()
+        XCTAssertEqual(warn(&skipped, 9), 9)
+        XCTAssertEqual(warn(&skipped, 3), 3)
+    }
+
+    func testToldAgainAfterChargingOrAbove15Percent() {
+        var warning = NoLimitBatteryWarning()
+        XCTAssertEqual(warn(&warning, 10), 10)
+        XCTAssertNil(warn(&warning, 15), "15 percent is not above 15")
+        XCTAssertNil(warn(&warning, 10))
+        XCTAssertNil(warn(&warning, 16))
+        XCTAssertEqual(warn(&warning, 10), 10)
+        XCTAssertEqual(warn(&warning, 5), 5)
+        XCTAssertNil(warn(&warning, 5, onBattery: false), "Charging")
+        XCTAssertEqual(warn(&warning, 5), 5)
+    }
+
+    func testOnlyWhileHoldingOnBatteryWithTheFloorOff() {
+        var warning = NoLimitBatteryWarning()
+        XCTAssertNil(warn(&warning, 10, holding: false))
+        XCTAssertEqual(warn(&warning, 9), 9, "Told when the hold begins")
+        var withFloor = NoLimitBatteryWarning()
+        XCTAssertNil(warn(&withFloor, 5, floorEnabled: true))
+        var onPower = NoLimitBatteryWarning()
+        XCTAssertNil(warn(&onPower, 5, onBattery: false))
+        var noBattery = NoLimitBatteryWarning()
+        XCTAssertNil(warn(&noBattery, nil))
+    }
+
+    func testTexts() {
+        XCTAssertEqual(
+            NoLimitBatteryWarning.notificationText(percent: 10),
+            "The battery is at 10 percent. agent caffeine keeps your Mac awake because the battery limit is off"
+        )
+        XCTAssertEqual(
+            NoLimitBatteryWarning.notificationText(percent: 5),
+            "The battery is at 5 percent. agent caffeine keeps your Mac awake because the battery limit is off"
+        )
+        var settings = DetectionSettings()
+        settings.batteryFloorPercent = 35
+        XCTAssertEqual(SafetyText.stillSleeps(settings), "Your Mac still sleeps below 35 percent battery and when it gets too hot.")
+        settings.batteryFloorEnabled = false
+        XCTAssertEqual(SafetyText.stillSleeps(settings), "Your Mac still sleeps when it gets too hot. The battery limit is off.")
+        XCTAssertTrue(SafetyText.alwaysTold(batteryFloorEnabled: true).contains("because the battery is low or your Mac got too hot"))
+        XCTAssertFalse(SafetyText.alwaysTold(batteryFloorEnabled: false).contains("battery is low"))
+        for text in [SafetyText.floorOnHelp, SafetyText.floorOffWarning, SafetyText.floorOffQuestion, SafetyText.floorOffConsequence,
+                     SafetyText.alwaysTold(batteryFloorEnabled: true), SafetyText.alwaysTold(batteryFloorEnabled: false)] {
+            XCTAssertFalse(text.contains("%") || text.contains("\u{2014}"), text)
+        }
+    }
+
     func testNotificationText() {
         XCTAssertEqual(SafetyStop.batteryLow(percent: 20).notificationText, "agent caffeine let your Mac sleep because the battery is at 20 percent")
         XCTAssertEqual(SafetyStop.tooHot.notificationText, "agent caffeine let your Mac sleep because it got too hot")

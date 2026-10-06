@@ -117,6 +117,22 @@ final class ReachableTests: XCTestCase {
         XCTAssertEqual(modes.pause.until, date(6, 18))
     }
 
+    /// Only a safety stop ends it, and with the battery floor off the
+    /// battery gives none.
+    func testWithTheFloorOffTheBatteryDoesNotEndStayReachable() {
+        var monitor = SafetyMonitor()
+        monitor.batteryFloorEnabled = false
+        var modes = TimedModes()
+        modes.startReachable(.fourHours, now: date(6, 17))
+        func sample(_ percent: Int, _ thermal: ProcessInfo.ThermalState) {
+            if monitor.update(SafetyInputs(batteryPercent: percent, onBattery: true, thermalState: thermal)) != nil { modes.safetyStopped() }
+        }
+        for percent in [20, 10, 5, 1] { sample(percent, .nominal) }
+        XCTAssertEqual(modes.reachable.until, date(6, 21))
+        sample(40, .serious)
+        XCTAssertNil(modes.reachable.until, "Heat still ends it")
+    }
+
     func testTheSwitchEndsBoth() {
         let now = date(6, 17)
         var modes = TimedModes()

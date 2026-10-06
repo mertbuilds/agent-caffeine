@@ -73,34 +73,39 @@ struct PanelAttention: Equatable {
 struct PanelBattery: Equatable {
     enum Level: Equatable {
         case normal
-        /// Within `MenuModel.batteryWarningPoints` of the floor.
+        /// Within `MenuModel.batteryWarningPoints` of the floor, or low with
+        /// no floor.
         case nearFloor
         /// The battery floor stopped agent caffeine.
         case stopped
+        /// With no floor, close to empty. See `NoLimitBatteryWarning.levels`.
+        case nearEmpty
     }
 
     /// 0 to 100.
     var percent: Int
-    /// The setting "let your Mac sleep below".
-    var floor: Int
+    /// The setting "sleep below". Nil when the battery floor is off.
+    var floor: Int?
     var level: Level
 
     /// How much of the bar is filled, 0 to 1.
     var fill: Double { Double(percent) / 100 }
-    /// Where the mark of the floor stands, 0 to 1.
-    var tick: Double { Double(floor) / 100 }
+    /// Where the mark of the floor stands, 0 to 1. Nil for no mark.
+    var tick: Double? { floor.map { Double($0) / 100 } }
     var leading: String { PanelText.batteryLeft(percent: percent) }
     var trailing: String {
-        level == .stopped ? PanelText.batteryStartsAgain(atPercent: recovery) : PanelText.batterySleepsBelow(percent: floor)
+        guard let floor else { return PanelText.batteryNoLimit }
+        return level == .stopped
+            ? PanelText.batteryStartsAgain(atPercent: floor + SafetyMonitor.batteryRecoveryPoints)
+            : PanelText.batterySleepsBelow(percent: floor)
     }
     /// One reading for VoiceOver.
     var accessibilityLabel: String {
-        level == .stopped
-            ? PanelText.batterySpokenStopped(percent: percent, recovery: recovery)
+        guard let floor else { return PanelText.batterySpokenNoLimit(percent: percent) }
+        return level == .stopped
+            ? PanelText.batterySpokenStopped(percent: percent, recovery: floor + SafetyMonitor.batteryRecoveryPoints)
             : PanelText.batterySpoken(percent: percent, floor: floor)
     }
-
-    private var recovery: Int { floor + SafetyMonitor.batteryRecoveryPoints }
 }
 
 /// The header line of a group of the agent list.

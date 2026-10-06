@@ -148,6 +148,12 @@ enum PanelText {
         "Sleeps below \(percent) percent"
     }
 
+    static let batteryNoLimit = "No battery limit"
+
+    static func batterySpokenNoLimit(percent: Int) -> String {
+        "Battery \(percent) percent, no battery limit"
+    }
+
     static func batteryStartsAgain(atPercent percent: Int) -> String {
         "Starts again at \(percent) percent"
     }

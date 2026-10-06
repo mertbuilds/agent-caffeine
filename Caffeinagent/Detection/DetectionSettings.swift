@@ -23,6 +23,8 @@ struct DetectionSettings: Codable, Equatable {
     /// as working.
     var weakEvidenceCap: TimeInterval = 1800
     var batteryFloorPercent = SafetyMonitor.defaultBatteryFloorPercent
+    /// Off: agent caffeine keeps the Mac awake until the battery is empty.
+    var batteryFloorEnabled = true
     var stayAwakeLidClosedOnBattery = true
     /// While agent caffeine keeps the Mac awake with the lid closed, the
     /// built-in display is kept dark. See `DisplayRules`.
@@ -45,9 +47,15 @@ struct DetectionSettings: Codable, Equatable {
         agentRules[agentID] ?? .automatic
     }
 
+    /// Switching the battery floor off is asked about first. Switching it
+    /// on is not.
+    func needsConfirmation(toSetBatteryFloor enabled: Bool) -> Bool {
+        batteryFloorEnabled && !enabled
+    }
+
     private enum CodingKeys: String, CodingKey {
         case releaseAfterState, releaseAfterActivity, waitingHold, weakEvidenceCap
-        case batteryFloorPercent, stayAwakeLidClosedOnBattery, displayOffLidClosed, dimAsLidCloses, stayAwakeForRemoteAccess, agentRules, userAgentNames
+        case batteryFloorPercent, batteryFloorEnabled, stayAwakeLidClosedOnBattery, displayOffLidClosed, dimAsLidCloses, stayAwakeForRemoteAccess, agentRules, userAgentNames
     }
 
     /// No time is shorter than a second or longer than a day.
@@ -74,6 +82,7 @@ struct DetectionSettings: Codable, Equatable {
         weakEvidenceCap = try time(.weakEvidenceCap, defaults.weakEvidenceCap)
         let floor = try container.decodeIfPresent(Int.self, forKey: .batteryFloorPercent) ?? defaults.batteryFloorPercent
         batteryFloorPercent = min(max(floor, Self.batteryFloorRange.lowerBound), Self.batteryFloorRange.upperBound)
+        batteryFloorEnabled = try container.decodeIfPresent(Bool.self, forKey: .batteryFloorEnabled) ?? defaults.batteryFloorEnabled
         stayAwakeLidClosedOnBattery = try container.decodeIfPresent(Bool.self, forKey: .stayAwakeLidClosedOnBattery) ?? defaults.stayAwakeLidClosedOnBattery
         displayOffLidClosed = try container.decodeIfPresent(Bool.self, forKey: .displayOffLidClosed) ?? defaults.displayOffLidClosed
         dimAsLidCloses = try container.decodeIfPresent(Bool.self, forKey: .dimAsLidCloses) ?? defaults.dimAsLidCloses

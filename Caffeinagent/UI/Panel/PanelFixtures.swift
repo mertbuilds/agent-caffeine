@@ -195,13 +195,17 @@ enum PanelFixtures {
         return state(input)
     }()
 
-    private static func onBattery(percent: Int) -> PanelState {
+    /// The battery floor is off: no mark on the bar.
+    static let onBatteryNoLimit = onBattery(percent: 9, floorEnabled: false)
+
+    private static func onBattery(percent: Int, floorEnabled: Bool = true) -> PanelState {
         var input = Self.input(.working(.one("Claude Code")), [
             Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 82, label: "wiki", cause: .working),
             Agent(id: "codex", name: "Codex", minutes: 40),
         ])
         input.onBattery = true
         input.batteryPercent = percent
+        input.settings.batteryFloorEnabled = floorEnabled
         return state(input)
     }
 
@@ -245,7 +249,7 @@ enum PanelFixtures {
         ("working", working), ("waiting", waiting), ("all-idle", allIdle), ("same-folder", sameFolder), ("no-agent", noAgent),
         ("grouped", grouped), ("mixed", mixed), ("idle-groups", idleGroups), ("long-label", longLabel),
         ("off", off), ("paused", paused), ("safety-stop", safetyStop), ("too-hot", tooHot),
-        ("on-battery", onBattery), ("on-battery-near-floor", onBatteryNearFloor), ("on-battery-stopped", onBatteryStopped),
+        ("on-battery", onBattery), ("on-battery-near-floor", onBatteryNearFloor), ("on-battery-stopped", onBatteryStopped), ("on-battery-no-limit", onBatteryNoLimit),
         ("reachable", reachable), ("reachable-no-helper", reachableNoHelper), ("lid-closed", lidClosedNotSetUp),
         ("helper-off", helperSwitchedOff), ("helper-silent", helperNotResponding), ("trial-ending", trialEnding), ("trial-over", trialOver),
     ]

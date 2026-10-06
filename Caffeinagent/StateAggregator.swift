@@ -97,9 +97,12 @@ final class StateAggregator: ObservableObject {
             guard settings != oldValue else { return }
             DetectionSettingsStore.save(settings, to: defaults)
             safetyMonitor.batteryFloorPercent = settings.batteryFloorPercent
+            safetyMonitor.batteryFloorEnabled = settings.batteryFloorEnabled
             engine.settings = settings
-            // The display follows a switch at once, not at the next sample.
-            if settings.displayOffLidClosed != oldValue.displayOffLidClosed || settings.dimAsLidCloses != oldValue.dimAsLidCloses {
+            // The display and a battery stop follow a switch at once, not at
+            // the next sample.
+            if settings.displayOffLidClosed != oldValue.displayOffLidClosed || settings.dimAsLidCloses != oldValue.dimAsLidCloses
+                || settings.batteryFloorEnabled != oldValue.batteryFloorEnabled {
                 engine.requestSample()
             }
         }
@@ -178,6 +181,7 @@ final class StateAggregator: ObservableObject {
     private var sessionOwners: [ProcessIdentity: Int32] = [:]
     private let openFiles = SystemOpenFiles()
     private var safetyMonitor = SafetyMonitor()
+    private var noLimitWarning = NoLimitBatteryWarning()
     private var flagRequest = SleepFlagRequest()
     private var hiddenNotice: HiddenNotice?
     private var lastHelperRefresh = Date.distantPast
@@ -233,6 +237,7 @@ final class StateAggregator: ObservableObject {
         self.showMenuBarIcon = MenuBarVisibility.isShown(in: defaults)
         self.decision = engine.decision
         safetyMonitor.batteryFloorPercent = settings.batteryFloorPercent
+        safetyMonitor.batteryFloorEnabled = settings.batteryFloorEnabled
 
         engine.$decision
             .dropFirst()
@@ -469,6 +474,9 @@ final class StateAggregator: ObservableObject {
         let stop = safetyMonitor.update(context.safetyInputs)
         if let begun = SafetyStop.toAnnounce(previous: engine.safety, current: stop, wasHolding: power.held) {
             notify(begun.notificationText)
+        }
+        if let percent = noLimitWarning.update(context.safetyInputs, floorEnabled: settings.batteryFloorEnabled, holding: power.held) {
+            notify(NoLimitBatteryWarning.notificationText(percent: percent))
         }
         engine.safety = stop
         // The notification above says why. The time does not come back

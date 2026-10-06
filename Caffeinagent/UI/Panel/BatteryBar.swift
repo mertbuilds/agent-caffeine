@@ -17,10 +17,12 @@ struct BatteryBar: View {
                     Capsule()
                         .fill(tint)
                         .frame(width: max(PanelMetrics.batteryBarHeight, width * battery.fill), height: PanelMetrics.batteryBarHeight)
-                    Rectangle()
-                        .fill(.secondary)
-                        .frame(width: 1, height: PanelMetrics.batteryTickHeight)
-                        .offset(x: (width * battery.tick).rounded())
+                    if let tick = battery.tick {
+                        Rectangle()
+                            .fill(.secondary)
+                            .frame(width: 1, height: PanelMetrics.batteryTickHeight)
+                            .offset(x: (width * tick).rounded())
+                    }
                 }
                 .frame(height: PanelMetrics.batteryTickHeight)
             }
@@ -45,7 +47,7 @@ struct BatteryBar: View {
         switch battery.level {
         case .normal: return .primary.opacity(0.35)
         case .nearFloor: return PanelMetrics.waitingAmber
-        case .stopped: return .red
+        case .stopped, .nearEmpty: return .red
         }
     }
 }

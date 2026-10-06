@@ -42,6 +42,29 @@ final class DetectionSettingsStoreTests: XCTestCase {
         XCTAssertEqual(DetectionSettingsStore.load(from: defaults), want)
     }
 
+    func testTheBatteryFloorIsOnUnlessSavedOff() throws {
+        XCTAssertTrue(DetectionSettings().batteryFloorEnabled)
+        defaults.set(Data(#"{"batteryFloorPercent":35}"#.utf8), forKey: DetectionSettingsStore.key)
+        let old = DetectionSettingsStore.load(from: defaults)
+        XCTAssertTrue(old.batteryFloorEnabled, "On for settings of a build that did not have it")
+        XCTAssertEqual(old.batteryFloorPercent, 35)
+        var off = old
+        off.batteryFloorEnabled = false
+        DetectionSettingsStore.save(off, to: defaults)
+        let loaded = DetectionSettingsStore.load(from: defaults)
+        XCTAssertFalse(loaded.batteryFloorEnabled)
+        XCTAssertEqual(loaded.batteryFloorPercent, 35, "The level is kept for when it is switched on again")
+    }
+
+    func testOnlySwitchingTheBatteryFloorOffIsAskedAbout() {
+        var settings = DetectionSettings()
+        XCTAssertTrue(settings.needsConfirmation(toSetBatteryFloor: false))
+        XCTAssertFalse(settings.needsConfirmation(toSetBatteryFloor: true))
+        settings.batteryFloorEnabled = false
+        XCTAssertFalse(settings.needsConfirmation(toSetBatteryFloor: true), "No question to switch it back on")
+        XCTAssertFalse(settings.needsConfirmation(toSetBatteryFloor: false))
+    }
+
     func testNumbersOutOfRangeAreNotTaken() throws {
         func decode(_ json: String) throws -> DetectionSettings {
             try JSONDecoder().decode(DetectionSettings.self, from: Data(json.utf8))

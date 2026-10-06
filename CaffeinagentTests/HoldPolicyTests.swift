@@ -425,6 +425,19 @@ final class HoldPolicyTests: XCTestCase {
         }
     }
 
+    func testWithTheBatteryFloorOffAnEmptyBatteryKeepsTheHold() {
+        var settings = DetectionSettings()
+        settings.batteryFloorEnabled = false
+        var monitor = SafetyMonitor()
+        monitor.batteryFloorEnabled = settings.batteryFloorEnabled
+        for (thermal, hold) in [(ProcessInfo.ThermalState.nominal, true), (.serious, false)] {
+            let safety = monitor.update(SafetyInputs(batteryPercent: 1, onBattery: true, thermalState: thermal))
+            let decision = decide([claude(.working)], safety: safety, settings: settings, context: FrameContext(onBattery: true, batteryPercent: 1))
+            XCTAssertEqual(decision.hold, hold, "\(thermal)")
+            XCTAssertEqual(decision.lidClosedFlag, hold, "\(thermal)")
+        }
+    }
+
     // MARK: Rules
 
     func testIgnoredAgent() {

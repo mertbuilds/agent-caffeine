@@ -25,6 +25,7 @@ struct PreferencesView: View {
                 .tag(PreferencesTab.general)
             AlertPreferences(
                 notices: $aggregator.notices, denied: aggregator.notificationPermission == .denied,
+                batteryFloorEnabled: aggregator.settings.batteryFloorEnabled,
                 openSystemSettings: aggregator.openNotificationSettings
             )
             .tabItem { Label("Alerts", systemImage: "bell") }
@@ -294,6 +295,7 @@ struct AlertPreferences: View {
     @Binding var notices: AgentNoticeSettings
     /// Notifications are switched off for agent caffeine in System Settings.
     var denied = false
+    var batteryFloorEnabled = true
     var openSystemSettings: () -> Void = {}
 
     var body: some View {
@@ -326,7 +328,7 @@ struct AlertPreferences: View {
                 .disabled(!notices.wantsAny)
             }
             Section {
-                Text("agent caffeine always tells you when it lets your Mac sleep because the battery is low or your Mac got too hot. These notifications have no switch, so you do not miss them.")
+                Text(SafetyText.alwaysTold(batteryFloorEnabled: batteryFloorEnabled))
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -482,6 +484,20 @@ struct LidClosedPreferences: View {
     var tryAgain: () -> Void = {}
     let openLoginItems: () -> Void
     let removeSudoersEntry: () -> Void
+    @State private var confirmingFloorOff = false
+
+    /// Off waits for the answer to the question. On is set at once.
+    private var batteryFloorSwitch: Binding<Bool> {
+        Binding {
+            settings.batteryFloorEnabled
+        } set: { enabled in
+            if settings.needsConfirmation(toSetBatteryFloor: enabled) {
+                confirmingFloorOff = true
+            } else {
+                settings.batteryFloorEnabled = enabled
+            }
+        }
+    }
 
     var body: some View {
         Form {
@@ -499,12 +515,24 @@ struct LidClosedPreferences: View {
             Section {
                 Toggle("Stay awake with the lid closed on battery", isOn: $settings.stayAwakeLidClosedOnBattery)
                     .disabled(helper != .enabled)
-                Stepper(value: $settings.batteryFloorPercent, in: 5...50, step: 5) {
-                    Text("Let your Mac sleep below \(settings.batteryFloorPercent) percent battery")
+            }
+            Section {
+                Toggle("Let your Mac sleep when the battery is low", isOn: batteryFloorSwitch)
+                Stepper(value: $settings.batteryFloorPercent, in: DetectionSettings.batteryFloorRange, step: 5) {
+                    Text("Sleep below \(settings.batteryFloorPercent) percent")
                 }
-                Text("agent caffeine also lets your Mac sleep when it gets too hot.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                .disabled(!settings.batteryFloorEnabled)
+                Group {
+                    if settings.batteryFloorEnabled {
+                        Text(SafetyText.floorOnHelp)
+                        Text("agent caffeine also lets your Mac sleep when it gets too hot.")
+                    } else {
+                        Label(SafetyText.floorOffWarning, systemImage: "exclamationmark.triangle")
+                        Text("agent caffeine still lets your Mac sleep when it gets too hot.")
+                    }
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
             }
             Section {
                 Toggle("Turn the display off when the lid is closed", isOn: $settings.displayOffLidClosed)
@@ -529,6 +557,13 @@ struct LidClosedPreferences: View {
             }
         }
         .formStyle(.grouped)
+        .alert(SafetyText.floorOffQuestion, isPresented: $confirmingFloorOff) {
+            Button("Keep the limit", role: .cancel) {}
+                .keyboardShortcut(.defaultAction)
+            Button("Turn the limit off") { settings.batteryFloorEnabled = false }
+        } message: {
+            Text(SafetyText.floorOffConsequence)
+        }
     }
 
     @ViewBuilder

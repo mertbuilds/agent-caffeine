@@ -161,11 +161,17 @@ enum MenuModel {
     // MARK: Battery
 
     /// The battery floor stops every hold on battery, with the lid open
-    /// too, so the bar is there whenever agent caffeine could hold on
+    /// too, and with the floor off the user has to see the end coming, so the bar is there whenever agent caffeine could hold on
     /// battery, with or without the helper for a closed lid.
     static func battery(_ input: PanelInput) -> PanelBattery? {
         guard input.onBattery, let percent = input.batteryPercent,
               input.enabled, input.pausedUntil == nil, input.entitlement.allowsHolding else { return nil }
+        let shown = min(max(percent, 0), 100)
+        // With no floor the bar still shows the end coming.
+        guard input.settings.batteryFloorEnabled else {
+            let reached = NoLimitBatteryWarning.levels.filter { percent <= $0 }.count
+            return PanelBattery(percent: shown, floor: nil, level: [.normal, .nearFloor, .nearEmpty][reached])
+        }
         let floor = input.settings.batteryFloorPercent
         var level = PanelBattery.Level.normal
         if case .safetyStop(.batteryLow) = input.decision.headline {
@@ -173,7 +179,7 @@ enum MenuModel {
         } else if percent <= floor + batteryWarningPoints {
             level = .nearFloor
         }
-        return PanelBattery(percent: min(max(percent, 0), 100), floor: floor, level: level)
+        return PanelBattery(percent: shown, floor: floor, level: level)
     }
 
     /// The hint of the first time. Not for a helper that was set up
