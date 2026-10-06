@@ -344,9 +344,11 @@ final class SystemLidTicker: LidTicking {
         timer?.cancel()
         timer = nil
         guard let interval else { return }
-        let timer = DispatchSource.makeTimerSource(queue: .main)
-        // A fast timer is on time. A slow one may join other wakeups.
-        timer.schedule(deadline: .now() + interval, repeating: interval, leeway: .milliseconds(interval < 0.1 ? 1 : 50))
+        let fast = interval < 0.1
+        // A fast timer is on time: the system may not move it to save
+        // power. A slow one may join other wakeups.
+        let timer = DispatchSource.makeTimerSource(flags: fast ? .strict : [], queue: .main)
+        timer.schedule(deadline: .now() + interval, repeating: interval, leeway: fast ? .nanoseconds(0) : .milliseconds(50))
         timer.setEventHandler(handler: work)
         timer.resume()
         self.timer = timer
@@ -358,9 +360,12 @@ final class SystemLidTicker: LidTicking {
 /// `caffeinagent --display-probe <seconds>`: prints once per second what
 /// the lid and the displays do, for a test by hand with the lid closed, and
 /// 20 times a second while the lid is below 70 degrees. `lidAngle` is the
-/// lid angle sensor in degrees, and `wouldSet` is the brightness the fade
-/// would set if agent caffeine kept the Mac awake. It only reads. It starts
-/// no app, takes no hold, and sets nothing.
+/// lid angle sensor in degrees, `lidEstimate` is the angle without the
+/// steps of the sensor, and `wouldSet` is the brightness the fade would set
+/// if agent caffeine kept the Mac awake. It only reads. It starts no app,
+/// takes no hold, and sets nothing. With the switch of `DisplayTrace` on,
+/// it also writes a trace of every step of each fade, 120 per second, with
+/// no value in the `written` column.
 enum DisplayProbe {
     private typealias KeyboardFloat = @convention(c) (AnyObject, Selector, UInt64) -> Float
     private typealias KeyboardBool = @convention(c) (AnyObject, Selector, UInt64) -> Bool
@@ -378,32 +383,41 @@ enum DisplayProbe {
         var pushes = 0
         lid.start { _ in pushes += 1 }
         var fade = LidDimMemory()
+        let trace = DisplayTraceRecorder(defaults: .standard)
+        var near = false
         var lastRow = Date.distantPast
         var notes: [String] = []
-        print((["time", "lidAngle", "wouldSet", "lidClosed", "sleepDisabled", "power", "displays"] + methods.map { "brightness\($0.name)" }
+        print((["time", "lidAngle", "lidEstimate", "wouldSet", "lidClosed", "sleepDisabled", "power", "displays"] + methods.map { "brightness\($0.name)" }
             + ["backlightMicroAmps", "keyboardBrightness", "keyboardLevel", "keyboardSuppressed", "idleSeconds", "event"]).joined(separator: "\t"))
         if !lid.isAvailable { print("# this Mac has no lid angle sensor") }
         let end = Date().addingTimeInterval(seconds)
         var wasAwake: [CGDirectDisplayID: Bool] = [:]
         while Date() < end {
-            // Lets the reports the sensor sends by itself arrive.
-            CFRunLoopRunInMode(.defaultMode, rowInterval, false)
+            // Lets the reports the sensor sends by itself arrive. Near the
+            // fade the angle is asked as often as the app asks it.
+            CFRunLoopRunInMode(.defaultMode, near ? LidPoll.fast.interval : rowInterval, false)
             let now = Date()
             let angle = lid.angle()
             let online = BuiltinDisplay.online()
             _ = BuiltinDisplay.id(among: online)
+            let level = methods.lazy.compactMap { $0.level() }.first
             // A dry run of the fade: what it would set is taken as set.
             let step = LidDimming.decide(
                 LidDimInputs(
-                    angle: angle, brightness: fade.written ?? methods.lazy.compactMap { $0.level() }.first, sensorAvailable: lid.isAvailable,
+                    angle: angle, brightness: fade.written ?? level, sensorAvailable: lid.isAvailable,
                     holding: true, externalDisplay: online.contains { CGDisplayIsBuiltin($0) == 0 }
                 ),
                 memory: fade, now: now
             )
             fade = step.memory
             notes += step.notes
-            let near = angle.map { $0 < LidDimming.fastBelow } ?? false
-            guard near || now.timeIntervalSince(lastRow) >= 1 else { continue }
+            if step.poll == .fast, fade.phase != .idle, trace.isRecording {
+                trace.add(DisplayTraceRow(time: now, raw: angle, estimate: fade.estimator.angle, target: step.target, read: level))
+            } else {
+                trace.finish()
+            }
+            near = angle.map { $0 < LidDimming.fastBelow } ?? false
+            guard now.timeIntervalSince(lastRow) >= (near ? rowInterval : 1) else { continue }
             lastRow = now
             var events = notes
             notes = []
@@ -424,7 +438,8 @@ enum DisplayProbe {
             wasAwake = Dictionary(uniqueKeysWithValues: online.map { ($0, CGDisplayIsAsleep($0) == 0) })
             let backlight = (properties("AppleARMBacklight")?["IODisplayParameters"] as? [String: Any])?["BrightnessMicroAmps"] as? [String: Any]
             let idle = CGEventType(rawValue: ~0).map { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: $0) }
-            var row = [clock.string(from: now), angle.map { String(format: "%.0f", $0) } ?? "-", step.target.map { String(format: "%.3f", $0) } ?? "-"]
+            var row = [clock.string(from: now), angle.map { String(format: "%.0f", $0) } ?? "-"]
+            row += [fade.estimator.angle.map { String(format: "%.2f", $0) } ?? "-", step.target.map { String(format: "%.3f", $0) } ?? "-"]
             row += [text(root?["AppleClamshellState"]), text(root?["SleepDisabled"]), power()]
             row.append(displays.isEmpty ? "none" : displays.joined(separator: ","))
             row += methods.map { $0.level().map { String(format: "%.3f", $0) } ?? "-" }
@@ -433,6 +448,7 @@ enum DisplayProbe {
             print(row.joined(separator: "\t"))
         }
         lid.stop()
+        trace.finish()
         exit(0)
     }
 

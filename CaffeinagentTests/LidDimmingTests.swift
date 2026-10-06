@@ -131,12 +131,13 @@ final class LidDimmingTests: XCTestCase {
         var line = Timeline()
         line.feed(60)
         var down: [Double: Float] = [:]
+        // At each degree the estimate of the angle gets time to arrive.
         for angle in stride(from: 59.0, through: 0, by: -1) {
-            line.feed(angle)
+            line.rest(at: angle, for: 0.3)
             down[angle] = line.panel
         }
         for angle in stride(from: 1.0, through: 59, by: 1) {
-            line.feed(angle)
+            line.rest(at: angle, for: 0.3)
             XCTAssertEqual(line.panel, down[angle] ?? -1, accuracy: 2 * LidDimming.minChange, "at \(angle)")
         }
         XCTAssertEqual(line.panel, 0.6)
@@ -155,7 +156,8 @@ final class LidDimmingTests: XCTestCase {
         XCTAssertEqual(step.actions.first, .wakeDisplays, "At the first reading above the closed angle")
         XCTAssertFalse(line.slept)
         XCTAssertGreaterThan(line.panel, 0, "And not black any more")
-        line.feed(12)
+        XCTAssertLessThan(line.panel, 0.01, "From black, with no jump")
+        line.rest(at: 12, for: 0.2)
         XCTAssertEqual(line.wakes, 1)
         XCTAssertEqual(line.panel, 0.6 * Float(LidDimming.curve(12)), accuracy: 0.01)
     }
@@ -207,9 +209,85 @@ final class LidDimmingTests: XCTestCase {
 
     func testSmallChangesAreNotWritten() {
         var line = Timeline()
+        line.move(from: 60, to: 30, over: 1)
+        line.rest(at: 30, for: 0.5)
+        let writes = line.writes
+        XCTAssertGreaterThan(writes, 15, "Many small steps, not one per degree")
+        line.rest(at: 30, for: 0.5)
+        XCTAssertEqual(line.writes, writes, "A lid that does not move writes nothing")
+        XCTAssertEqual(LidDimming.minChange, 0.001)
+    }
+
+    // MARK: No steps
+
+    /// What the eye saw as flicker: the brightness that one whole degree
+    /// of the sensor is worth.
+    func testOneDegreeOfTheSensorIsMoreThanThreePercentOfTheBrightness() {
+        XCTAssertGreaterThan(LidDimming.curve(24.5) - LidDimming.curve(23.5), 0.035)
+    }
+
+    func testASlowCloseHasNoStepsTheEyeCanSee() {
+        var line = Timeline()
+        line.panel = 1
+        line.feed(50)
+        var largest: Float = 0
+        var before = line.panel
+        let frames = 5 * 120
+        for frame in 1...frames {
+            // 120 readings a second of a sensor that gives whole degrees.
+            line.feed((50 - 50 * Double(frame) / Double(frames)).rounded(), after: 1.0 / 120)
+            XCTAssertLessThanOrEqual(line.panel, before, "Never up while the lid goes down")
+            largest = max(largest, before - line.panel)
+            before = line.panel
+        }
+        XCTAssertEqual(line.panel, 0)
+        XCTAssertLessThan(largest, 0.006, "One degree at once would be 0.036")
+        XCTAssertGreaterThan(line.writes, 300)
+    }
+
+    func testOneDegreeOfNoiseWritesNothing() {
+        var line = Timeline()
+        line.move(from: 110, to: 15, over: 1)
+        line.rest(at: 15, for: 0.5)
+        let writes = line.writes
+        for frame in 0..<240 { line.feed(frame % 2 == 0 ? 16 : 15) }
+        XCTAssertEqual(line.writes, writes, "The sensor reads 15, 16, 15 for a lid that rests")
+    }
+
+    func testAFastCloseIsDarkWhenTheLidSwitchSaysClosed() {
+        var line = Timeline()
         line.feed(60)
-        line.move(from: 60, to: 0, over: 2)
-        XCTAssertLessThanOrEqual(line.writes, 43, "One write per degree at most, for 120 readings")
+        line.move(from: 60, to: 8, over: 0.25)
+        XCTAssertGreaterThan(line.panel, 0)
+        line.inputs.clamshellClosed = true
+        let step = line.feed(8)
+        XCTAssertEqual(line.panel, 0, "The switch is first: the sensor still reads 8 degrees")
+        XCTAssertEqual(step.target, 0)
+        XCTAssertEqual(line.sleeps, 1)
+        XCTAssertEqual(line.memory.phase, .closed)
+        // It opens: from black, with no jump.
+        line.inputs.clamshellClosed = false
+        line.feed(8)
+        XCTAssertLessThan(line.panel, 0.01)
+        line.rest(at: 8, for: 0.5)
+        XCTAssertEqual(line.panel, 0.6 * Float(LidDimming.curve(8)), accuracy: 0.002)
+    }
+
+    func testALidThatIsShutInALittleTimeIsDarkAtTheClosedAngle() {
+        var line = Timeline()
+        line.feed(60)
+        line.move(from: 60, to: 3, over: 0.3)
+        XCTAssertEqual(line.panel, 0, "The estimate may be behind. The closed angle is not")
+    }
+
+    func testALidThatComesDownBetweenTwoSlowReadingsFadesAndDoesNotJump() {
+        var line = Timeline()
+        line.feed(110)
+        line.feed(25, after: 0.5)
+        XCTAssertGreaterThan(line.panel, 0.5, "Not at the brightness of 25 degrees in one step")
+        XCTAssertEqual(line.poll, .fast)
+        line.rest(at: 25, for: 0.5)
+        XCTAssertEqual(line.panel, 0.6 * Float(LidDimming.curve(25)), accuracy: 0.002)
     }
 
     // MARK: A lid that rests half open
@@ -227,6 +305,7 @@ final class LidDimmingTests: XCTestCase {
         line.feed(29)
         XCTAssertGreaterThan(line.panel, 0.5)
         line.move(from: 29, to: 25, over: 0.3)
+        line.rest(at: 25, for: 0.1)
         XCTAssertEqual(line.panel, 0.6 * Float(LidDimming.curve(25)), accuracy: 0.01)
     }
 
@@ -257,6 +336,7 @@ final class LidDimmingTests: XCTestCase {
         XCTAssertEqual(line.panel, 0.6)
         XCTAssertNil(line.saved)
         line.move(from: 30, to: 20, over: 0.5)
+        line.rest(at: 20, for: 0.1)
         XCTAssertEqual(line.panel, 0.6 * Float(LidDimming.curve(20)), accuracy: 0.01, "It moves down: it fades")
     }
 
@@ -274,18 +354,52 @@ final class LidDimmingTests: XCTestCase {
         XCTAssertEqual(line.panel, 0.8, accuracy: 0.001)
     }
 
-    func testABrightnessKeyOnADimDisplayIsNotUndone() {
+    func testAChangeOnADimDisplayIsNotUndoneAndIsNotTheUsers() {
         var line = Timeline()
         line.move(from: 110, to: 15, over: 1)
         line.rest(at: 15, for: 1)
         let dim = line.panel
         line.panel = dim + 0.06
         line.rest(at: 15, for: 1)
-        XCTAssertEqual(line.panel, dim + 0.06, accuracy: LidDimming.minChange)
-        // The same share of a higher value.
-        XCTAssertEqual(line.saved ?? -1, (dim + 0.06) / Float(LidDimming.curve(15)), accuracy: 0.01)
+        XCTAssertEqual(line.panel, dim + 0.06, "A lid that rests writes nothing")
+        XCTAssertEqual(line.saved, 0.6, "Below 20 degrees nobody reads the display: the value from 45 degrees stays")
         line.move(from: 15, to: 60, over: 0.5)
-        XCTAssertEqual(line.panel, (dim + 0.06) / Float(LidDimming.curve(15)), accuracy: 0.01)
+        XCTAssertEqual(line.panel, 0.6)
+    }
+
+    /// Auto-brightness: the lid covers the light sensor, and macOS makes
+    /// the display darker a little at a time.
+    func testADriftWhileTheLidPausesIsNotTakenForTheUsers() {
+        var line = Timeline()
+        line.move(from: 110, to: 30, over: 1)
+        for _ in 0..<30 {
+            line.panel -= 0.004
+            line.feed(30)
+        }
+        line.move(from: 30, to: 18, over: 0.5)
+        for _ in 0..<60 {
+            line.panel = max(line.panel - 0.002, 0.01)
+            line.feed(18)
+        }
+        XCTAssertEqual(line.saved, 0.6)
+        line.move(from: 18, to: 60, over: 0.5)
+        XCTAssertEqual(line.panel, 0.6)
+    }
+
+    func testADriftWithTheLidAtRestIsNotTheUsersAndAKeyAfterItIs() {
+        var line = Timeline()
+        line.move(from: 110, to: 30, over: 1)
+        line.rest(at: 30, for: 2.5)
+        XCTAssertEqual(line.panel, 0.6, accuracy: LidDimming.minChange)
+        for _ in 0..<50 {
+            line.panel -= 0.002
+            line.feed(30)
+        }
+        XCTAssertEqual(line.saved, 0.6, "Ten percent, a little at a time")
+        XCTAssertEqual(line.panel, 0.5, accuracy: 0.002, "And not fought")
+        line.panel += 0.0625
+        line.rest(at: 30, for: 0.5)
+        XCTAssertEqual(line.saved ?? -1, 0.5625, accuracy: 0.002, "One press of the key")
     }
 
     func testAChangeWhileTheLidMovesIsNotTakenForTheUsers() {
@@ -358,9 +472,12 @@ final class LidDimmingTests: XCTestCase {
         var line = Timeline()
         line.move(from: 110, to: 20, over: 1)
         let dim = line.panel
-        line.feed(nil, after: 0.1)
-        line.feed(nil, after: 0.1)
-        XCTAssertEqual(line.panel, dim, "Not yet: one answer can be late")
+        // The sensor was asked slowly: the first answer that is missing
+        // comes half a second after the last answer.
+        line.feed(nil, after: 0.5)
+        line.feed(nil, after: 0.2)
+        line.feed(nil, after: 0.2)
+        XCTAssertEqual(line.panel, dim, "Not yet: an answer can be late")
         XCTAssertEqual(line.poll, .fast)
         let step = line.feed(nil, after: 0.1)
         XCTAssertEqual(step.actions, [.restore(reason: "the lid angle sensor stopped answering")])
@@ -371,10 +488,24 @@ final class LidDimmingTests: XCTestCase {
         XCTAssertEqual(line.panel, 0.6)
     }
 
+    func testOneAnswerThatIsLateChangesNothing() {
+        var line = Timeline()
+        line.move(from: 110, to: 20, over: 1)
+        line.rest(at: 20, for: 0.3)
+        let dim = line.panel
+        XCTAssertEqual(line.feed(nil, after: 0.5).actions, [])
+        line.rest(at: 20, for: 0.2)
+        XCTAssertEqual(line.feed(nil, after: 0.4).actions, [], "Counted from the first answer that is missing, each time")
+        XCTAssertEqual(line.panel, dim)
+        XCTAssertEqual(line.saved, 0.6)
+        XCTAssertEqual(LidDimming.sensorTimeout, 0.5)
+    }
+
     func testASensorThatStopsUnderTheClosedLidLeavesTheDisplayDark() {
         var line = Timeline()
         line.move(from: 110, to: 0, over: 1)
         line.inputs.clamshellClosed = true
+        line.feed(nil, after: 0.5)
         let step = line.feed(nil, after: 0.5)
         XCTAssertEqual(step.actions, [], "`DisplayRules` goes on, and puts the brightness back when the lid opens")
         XCTAssertEqual(line.panel, 0)
@@ -421,6 +552,6 @@ final class LidDimmingTests: XCTestCase {
         line.rest(at: 40, for: 1)
         XCTAssertEqual(line.poll, .slow)
         XCTAssertEqual(LidPoll.slow.interval, 0.5)
-        XCTAssertEqual(LidPoll.fast.interval, 1.0 / 60)
+        XCTAssertEqual(LidPoll.fast.interval, 1.0 / 120, "The refresh rate of the display")
     }
 }

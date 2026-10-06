@@ -168,6 +168,7 @@ final class DisplayController {
     private let watcher: DisplayWatching?
     private let lid: LidAngleReading?
     private let ticker: LidTicking?
+    private let trace: DisplayTraceRecorder?
     private let clock: () -> Date
     private var memory = DisplayMemory()
     private var fade = LidDimMemory()
@@ -182,7 +183,8 @@ final class DisplayController {
 
     init(
         reader: DisplayReading, sleeper: DisplaySleeping, dimmer: BuiltinDimmer, watcher: DisplayWatching? = nil,
-        lid: LidAngleReading? = nil, ticker: LidTicking? = nil, clock: @escaping () -> Date = Date.init
+        lid: LidAngleReading? = nil, ticker: LidTicking? = nil, trace: DisplayTraceRecorder? = nil,
+        clock: @escaping () -> Date = Date.init
     ) {
         self.reader = reader
         self.sleeper = sleeper
@@ -190,6 +192,7 @@ final class DisplayController {
         self.watcher = watcher
         self.lid = lid
         self.ticker = ticker
+        self.trace = trace
         self.clock = clock
     }
 
@@ -285,6 +288,7 @@ final class DisplayController {
         poll = nil
         ticker?.tick(every: nil) {}
         lid?.stop()
+        trace?.finish()
     }
 
     private func step(angle: Double?) {
@@ -303,16 +307,19 @@ final class DisplayController {
         let result = LidDimming.decide(inputs, memory: fade, now: now)
         fade = result.memory
         for note in result.notes { log.info("\(note, privacy: .public)") }
+        var written: Float?
         for action in result.actions {
             switch action {
             case .save(let level):
                 dimmer.save(level)
             case .set(let level):
-                if !dimmer.set(level) {
+                if dimmer.set(level) {
+                    written = level
+                } else {
                     // Tried again at the next reading.
                     fade.written = before.written
-                    fade.factor = before.factor
                     fade.wroteAt = before.wroteAt
+                    fade.keys = before.keys
                 }
             case .restore:
                 // One that fails is tried again on the next sample.
@@ -325,6 +332,16 @@ final class DisplayController {
             }
         }
         memory.dimmed = dimmer.isDimmed
+        // One file per fade: from the first fast step to the last.
+        if let trace {
+            if result.poll == .fast, fade.phase != .idle || before.phase != .idle, trace.isRecording {
+                trace.add(DisplayTraceRow(
+                    time: now, raw: angle, estimate: fade.estimator.angle, target: result.target, written: written, read: dimmer.level()
+                ))
+            } else {
+                trace.finish()
+            }
+        }
         if result.poll != poll {
             poll = result.poll
             ticker?.tick(every: result.poll.interval) { [weak self] in
@@ -346,7 +363,7 @@ final class DisplayController {
         }
     }
 
-    /// Read at most twice a second: a fade asks 60 times a second.
+    /// Read at most twice a second: a fade asks 120 times a second.
     private func externalDisplay(now: Date) -> Bool {
         if let external, abs(now.timeIntervalSince(external.at)) < 0.5 { return external.value }
         let value = reader.read().externalDisplay

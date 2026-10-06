@@ -28,7 +28,7 @@ struct AggregatorParts {
             display: DisplayController(
                 reader: SystemDisplayReader(), sleeper: SystemDisplaySleep(),
                 dimmer: BuiltinDimmer(methods: BuiltinDimmer.systemMethods, defaults: .standard), watcher: SystemDisplayWatcher(),
-                lid: SystemLidAngle(), ticker: SystemLidTicker()
+                lid: SystemLidAngle(), ticker: SystemLidTicker(), trace: DisplayTraceRecorder(defaults: .standard)
             ),
             notify: Notifier.post,
             notifier: Notifier.shared

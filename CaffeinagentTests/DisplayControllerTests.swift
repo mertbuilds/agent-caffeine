@@ -371,7 +371,7 @@ final class DisplayControllerTests: XCTestCase {
         move(from: 69, to: 30, over: 0.5)
         XCTAssertEqual(panel.level, 0.6 * Float(LidDimming.curve(30)), accuracy: 0.01)
         XCTAssertEqual(saved ?? -1, 0.6, accuracy: 0.001)
-        tick(24)
+        for _ in 0..<12 { tick(24) }
         XCTAssertEqual(panel.level, 0.3, accuracy: 0.01, "No sample of the engine in between")
         move(from: 24, to: 0, over: 0.3)
         XCTAssertEqual(panel.level, 0)
@@ -457,9 +457,45 @@ final class DisplayControllerTests: XCTestCase {
         tick(60, after: 0.5)
         move(from: 60, to: 20, over: 0.5)
         tick(nil, after: 0.2)
-        tick(nil, after: 0.2)
+        tick(nil, after: 0.3)
+        XCTAssertLessThan(panel.level, 0.3, "An answer can be late")
+        tick(nil, after: 0.3)
         XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
         XCTAssertNil(saved)
+    }
+
+    func testWithTheSwitchOnEveryFadeLeavesATrace() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("caffeinagent-tests-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let controller = DisplayController(
+            reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: [Method("first", panel: panel)], defaults: defaults),
+            lid: lid, ticker: ticker, trace: DisplayTraceRecorder(defaults: defaults, directory: directory), clock: { [clock] in clock.now }
+        )
+        kept = controller
+        controller.update(lidClosed: false, holding: true, enabled: true, fade: true, now: clock.now)
+        tick(60, after: 0.5)
+        move(from: 60, to: 20, over: 0.5)
+        for _ in 0..<300 { tick(20) }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path), "Off unless the switch is on")
+
+        defaults.set(true, forKey: DisplayTrace.defaultsKey)
+        move(from: 20, to: 10, over: 0.25)
+        for _ in 0..<300 { tick(10) }
+        XCTAssertEqual(ticker.interval, LidPoll.slow.interval)
+        let names = try FileManager.default.contentsOfDirectory(atPath: directory.path)
+        XCTAssertEqual(names.count, 1, "Written when the lid is steady")
+        let rows = try String(contentsOf: directory.appendingPathComponent(names[0]), encoding: .utf8).split(separator: "\n").map { $0.split(separator: "\t") }
+        XCTAssertEqual(rows[0].joined(separator: "\t"), DisplayTrace.header)
+        XCTAssertGreaterThan(rows.count, 100)
+        XCTAssertEqual(rows[1][1], "19", "What the sensor gave")
+        XCTAssertTrue(rows.dropFirst().contains { $0[4] != "-" }, "What was set")
+        XCTAssertTrue(rows.dropFirst().allSatisfy { $0[6] == "0" }, "Nobody else set the brightness")
+        XCTAssertEqual(rows.last?[2], "10.000")
+
+        // Quit in the middle of a fade: what there is, is written.
+        move(from: 10, to: 30, over: 0.25)
+        controller.stop()
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path).count, 2)
     }
 
     // MARK: Without the fade: at once, not at the next sample
