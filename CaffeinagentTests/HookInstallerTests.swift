@@ -506,6 +506,24 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.attributesOfItem(atPath: real.path)[.posixPermissions] as? Int, 0o600)
     }
 
+    /// A link to a file that is gone, as a dotfiles folder that is not
+    /// mounted. A regular file took the place of the link.
+    func testALinkWhoseDestinationIsGoneIsRefused() throws {
+        let missing = home.appendingPathComponent("dotfiles/settings.json")
+        for entry in [claude, opencode] {
+            let url = installer.configURL(for: entry)
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try FileManager.default.createSymbolicLink(at: url, withDestinationURL: missing)
+            XCTAssertEqual(installer.status(of: entry), .unreadable)
+            XCTAssertThrowsError(try installer.install(entry)) { XCTAssertEqual($0 as? HookInstallError, .unreadable) }
+            XCTAssertThrowsError(try installer.uninstall(entry)) { XCTAssertEqual($0 as? HookInstallError, .unreadable) }
+            XCTAssertEqual(try FileManager.default.destinationOfSymbolicLink(atPath: url.path), missing.path)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: missing.path))
+            XCTAssertNil(installer.record(for: entry))
+        }
+        XCTAssertEqual(backups(of: claude), [])
+    }
+
     func testTwoChangesInOneSecondKeepBothBackups() throws {
         installer.now = { Date(timeIntervalSince1970: 1_791_000_000) }
         try write(foreignCodex, for: codex)

@@ -468,18 +468,21 @@ struct HookInstaller {
         return FileManager.default.fileExists(atPath: agentFolder(for: entry).path, isDirectory: &isDirectory) && isDirectory.boolValue
     }
 
-    /// Nil when the file is not there.
+    /// Nil when nothing is there. A link whose destination is gone is
+    /// there, and is the user's: it is refused, so no file takes its place.
     private func read(_ url: URL) throws -> [UInt8]? {
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
+        var info = stat()
+        guard lstat(url.path, &info) == 0 else { return nil }
+        guard FileManager.default.fileExists(atPath: url.path) else { throw HookInstallError.unreadable }
         guard let data = try? Data(contentsOf: url) else { throw HookInstallError.unreadable }
         return Array(data)
     }
 
     func status(of entry: HookCatalogEntry) -> HookStatus {
         guard agentIsSetUp(entry) else { return .configMissing }
-        guard let text = try? read(configURL(for: entry)) else {
-            return FileManager.default.fileExists(atPath: configURL(for: entry).path) ? .unreadable : .notInstalled
-        }
+        let text: [UInt8]?
+        do { text = try read(configURL(for: entry)) } catch { return .unreadable }
+        guard let text else { return .notInstalled }
         return HookConfigEditor.status(text: text, entry: entry, appPath: appPath)
     }
 
