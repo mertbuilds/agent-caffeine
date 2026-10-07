@@ -41,11 +41,11 @@ enum PanelText {
     static let agentNotListed = "My agent is not listed"
 
     /// The outcome, then the reason.
-    /// - Parameter waitingFor: how long the Mac still stays awake for an
-    ///   agent that waits, when that is known.
+    /// - Parameter outlook: what happens when the hold for an agent that
+    ///   waits ends.
     ///   - now: for a pause, to say whether it ends today or tomorrow.
     static func headline(
-        _ headline: HoldHeadline, waitingFor: TimeInterval? = nil,
+        _ headline: HoldHeadline, outlook: SleepOutlook = .silent,
         now: Date = Date(), calendar: Calendar = .current, locale: Locale = .current
     ) -> (title: String, subtitle: String) {
         switch headline {
@@ -53,10 +53,7 @@ enum PanelText {
             return (awakeTitle, phrase(subject, one: "is working", many: "are working"))
         case .waitingHeld(let subject):
             let waiting = phrase(subject, one: "is waiting for you", many: "are waiting for you")
-            guard let waitingFor else { return (awakeTitle, waiting) }
-            // The Mac may sleep then. Nothing says that it will.
-            let minutes = max(1, Int((waitingFor / 60).rounded(.up)))
-            return (awakeTitle, "\(waiting), can sleep in \(HumaneDuration.counted(minutes, "minute"))")
+            return (awakeTitle, [waiting, waitingEnd(outlook)].compactMap { $0 }.joined(separator: ", "))
         case .finishedRecently(let subject):
             return (awakeTitle, phrase(subject, one: "finished a moment ago", many: "finished a moment ago"))
         case .open(let subject):
@@ -99,6 +96,42 @@ enum PanelText {
         case .one(let name): return "\(name) \(one)"
         case .many(let count): return "\(count) agents \(many)"
         }
+    }
+
+    // MARK: Sleep outlook
+
+    /// The body of a notification about an agent that waits. Nil when
+    /// something else keeps the Mac awake. With the lid open it says what
+    /// agent caffeine does, never when the Mac sleeps: the sleep timer of
+    /// macOS and other apps decide that.
+    static func sleepOutlook(_ outlook: SleepOutlook) -> String? {
+        switch outlook {
+        case .silent: return nil
+        case .sleeps(let after): return "Your Mac sleeps in \(timeLeft(after))"
+        case .letsGo(let after, _): return "agent caffeine keeps your Mac awake for \(moreTime(after))"
+        }
+    }
+
+    /// The same below the headline "Your Mac stays awake", after the name
+    /// of the agent.
+    private static func waitingEnd(_ outlook: SleepOutlook) -> String? {
+        switch outlook {
+        case .silent: return nil
+        case .sleeps(let after): return "your Mac sleeps in \(timeLeft(after))"
+        case .letsGo(let after, _): return "for at least \(moreTime(after))"
+        }
+    }
+
+    /// "5 minutes", rounded up to the full minute and never under one.
+    private static func timeLeft(_ seconds: TimeInterval) -> String {
+        let minutes = max(1, Int((seconds / 60).rounded(.up)))
+        return HumaneDuration.length(seconds: TimeInterval(minutes) * 60) ?? HumaneDuration.counted(minutes, "minute")
+    }
+
+    /// "5 more minutes", and "1 hour 30 minutes more" from an hour on.
+    private static func moreTime(_ seconds: TimeInterval) -> String {
+        let minutes = max(1, Int((seconds / 60).rounded(.up)))
+        return minutes < 60 ? "\(minutes) more \(minutes == 1 ? "minute" : "minutes")" : "\(timeLeft(seconds)) more"
     }
 
     // MARK: Pause

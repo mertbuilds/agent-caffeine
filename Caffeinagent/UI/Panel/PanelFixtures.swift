@@ -37,7 +37,11 @@ enum PanelFixtures {
             let seen = zip(agents, holds).filter { $0.0.minutes >= minutes }.map(\.1.reading)
             clock = clock.updated(with: seen, now: now.addingTimeInterval(-minutes * 60))
         }
-        var input = PanelInput(decision: HoldDecision(hold: headline.keepsAwake, lidClosedFlag: false, headline: headline, perAgent: holds))
+        var decision = HoldDecision(hold: headline.keepsAwake, lidClosedFlag: false, headline: headline, perAgent: holds)
+        if case .waitingHeld = headline, let waited = agents.filter({ $0.cause == .waitingForUser }).map(\.minutes).min() {
+            decision.waitingEnds = now.addingTimeInterval(DetectionSettings().waitingHold - waited * 60)
+        }
+        var input = PanelInput(decision: decision)
         input.labels = labels
         input.hints = hints
         input.clock = clock

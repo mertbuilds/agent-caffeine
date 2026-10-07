@@ -20,6 +20,10 @@ struct AggregatorParts {
     /// Nil finds the app of no agent, so no row goes to one.
     var hosts: AgentHostFinding?
     var loginItem: LoginItemManaging
+    /// Nil reads no sleep timer of macOS.
+    var sleepTimer: SleepTimerReading?
+    /// Nil sees no other app that keeps the Mac awake.
+    var assertions: PowerAssertionListing?
     /// The keyboard layouts the default shortcuts are looked up in, asked
     /// again when the user selects another layout. With none, the defaults
     /// stay on the keys of the American layout.
@@ -41,6 +45,8 @@ struct AggregatorParts {
             notifier: Notifier.shared,
             hosts: SystemAgentHosts(),
             loginItem: SystemLoginItem(),
+            sleepTimer: SystemSleepTimer(),
+            assertions: SystemPowerAssertions(),
             keyLayouts: SystemKeyLayout.inUse
         )
     }
@@ -179,6 +185,8 @@ final class StateAggregator: ObservableObject {
     /// For the line of the battery in the menu.
     @PublishedOnChange private(set) var onBattery = false
     @PublishedOnChange private(set) var batteryPercent: Int?
+    /// For what the menu says below an agent that waits. See `SleepOutlook`.
+    @PublishedOnChange private(set) var macSleep = MacSleepState()
     @PublishedOnChange private(set) var helperError: String?
     /// By hook agent id. Read at launch and when Preferences opens, and
     /// never changed without the user's word.
@@ -205,6 +213,11 @@ final class StateAggregator: ObservableObject {
     private let notifier: AgentNotifying?
     private let hosts: AgentHostFinding?
     private let loginItemService: LoginItemManaging
+    private let sleepTimer: SleepTimerReading?
+    private let assertions: PowerAssertionListing?
+    private let sleepTimerQueue = DispatchQueue(label: "com.caffeinagent.sleep-timer", qos: .utility)
+    /// The last answer, and what it was asked for.
+    private var sleepTimerRead: (onBattery: Bool, at: Date, minutes: Int?)?
     private var trialNoticesTold: Set<TrialNotice>
     /// Taken when macOS says the Mac goes to sleep, read when it wakes.
     private var sleepSnapshot: SleepSnapshot?
@@ -231,6 +244,8 @@ final class StateAggregator: ObservableObject {
     /// System Settings tells nobody when the user allows or removes the
     /// helper, so its state is read again this often.
     private static let helperRefreshInterval: TimeInterval = 30
+    /// The user can change the sleep timer in System Settings at any time.
+    private static let sleepTimerRefreshInterval: TimeInterval = 30
 
     init(parts: AggregatorParts) {
         let license = parts.license
@@ -260,6 +275,8 @@ final class StateAggregator: ObservableObject {
         self.notifier = parts.notifier
         self.hosts = parts.hosts
         self.loginItemService = parts.loginItem
+        self.sleepTimer = parts.sleepTimer
+        self.assertions = parts.assertions
         self.trialNoticesTold = TrialNoticeStore.load(from: defaults)
         self.engine = engine
         self.entitlement = license.entitlement
@@ -397,6 +414,7 @@ final class StateAggregator: ObservableObject {
             reachableUntil: reachable.until,
             enabled: enabled,
             onBattery: onBattery,
+            macSleep: macSleep,
             batteryPercent: batteryPercent,
             sleepNote: sleepNote
         )
@@ -689,6 +707,7 @@ final class StateAggregator: ObservableObject {
         }
         announceHiddenNotice()
         announceTrial(at: sample.frame.at)
+        updateMacSleep(context, at: sample.frame.at)
         announceAgents(sample)
         // The hold of the decision as it is now: a stop from this sample
         // is in it.
@@ -711,6 +730,36 @@ final class StateAggregator: ObservableObject {
         // Sends again what did not get through.
         syncSleepFlag()
         if sample.frame.at.timeIntervalSince(lastHelperRefresh) >= Self.helperRefreshInterval { refreshHelperStatus() }
+    }
+
+    /// The lid and the power source come with the sample. The sleep timer
+    /// of macOS is read on a queue of its own, when the power source
+    /// changes and every half minute, and is in the state one sample later.
+    private func updateMacSleep(_ context: FrameContext, at now: Date) {
+        if let sleepTimer {
+            let last = sleepTimerRead
+            if last?.onBattery != context.onBattery || now.timeIntervalSince(last?.at ?? .distantPast) >= Self.sleepTimerRefreshInterval {
+                let onBattery = context.onBattery
+                // Kept until the answer comes, unless it is for the other
+                // power source.
+                sleepTimerRead = (onBattery, now, last?.onBattery == onBattery ? last?.minutes : nil)
+                sleepTimerQueue.async { [weak self] in
+                    let minutes = sleepTimer.sleepTimerMinutes(onBattery: onBattery)
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated {
+                            guard let self, self.sleepTimerRead?.onBattery == onBattery else { return }
+                            self.sleepTimerRead?.minutes = minutes
+                        }
+                    }
+                }
+            }
+        }
+        let others = assertions?.assertingPIDs().subtracting([ProcessInfo.processInfo.processIdentifier]) ?? []
+        let state = MacSleepState(
+            lidClosed: context.lidClosed, onBattery: context.onBattery, flagInUse: sleepFlag.sleepDisabled,
+            sleepTimerMinutes: sleepTimerRead?.minutes, otherAppHolds: !others.isEmpty
+        )
+        if macSleep != state { macSleep = state }
     }
 
     /// With the icon hidden, the menu's word that agent caffeine cannot do
@@ -771,13 +820,8 @@ final class StateAggregator: ObservableObject {
             settings: notices,
             active: enabled && pause.until == nil && entitlement.allowsHolding
         )
-        // In the other modes, after a stop, and while the Mac stays awake
-        // for phone access, the waiting hold does not decide when the Mac
-        // sleeps.
-        let context = sample.frame.context
-        let staysAwake = reachable.until != nil
-            || settings.stayAwakeForRemoteAccess && context.remoteAccessDetected && !context.onBattery
-        let waitingHold = mode == .agentWorking && sample.decision.hold && !staysAwake ? settings.waitingHold : nil
+        // For the whole Mac at this moment, as the menu says it.
+        let outlook = SleepOutlook(sample.decision, mac: macSleep, now: sample.frame.at)
         let told = agentNotices.update(input, now: sample.frame.at)
         var history = noticeHistory
         for decision in agentNotices.decisions {
@@ -785,7 +829,8 @@ final class StateAggregator: ObservableObject {
             history.note(decision, at: sample.frame.at)
         }
         for notice in told {
-            let content = AgentNoticeText.content(notice, waitingHold: waitingHold, now: sample.frame.at)
+            if notice.kind == .waiting { Notifier.log.notice("\(outlook.logLine, privacy: .public)") }
+            let content = AgentNoticeText.content(notice, outlook: outlook, now: sample.frame.at)
             history.posted(content, at: sample.frame.at)
             notifier.post(content)
         }

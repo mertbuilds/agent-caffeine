@@ -19,7 +19,7 @@ enum MenuModel {
         let (title, subtitle) = pose == .helperOff
             ? (PanelText.helperOffTitle, PanelText.helperOffReason)
             : PanelText.headline(
-                input.decision.headline, waitingFor: waitingHoldLeft(input, now: now),
+                input.decision.headline, outlook: SleepOutlook(input.decision, mac: input.macSleep, now: now),
                 now: now, calendar: input.calendar, locale: input.locale
             )
         let (groups, moreIdle) = groups(input, now: now)
@@ -84,16 +84,6 @@ enum MenuModel {
         case .switchedOff, .notEntitled: return .off
         case .paused: return .paused
         }
-    }
-
-    /// Until the last waiting hold runs out. Nil when no agent holds by
-    /// waiting, or when its start is not known.
-    private static func waitingHoldLeft(_ input: PanelInput, now: Date) -> TimeInterval? {
-        input.decision.perAgent
-            .filter { $0.cause == .waitingForUser }
-            .compactMap { input.clock.since($0.reading.identity) }
-            .map { $0.addingTimeInterval(input.settings.waitingHold).timeIntervalSince(now) }
-            .max()
     }
 
     // MARK: Stay reachable

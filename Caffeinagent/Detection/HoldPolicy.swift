@@ -103,6 +103,11 @@ struct HoldDecision: Equatable {
     var headline: HoldHeadline
     /// In the order of the readings.
     var perAgent: [AgentHold]
+    /// When agent caffeine lets go, while it holds only for agents that
+    /// wait for the user. Nil when anything else keeps the Mac awake: an
+    /// agent that works, finished a moment ago or is open, the mode,
+    /// "stay reachable", or phone access on power. See `SleepOutlook`.
+    var waitingEnds: Date? = nil
 }
 
 struct PolicyMemory: Equatable {
@@ -145,7 +150,26 @@ enum HoldPolicy {
         // closed must not race the flag. With the setting off the power
         // assertions alone cover a closed lid on wall power.
         let lidClosedFlag = hold && settings.stayAwakeLidClosedOnBattery
-        return (HoldDecision(hold: hold, lidClosedFlag: lidClosedFlag, headline: headline, perAgent: perAgent), memory)
+        let staysAwake = mode != .agentWorking || reachable != nil || remoteAccessHolds(settings: settings, context: context)
+        let waitingEnds = staysAwake ? nil : waitingEnds(perAgent, memory: memory, settings: settings)
+        return (HoldDecision(hold: hold, lidClosedFlag: lidClosedFlag, headline: headline, perAgent: perAgent, waitingEnds: waitingEnds), memory)
+    }
+
+    private static func remoteAccessHolds(settings: DetectionSettings, context: FrameContext) -> Bool {
+        settings.stayAwakeForRemoteAccess && context.remoteAccessDetected && !context.onBattery
+    }
+
+    /// Nil when an agent holds for another cause, or none waits. An agent
+    /// that reports its own state holds on as "finished a moment ago"
+    /// after a short wait, so that end counts too.
+    private static func waitingEnds(_ perAgent: [AgentHold], memory: PolicyMemory, settings: DetectionSettings) -> Date? {
+        guard perAgent.allSatisfy({ $0.cause == nil || $0.cause == .waitingForUser }) else { return nil }
+        return perAgent.filter { $0.cause == .waitingForUser }.compactMap { hold -> Date? in
+            guard let instance = memory.instances[hold.reading.identity], let since = instance.waitingSince else { return nil }
+            let waited = since.addingTimeInterval(settings.waitingHold)
+            guard hold.reading.level == .state, let last = instance.lastWorkingAt else { return waited }
+            return max(waited, last.addingTimeInterval(settings.releaseAfterState))
+        }.max()
     }
 
     /// Safety comes first, then the switch, then a pause, then the
@@ -217,7 +241,7 @@ enum HoldPolicy {
         if let finished = subject(.finishedRecently) { return .finishedRecently(finished) }
         if let open = subject(.open) { return .open(open) }
         if let reachableUntil { return .reachable(until: reachableUntil) }
-        if settings.stayAwakeForRemoteAccess && context.remoteAccessDetected && !context.onBattery { return .remoteAccess }
+        if remoteAccessHolds(settings: settings, context: context) { return .remoteAccess }
         return restHeadline(perAgent, settings: settings)
     }
 

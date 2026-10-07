@@ -440,6 +440,9 @@ struct PanelInput: Equatable {
     /// The switch. A pause does not change it.
     var enabled = true
     var onBattery = false
+    /// The lid, the sleep flag and what macOS does about sleep, for the
+    /// line of an agent that waits.
+    var macSleep = MacSleepState()
     /// Nil on a Mac without a battery.
     var batteryPercent: Int?
     /// Nil when the Mac did not sleep under an agent, or the user

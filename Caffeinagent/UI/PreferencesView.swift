@@ -380,7 +380,7 @@ struct GeneralPreferences: View {
                 )
                 duration(
                     "While an agent is waiting for you", $settings.waitingHold,
-                    help: "Your Mac stays awake this long while an agent is waiting for your answer. After that it can sleep."
+                    help: "Your Mac stays awake this long while an agent is waiting for your answer. After that agent caffeine lets it sleep, unless another agent is working."
                 )
             }
             Section {

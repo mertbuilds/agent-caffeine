@@ -84,30 +84,34 @@ final class MenuModelTests: XCTestCase {
     func testWaitingHeadlineCountsTheHoldDown() {
         let codex = hold("codex", "Codex", pid: 1, .waitingForUser, .asksPermission, cause: .waitingForUser)
         var input = input(.waitingHeld(.one("Codex")), [codex])
-        input.settings.waitingHold = 300
-        let cases: [(TimeInterval, String)] = [
-            (0, "Codex is waiting for you, can sleep in 5 minutes"),
-            (61, "Codex is waiting for you, can sleep in 4 minutes"),
-            (120, "Codex is waiting for you, can sleep in 3 minutes"),
-            (241, "Codex is waiting for you, can sleep in 1 minute"),
-            (299, "Codex is waiting for you, can sleep in 1 minute"),
+        let cases: [(TimeInterval, String, String)] = [
+            (0, "for at least 5 more minutes", "your Mac sleeps in 5 minutes"),
+            (61, "for at least 4 more minutes", "your Mac sleeps in 4 minutes"),
+            (120, "for at least 3 more minutes", "your Mac sleeps in 3 minutes"),
+            (241, "for at least 1 more minute", "your Mac sleeps in 1 minute"),
+            (299, "for at least 1 more minute", "your Mac sleeps in 1 minute"),
         ]
-        for (waited, subtitle) in cases {
-            input.clock = clock([codex], secondsAgo: [1: waited])
-            XCTAssertEqual(MenuModel.state(input, now: now).subtitle, subtitle, "after \(waited) s")
+        for (waited, lidOpen, lidClosed) in cases {
+            input.decision.waitingEnds = now.addingTimeInterval(300 - waited)
+            input.decision.lidClosedFlag = false
+            input.macSleep = MacSleepState()
+            XCTAssertEqual(MenuModel.state(input, now: now).subtitle, "Codex is waiting for you, \(lidOpen)", "after \(waited) s")
+            input.decision.lidClosedFlag = true
+            input.macSleep = MacSleepState(lidClosed: true, onBattery: true, flagInUse: true)
+            XCTAssertEqual(MenuModel.state(input, now: now).subtitle, "Codex is waiting for you, \(lidClosed)", "after \(waited) s, lid closed")
         }
+        XCTAssertEqual(
+            MenuModel.state(input, now: now).headlineAccessibilityLabel, "Your Mac stays awake, Codex is waiting for you, your Mac sleeps in 1 minute"
+        )
     }
 
-    func testTheLongestWaitingHoldCounts() {
-        let perAgent = [
-            hold("codex", "Codex", pid: 1, .waitingForUser, .asksPermission, cause: .waitingForUser),
-            claude(pid: 2, .waitingForUser, .asksPermission),
-            hold("claude", "Claude Code", pid: 3, .waitingForUser, .asksPermission, cause: .waitingForUser),
-        ]
-        var input = input(.waitingHeld(.many(2)), perAgent)
-        // The second one waits since a moment ago, and its hold has run out.
-        input.clock = clock(perAgent, secondsAgo: [1: 200, 2: 0, 3: 30])
-        XCTAssertEqual(MenuModel.state(input, now: now).subtitle, "2 agents are waiting for you, can sleep in 5 minutes")
+    /// Another hold, a mode or "stay reachable" keeps the Mac awake after
+    /// the wait, so the decision gives no end.
+    func testWaitingHeadlineSaysNothingOfSleepWithoutAnEnd() {
+        let codex = hold("codex", "Codex", pid: 1, .waitingForUser, .asksPermission, cause: .waitingForUser)
+        var input = input(.waitingHeld(.one("Codex")), [codex])
+        input.macSleep = MacSleepState(lidClosed: true, onBattery: true, flagInUse: true)
+        XCTAssertEqual(MenuModel.state(input, now: now).subtitle, "Codex is waiting for you")
     }
 
     func testEveryHeroPose() {

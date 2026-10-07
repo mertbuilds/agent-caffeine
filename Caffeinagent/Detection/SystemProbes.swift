@@ -16,6 +16,13 @@ protocol PowerContextReading {
     func context() -> FrameContext
 }
 
+/// The sleep timer of macOS, as System Settings and `pmset -g` show it.
+protocol SleepTimerReading: Sendable {
+    /// Minutes without input until the Mac sleeps on this power source. 0
+    /// is never. Nil when it cannot be read.
+    func sleepTimerMinutes(onBattery: Bool) -> Int?
+}
+
 /// What a process of the same user has open.
 protocol OpenFileListing {
     /// The paths of the files a process has open, nil when the list cannot
@@ -42,6 +49,29 @@ struct SystemPowerAssertions: PowerAssertionListing {
             if holds { pids.insert(pid.int32Value) }
         }
         return pids
+    }
+}
+
+/// `IOPMCopyActivePMPreferences`, which reads and needs no permission. It
+/// asks powerd and took about 13 ms on the test Mac, so the caller keeps
+/// it off the main thread. IOKit has it and its header does not, so it is
+/// looked up by name: a macOS without it gives nil.
+struct SystemSleepTimer: SleepTimerReading {
+    private typealias Copy = @convention(c) () -> Unmanaged<CFDictionary>?
+    private static let handle = dlopen("/System/Library/Frameworks/IOKit.framework/IOKit", RTLD_LAZY)
+    private static let copy = handle.flatMap { dlsym($0, "IOPMCopyActivePMPreferences") }.map { unsafeBitCast($0, to: Copy.self) }
+
+    func sleepTimerMinutes(onBattery: Bool) -> Int? {
+        guard let preferences = Self.copy?()?.takeRetainedValue() as? [String: Any] else { return nil }
+        return Self.sleepTimerMinutes(in: preferences, onBattery: onBattery)
+    }
+
+    /// One dictionary per power source. A Mac without a battery has "AC
+    /// Power" only. "Display Sleep Timer" is not read: a dark display is
+    /// not a sleeping Mac.
+    static func sleepTimerMinutes(in preferences: [String: Any], onBattery: Bool) -> Int? {
+        let source = preferences[onBattery ? "Battery Power" : "AC Power"] as? [String: Any]
+        return (source?["System Sleep Timer"] as? NSNumber)?.intValue
     }
 }
 

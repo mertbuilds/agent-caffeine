@@ -38,9 +38,9 @@ final class NotifierTests: XCTestCase {
     private func content(_ kind: AgentNoticeKind, pid: Int32 = 7, after seconds: TimeInterval) -> AgentNoticeContent {
         let session = AgentNotice.Session(
             identity: ProcessIdentity(pid: pid, startTime: 5), agentID: "claude", displayName: "Claude Code", label: "wiki", ownerPid: 500,
-            workedFor: kind == .finished ? 90 : nil, waitingSince: kind == .waiting ? start : nil
+            workedFor: kind == .finished ? 90 : nil
         )
-        return AgentNoticeText.content(AgentNotice(kind: kind, sessions: [session]), waitingHold: nil, now: start.addingTimeInterval(seconds))
+        return AgentNoticeText.content(AgentNotice(kind: kind, sessions: [session]), outlook: .silent, now: start.addingTimeInterval(seconds))
     }
 
     /// The answers of the centre come back on the main queue.
@@ -125,7 +125,7 @@ final class NotifierTests: XCTestCase {
         let sessions = (1...3).map {
             AgentNotice.Session(identity: ProcessIdentity(pid: $0, startTime: 5), agentID: "claude", displayName: "Claude Code", ownerPid: 500)
         }
-        let summary = AgentNoticeText.content(AgentNotice(kind: .finished, sessions: sessions), waitingHold: nil, now: start)
+        let summary = AgentNoticeText.content(AgentNotice(kind: .finished, sessions: sessions), outlook: .silent, now: start)
         XCTAssertEqual(summary.title, "3 agents finished")
         XCTAssertNil(summary.agent)
         let info = Notifier.request(for: summary).content.userInfo

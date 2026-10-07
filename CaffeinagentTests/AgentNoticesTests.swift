@@ -51,7 +51,6 @@ final class AgentNoticesTests: XCTestCase {
         let told = sample(14, [reading(1, .waitingForUser)])
         XCTAssertEqual(kinds(told), [.waiting])
         XCTAssertEqual(told.first?.sessions.map(\.label), ["wiki-6e"])
-        XCTAssertEqual(told.first?.sessions.first?.waitingSince, start.addingTimeInterval(10))
         XCTAssertEqual(sample(16, [reading(1, .waitingForUser)]), [], "Once")
         XCTAssertEqual(sample(600, [reading(1, .waitingForUser)]), [])
     }
@@ -521,19 +520,19 @@ final class AgentNoticesTests: XCTestCase {
 
     // MARK: Words
 
-    private func session(label: String? = "wiki-6e", workedFor: TimeInterval? = nil, waitingSince: Date? = nil, pid: Int32 = 7, owner: Int32? = 500) -> AgentNotice.Session {
+    private func session(label: String? = "wiki-6e", workedFor: TimeInterval? = nil, pid: Int32 = 7, owner: Int32? = 500) -> AgentNotice.Session {
         AgentNotice.Session(
             identity: identity(pid), agentID: "claude", displayName: "Claude Code", label: label, ownerPid: owner,
-            workedFor: workedFor, waitingSince: waitingSince
+            workedFor: workedFor
         )
     }
 
     func testWaitingWords() {
-        let notice = AgentNotice(kind: .waiting, sessions: [session(waitingSince: start)])
-        let content = AgentNoticeText.content(notice, waitingHold: 300, now: start.addingTimeInterval(4))
+        let notice = AgentNotice(kind: .waiting, sessions: [session()])
+        let content = AgentNoticeText.content(notice, outlook: .letsGo(after: 296, then: .unknown), now: start.addingTimeInterval(4))
         XCTAssertEqual(content.title, "Claude Code is waiting for you")
         XCTAssertEqual(content.subtitle, "wiki-6e")
-        XCTAssertEqual(content.body, "Your Mac can sleep in 5 minutes")
+        XCTAssertEqual(content.body, "agent caffeine keeps your Mac awake for 5 more minutes")
         XCTAssertTrue(content.sound)
         XCTAssertEqual(content.thread, "agent-claude")
         XCTAssertEqual(content.key, "waiting-7-5")
@@ -541,27 +540,24 @@ final class AgentNoticesTests: XCTestCase {
         XCTAssertEqual(content.ownerPid, 500)
     }
 
-    func testWaitingWordsWithoutTheHoldOrTheLabel() {
-        let notice = AgentNotice(kind: .waiting, sessions: [session(label: nil, waitingSince: start)])
-        let content = AgentNoticeText.content(notice, waitingHold: nil, now: start.addingTimeInterval(4))
+    func testWaitingWordsWithoutTheOutlookOrTheLabel() {
+        let notice = AgentNotice(kind: .waiting, sessions: [session(label: nil)])
+        let content = AgentNoticeText.content(notice, outlook: .silent, now: start.addingTimeInterval(4))
         XCTAssertEqual(content.title, "Claude Code is waiting for you")
         XCTAssertNil(content.subtitle)
-        XCTAssertNil(content.body, "In the mode always the Mac does not sleep")
+        XCTAssertNil(content.body, "Something else keeps the Mac awake")
     }
 
-    func testTheRealWaitingHoldIsSaid() {
-        let cases: [(TimeInterval, TimeInterval, String?)] = [
-            (300, 4, "Your Mac can sleep in 5 minutes"), (300, 250, "Your Mac can sleep in 1 minute"), (120, 4, "Your Mac can sleep in 2 minutes"),
-            (30, 4, "Your Mac can sleep in 1 minute"), (5400, 4, "Your Mac can sleep in 1 hour 30 minutes"), (300, 300, nil), (300, 900, nil),
-        ]
-        for (hold, elapsed, text) in cases {
-            XCTAssertEqual(AgentNoticeText.canSleep(waitingHold: hold, since: start, now: start.addingTimeInterval(elapsed)), text, "\(hold) \(elapsed)")
-        }
+    func testWaitingWordsWithTheLidClosedOnBattery() {
+        let notice = AgentNotice(kind: .waiting, sessions: [session()])
+        let content = AgentNoticeText.content(notice, outlook: .sleeps(after: 296), now: start.addingTimeInterval(4))
+        XCTAssertEqual(content.subtitle, "wiki-6e")
+        XCTAssertEqual(content.body, "Your Mac sleeps in 5 minutes")
     }
 
     func testFinishedWords() {
         let notice = AgentNotice(kind: .finished, sessions: [session(workedFor: 82 * 60)])
-        let content = AgentNoticeText.content(notice, waitingHold: 300, now: start)
+        let content = AgentNoticeText.content(notice, outlook: .sleeps(after: 300), now: start)
         XCTAssertEqual(content.title, "Claude Code finished")
         XCTAssertEqual(content.subtitle, "wiki-6e")
         XCTAssertEqual(content.body, "After 1 hour 22 minutes")
@@ -569,25 +565,25 @@ final class AgentNoticesTests: XCTestCase {
         XCTAssertEqual(content.thread, "agent-claude")
         XCTAssertEqual(content.key, "finished-7-5")
         XCTAssertEqual(content.id, "finished-7-5-1000000000")
-        let short = AgentNoticeText.content(AgentNotice(kind: .finished, sessions: [session(label: nil, workedFor: 45)]), waitingHold: nil, now: start)
+        let short = AgentNoticeText.content(AgentNotice(kind: .finished, sessions: [session(label: nil, workedFor: 45)]), outlook: .silent, now: start)
         XCTAssertNil(short.subtitle)
         XCTAssertNil(short.body, "Under a minute there is no length to say")
     }
 
     func testWordsForSeveral() {
         let three = [session(pid: 1), session(pid: 2), session(pid: 3, owner: 600)]
-        let finished = AgentNoticeText.content(AgentNotice(kind: .finished, sessions: three), waitingHold: 300, now: start)
+        let finished = AgentNoticeText.content(AgentNotice(kind: .finished, sessions: three), outlook: .sleeps(after: 300), now: start)
         XCTAssertEqual(finished.title, "3 agents finished")
         XCTAssertNil(finished.subtitle)
         XCTAssertNil(finished.body)
         XCTAssertTrue(finished.sound)
         XCTAssertNil(finished.ownerPid, "They run in two apps")
         let waiting = AgentNoticeText.content(
-            AgentNotice(kind: .waiting, sessions: three.map { var session = $0; session.waitingSince = start; session.ownerPid = 500; return session }),
-            waitingHold: 300, now: start.addingTimeInterval(4)
+            AgentNotice(kind: .waiting, sessions: three.map { var session = $0; session.ownerPid = 500; return session }),
+            outlook: .letsGo(after: 296, then: .neverSleeps), now: start.addingTimeInterval(4)
         )
         XCTAssertEqual(waiting.title, "3 agents are waiting for you")
-        XCTAssertEqual(waiting.body, "Your Mac can sleep in 5 minutes")
+        XCTAssertEqual(waiting.body, "agent caffeine keeps your Mac awake for 5 more minutes")
         XCTAssertTrue(waiting.sound)
         XCTAssertEqual(waiting.ownerPid, 500)
     }
@@ -599,7 +595,7 @@ final class AgentNoticesTests: XCTestCase {
         var ids: Set<String> = []
         for seconds in [0.0, 30, 60] {
             for notice in [one, three] {
-                let content = AgentNoticeText.content(notice, waitingHold: nil, now: start.addingTimeInterval(seconds))
+                let content = AgentNoticeText.content(notice, outlook: .silent, now: start.addingTimeInterval(seconds))
                 XCTAssertTrue(ids.insert(content.id).inserted, content.id)
                 XCTAssertEqual(content.thread, notice.sessions.count == 1 ? "agent-claude" : "agents", "Grouped by the thread only")
             }
@@ -627,7 +623,7 @@ final class AgentNoticesTests: XCTestCase {
         var history = AgentNoticeHistory()
         for index in 0..<7 {
             let notice = AgentNotice(kind: .finished, sessions: [session(label: "a secret folder", workedFor: 40)])
-            history.posted(AgentNoticeText.content(notice, waitingHold: nil, now: start.addingTimeInterval(TimeInterval(index))), at: start.addingTimeInterval(TimeInterval(index)))
+            history.posted(AgentNoticeText.content(notice, outlook: .silent, now: start.addingTimeInterval(TimeInterval(index))), at: start.addingTimeInterval(TimeInterval(index)))
         }
         XCTAssertEqual(history.entries.count, 5)
         XCTAssertEqual(history.entries.first?.id, "finished-7-5-1000006000", "Newest first")

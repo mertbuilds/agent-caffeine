@@ -50,8 +50,6 @@ struct AgentNotice: Equatable {
         var ownerPid: Int32?
         /// How long it worked. Finished only.
         var workedFor: TimeInterval?
-        /// Since when it waits. Waiting only.
-        var waitingSince: Date?
 
         var description: String { "AgentNotice.Session" }
         var debugDescription: String { description }
@@ -210,7 +208,7 @@ struct AgentNoticeReducer {
                 withdraw(identity, now: now)
             case .waitingForUser:
                 // An end that is on its way stays: see `due`.
-                if old?.state != .waitingForUser { offer(.waiting, snapshot(identity, session, waitingSince: now)) }
+                if old?.state != .waitingForUser { offer(.waiting, snapshot(identity, session)) }
                 session.waitTold = old?.state == .waitingForUser && old?.waitTold == true
             case .idle:
                 withdraw(identity, kind: .waiting, now: now)
@@ -248,10 +246,10 @@ struct AgentNoticeReducer {
         reading.verdict.reason == .ignoredByRule || reading.verdict.reason == .alwaysWorkingByRule
     }
 
-    private func snapshot(_ identity: ProcessIdentity, _ session: Session, workedFor: TimeInterval? = nil, waitingSince: Date? = nil) -> AgentNotice.Session {
+    private func snapshot(_ identity: ProcessIdentity, _ session: Session, workedFor: TimeInterval? = nil) -> AgentNotice.Session {
         AgentNotice.Session(
             identity: identity, agentID: session.agentID, displayName: session.displayName, label: session.label,
-            ownerPid: session.ownerPid, workedFor: workedFor, waitingSince: waitingSince
+            ownerPid: session.ownerPid, workedFor: workedFor
         )
     }
 
@@ -448,15 +446,13 @@ struct AgentNoticeTarget: Equatable {
 
 /// The words of the agent notifications.
 enum AgentNoticeText {
-    /// - Parameter waitingHold: how long the Mac stays awake for an agent
-    ///   that waits. Nil when that does not decide when the Mac sleeps.
-    static func content(_ notice: AgentNotice, waitingHold: TimeInterval?, now: Date) -> AgentNoticeContent {
+    /// - Parameter outlook: what happens when the hold for the agents that
+    ///   wait ends, for the whole Mac at this moment.
+    static func content(_ notice: AgentNotice, outlook: SleepOutlook, now: Date) -> AgentNoticeContent {
         let sessions = notice.sessions
         let owners = Set(sessions.map(\.ownerPid))
         let ownerPid = owners.count == 1 ? owners.first ?? nil : nil
-        // The Mac stays awake until the last one's hold runs out.
-        let since = sessions.compactMap(\.waitingSince).max()
-        let sleeps = notice.kind == .waiting ? canSleep(waitingHold: waitingHold, since: since, now: now) : nil
+        let sleeps = notice.kind == .waiting ? PanelText.sleepOutlook(outlook) : nil
         let stamp = Int64((now.timeIntervalSince1970 * 1000).rounded())
         guard sessions.count == 1, let session = sessions.first else {
             let key = notice.kind == .waiting ? "agents-waiting" : "agents-finished"
@@ -480,16 +476,6 @@ enum AgentNoticeText {
                 sound: true, ownerPid: ownerPid, agent: session.identity
             )
         }
-    }
-
-    /// "Your Mac can sleep in 5 minutes", with the minutes rounded up as
-    /// in the menu. Nil when the hold is over.
-    static func canSleep(waitingHold: TimeInterval?, since: Date?, now: Date) -> String? {
-        guard let waitingHold else { return nil }
-        let left = waitingHold - (since.map { now.timeIntervalSince($0) } ?? 0)
-        guard left > 0 else { return nil }
-        let minutes = Int((left / 60).rounded(.up))
-        return "Your Mac can sleep in \(HumaneDuration.length(seconds: TimeInterval(minutes) * 60) ?? "a moment")"
     }
 }
 
