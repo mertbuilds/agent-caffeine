@@ -794,6 +794,9 @@ final class StateAggregator: ObservableObject {
     /// called only when the wanted value changes, and again after a call
     /// that did not get through.
     private func syncSleepFlag() {
+        // Whatever the helper's state is: a helper that is not enabled gets
+        // no request below, and its heartbeats must stop all the same.
+        if !decision.lidClosedFlag { sleepFlag.stopWanting() }
         guard let value = flagRequest.next(
             wanted: decision.lidClosedFlag, helperEnabled: sleepFlag.helperStatus == .enabled, now: Self.uptime
         ) else { return }

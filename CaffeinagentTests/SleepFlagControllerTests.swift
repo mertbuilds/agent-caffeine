@@ -416,6 +416,61 @@ final class SleepFlagControllerTests: XCTestCase {
         XCTAssertTrue(controller.flagLeftOn)
     }
 
+    /// The decision drops the flag while System Settings no longer calls
+    /// the helper enabled, and the helper still runs. The old code sent
+    /// nothing and went on with the heartbeats, so the flag stayed on.
+    func testStopWantingEndsTheHeartbeatsAndClearsTheFlagOfAHelperThatIsNotEnabled() async {
+        for status in [HelperStatus.requiresApproval, .notRegistered, .notFound] {
+            let service = FakeService(status: .enabled)
+            let helper = FakeHelper()
+            let controller = makeController(service, helper)
+            _ = await controller.setSleepDisabled(true)
+            service.status = status
+            controller.refreshStatus()
+            XCTAssertTrue(controller.flagLeftOn)
+            await controller.stopWanting()?.value
+            XCTAssertEqual(helper.calls, ["set true", "set false"], "\(status)")
+            XCTAssertFalse(helper.flag)
+            XCTAssertFalse(controller.sleepDisabled)
+            XCTAssertFalse(controller.flagLeftOn)
+            await controller.sendHeartbeat()
+            XCTAssertEqual(helper.calls.count, 2, "No heartbeat keeps the flag on")
+            XCTAssertNil(controller.stopWanting(), "Nothing is owed any more")
+        }
+    }
+
+    func testStopWantingWithAHelperThatIsGoneTriesNoMoreOftenThanAHeartbeat() async {
+        let service = FakeService(status: .enabled)
+        let helper = FakeHelper()
+        let controller = makeController(service, helper)
+        _ = await controller.setSleepDisabled(true)
+        service.status = .notRegistered
+        controller.refreshStatus()
+        helper.unreachable = true
+        await controller.stopWanting()?.value
+        XCTAssertEqual(helper.calls, ["set true", "set false"])
+        XCTAssertTrue(controller.flagLeftOn, "Not confirmed, so the menu still says it")
+        XCTAssertNil(controller.stopWanting())
+        await controller.sendHeartbeat()
+        XCTAssertEqual(helper.calls.count, 2)
+        now += 3600
+        helper.unreachable = false
+        await controller.stopWanting()?.value
+        XCTAssertEqual(helper.calls.count, 3)
+        XCTAssertFalse(controller.flagLeftOn)
+    }
+
+    func testStopWantingLeavesAnEnabledHelperToTheRequest() async {
+        let helper = FakeHelper()
+        let controller = makeController(FakeService(status: .enabled), helper)
+        _ = await controller.setSleepDisabled(true)
+        XCTAssertNil(controller.stopWanting())
+        await controller.sendHeartbeat()
+        XCTAssertEqual(helper.calls, ["set true"], "The heartbeats stopped, and the request sends off")
+        _ = await controller.setSleepDisabled(false)
+        XCTAssertEqual(helper.calls, ["set true", "set false"])
+    }
+
     func testClearForQuit() async {
         let helper = FakeHelper()
         let controller = makeController(FakeService(status: .enabled), helper)

@@ -136,6 +136,7 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
     private var slowRetriesLeft = HelperRepair.slowRetries
     private var lastRepairEnd = -TimeInterval.infinity
     private var lastSendAfterLoss = -TimeInterval.infinity
+    private var lastOffWithTheHelperOff = -TimeInterval.infinity
     private var heartbeatTask: Task<Void, Never>?
     private let log = Logger(subsystem: "com.caffeinagent.app", category: "SleepFlagController")
 
@@ -466,6 +467,40 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         if on { startHeartbeat() } else { stopHeartbeat() }
         await send(reason)
         return sleepDisabled
+    }
+
+    /// The decision no longer wants the flag, whatever the state of the
+    /// helper is. A helper that System Settings no longer calls enabled
+    /// can still run and answer, and `setSleepDisabled(false)` never
+    /// reaches it: without this the heartbeats would keep its flag on.
+    /// - Returns: the try to send "off" to such a helper, nil for none.
+    @discardableResult
+    func stopWanting() -> Task<Void, Never>? {
+        wanted = false
+        stopHeartbeat()
+        guard offIsOwedWithTheHelperOff else { return nil }
+        return Task { await self.sendOffWithTheHelperOff() }
+    }
+
+    /// With the helper enabled the caller's request sends "off".
+    private var offIsOwedWithTheHelperOff: Bool {
+        !wanted && helperStatus != .enabled && (sleepDisabled || flagUnconfirmed) && !sending && !repairing
+            && now() - lastOffWithTheHelperOff >= heartbeatInterval
+    }
+
+    /// A helper that is gone gives no answer, and the next try comes no
+    /// sooner than a heartbeat would.
+    private func sendOffWithTheHelperOff() async {
+        guard offIsOwedWithTheHelperOff else { return }
+        lastOffWithTheHelperOff = now()
+        logSend(false, .decision)
+        do {
+            sleepDisabled = try await helper.setSleepDisabled(false)
+            flagUnconfirmed = false
+        } catch {
+            log.error("no answer from a helper that is not enabled: \(String(describing: error), privacy: .public)")
+        }
+        refreshHealth()
     }
 
     /// Every value the app sends is in the log with its reason.
