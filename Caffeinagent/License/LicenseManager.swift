@@ -11,7 +11,7 @@ enum LicenseMessage: Equatable {
 
     var text: String {
         switch self {
-        case .limitReached: return "This key is in use on as many Macs as it allows. Choose Deactivate this Mac on one of them, then try again."
+        case .limitReached: return "This key is in use on as many Macs as it allows. Choose Deactivate this Mac on one of them, or remove one in Manage in Polar, then try again."
         case .notFound: return "Polar does not recognize this key. Check it for typos."
         case .revoked: return "This key was turned off."
         case .unavailable: return "agent caffeine could not reach Polar. Check your connection and try again."

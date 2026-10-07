@@ -66,7 +66,7 @@ final class LicenseManagerTests: XCTestCase {
         XCTAssertEqual(PanelText.keyRunsOn(macs: 1), "This key runs on 1 Mac.")
         XCTAssertEqual(
             LicenseMessage.limitReached.text,
-            "This key is in use on as many Macs as it allows. Choose Deactivate this Mac on one of them, then try again."
+            "This key is in use on as many Macs as it allows. Choose Deactivate this Mac on one of them, or remove one in Manage in Polar, then try again."
         )
     }
 
