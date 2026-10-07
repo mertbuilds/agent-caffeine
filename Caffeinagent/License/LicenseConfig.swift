@@ -12,7 +12,8 @@ struct LicenseConfig: Equatable, Sendable {
     /// The Polar organization the keys belong to. Every call names it, because
     /// a key string is only unique inside one organization.
     let organizationID: String
-    /// The page that sells one key.
+    /// Where a key is bought. In production this is the pricing section of the
+    /// site, which offers both plans (1 Mac and 3 Macs).
     let checkoutURL: URL
     /// Where a buyer sees their keys and frees an activation.
     let customerPortalURL: URL
@@ -27,7 +28,7 @@ struct LicenseConfig: Equatable, Sendable {
     static let production = LicenseConfig(
         apiBase: URL(string: "https://api.polar.sh")!,
         organizationID: "6fd87dcb-ab66-439b-8c83-5b2eb5836da6",
-        checkoutURL: URL(string: "https://buy.polar.sh/polar_cl_UtPTTZP0j4vXcUW47KZQalB2aVkSo3GyKubce3pvdr1")!,
+        checkoutURL: URL(string: "https://caffeinagent.com/?utm_source=agent-caffeine-app&utm_medium=app&utm_campaign=buy#pricing")!,
         customerPortalURL: URL(string: "https://polar.sh/mertbuilds/portal")!
     )
 
