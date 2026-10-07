@@ -9,6 +9,45 @@ enum HookCommand {
     /// Two readings of one start time can differ in the last digit.
     static let startTolerance: TimeInterval = 0.001
 
+    static let inputLimit = 64 * 1024
+    /// How long the hook waits for the first byte of its input. An agent
+    /// under load can take longer than a moment to write it, and an event
+    /// with no input has no session. The agents close the pipe when they
+    /// have written, so this wait is paid only for an input that never comes.
+    static let inputWait: TimeInterval = 1
+    /// How long it waits for more once a part has come and the pipe is
+    /// still open.
+    static let inputQuiet: TimeInterval = 0.2
+    /// The longest time the reading takes in all.
+    static let inputTotal: TimeInterval = 2
+
+    /// The hook's input: at most `limit` bytes are kept. What comes after
+    /// the limit is read and dropped, so the agent never writes into a
+    /// closed pipe. Reads to the end of the input, and gives up at the
+    /// waits above, so a pipe that stays open never holds the agent.
+    static func readInput(
+        from descriptor: Int32 = STDIN_FILENO, limit: Int = inputLimit,
+        wait: TimeInterval = inputWait, quiet: TimeInterval = inputQuiet, total: TimeInterval = inputTotal
+    ) -> [UInt8] {
+        func nanoseconds(_ seconds: TimeInterval) -> UInt64 { UInt64(max(seconds, 0) * 1_000_000_000) }
+        var input: [UInt8] = []
+        var chunk = [UInt8](repeating: 0, count: 16 * 1024)
+        let start = DispatchTime.now().uptimeNanoseconds
+        let end = start + nanoseconds(total)
+        var deadline = min(start + nanoseconds(wait), end)
+        while true {
+            let now = DispatchTime.now().uptimeNanoseconds
+            guard now < deadline else { break }
+            var polled = pollfd(fd: descriptor, events: Int16(POLLIN), revents: 0)
+            guard poll(&polled, 1, Int32((deadline - now) / 1_000_000) + 1) > 0 else { break }
+            let count = read(descriptor, &chunk, chunk.count)
+            guard count > 0 else { break }
+            if input.count < limit { input.append(contentsOf: chunk[..<min(count, limit - input.count)]) }
+            deadline = min(DispatchTime.now().uptimeNanoseconds + nanoseconds(quiet), end)
+        }
+        return input
+    }
+
     /// The nearest process above the hook command that is the agent the hook
     /// was registered for. `chain` is nearest first. Nil when the hook ran
     /// under another tool, as when Droid or Cursor replay Claude Code's hooks.
@@ -45,7 +84,12 @@ enum HookCommand {
             agent: agent, event: event, notificationType: fields["notification_type"], isSubagent: fields["agent_id"] != nil
         )
         guard action != .ignore, let process = agentProcess(in: chain, hookAgent: agent) else { return false }
-        let sessionID = HookInput.sessionKeys.lazy.compactMap { fields[$0] }.first
+        let sessionID = HookInput.sessionKeys.lazy.compactMap { fields[$0] }.first { !$0.isEmpty }
+        // An input that came and names no session, as one that is cut off
+        // before the id: the state would land on a session with no name,
+        // which no later event ends. With no input at all every event of
+        // the process lands there, and that is one session.
+        if sessionID == nil, !input.isEmpty, case .set = action { return false }
         let url = directory.appendingPathComponent(HookStateFile.fileName(agent: agent, pid: process.pid))
         do {
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true, attributes: [.posixPermissions: 0o700])

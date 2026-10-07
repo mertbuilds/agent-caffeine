@@ -137,6 +137,114 @@ final class HookCommandTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: directory.path))
     }
 
+    /// One event whose session id could not be read left a working under
+    /// the key of no session. No Stop ends that one.
+    func testAnEventWithInputAndNoSessionIDIsDropped() throws {
+        XCTAssertTrue(record("UserPromptSubmit", #"{"session_id":"s-1"}"#))
+        let cut = #"{"hook_event_name":"PreToolUse","tool_input":{"content":""# + String(repeating: "x", count: 500)
+        XCTAssertFalse(record("PreToolUse", cut, after: 1), "The input was cut off before the id")
+        XCTAssertFalse(record("PreToolUse", #"{"cwd":"/tmp"}"#, after: 1))
+        XCTAssertFalse(record("Stop", #"{"session_id":""}"#, after: 1))
+        XCTAssertFalse(record("Notification", #"{"notification_type":"permission_prompt"}"#, after: 1))
+        XCTAssertEqual(Array(try file("claude-100.json").sessions.keys), [HookStateFile.sessionKey("s-1")])
+        XCTAssertTrue(record("Stop", #"{"session_id":"s-1"}"#, after: 2))
+        XCTAssertEqual(try file("claude-100.json").summary(now: now.addingTimeInterval(3), freshness: 60, workingLimit: 1800)?.state, .idle)
+    }
+
+    /// No input at all: every event of the process is one session.
+    func testEventsWithNoInputAreOneSession() throws {
+        XCTAssertTrue(record("UserPromptSubmit", ""))
+        XCTAssertEqual(Array(try file("claude-100.json").sessions.keys), ["none"])
+        XCTAssertTrue(record("Stop", "", after: 5))
+        XCTAssertEqual(try file("claude-100.json").sessions["none"]?.state, "idle")
+        XCTAssertTrue(record("SessionEnd", "", after: 6))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("claude-100.json").path))
+    }
+
+    /// A working of a session that sends nothing more does not hide the
+    /// other sessions of the process for a day.
+    func testAWorkingThatNoEventEndsGivesWayAfterTheLimit() {
+        var file = HookStateFile(agent: "claude", pid: 1, start: 0)
+        file.apply(.set(.working), session: "none", event: "PreToolUse", at: now)
+        file.apply(.set(.idle), session: "a", event: "Stop", at: now.addingTimeInterval(4000))
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(4001), freshness: 60, workingLimit: 1800)?.state, .idle)
+        file.apply(.set(.waitingForUser), session: "a", event: "Notification", at: now.addingTimeInterval(4100))
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(4101), freshness: 60, workingLimit: 1800)?.state, .waitingForUser)
+    }
+
+    // MARK: Input
+
+    private func pipe() throws -> (read: Int32, write: Int32) {
+        var ends: [Int32] = [0, 0]
+        XCTAssertEqual(Darwin.pipe(&ends), 0)
+        return (ends[0], ends[1])
+    }
+
+    private func seconds(_ body: () -> Void) -> TimeInterval {
+        let start = DispatchTime.now().uptimeNanoseconds
+        body()
+        return TimeInterval(DispatchTime.now().uptimeNanoseconds - start) / 1_000_000_000
+    }
+
+    func testInputIsReadToItsEndAtOnce() throws {
+        let ends = try pipe()
+        defer { close(ends.read) }
+        let text = Array(#"{"session_id":"s-1"}"#.utf8)
+        XCTAssertEqual(write(ends.write, text, text.count), text.count)
+        close(ends.write)
+        var input: [UInt8] = []
+        let took = seconds { input = HookCommand.readInput(from: ends.read) }
+        XCTAssertEqual(input, text)
+        XCTAssertLessThan(took, 0.1, "A closed pipe is no wait")
+    }
+
+    /// The agent writes its input 0.4 seconds after it started the hook.
+    /// The hook gave up after 0.2 and recorded an event with no session.
+    func testInputThatComesLateIsStillRead() throws {
+        let ends = try pipe()
+        defer { close(ends.read) }
+        let text = Array(#"{"session_id":"s-1"}"#.utf8)
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.4) {
+            _ = write(ends.write, text, text.count)
+            close(ends.write)
+        }
+        XCTAssertEqual(HookCommand.readInput(from: ends.read), text)
+    }
+
+    func testAPipeThatStaysOpenNeverHoldsTheHookForLong() throws {
+        XCTAssertLessThanOrEqual(HookCommand.inputWait, 1)
+        XCTAssertLessThanOrEqual(HookCommand.inputTotal, 2)
+        XCTAssertLessThan(HookCommand.inputTotal, TimeInterval(HookCatalog.timeoutSeconds))
+        // Nothing comes.
+        let silent = try pipe()
+        defer { close(silent.read); close(silent.write) }
+        var input: [UInt8] = [1]
+        var took = seconds { input = HookCommand.readInput(from: silent.read, wait: 0.2) }
+        XCTAssertEqual(input, [])
+        XCTAssertLessThan(took, 0.5)
+        // The input comes and the pipe is not closed.
+        let open = try pipe()
+        defer { close(open.read); close(open.write) }
+        let text = Array(#"{"session_id":"s-1"}"#.utf8)
+        XCTAssertEqual(write(open.write, text, text.count), text.count)
+        took = seconds { input = HookCommand.readInput(from: open.read) }
+        XCTAssertEqual(input, text)
+        XCTAssertLessThan(took, 0.6, "The short wait after a part, not the long one")
+        // A writer that never stops is cut at the total.
+        let endless = try pipe()
+        defer { close(endless.read) }
+        let stop = DispatchSemaphore(value: 0)
+        DispatchQueue.global().async {
+            let byte: [UInt8] = [120]
+            while stop.wait(timeout: .now() + 0.02) == .timedOut { _ = write(endless.write, byte, 1) }
+            close(endless.write)
+        }
+        took = seconds { input = HookCommand.readInput(from: endless.read, limit: 8, total: 0.5) }
+        stop.signal()
+        XCTAssertEqual(input.count, 8, "Kept up to the limit, the rest is read and dropped")
+        XCTAssertLessThan(took, 1)
+    }
+
     func testRecordStartsAgainForAReusedPid() throws {
         XCTAssertTrue(record("UserPromptSubmit", #"{"session_id":"old"}"#))
         var chain = claudeChain
