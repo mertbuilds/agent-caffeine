@@ -4,6 +4,7 @@ import NumberFlow from "@number-flow/react";
 import { useState, type KeyboardEvent, type ReactNode } from "react";
 import { BuyButton } from "@/components/buy-button";
 import { BASE_PLAN, PLANS, dollars, macs, type Plan } from "@/lib/pricing";
+import { track } from "@/lib/track";
 
 const PRICE_FORMAT = { style: "currency", currency: "USD", maximumFractionDigits: 0 } as const;
 
@@ -16,6 +17,13 @@ export function PlanCard({ download = null }: { download?: ReactNode }) {
   const at = Math.max(0, PLANS.findIndex((entry) => entry.id === picked));
   const plan = PLANS[at];
 
+  function pick(id: Plan["id"]) {
+    if (id !== plan.id) {
+      track("plan_select", { plan: id });
+    }
+    setPicked(id);
+  }
+
   function onKey(event: KeyboardEvent<HTMLDivElement>) {
     const step = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : event.key === "ArrowLeft" || event.key === "ArrowUp" ? -1 : 0;
     if (step === 0) {
@@ -23,7 +31,7 @@ export function PlanCard({ download = null }: { download?: ReactNode }) {
     }
     event.preventDefault();
     const next = PLANS[(at + step + PLANS.length) % PLANS.length];
-    setPicked(next.id);
+    pick(next.id);
     event.currentTarget.querySelector<HTMLElement>(`[data-plan="${next.id}"]`)?.focus();
   }
 
@@ -56,7 +64,7 @@ export function PlanCard({ download = null }: { download?: ReactNode }) {
                   aria-checked={entry.id === plan.id}
                   className={`relative flex items-baseline justify-center gap-2 whitespace-nowrap rounded-full px-4 py-2 text-sm transition-colors duration-fast ease-smooth-out focus-visible:outline-white motion-reduce:transition-none sm:px-5 ${entry.id === plan.id ? "text-brand-deep" : "text-white"}`}
                   data-plan={entry.id}
-                  onClick={() => setPicked(entry.id)}
+                  onClick={() => pick(entry.id)}
                   role="radio"
                   tabIndex={entry.id === plan.id ? 0 : -1}
                   type="button"

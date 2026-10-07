@@ -3,10 +3,11 @@
 import { useId, useState } from "react";
 import type { ReactNode } from "react";
 import { faqItems } from "@/lib/faq";
+import { track } from "@/lib/track";
 
-function Question({ question, answer, first }: { question: string; answer: ReactNode; first: boolean }) {
+function Question({ question, answer, index }: { question: string; answer: ReactNode; index: number }) {
   const id = useId();
-  const [open, setOpen] = useState(first);
+  const [open, setOpen] = useState(index === 0);
   const questionId = `${id}-question`;
   const answerId = `${id}-answer`;
 
@@ -18,7 +19,12 @@ function Question({ question, answer, first }: { question: string; answer: React
           id={questionId}
           aria-expanded={open}
           aria-controls={answerId}
-          onClick={() => setOpen(!open)}
+          onClick={() => {
+            if (!open) {
+              track("faq_open", { index, question });
+            }
+            setOpen(!open);
+          }}
           className="group flex w-full items-center justify-between gap-4 rounded py-4 text-left leading-normal"
         >
           <span className="text-pretty">{question}</span>
@@ -66,7 +72,7 @@ export function Faq({ trial }: { trial: boolean }) {
       </h2>
       <div>
         {faqItems(trial).map((item, index) => (
-          <Question key={item.question} question={item.question} answer={item.answer} first={index === 0} />
+          <Question key={item.question} question={item.question} answer={item.answer} index={index} />
         ))}
       </div>
     </section>

@@ -47,6 +47,7 @@ import {
   type PresetId,
   type SimState,
 } from "@/lib/simulator";
+import { track } from "@/lib/track";
 import { useLessMotion } from "@/lib/use-less-motion";
 import { useSeen } from "@/lib/use-seen";
 import { useTabHidden } from "@/lib/use-tab-hidden";
@@ -221,6 +222,7 @@ function Setting({ children, label }: { children: ReactNode; label: string }) {
 export function MenuBarSimulator() {
   const ref = useRef<HTMLDivElement>(null);
   const pauseRef = useRef<HTMLDivElement>(null);
+  const used = useRef(false);
   const seen = useSeen(ref, 0.2);
   const hidden = useTabHidden();
   const lessMotion = useLessMotion();
@@ -304,6 +306,21 @@ export function MenuBarSimulator() {
     return event.target instanceof Node && pauseRef.current?.contains(event.target) === true;
   }
 
+  /** Counts the first control a visitor presses. The demo presses nothing itself: it only draws a pointer. */
+  function countUse(event: SyntheticEvent) {
+    if (used.current || !(event.target instanceof Element)) {
+      return;
+    }
+    const control = fromPause(event)
+      ? "demo"
+      : (event.target.closest("[data-demo]")?.getAttribute("data-demo") ??
+        (event.target.closest("button, [role='menuitem'], [role='option'], [role='switch']") === null ? null : "panel"));
+    if (control !== null) {
+      used.current = true;
+      track("simulator_use", { control });
+    }
+  }
+
   function stopDemo() {
     if (demoing) {
       setAutoplay(false);
@@ -323,6 +340,7 @@ export function MenuBarSimulator() {
       ref={ref}
       className="relative flex w-full max-w-[36rem] flex-col gap-8 lg:max-w-none lg:gap-10"
       onClickCapture={(event) => {
+        countUse(event);
         if (!fromPause(event)) {
           stopDemo();
         }
