@@ -165,6 +165,14 @@ final class CursorCatalogTests: XCTestCase {
             ("helper with a title that names a CLI", plugin, ["codex", "app-server"], "cursor-desktop", .helper),
             ("helper as node with a codex script", plugin, ["node", "/Users/me/.local/bin/codex", "exec"], "cursor-desktop", .helper),
             ("bundled launcher", "\(app)/Resources/app/bin/cursor", ["cursor", "."], "cursor-desktop", .helper),
+            ("cursor --wait", main, [main, "\(app)/Resources/app/out/cli.js", "--wait", "COMMIT_EDITMSG"], "cursor-desktop", .helper),
+            ("cursor --wait of a copy in another folder", "/Users/me/Applications/Cursor.app/Contents/MacOS/Cursor", ["/Users/me/Applications/Cursor.app/Contents/MacOS/Cursor", "/Users/me/Applications/Cursor.app/Contents/Resources/app/out/cli.js", "--wait", "a.txt"], "cursor-desktop", .helper),
+            ("main that opens a file named cli.js", main, [main, "/Users/me/code/tool/cli.js"], "cursor-desktop", .engine),
+            // The same command of the other editors is inside a bundle
+            // with no engine at that path, so it is no agent.
+            ("code --wait", "/Applications/Visual Studio Code.app/Contents/MacOS/Code", ["/Applications/Visual Studio Code.app/Contents/MacOS/Code", "/Applications/Visual Studio Code.app/Contents/Resources/app/out/cli.js", "--wait", "a.txt"], nil, nil),
+            ("antigravity --wait", "/Applications/Antigravity.app/Contents/MacOS/Antigravity", ["/Applications/Antigravity.app/Contents/MacOS/Antigravity", "/Applications/Antigravity.app/Contents/Resources/app/out/cli.js", "--wait", "a.txt"], nil, nil),
+            ("windsurf --wait", "/Applications/Windsurf.app/Contents/MacOS/Electron", ["/Applications/Windsurf.app/Contents/MacOS/Electron", "/Applications/Windsurf.app/Contents/Resources/app/out/cli.js", "--wait", "a.txt"], nil, nil),
             ("the CLI", "/Users/me/.local/bin/cursor-agent", ["cursor-agent"], "cursor-agent", .session),
             ("another app named Cursor inside", "/Applications/Other.app/Contents/MacOS/Cursor", ["Cursor"], nil, nil),
             ("system cursor service", "/System/Library/PrivateFrameworks/TextInputUIMacHelper.framework/Versions/A/XPCServices/CursorUIViewService.xpc/Contents/MacOS/CursorUIViewService", ["CursorUIViewService"], nil, nil),
@@ -196,6 +204,23 @@ final class CursorCatalogTests: XCTestCase {
         XCTAssertEqual(instances.map(\.definitionID), ["cursor-desktop", "claude"])
         XCTAssertEqual(instances.first?.rootPID, 500)
         XCTAssertEqual(Set(instances.first?.rows.map(\.pid) ?? []), [500, 510, 511, 520, 521, 530, 531])
+    }
+
+    /// `git commit` in Terminal with `cursor --wait` as the editor. It was
+    /// a second Cursor that read every transcript again: a wrong wait, and
+    /// "finished" told twice.
+    func testTheShellCommandThatWaitsIsNoSecondCursor() {
+        let cli = "\(app)/Resources/app/out/cli.js"
+        let snapshot: [Row] = [
+            .fixture(500, path: main, args: [main]),
+            .fixture(510, ppid: 500, path: plugin, args: ["Cursor Helper (Plugin): extension-host Agents Window [1-1]"]),
+            .fixture(700, path: "/bin/zsh", args: ["-zsh"], tty: 7),
+            .fixture(710, ppid: 700, path: "/bin/bash", args: ["bash", "\(app)/Resources/app/bin/cursor", "--wait", "COMMIT_EDITMSG"], tty: 7),
+            .fixture(711, ppid: 710, path: main, args: [main, cli, "--wait", "COMMIT_EDITMSG"], tty: 7),
+        ]
+        let instances = catalog.instances(in: snapshot)
+        XCTAssertEqual(instances.map(\.rootPID), [500])
+        XCTAssertNil(HookCommand.agentProcess(in: [snapshot[4], snapshot[3], snapshot[2]], hookAgent: "cursor"))
     }
 
     func testAgentCommandIsAShellBelowAnExtensionHost() {

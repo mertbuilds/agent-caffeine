@@ -41,6 +41,8 @@ enum ArgumentPattern: Equatable {
     case leading([String])
     /// Each of these is one of the arguments, at any position.
     case contains([String])
+    /// One of the arguments ends with this.
+    case anySuffix(String)
 }
 
 struct AgentMatcher: Equatable {
@@ -128,7 +130,7 @@ struct AgentCatalog {
 
     /// Raised when a definition changes what it matches, so a lab recording
     /// says which catalog saw its processes.
-    static let version = 4
+    static let version = 5
 
     // MARK: Data
 
@@ -171,10 +173,17 @@ struct AgentCatalog {
         // window can have several extension hosts. Every other binary of
         // the bundle is a helper, so none of them is taken for a CLI. The
         // helpers rewrite their titles; the executable path stays.
+        //
+        // The shell command `cursor` (`cursor --wait file`, as an editor
+        // of git) runs the main binary as Node on `out/cli.js`, and that
+        // process lives until the file is closed. It is no second Cursor.
+        // Read 2026-10-07 in `Contents/Resources/app/bin/cursor`:
+        // `ELECTRON_RUN_AS_NODE=1 "$ELECTRON" "$CLI" "$@"`.
         AgentDefinition(
             id: cursorDesktopID, displayName: "Cursor", level: .state, kind: .desktop,
             matchers: [AgentMatcher(.appBundle(bundle: "Cursor.app", relativePath: "Contents/MacOS/Cursor"))],
             exclusions: [
+                AgentExclusion(arguments: .anySuffix("/Contents/Resources/app/out/cli.js")),
                 AgentExclusion(process: .executableContains("/Cursor.app/Contents/Frameworks/")),
                 AgentExclusion(process: .executableContains("/Cursor.app/Contents/Resources/")),
             ],
@@ -557,6 +566,8 @@ struct AgentCatalog {
             return command.arguments.starts(with: leading)
         case .contains(let wanted):
             return wanted.allSatisfy(command.arguments.contains)
+        case .anySuffix(let suffix):
+            return command.arguments.contains { $0.hasSuffix(suffix) }
         }
     }
 
