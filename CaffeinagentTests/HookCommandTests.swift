@@ -52,6 +52,21 @@ final class HookCommandTests: XCTestCase {
             ("droid", "Notification", "idle_prompt", false, .set(.idle)),
             ("opencode", "session.busy", nil, false, .set(.working)),
             ("opencode", "permission.asked", nil, false, .set(.waitingForUser)),
+            ("pi", "session_start", nil, false, .set(.idle)),
+            ("pi", "agent_start", nil, false, .set(.working)),
+            ("pi", "turn_start", nil, false, .set(.working)),
+            ("pi", "tool_execution_start", nil, false, .set(.working)),
+            ("pi", "tool_execution_end", nil, false, .set(.working)),
+            ("pi", "ui_prompt_start", nil, false, .set(.waitingForUser)),
+            ("pi", "ui_prompt_end", nil, false, .set(.working)),
+            ("pi", "session_before_compact", nil, false, .set(.working)),
+            ("pi", "session_compact", nil, false, .set(.idle)),
+            ("pi", "session_compact_failed", nil, false, .set(.idle)),
+            ("pi", "agent_settled", nil, false, .set(.idle)),
+            ("pi", "session_shutdown", nil, false, .end),
+            // A retry or queued work can follow it, and its answer can block a tool.
+            ("pi", "agent_end", nil, false, .ignore),
+            ("pi", "tool_call", nil, false, .ignore),
             ("nobody", "Stop", nil, false, .ignore),
         ]
         for c in cases {
@@ -68,6 +83,8 @@ final class HookCommandTests: XCTestCase {
             XCTAssertFalse(entry.benefit.contains("\u{2014}"))
         }
         XCTAssertEqual(HookEvents.hookAgent(forDefinition: "codex-desktop"), "codex")
+        XCTAssertEqual(HookEvents.hookAgent(forDefinition: "pi"), "pi")
+        XCTAssertEqual(HookCatalog.entry(forDefinition: "pi")?.format, .pluginFile)
         XCTAssertNil(HookEvents.hookAgent(forDefinition: "aider"))
     }
 
@@ -328,6 +345,56 @@ final class HookCommandTests: XCTestCase {
 
     private var opencodeChain: [Row] {
         [.fixture(400, ppid: 50, path: "/Users/me/.opencode/bin/opencode", args: ["opencode"]), .fixture(50, path: "/bin/zsh", args: ["-zsh"])]
+    }
+
+    /// The extension runs inside Pi and starts the hook command itself, so
+    /// Pi is the process right above it. Pi sets its title: the executable
+    /// is node, and argv[0] reads `pi`.
+    private var piChain: [Row] {
+        [.fixture(500, ppid: 50, path: "/Users/me/.local/share/pi-node/current/bin/node", args: ["pi"]), .fixture(50, path: "/bin/zsh", args: ["-zsh"])]
+    }
+
+    func testThePiProcessIsRightAboveItsHookCommand() {
+        XCTAssertEqual(HookCommand.agentProcess(in: piChain, hookAgent: "pi")?.pid, 500)
+        XCTAssertNil(HookCommand.agentProcess(in: piChain, hookAgent: "opencode"))
+        XCTAssertNil(HookCommand.agentProcess(in: opencodeChain, hookAgent: "pi"))
+        // A Pi that another Pi started as a subagent has a file of its own.
+        let inner: [Row] = [.fixture(600, ppid: 500, path: "/opt/homebrew/bin/node", args: ["pi"])] + piChain
+        XCTAssertEqual(HookCommand.agentProcess(in: inner, hookAgent: "pi")?.pid, 600)
+    }
+
+    /// One turn of Pi as the extension sends it, with the hook command of
+    /// the last tool event landing after the one of the end.
+    func testRecordFollowsAPiTurnByItsStamp() throws {
+        func pi(_ event: String, seq: Int, ts: Int, after seconds: TimeInterval, session: String = "s-1") -> Bool {
+            record(event, #"{"session_id":"\#(session)","seq":\#(seq),"ts":\#(ts)}"#, agent: "pi", chain: piChain, after: seconds)
+        }
+        func state(after seconds: TimeInterval) throws -> ReportedState? {
+            try file("pi-500.json").summary(now: now.addingTimeInterval(seconds), freshness: 60, workingLimit: 1800)?.state
+        }
+        XCTAssertTrue(pi("session_start", seq: 1, ts: 1000, after: 0))
+        XCTAssertEqual(try state(after: 0), .idle)
+        XCTAssertTrue(pi("agent_start", seq: 2, ts: 5000, after: 4))
+        XCTAssertTrue(pi("turn_start", seq: 3, ts: 5000, after: 4))
+        XCTAssertTrue(pi("tool_execution_start", seq: 4, ts: 6000, after: 5))
+        XCTAssertEqual(try state(after: 400), .working)
+        XCTAssertTrue(pi("ui_prompt_start", seq: 5, ts: 406_000, after: 405))
+        XCTAssertEqual(try state(after: 4000), .waitingForUser)
+        XCTAssertTrue(pi("ui_prompt_end", seq: 6, ts: 4_001_000, after: 4000))
+        XCTAssertEqual(try state(after: 4001), .working)
+        XCTAssertTrue(pi("agent_settled", seq: 8, ts: 4_010_001, after: 4009))
+        XCTAssertTrue(pi("tool_execution_end", seq: 7, ts: 4_010_000, after: 4009.02))
+        let session = try XCTUnwrap(try file("pi-500.json").sessions[HookStateFile.sessionKey("s-1")])
+        XCTAssertEqual(session, .init(state: "idle", event: "agent_settled", at: now.timeIntervalSince1970 + 4009, ts: 4_010_001, seq: 8))
+        XCTAssertFalse(pi("agent_end", seq: 9, ts: 4_010_002, after: 4010))
+        // A new session of the same process, and the end of the first one.
+        XCTAssertTrue(pi("session_shutdown", seq: 10, ts: 4_020_000, after: 4019))
+        XCTAssertTrue(pi("session_start", seq: 11, ts: 4_020_001, after: 4019, session: "s-2"))
+        XCTAssertEqual(Array(try file("pi-500.json").sessions.keys), [HookStateFile.sessionKey("s-2")])
+        XCTAssertTrue(pi("session_shutdown", seq: 12, ts: 4_030_000, after: 4029, session: "s-2"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("pi-500.json").path))
+        let written = try FileManager.default.contentsOfDirectory(atPath: directory.path).filter { !$0.hasPrefix(".") }
+        XCTAssertEqual(written, [])
     }
 
     func testInputScannerReadsTheStamp() {

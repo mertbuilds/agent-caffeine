@@ -53,7 +53,7 @@ enum HookConfigEditor {
         switch entry.format {
         case .pluginFile:
             let source = String(decoding: text, as: UTF8.self)
-            if source == HookCatalog.pluginSource(appPath: appPath) { return .installed(version: HookCatalog.pluginVersion) }
+            if source == HookCatalog.pluginSource(for: entry, appPath: appPath) { return .installed(version: HookCatalog.pluginVersion(for: entry)) }
             return source.contains(HookCatalog.pluginMarker) ? .outdated : .unreadable
         case .jsonHookGroups, .jsonFlatHooks:
             guard let (keyPath, flat) = entry.format.jsonLayout else { return .unreadable }
@@ -73,7 +73,7 @@ enum HookConfigEditor {
     /// trust of a hook by that position. `keeping` is for the entries of an
     /// older build that are taken out first: see `uninstalling`.
     static func installing(into text: [UInt8], entry: HookCatalogEntry, appPath: String, keeping: Set<[String]> = []) throws -> [UInt8] {
-        guard let (keyPath, flat) = entry.format.jsonLayout else { return Array(HookCatalog.pluginSource(appPath: appPath).utf8) }
+        guard let (keyPath, flat) = entry.format.jsonLayout else { return Array(HookCatalog.pluginSource(for: entry, appPath: appPath).utf8) }
         if status(text: text, entry: entry, appPath: appPath) == .installed(version: HookCatalog.version) { return text }
         let cleared = try clearedForInstall(text, entry: entry, keeping: keeping)
         var source = JSONSourceText(cleared)
@@ -375,7 +375,7 @@ enum HookConfigEditor {
     static func preview(for entry: HookCatalogEntry, appPath: String) -> String {
         switch entry.format {
         case .pluginFile:
-            return HookCatalog.pluginSource(appPath: appPath)
+            return HookCatalog.pluginSource(for: entry, appPath: appPath)
         case .jsonHookGroups, .jsonFlatHooks:
             guard let (keyPath, flat) = entry.format.jsonLayout else { return "" }
             return expectedHandlers(for: entry, appPath: appPath).map { handler in
@@ -479,7 +479,7 @@ struct HookInstaller {
     }
 
     /// The folder that shows the agent is set up: `~/.claude`, `~/.codex`,
-    /// `~/.factory`, `~/.config/opencode`.
+    /// `~/.factory`, `~/.config/opencode`, `~/.pi`.
     private func agentFolder(for entry: HookCatalogEntry) -> URL {
         let parts = entry.configPath.split(separator: "/").map(String.init)
         let depth = parts.first == ".config" ? 2 : 1

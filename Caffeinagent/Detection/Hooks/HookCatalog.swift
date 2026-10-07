@@ -10,7 +10,7 @@ struct HookCatalogEntry: Equatable, Identifiable {
         /// A JSON file with a top-level `"version": 1` and
         /// `<key path>.<event>: [{command, timeout}]`, the form of Cursor.
         case jsonFlatHooks(keyPath: [String])
-        /// A JavaScript plugin file that is all ours.
+        /// A JavaScript plugin or extension file that is all ours.
         case pluginFile
 
         /// Nil for a file that is no JSON config.
@@ -52,6 +52,8 @@ enum HookCatalog {
     /// other agents read as outdated. 2: the events go to the hook command
     /// one after the other, with a stamp of their order.
     static let pluginVersion = 2
+    /// The same for the Pi extension file.
+    static let piExtensionVersion = 1
     /// Two events of one name for one session this close together are one:
     /// opencode sends `session.status` idle and `session.idle` in the same
     /// millisecond. A later busy of the same turn is passed on: it starts
@@ -99,6 +101,14 @@ enum HookCatalog {
             confirmedBy: "opencode.ai/docs/plugins for the folder, the plugin form and the event names. The event payload and the call of `event` without a wait are from the opencode 1.18.16 binary. A turn was measured live."
         ),
         HookCatalogEntry(
+            id: piID, displayName: "Pi", configPath: ".pi/agent/extensions/\(pluginFileName)",
+            format: .pluginFile,
+            adds: [.working, .waitingForUser, .idle],
+            benefit: "Lets agent caffeine see at once when Pi starts and stops working",
+            afterInstall: "Pi loads the extension the next time it starts, or when you type /reload in Pi.",
+            confirmedBy: "Pi 1.0.4 on the test Mac: docs/extensions.md and docs/configuration.md for the folder and the form, dist/core/extensions/types.d.ts for the event names, dist/core/extensions/runner.js and dist/core/agent-session.js for the wait on each handler and for agent_settled after every run. The extension was loaded by Pi and its session events were recorded. A turn with a model was not run live."
+        ),
+        HookCatalogEntry(
             id: "cursor", displayName: "Cursor", configPath: ".cursor/hooks.json",
             format: .jsonFlatHooks(keyPath: ["hooks"]),
             adds: [],
@@ -112,7 +122,7 @@ enum HookCatalog {
     static let notConfirmed: [(agent: String, reason: String)] = [
         ("Cursor CLI", "It is not known which hooks.json events fire in cursor-agent, or what an empty answer does to beforeSubmitPrompt."),
         ("Gemini CLI", "The settings.json hook format is known from source only, and no Gemini config exists on the test Mac."),
-        ("Grok, Pi, Amp, Antigravity, Copilot", "Known from another project's catalogue only."),
+        ("Grok, Amp, Antigravity, Copilot", "Known from another project's catalogue only."),
     ]
 
     static func entry(id: String) -> HookCatalogEntry? {
@@ -210,4 +220,127 @@ enum HookCatalog {
     }
 
     static let pluginMarker = "agent-caffeine-hook"
+    static let piID = "pi"
+
+    /// The file of an entry of the form `.pluginFile`.
+    static func pluginSource(for entry: HookCatalogEntry, appPath: String = stableAppPath) -> String {
+        entry.id == piID ? piExtensionSource(appPath: appPath) : pluginSource(appPath: appPath)
+    }
+
+    static func pluginVersion(for entry: HookCatalogEntry) -> Int {
+        entry.id == piID ? piExtensionVersion : pluginVersion
+    }
+
+    /// The Pi extension. It hands each event to the hook command with the
+    /// session id, the number of the event and its time, and nothing else.
+    /// Pi waits for each handler, so a handler only puts the event in the
+    /// queue and returns: a hook command starts when the one before it has
+    /// ended, and Pi never waits for one. A handler never throws. Only
+    /// events that tell and change nothing are taken: a handler of
+    /// `tool_call` that fails blocks the tool. The queue and the number are
+    /// kept for the process, because `/reload` and a new session load the
+    /// extension anew.
+    ///
+    /// Pi has no permission step of its own. Another extension can ask the
+    /// user (`ui_prompt_start`), and that is a wait only during a run. A
+    /// compaction that the user starts is work with no run around it.
+    static func piExtensionSource(appPath: String = stableAppPath) -> String {
+        """
+        // \(pluginMarker) v=\(piExtensionVersion)
+        // Written by agent caffeine. Turn it off in agent caffeine > Preferences > Agents.
+        // It tells agent caffeine when Pi works, waits for you or is done.
+        import { spawn } from "node:child_process";
+
+        const hook = \(JSONSourceText.literal(executablePath(appPath: appPath)));
+        const shared = (globalThis[Symbol.for("agent-caffeine.pi.v\(piExtensionVersion)")] ??= { queue: Promise.resolve(), seq: 0 });
+
+        const run = (name, body) =>
+          new Promise((done) => {
+            const timer = setTimeout(done, \(timeoutSeconds * 1000));
+            const end = () => {
+              clearTimeout(timer);
+              done();
+            };
+            try {
+              timer.unref?.();
+              const child = spawn(hook, ["\(piID)", name, "v=\(piExtensionVersion)"], { stdio: ["pipe", "ignore", "ignore"], detached: true });
+              child.on("error", end);
+              child.on("close", end);
+              child.stdin.on("error", () => {});
+              child.stdin.end(body);
+              child.unref();
+            } catch {
+              end();
+            }
+          });
+
+        export default function (pi) {
+          let session = "";
+          let last = "";
+          let lastAt = 0;
+          let running = false;
+          let asked = false;
+
+          const send = (name, ctx) => {
+            try {
+              try {
+                session = String(ctx?.sessionManager?.getSessionId?.() ?? "") || session;
+              } catch {}
+              const ts = Date.now();
+              const key = name + " " + session;
+              if (key === last && Math.abs(ts - lastAt) < \(pluginRepeatMilliseconds)) return;
+              last = key;
+              lastAt = ts;
+              shared.seq += 1;
+              const body = JSON.stringify({ session_id: session || "pid-" + process.pid, seq: shared.seq, ts });
+              shared.queue = shared.queue.then(() => run(name, body));
+            } catch {}
+          };
+          const on = (name, handler) => {
+            try {
+              pi.on(name, (_event, ctx) => {
+                try {
+                  handler(ctx);
+                } catch {}
+              });
+            } catch {}
+          };
+          const rests = (name) =>
+            on(name, (ctx) => {
+              running = false;
+              asked = false;
+              send(name, ctx);
+            });
+
+          rests("session_start");
+          for (const name of ["agent_start", "turn_start", "tool_execution_start", "tool_execution_end"]) {
+            on(name, (ctx) => {
+              running = true;
+              if (!asked) send(name, ctx);
+            });
+          }
+          on("ui_prompt_start", (ctx) => {
+            if (!running) return;
+            asked = true;
+            send("ui_prompt_start", ctx);
+          });
+          on("ui_prompt_end", (ctx) => {
+            if (!asked) return;
+            asked = false;
+            send("ui_prompt_end", ctx);
+          });
+          on("session_before_compact", (ctx) => {
+            if (!asked) send("session_before_compact", ctx);
+          });
+          for (const name of ["session_compact", "session_compact_failed"]) {
+            on(name, (ctx) => {
+              if (!running) send(name, ctx);
+            });
+          }
+          rests("agent_settled");
+          rests("session_shutdown");
+        }
+
+        """
+    }
 }

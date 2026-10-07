@@ -112,6 +112,8 @@ final class LaunchArgumentsTests: XCTestCase {
         }
         XCTAssertTrue(HookCatalog.pluginSource().contains("/Contents/MacOS/CaffeinagentHook"))
         XCTAssertFalse(HookCatalog.pluginSource().contains("/Contents/MacOS/caffeinagent"))
+        XCTAssertTrue(HookCatalog.piExtensionSource().contains("/Contents/MacOS/CaffeinagentHook"))
+        XCTAssertFalse(HookCatalog.piExtensionSource().contains("/Contents/MacOS/caffeinagent"))
     }
 
     func testReopenAction() {
