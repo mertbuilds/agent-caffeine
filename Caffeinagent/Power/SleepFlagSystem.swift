@@ -185,17 +185,14 @@ struct SudoersCleanupError: LocalizedError {
     var errorDescription: String? { message }
 }
 
-// The builds before the helper set SleepDisabled through `sudo pmset` and
-// remembered it in UserDefaults, because the flag survives a quit.
-enum LegacyBatteryOverride {
-    private static let flagKey = "BatteryOverride.overrideSetByApp"
-
-    /// Clears a flag such a build left on, then forgets it. `sudo -n` never
-    /// asks for a password: without the sudoers entry it fails at once.
+extension LegacyBatteryOverride {
     static func clearLeftover(defaults: UserDefaults = .standard) {
-        guard defaults.bool(forKey: flagKey) else { return }
-        defaults.removeObject(forKey: flagKey)
-        guard FileManager.default.fileExists(atPath: SudoersEntry.path) else { return }
+        clearLeftover(defaults: defaults, entryExists: { FileManager.default.fileExists(atPath: SudoersEntry.path) }, clear: runPmset)
+    }
+
+    /// `sudo -n` never asks for a password: without the sudoers entry it
+    /// fails at once.
+    private static func runPmset() -> Int32? {
         let task = Process()
         task.executableURL = URL(fileURLWithPath: "/usr/bin/sudo")
         // Word for word the command the sudoers entry allows.
@@ -204,7 +201,8 @@ enum LegacyBatteryOverride {
         task.standardError = FileHandle.nullDevice
         let exited = DispatchSemaphore(value: 0)
         task.terminationHandler = { _ in exited.signal() }
-        guard (try? task.run()) != nil else { return }
+        guard (try? task.run()) != nil else { return nil }
         exited.wait()
+        return task.terminationReason == .exit ? task.terminationStatus : nil
     }
 }
