@@ -92,6 +92,34 @@ struct CodexRolloutReader {
         return files.sorted { $0.lastWrite > $1.lastWrite }
     }
 
+    /// The rollouts in the dated folders of the last `days` days, newest
+    /// first, without a walk of the whole tree. A thread that began
+    /// earlier and is still written is not found here: the collector
+    /// finds that one through the process that holds it open. The folders
+    /// are tried by the local date and by the UTC date.
+    func filesOfLastDays(_ days: Int, now: Date = Date()) -> [CodexRolloutFile] {
+        var folders: [String] = []
+        for zone in [TimeZone.current, TimeZone(identifier: "UTC")].compactMap({ $0 }) {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = zone
+            for back in 0..<max(days, 1) {
+                let day = calendar.dateComponents([.year, .month, .day], from: now.addingTimeInterval(-86_400 * TimeInterval(back)))
+                let folder = String(format: "%04d/%02d/%02d", day.year ?? 0, day.month ?? 0, day.day ?? 0)
+                if !folders.contains(folder) { folders.append(folder) }
+            }
+        }
+        var files: [CodexRolloutFile] = []
+        for folder in folders {
+            let directory = sessionsDirectory.appendingPathComponent(folder, isDirectory: true)
+            for name in (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [] where name.hasPrefix("rollout-") && name.hasSuffix(".jsonl") {
+                let url = directory.appendingPathComponent(name)
+                guard let signature = FileSignature(path: url.path) else { continue }
+                files.append(CodexRolloutFile(url: url, sessionID: Self.sessionID(fromFileName: name), lastWrite: signature.modifiedAt, size: signature.size))
+            }
+        }
+        return files.sorted { $0.lastWrite > $1.lastWrite }
+    }
+
     func rollouts(maxAge: TimeInterval = 86_400, now: Date = Date()) -> [CodexRollout] {
         recentFiles(maxAge: maxAge, now: now).map(Self.rollout(for:))
     }

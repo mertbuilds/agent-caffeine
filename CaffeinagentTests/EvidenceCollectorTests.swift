@@ -62,6 +62,11 @@ final class EvidenceCollectorTests: XCTestCase {
         collector = EvidenceCollector(sources: sources)
     }
 
+    /// A new collector with the same sources, and so with no memory.
+    private func setUpCollector() {
+        collector = EvidenceCollector(sources: sources)
+    }
+
     /// A collector that also reads hook states and Claude Code's settings.
     private func collectWithHooks() -> URL {
         let hooks = root.appendingPathComponent("hooks")
@@ -441,20 +446,98 @@ final class EvidenceCollectorTests: XCTestCase {
         XCTAssertEqual(sample(at: 6).frame.agents.first?.reported?.state, .working)
     }
 
+    /// The dated folder of a rollout that began `daysBack` days ago, as
+    /// Codex names it.
+    private func codexFolder(daysBack: Int = 0) -> String {
+        let day = Calendar.current.dateComponents([.year, .month, .day], from: base.addingTimeInterval(-86_400 * TimeInterval(daysBack)))
+        return String(format: "codex/%04d/%02d/%02d", day.year ?? 0, day.month ?? 0, day.day ?? 0)
+    }
+
+    private func codexSession(_ pid: Int32, cwd: String = "/Users/me/code/demo") -> Row {
+        openFiles.directories[pid] = cwd
+        return .fixture(pid, start: processStart, path: "/Users/me/.codex/bin/codex", args: ["codex", "exec", "do it"])
+    }
+
+    private func rolloutName(_ last: Character) -> String {
+        "rollout-2026-10-05T11-00-00-01a10000-aaaa-7000-8000-00000000c78\(last).jsonl"
+    }
+
     func testCodexSessionMatchesItsRolloutByWorkingDirectory() throws {
-        census.rows = [.fixture(300, start: processStart, path: "/Users/me/.codex/bin/codex", args: ["codex", "exec", "do it"])]
-        openFiles.directories[300] = "/Users/me/code/demo"
-        try write(rollout([meta(cwd: "/Users/me/code/other"), turnStarted]), to: "codex/2026/10/05/rollout-2026-10-05T10-00-00-01a10000-aaaa-7000-8000-00000000c781.jsonl")
-        try write(rollout([meta(cwd: "/Users/me/code/demo"), turnStarted]), to: "codex/2026/10/04/rollout-2026-10-04T10-00-00-01a10000-aaaa-7000-8000-00000000c780.jsonl", modified: Date(timeIntervalSince1970: processStart - 60))
+        census.rows = [codexSession(300)]
+        try write(rollout([meta(cwd: "/Users/me/code/other"), turnStarted]), to: "\(codexFolder())/\(rolloutName("1"))")
+        try write(rollout([meta(cwd: "/Users/me/code/demo"), turnStarted]), to: "\(codexFolder(daysBack: 1))/\(rolloutName("0"))", modified: Date(timeIntervalSince1970: processStart - 60))
         let none = try XCTUnwrap(sample(at: 0).frame.agents.first)
         XCTAssertEqual(none.agentID, "codex")
         XCTAssertNil(none.reported, "The rollout of its directory is from before the process started")
 
-        let own = try write(rollout([meta(cwd: "/Users/me/code/demo"), turnStarted]), to: "codex/2026/10/05/rollout-2026-10-05T11-00-00-01a10000-aaaa-7000-8000-00000000c782.jsonl")
-        let sample = sample(at: EvidenceCollector.listingAge)
+        let own = try write(rollout([meta(cwd: "/Users/me/code/demo"), turnStarted]), to: "\(codexFolder())/\(rolloutName("2"))")
+        XCTAssertNil(sample(at: 30).frame.agents.first?.reported, "The folders are listed once a minute")
+        let sample = sample(at: EvidenceCollector.rolloutListingAge)
         XCTAssertEqual(sample.frame.agents.first?.reported?.state, .working)
         XCTAssertEqual(sample.watchedFiles.map { URL(fileURLWithPath: $0).lastPathComponent }, [URL(fileURLWithPath: own).lastPathComponent])
         XCTAssertFalse(sample.frame.agents.first?.hasLiveSession ?? true, "Only desktop apps have a live session")
+    }
+
+    /// Two `codex` sessions in one folder. Both read the newest rollout of
+    /// the folder: the end of A's turn made B idle in the middle of its
+    /// turn.
+    func testTwoCodexSessionsInOneFolderEachReadTheRolloutTheyHoldOpen() throws {
+        census.rows = [codexSession(300), codexSession(301)]
+        let ofB = try write(rollout([meta(cwd: "/Users/me/code/demo"), turnStarted]), to: "\(codexFolder())/\(rolloutName("1"))", modified: at(-20))
+        let ofA = try write(rollout([meta(cwd: "/Users/me/code/demo"), turnStarted, turnComplete]), to: "\(codexFolder())/\(rolloutName("2"))")
+        openFiles.files[300] = [ofA, "/Users/me/.codex/logs_2.sqlite"]
+        openFiles.files[301] = [ofB]
+        let agents = sample(at: 0).frame.agents
+        XCTAssertEqual(agents.map(\.pid), [300, 301])
+        XCTAssertEqual(agents.map { $0.reported?.state }, [.idle, .working])
+    }
+
+    /// A killed session left a turn open in the newest rollout of the
+    /// folder, and the session that lives read as working for ever.
+    func testAKilledCodexSessionDoesNotMakeAnotherOneWork() throws {
+        census.rows = [codexSession(301)]
+        let own = try write(rollout([meta(cwd: "/Users/me/code/demo"), turnStarted, turnComplete]), to: "\(codexFolder())/\(rolloutName("1"))", modified: at(-20))
+        try write(rollout([meta(cwd: "/Users/me/code/demo"), turnStarted]), to: "\(codexFolder())/\(rolloutName("2"))")
+        openFiles.files[301] = [own]
+        let sample = sample(at: 0)
+        XCTAssertEqual(sample.frame.agents.first?.reported?.state, .idle)
+        XCTAssertEqual(sample.watchedFiles, [own])
+    }
+
+    /// With no open rollout the folder decides, and only for a session
+    /// that is alone in it. No file goes to two sessions.
+    func testCodexSessionsThatShareAFolderAndHoldNoRolloutGetNone() throws {
+        try write(rollout([meta(cwd: "/Users/me/code/demo"), turnStarted]), to: "\(codexFolder())/\(rolloutName("1"))", modified: at(-20))
+        let newest = try write(rollout([meta(cwd: "/Users/me/code/demo"), turnStarted, turnComplete]), to: "\(codexFolder())/\(rolloutName("2"))")
+        census.rows = [codexSession(300), codexSession(301), codexSession(302, cwd: "/Users/me/code/other")]
+        XCTAssertEqual(sample(at: 0).frame.agents.map { $0.reported?.state }, [nil, nil, nil])
+
+        // One of the two holds the newest file: the other one is alone
+        // among those that search, and gets the file that is left.
+        setUpCollector()
+        openFiles.files[300] = [newest]
+        XCTAssertEqual(sample(at: 0).frame.agents.map { $0.reported?.state }, [.idle, .working, nil])
+
+        // The file that is held is not given a second time.
+        setUpCollector()
+        census.rows = [codexSession(300), codexSession(301)]
+        try FileManager.default.removeItem(atPath: root.appendingPathComponent("\(codexFolder())/\(rolloutName("1"))").path)
+        XCTAssertEqual(sample(at: 0).frame.agents.map { $0.reported?.state }, [.idle, nil])
+    }
+
+    /// Only the dated folders of today and yesterday are listed. A thread
+    /// from an older folder is found through the process that holds it.
+    func testCodexRolloutFromAnOlderFolderIsFoundOnlyThroughItsOpenFile() throws {
+        census.rows = [codexSession(300)]
+        let old = try write(rollout([meta(cwd: "/Users/me/code/demo"), turnStarted]), to: "\(codexFolder(daysBack: 9))/\(rolloutName("1"))")
+        XCTAssertNil(sample(at: 0).frame.agents.first?.reported)
+        openFiles.files[300] = [old]
+        XCTAssertEqual(sample(at: 2).frame.agents.first?.reported?.state, .working)
+        let reader = CodexRolloutReader(sessionsDirectory: root.appendingPathComponent("codex"))
+        try write(rollout([turnStarted]), to: "\(codexFolder(daysBack: 1))/\(rolloutName("2"))", modified: at(-90_000))
+        try write(rollout([turnStarted]), to: "\(codexFolder())/\(rolloutName("3"))")
+        try write("{}", to: "\(codexFolder())/notes.jsonl")
+        XCTAssertEqual(reader.filesOfLastDays(2, now: base).map(\.url.lastPathComponent), [rolloutName("3"), rolloutName("2")])
     }
 
     // MARK: Activity
