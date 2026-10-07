@@ -8,6 +8,7 @@ import Foundation
 ///     caffeinagent --lab-record <label>                 record until SIGINT or SIGTERM
 ///     caffeinagent --lab-mark <agent> <truth> [note]    mark the running recording
 ///     caffeinagent --lab-score <file>                   replay a recording and score it
+///     caffeinagent --lab-notices <file>                 replay a recording and list the agent notifications
 ///
 /// `<agent>` is an agent id from the catalog (`claude`, `codex-desktop`),
 /// `id:pid` for one instance, or `*`. `<truth>` is `working`, `waiting`,
@@ -33,6 +34,9 @@ enum LabCommand {
         case "--lab-score":
             guard let path = rest.first else { fail("Usage: --lab-score <file>") }
             score(path: path)
+        case "--lab-notices":
+            guard let path = rest.first else { fail("Usage: --lab-notices <file>") }
+            notices(path: path)
         default:
             fail("Unknown lab command \(arguments[index]).")
         }
@@ -151,6 +155,15 @@ enum LabCommand {
             fail("\(error)")
         }
         say("Marked \(agent) as \(truth.rawValue) in \(url.path)")
+        exit(0)
+    }
+
+    private static func notices(path: String) -> Never {
+        do {
+            say(LabNotices.report(try LabFormat.recording(at: URL(fileURLWithPath: path))))
+        } catch {
+            fail("\(error)")
+        }
         exit(0)
     }
 

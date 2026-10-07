@@ -215,6 +215,8 @@ targets:
       - Caffeinagent/UI/HookPreferences.swift
       # The shortcut as a value and its rules. Without the Carbon part.
       - Caffeinagent/Shortcut/Shortcut.swift
+      # With a centre that stands in for UNUserNotificationCenter.
+      - Caffeinagent/Notifier.swift
       - CaffeinagentHelper/HelperCore.swift
       - CaffeinagentHelper/HelperService.swift
       - CaffeinagentHelper/SleepFlagWatchdog.swift

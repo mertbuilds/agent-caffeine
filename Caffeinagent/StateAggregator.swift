@@ -117,6 +117,8 @@ final class StateAggregator: ObservableObject {
         }
     }
     @PublishedOnChange private(set) var notificationPermission = NotificationPermission.notAsked
+    /// The last agent notifications, for Preferences.
+    @PublishedOnChange private(set) var noticeHistory = AgentNoticeHistory()
     /// The robot in the menu bar. Hiding it changes nothing else. The
     /// menu bar scene writes this back all the time, so a write of the
     /// same value must publish nothing and save nothing.
@@ -245,6 +247,9 @@ final class StateAggregator: ObservableObject {
             .store(in: &cancellables)
         engine.onSample = { [weak self] sample in self?.sampled(sample) }
         notifier?.onPermission = { [weak self] permission in self?.notificationPermission = permission }
+        notifier?.onDelivery = { [weak self] id, delivery in self?.noticeHistory.delivered(id, delivery) }
+        // Asks the user nothing, and puts the permission in the log.
+        notifier?.readPermission()
 
         // An expired trial goes through the same release path as switching off,
         // so the assertions and the sleep flag both end.
@@ -564,9 +569,18 @@ final class StateAggregator: ObservableObject {
         let staysAwake = reachable.until != nil
             || settings.stayAwakeForRemoteAccess && context.remoteAccessDetected && !context.onBattery
         let waitingHold = mode == .agentWorking && sample.decision.hold && !staysAwake ? settings.waitingHold : nil
-        for notice in agentNotices.update(input, now: sample.frame.at) {
-            notifier.post(AgentNoticeText.content(notice, waitingHold: waitingHold, now: sample.frame.at))
+        let told = agentNotices.update(input, now: sample.frame.at)
+        var history = noticeHistory
+        for decision in agentNotices.decisions {
+            Notifier.log.notice("\(decision.logLine, privacy: .public)")
+            history.note(decision, at: sample.frame.at)
         }
+        for notice in told {
+            let content = AgentNoticeText.content(notice, waitingHold: waitingHold, now: sample.frame.at)
+            history.posted(content, at: sample.frame.at)
+            notifier.post(content)
+        }
+        if noticeHistory != history { noticeHistory = history }
     }
 
     /// Called when Preferences opens: the user can change the permission

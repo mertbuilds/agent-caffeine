@@ -56,7 +56,7 @@ extension AgentRole: NameCoded {
 
 extension StateReport: Codable {
     private enum CodingKeys: String, CodingKey {
-        case state, since, observedAt = "seen", source, detail
+        case state, since, observedAt = "seen", source, detail, turnEnded = "over"
     }
 
     init(from decoder: Decoder) throws {
@@ -66,7 +66,8 @@ extension StateReport: Codable {
             since: try container.decodeIfPresent(Date.self, forKey: .since),
             observedAt: try container.decode(Date.self, forKey: .observedAt),
             source: try container.decode(Source.self, forKey: .source),
-            detail: try container.decodeIfPresent(String.self, forKey: .detail)
+            detail: try container.decodeIfPresent(String.self, forKey: .detail),
+            turnEnded: try container.decodeIfPresent(Bool.self, forKey: .turnEnded) ?? false
         )
     }
 
@@ -77,6 +78,7 @@ extension StateReport: Codable {
         try container.encode(observedAt, forKey: .observedAt)
         try container.encode(source, forKey: .source)
         try container.encodeIfPresent(detail, forKey: .detail)
+        if turnEnded { try container.encode(true, forKey: .turnEnded) }
     }
 }
 

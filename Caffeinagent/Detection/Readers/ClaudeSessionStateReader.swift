@@ -32,7 +32,7 @@ struct ClaudeSessionState: Equatable {
     var observedAt: Date
 
     var report: StateReport {
-        StateReport(state: state, since: statusUpdatedAt, observedAt: observedAt, source: .claudeSessionFile, detail: detail)
+        StateReport(state: state, since: statusUpdatedAt, observedAt: observedAt, source: .claudeSessionFile, detail: detail, turnEnded: rawStatus == "shell")
     }
 
     private var detail: String? {

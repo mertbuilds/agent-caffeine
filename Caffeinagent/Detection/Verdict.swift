@@ -111,9 +111,13 @@ struct AgentReading: Equatable {
     var identity: ProcessIdentity
     var hasLiveSession: Bool
     var verdict: AgentVerdict
+    /// What the agent says of its own turn. Nil when it says nothing. The
+    /// verdict can be working after the turn ended, for a command or a
+    /// background job that still runs. The notifications follow the turn.
+    var turn: AgentTurn?
 
     init(agentID: String, displayName: String, level: AgentDefinition.Level, kind: AgentDefinition.Kind = .cli,
-         identity: ProcessIdentity, hasLiveSession: Bool = false, verdict: AgentVerdict) {
+         identity: ProcessIdentity, hasLiveSession: Bool = false, verdict: AgentVerdict, turn: AgentTurn? = nil) {
         self.agentID = agentID
         self.displayName = displayName
         self.level = level
@@ -121,12 +125,20 @@ struct AgentReading: Equatable {
         self.identity = identity
         self.hasLiveSession = hasLiveSession
         self.verdict = verdict
+        self.turn = turn
     }
 
-    init(evidence: AgentEvidence, verdict: AgentVerdict) {
+    init(evidence: AgentEvidence, verdict: AgentVerdict, turn: AgentTurn? = nil) {
         self.init(agentID: evidence.agentID, displayName: evidence.displayName, level: evidence.level, kind: evidence.kind,
-                  identity: evidence.identity, hasLiveSession: evidence.hasLiveSession, verdict: verdict)
+                  identity: evidence.identity, hasLiveSession: evidence.hasLiveSession, verdict: verdict, turn: turn)
     }
+}
+
+/// The turn of an agent that reports its own state.
+struct AgentTurn: Equatable {
+    var state: WorkState
+    /// When the turn began, when the agent says so. Working only.
+    var since: Date?
 }
 
 /// Turns evidence into a state. Pure: the caller keeps the memory and
@@ -214,9 +226,22 @@ enum VerdictRules {
         for evidence in frame.agents {
             let (verdict, next) = verdict(for: evidence, memory: memory[evidence.identity] ?? AgentMemory(), settings: settings, now: frame.at)
             kept[evidence.identity] = next
-            readings.append(AgentReading(evidence: evidence, verdict: verdict))
+            readings.append(AgentReading(evidence: evidence, verdict: verdict, turn: turn(of: evidence, memory: next, settings: settings, now: frame.at)))
         }
         return (readings, kept)
+    }
+
+    /// The stated state before a left-over command or a background job
+    /// makes it working again. `memory` is the one the verdict left.
+    static func turn(of evidence: AgentEvidence, memory: AgentMemory, settings: DetectionSettings, now: Date) -> AgentTurn? {
+        guard settings.rule(for: evidence.agentID) == .automatic,
+              let state = statedState(of: evidence, memory: memory, settings: settings, now: now) else { return nil }
+        let report = reportedState(memory: memory, settings: settings, now: now) == state ? memory.lastReport : nil
+        guard state == .working else { return AgentTurn(state: state) }
+        if report?.turnEnded == true { return AgentTurn(state: .idle) }
+        // The time of a transcript is its last write, not the start of the turn.
+        let startsTurn = report?.source == .claudeSessionFile || report?.source == .codexRollout
+        return AgentTurn(state: .working, since: startsTurn ? report?.since : nil)
     }
 
     // MARK: Memory

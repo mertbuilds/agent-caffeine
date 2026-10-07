@@ -27,6 +27,9 @@ struct StateReport: Equatable {
     var source: Source
     /// Short, user-safe reason fragment such as "running a tool". Never user content.
     var detail: String?
+    /// The turn is over and work it left behind still runs: Claude Code's
+    /// `shell`. The state is working, and the agent has answered.
+    var turnEnded = false
 }
 
 /// Timestamps as the agents write them: epoch milliseconds (Claude session

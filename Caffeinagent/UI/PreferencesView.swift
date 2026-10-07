@@ -25,6 +25,7 @@ struct PreferencesView: View {
                 .tag(PreferencesTab.general)
             AlertPreferences(
                 notices: $aggregator.notices, denied: aggregator.notificationPermission == .denied,
+                history: aggregator.noticeHistory.entries,
                 batteryFloorEnabled: aggregator.settings.batteryFloorEnabled,
                 openSystemSettings: aggregator.openNotificationSettings
             )
@@ -295,6 +296,7 @@ struct AlertPreferences: View {
     @Binding var notices: AgentNoticeSettings
     /// Notifications are switched off for agent caffeine in System Settings.
     var denied = false
+    var history: [AgentNoticeHistory.Entry] = []
     var batteryFloorEnabled = true
     var openSystemSettings: () -> Void = {}
 
@@ -317,7 +319,7 @@ struct AlertPreferences: View {
                 )
                 toggle(
                     "An agent finished", $notices.finished,
-                    help: "You get a notification when an agent finishes work that took 30 seconds or longer."
+                    help: "You get a notification when an agent finishes its work."
                 )
             }
             Section {
@@ -326,6 +328,24 @@ struct AlertPreferences: View {
                     help: "You get no notification while you use the app the agent runs in."
                 )
                 .disabled(!notices.wantsAny)
+            }
+            if !history.isEmpty {
+                Section("Last notifications") {
+                    ForEach(history) { entry in
+                        VStack(alignment: .leading, spacing: 2) {
+                            HStack {
+                                Text(entry.title)
+                                Spacer()
+                                Text(entry.at, style: .time)
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                            }
+                            Text(entry.result.text)
+                                .font(.callout)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                }
             }
             Section {
                 Text(SafetyText.alwaysTold(batteryFloorEnabled: batteryFloorEnabled))

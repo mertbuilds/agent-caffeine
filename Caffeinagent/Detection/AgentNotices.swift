@@ -77,20 +77,61 @@ struct AgentNoticeInput {
     var active = true
 }
 
+/// What the reducer made of one change of one session: told, or why not.
+/// It holds no name, so it can go to the log.
+struct AgentNoticeDecision: Equatable {
+    enum Outcome: Equatable {
+        case told
+        /// It waited already when the app started or the switch went on.
+        case atLaunch
+        /// Agent caffeine is off, paused or without a license.
+        case notActive
+        /// "Only when not in front" is on and the user works in its app.
+        case inFront
+        /// Finished only: at work again before the notification was due.
+        case backAtWork(after: TimeInterval)
+        /// Waiting only: the wait ended before the notification was due.
+        case waitEnded(after: TimeInterval)
+    }
+
+    var kind: AgentNoticeKind
+    var pid: Int32
+    var outcome: Outcome
+    /// Finished only.
+    var workedFor: TimeInterval?
+
+    /// One line for the log: states, times and the pid.
+    var logLine: String {
+        let name = kind == .waiting ? "waiting" : "finished"
+        switch outcome {
+        case .told:
+            let after = workedFor.map { " after \(Int($0.rounded())) s" } ?? ""
+            return "\(name) fired pid \(pid)\(after)"
+        case .atLaunch: return "\(name) skipped pid \(pid): it waited already at launch"
+        case .notActive: return "\(name) skipped pid \(pid): agent caffeine is off or paused"
+        case .inFront: return "\(name) skipped pid \(pid): front app is its app"
+        case .backAtWork(let after): return "\(name) skipped pid \(pid): working again after \(String(format: "%.1f", after)) s"
+        case .waitEnded(let after): return "\(name) skipped pid \(pid): the wait ended after \(String(format: "%.1f", after)) s"
+        }
+    }
+}
+
 /// Says when an agent notification is due. Pure: the caller passes the
 /// readings of each sample and the time.
 ///
-/// Waiting: a session goes from working, or from nothing, to waiting for
-/// the user and stays so for `waitingDebounce`. Finished: a session that
-/// worked for `shortestWork` or longer goes idle or is gone. What was
-/// there at the first sample is never told, and nothing is told while
-/// agent caffeine is off or paused. Three or more sessions that change
-/// within `coalesceWindow` give one notification.
+/// The state of a session is its turn where the agent reports one, else
+/// its verdict: a command that runs on after the answer is no work here.
+/// Waiting: a session starts to wait for the user and stays so for
+/// `waitingDebounce`. Finished: a session that worked goes idle or is gone
+/// and is not at work again within `finishedDebounce`. What was there at
+/// the first sample is never told, and nothing is told while agent
+/// caffeine is off or paused. Three or more sessions that change within
+/// `coalesceWindow` give one notification.
 struct AgentNoticeReducer {
     /// A wait that is over sooner was a flicker.
     static let waitingDebounce: TimeInterval = 3
-    /// Shorter work is a one-line answer, and no news.
-    static let shortestWork: TimeInterval = 30
+    /// An end that is followed by work sooner was no end.
+    static let finishedDebounce: TimeInterval = 2
     static let coalesceWindow: TimeInterval = 2
     static let coalesceCount = 3
 
@@ -101,7 +142,7 @@ struct AgentNoticeReducer {
         var label: String?
         var ownerPid: Int32?
         /// When the work began that goes on now, also over a wait for
-        /// the user. Nil while idle.
+        /// the user and over an end that is not told yet. Nil while idle.
         var workStart: Date?
     }
 
@@ -111,64 +152,85 @@ struct AgentNoticeReducer {
         var at: Date
     }
 
+    /// What the last update decided, for the log.
+    private(set) var decisions: [AgentNoticeDecision] = []
     private var sessions: [ProcessIdentity: Session] = [:]
     private var candidates: [Candidate] = []
     private var primed = false
+    private var lastUpdate: Date?
 
     init() {}
 
     mutating func update(_ input: AgentNoticeInput, now: Date) -> [AgentNotice] {
+        decisions = []
         let wasPrimed = primed
         primed = true
-        let tells = wasPrimed && input.active
         func watched(_ ownerPid: Int32?) -> Bool {
             guard input.settings.onlyWhenAway, input.userActive, let ownerPid else { return false }
             return ownerPid == input.frontmostPid
+        }
+        /// A change that may become a notification.
+        func offer(_ kind: AgentNoticeKind, _ session: AgentNotice.Session) {
+            guard kind == .waiting ? input.settings.waiting : input.settings.finished else { return }
+            let outcome: AgentNoticeDecision.Outcome? = !wasPrimed ? .atLaunch : !input.active ? .notActive : watched(session.ownerPid) ? .inFront : nil
+            if let outcome {
+                decisions.append(AgentNoticeDecision(kind: kind, pid: session.identity.pid, outcome: outcome, workedFor: session.workedFor))
+                return
+            }
+            candidates.removeAll { $0.session.identity == session.identity }
+            candidates.append(Candidate(kind: kind, session: session, at: now))
         }
 
         var next: [ProcessIdentity: Session] = [:]
         for reading in input.readings where !Self.byRule(reading) {
             let identity = reading.identity
             let old = sessions[identity]
+            let state = reading.turn?.state ?? reading.verdict.state
             var session = Session(
-                state: reading.verdict.state, agentID: reading.agentID, displayName: reading.displayName,
+                state: state, agentID: reading.agentID, displayName: reading.displayName,
                 label: input.labels[identity] ?? old?.label, ownerPid: input.owners[identity] ?? old?.ownerPid, workStart: old?.workStart
             )
-            switch reading.verdict.state {
+            switch state {
             case .working:
-                // Back at work before it was told: it did not finish, and
-                // the work goes on from where it began.
-                let pending = candidates.first { $0.session.identity == identity && $0.kind == .finished }
-                let began = pending.flatMap { candidate in candidate.session.workedFor.map { candidate.at.addingTimeInterval(-$0) } }
-                session.workStart = session.workStart ?? began ?? now
-                candidates.removeAll { $0.session.identity == identity }
+                if session.workStart == nil {
+                    // The agent's own time, so work that began before the
+                    // app saw it counts in full. Not from before the last
+                    // sample that saw the session idle.
+                    let said = reading.turn?.since.flatMap { $0 <= now ? $0 : nil }
+                    let idleAt = old == nil ? nil : lastUpdate
+                    session.workStart = said.map { max($0, idleAt ?? $0) } ?? now
+                }
+                // Back at work before it was told: it did not finish.
+                withdraw(identity, now: now)
             case .waitingForUser:
-                let began = old == nil || old?.state == .working
-                if began, tells, input.settings.waiting, !watched(session.ownerPid) {
+                if old?.state != .waitingForUser {
+                    // An end that turns into a question was no end.
                     candidates.removeAll { $0.session.identity == identity }
-                    candidates.append(Candidate(kind: .waiting, session: snapshot(identity, session, waitingSince: now), at: now))
+                    offer(.waiting, snapshot(identity, session, waitingSince: now))
                 }
             case .idle:
-                if let old, old.state == .working, tells, input.settings.finished, !watched(session.ownerPid) {
-                    addFinished(identity, old, now: now)
+                withdraw(identity, kind: .waiting, now: now)
+                if let old, old.state == .working {
+                    offer(.finished, snapshot(identity, old, workedFor: old.workStart.map { now.timeIntervalSince($0) }))
                 }
-                session.workStart = nil
-                candidates.removeAll { $0.session.identity == identity && $0.kind == .waiting }
+                if !candidates.contains(where: { $0.session.identity == identity && $0.kind == .finished }) { session.workStart = nil }
             }
             next[identity] = session
         }
         for (identity, old) in sessions where next[identity] == nil {
-            candidates.removeAll { $0.session.identity == identity && $0.kind == .waiting }
-            if old.state == .working, tells, input.settings.finished, !watched(old.ownerPid) {
-                addFinished(identity, old, now: now)
+            withdraw(identity, kind: .waiting, now: now)
+            if old.state == .working {
+                offer(.finished, snapshot(identity, old, workedFor: old.workStart.map { now.timeIntervalSince($0) }))
             }
         }
         sessions = next
+        lastUpdate = now
 
-        if !input.active { candidates = [] }
         // A clock that was set back leaves times in the future.
-        candidates.removeAll { $0.at > now || watched($0.session.ownerPid) }
+        candidates.removeAll { $0.at > now }
         candidates.removeAll { !input.settings.waiting && $0.kind == .waiting || !input.settings.finished && $0.kind == .finished }
+        drop(as: .notActive) { _ in !input.active }
+        drop(as: .inFront) { watched($0.session.ownerPid) }
         return due(now: now)
     }
 
@@ -184,43 +246,147 @@ struct AgentNoticeReducer {
         )
     }
 
-    private mutating func addFinished(_ identity: ProcessIdentity, _ old: Session, now: Date) {
-        guard let start = old.workStart, now.timeIntervalSince(start) >= Self.shortestWork else { return }
-        candidates.removeAll { $0.session.identity == identity }
-        candidates.append(Candidate(kind: .finished, session: snapshot(identity, old, workedFor: now.timeIntervalSince(start)), at: now))
+    /// The change that was on its way did not last.
+    private mutating func withdraw(_ identity: ProcessIdentity, kind: AgentNoticeKind? = nil, now: Date) {
+        for candidate in candidates where candidate.session.identity == identity && (kind == nil || candidate.kind == kind) {
+            let after = now.timeIntervalSince(candidate.at)
+            decisions.append(AgentNoticeDecision(
+                kind: candidate.kind, pid: identity.pid,
+                outcome: candidate.kind == .finished ? .backAtWork(after: after) : .waitEnded(after: after), workedFor: candidate.session.workedFor
+            ))
+        }
+        candidates.removeAll { $0.session.identity == identity && (kind == nil || $0.kind == kind) }
     }
 
-    /// The oldest of a kind is told when its time has come, together with
-    /// the ones that came up to `coalesceWindow` after it.
+    private mutating func drop(as outcome: AgentNoticeDecision.Outcome, where gone: (Candidate) -> Bool) {
+        for candidate in candidates where gone(candidate) {
+            decisions.append(AgentNoticeDecision(
+                kind: candidate.kind, pid: candidate.session.identity.pid, outcome: outcome, workedFor: candidate.session.workedFor
+            ))
+        }
+        candidates.removeAll(where: gone)
+    }
+
+    /// The oldest of a kind and the ones that came up to `coalesceWindow`
+    /// after it are told together, when the time of the last of them has
+    /// come. The group is fixed by its oldest, so a row of changes cannot
+    /// push a notification back for ever, and each group is told.
     private mutating func due(now: Date) -> [AgentNotice] {
         var notices: [AgentNotice] = []
         for kind in [AgentNoticeKind.waiting, .finished] {
-            let delay = kind == .waiting ? Self.waitingDebounce : Self.coalesceWindow
-            let mine = candidates.filter { $0.kind == kind }.sorted { $0.at < $1.at }
-            guard let first = mine.first, now.timeIntervalSince(first.at) >= delay else { continue }
-            let group = mine.filter { $0.at.timeIntervalSince(first.at) <= Self.coalesceWindow }
-            let told = Set(group.map(\.session.identity))
-            candidates.removeAll { $0.kind == kind && told.contains($0.session.identity) }
-            // A name that was read after the change still counts.
-            let sessions = group.map { candidate -> AgentNotice.Session in
-                var session = candidate.session
-                session.label = self.sessions[session.identity]?.label ?? session.label
-                return session
-            }
-            if sessions.count >= Self.coalesceCount {
-                notices.append(AgentNotice(kind: kind, sessions: sessions))
-            } else {
-                notices += sessions.map { AgentNotice(kind: kind, sessions: [$0]) }
+            let delay = kind == .waiting ? Self.waitingDebounce : Self.finishedDebounce
+            while true {
+                let mine = candidates.filter { $0.kind == kind }.sorted { $0.at < $1.at }
+                guard let first = mine.first else { break }
+                let group = mine.filter { $0.at.timeIntervalSince(first.at) <= Self.coalesceWindow }
+                guard let last = group.last, now.timeIntervalSince(last.at) >= delay else { break }
+                let told = Set(group.map(\.session.identity))
+                candidates.removeAll { $0.kind == kind && told.contains($0.session.identity) }
+                // The work that was told is over.
+                if kind == .finished { told.forEach { self.sessions[$0]?.workStart = nil } }
+                // A name that was read after the change still counts.
+                let sessions = group.map { candidate -> AgentNotice.Session in
+                    var session = candidate.session
+                    session.label = self.sessions[session.identity]?.label ?? session.label
+                    return session
+                }
+                decisions += sessions.map { AgentNoticeDecision(kind: kind, pid: $0.identity.pid, outcome: .told, workedFor: $0.workedFor) }
+                if sessions.count >= Self.coalesceCount {
+                    notices.append(AgentNotice(kind: kind, sessions: sessions))
+                } else {
+                    notices += sessions.map { AgentNotice(kind: kind, sessions: [$0]) }
+                }
             }
         }
         return notices
     }
 }
 
+/// What became of one agent notification.
+enum AgentNoticeDelivery: Equatable {
+    case delivered
+    /// macOS took it and shows no banner: the style is "None" in System Settings.
+    case noBanner
+    /// Notifications are off for agent caffeine.
+    case notAllowed
+    /// macOS did not take it.
+    case failed
+}
+
+/// The last agent notifications and what became of them, for Preferences.
+/// It holds the words of the title and no session name.
+struct AgentNoticeHistory: Equatable {
+    static let length = 5
+
+    enum Result: Equatable {
+        /// Handed to macOS, no answer yet.
+        case sending
+        case sent(AgentNoticeDelivery)
+        case inFront
+        case notActive
+
+        var text: String {
+            switch self {
+            case .sending: return "Sending"
+            case .sent(.delivered): return "Delivered"
+            case .sent(.noBanner): return "Delivered without a banner: banners are off in System Settings"
+            case .sent(.notAllowed): return "Not shown: notifications are off in System Settings"
+            case .sent(.failed): return "Not shown: macOS did not take it"
+            case .inFront: return "Not sent: you were in the agent's app"
+            case .notActive: return "Not sent: agent caffeine was off or paused"
+            }
+        }
+    }
+
+    struct Entry: Equatable, Identifiable {
+        var id: String
+        var at: Date
+        var title: String
+        var result: Result
+    }
+
+    /// Newest first.
+    private(set) var entries: [Entry] = []
+    private var count = 0
+
+    mutating func posted(_ content: AgentNoticeContent, at: Date) {
+        add(Entry(id: content.id, at: at, title: content.title, result: .sending))
+    }
+
+    /// Only what the user would ask about: a notification that was held
+    /// back. A flicker that was no change is in the log.
+    mutating func note(_ decision: AgentNoticeDecision, at: Date) {
+        let result: Result
+        switch decision.outcome {
+        case .inFront: result = .inFront
+        case .notActive: result = .notActive
+        case .told, .atLaunch, .backAtWork, .waitEnded: return
+        }
+        count += 1
+        let title = decision.kind == .waiting ? "An agent started to wait for you" : "An agent finished"
+        add(Entry(id: "skipped-\(count)", at: at, title: title, result: result))
+    }
+
+    mutating func delivered(_ id: String, _ delivery: AgentNoticeDelivery) {
+        guard let index = entries.firstIndex(where: { $0.id == id }) else { return }
+        entries[index].result = .sent(delivery)
+    }
+
+    private mutating func add(_ entry: Entry) {
+        entries.insert(entry, at: 0)
+        if entries.count > Self.length { entries.removeLast(entries.count - Self.length) }
+    }
+}
+
 /// What a notification shows.
 struct AgentNoticeContent: Equatable {
-    /// A new notification with the same id takes the place of the old one.
+    /// The request identifier. Never the same twice: macOS puts a request
+    /// with a known identifier in the place of the old one and shows no
+    /// new banner.
     var id: String
+    /// What the notification is about: a kind and a session. The older
+    /// notification with the same key is taken away.
+    var key: String
     /// macOS groups the notifications of one agent.
     var thread: String
     var title: String
@@ -241,9 +407,11 @@ enum AgentNoticeText {
         // The Mac stays awake until the last one's hold runs out.
         let since = sessions.compactMap(\.waitingSince).max()
         let sleeps = notice.kind == .waiting ? canSleep(waitingHold: waitingHold, since: since, now: now) : nil
+        let stamp = Int64((now.timeIntervalSince1970 * 1000).rounded())
         guard sessions.count == 1, let session = sessions.first else {
+            let key = notice.kind == .waiting ? "agents-waiting" : "agents-finished"
             return AgentNoticeContent(
-                id: notice.kind == .waiting ? "agents-waiting" : "agents-finished", thread: "agents",
+                id: "\(key)-\(stamp)", key: key, thread: "agents",
                 title: notice.kind == .waiting ? "\(sessions.count) agents are waiting for you" : "\(sessions.count) agents finished",
                 subtitle: nil, body: sleeps, sound: notice.kind == .waiting, ownerPid: ownerPid
             )
@@ -252,12 +420,12 @@ enum AgentNoticeText {
         switch notice.kind {
         case .waiting:
             return AgentNoticeContent(
-                id: "waiting-\(id)", thread: "agent-\(session.agentID)", title: "\(session.displayName) is waiting for you",
+                id: "waiting-\(id)-\(stamp)", key: "waiting-\(id)", thread: "agent-\(session.agentID)", title: "\(session.displayName) is waiting for you",
                 subtitle: session.label, body: sleeps, sound: true, ownerPid: ownerPid
             )
         case .finished:
             return AgentNoticeContent(
-                id: "finished-\(id)", thread: "agent-\(session.agentID)", title: "\(session.displayName) finished",
+                id: "finished-\(id)-\(stamp)", key: "finished-\(id)", thread: "agent-\(session.agentID)", title: "\(session.displayName) finished",
                 subtitle: session.label, body: session.workedFor.flatMap(HumaneDuration.length(seconds:)).map { "After \($0)" },
                 sound: false, ownerPid: ownerPid
             )
