@@ -14,10 +14,14 @@ enum HookCommand {
     /// under another tool, as when Droid or Cursor replay Claude Code's hooks.
     static func agentProcess(in chain: [ProcessInfoRow], hookAgent: String, catalog: AgentCatalog = .standard) -> ProcessInfoRow? {
         guard let ids = HookEvents.definitionIDs[hookAgent] else { return nil }
-        return chain.first { row in
-            guard let match = catalog.match(row, userNames: []) else { return false }
-            return match.role != .helper && ids.contains(match.definition.id)
+        // The nearest agent decides. A helper is passed over, so a hook
+        // that a Cursor helper started lands on Cursor's main process, and
+        // a hook of a CLI in the editor's terminal does not.
+        for row in chain {
+            guard let match = catalog.match(row, userNames: []), match.role != .helper else { continue }
+            return ids.contains(match.definition.id) ? row : nil
         }
+        return nil
     }
 
     /// The processes above `pid`, nearest first.

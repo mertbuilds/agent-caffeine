@@ -128,7 +128,7 @@ struct HookChanges: View {
         switch entry.format {
         case .pluginFile:
             return "agent caffeine writes this file: \(path). Turning this off removes the file."
-        case .jsonHookGroups:
+        case .jsonHookGroups, .jsonFlatHooks:
             return "agent caffeine adds these lines to \(path) and saves a copy of the file next to it first. Turning this off removes the lines and nothing else. If agent caffeine created the file and nothing else is in it, the file is removed too."
         }
     }

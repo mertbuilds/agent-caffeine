@@ -32,6 +32,8 @@ enum VerdictReason: Equatable {
     case workedRecently(secondsAgo: Int)
     case cpuActivity
     case asksPermission
+    /// Inferred, not said by the agent: see `CursorApprovalRule`.
+    case awaitsApproval
     case atPrompt
     case noActivity(minutes: Int)
     /// CPU use was the only sign for longer than the cap.
@@ -51,6 +53,7 @@ enum VerdictReason: Equatable {
         case .workedRecently(let seconds): return "Last worked \(Self.ago(seconds))"
         case .cpuActivity: return "Using the processor"
         case .asksPermission: return "Waiting for your answer"
+        case .awaitsApproval: return "Waiting for your approval"
         case .atPrompt: return "Ready for your next message"
         case .noActivity(let minutes): return ["No activity", HumaneDuration.lasting(minutes: minutes)].compactMap { $0 }.joined(separator: " ")
         case .onlyWeakSigns(let minutes):
@@ -94,6 +97,8 @@ struct AgentMemory: Equatable {
     /// The time of the hook wait that ended on a sign of new work. That
     /// wait is not read again.
     var endedHookWaitAt: Date?
+    /// Since when every sign of `CursorApprovalRule` holds without a break.
+    var approvalSignsSince: Date?
     /// The samples of the last `cpuWindow * cpuWindowCount` seconds.
     var cpuSamples: [CPUSample] = []
 
@@ -139,6 +144,48 @@ struct AgentTurn: Equatable {
     var state: WorkState
     /// When the turn began, when the agent says so. Working only.
     var since: Date?
+}
+
+/// Cursor does not say that it waits for an approval: no transcript line
+/// and no hook event exists for it. Its own code says what it does then
+/// (docs/research/08-cursor.md): the main process holds a sleep assertion
+/// from the prompt to the end of the answer, and gives it up while an
+/// approval is pending. So a turn in progress with no assertion and no
+/// command of the agent, for `settle` seconds, reads as a wait.
+///
+/// Measured on 2026-10-07 with Cursor 3.22.12: the assertion went 10
+/// seconds after the last transcript write, and for the 12 minutes of the
+/// wait the turn was open with no assertion, no command and no write.
+///
+/// It assumes that nothing else drops the assertion in the middle of a
+/// turn for longer than `settle`. Set `enabled` to false when a recording
+/// disproves that: Cursor then counts as working for the whole turn.
+enum CursorApprovalRule {
+    static let enabled = true
+    /// The end of a turn looks the same for a while: Cursor was measured
+    /// to write the end line 9 seconds after it gave up the assertion.
+    /// The wait is said, and so told in a notification, only after this.
+    static let settle: TimeInterval = 15
+
+    /// The three inputs, as a recording holds them: `rep` (working, from
+    /// the transcript), `pwr` (the assertion) and `cmds` (the commands).
+    static func signs(of evidence: AgentEvidence) -> Bool {
+        guard evidence.agentID == AgentCatalog.cursorDesktopID, let report = evidence.reported else { return false }
+        // With the hooks on, Cursor's `stop` says that the turn is over,
+        // also when the transcript got no end line.
+        if evidence.hookState == .idle { return false }
+        return signs(turnInProgress: report.source == .cursorTranscript && report.state == .working,
+                     holdsAssertion: evidence.ownsSleepAssertion, childCommands: evidence.childCommands)
+    }
+
+    static func signs(turnInProgress: Bool, holdsAssertion: Bool, childCommands: Int) -> Bool {
+        turnInProgress && !holdsAssertion && childCommands == 0
+    }
+
+    static func waits(signsSince: Date?, now: Date, enabled: Bool = CursorApprovalRule.enabled, settle: TimeInterval = CursorApprovalRule.settle) -> Bool {
+        guard enabled, let signsSince else { return false }
+        return now.timeIntervalSince(signsSince) >= settle
+    }
 }
 
 /// Turns evidence into a state. Pure: the caller keeps the memory and
@@ -212,6 +259,9 @@ enum VerdictRules {
         case .automatic:
             break
         }
+        if CursorApprovalRule.waits(signsSince: memory.approvalSignsSince, now: now) {
+            return (AgentVerdict(state: .waitingForUser, confidence: .inferredStrong, reason: .awaitsApproval), memory)
+        }
         if let state = statedState(of: evidence, memory: memory, settings: settings, now: now) {
             return (statedVerdict(state, evidence: evidence), memory)
         }
@@ -235,6 +285,7 @@ enum VerdictRules {
     /// makes it working again. `memory` is the one the verdict left.
     static func turn(of evidence: AgentEvidence, memory: AgentMemory, settings: DetectionSettings, now: Date) -> AgentTurn? {
         guard settings.rule(for: evidence.agentID) == .automatic else { return nil }
+        if CursorApprovalRule.waits(signsSince: memory.approvalSignsSince, now: now) { return AgentTurn(state: .waitingForUser) }
         guard let stated = statedState(of: evidence, memory: memory, settings: settings, now: now) else {
             // An agent that speaks through its hooks only: the idle of a
             // hook stands for the turn until the next event, at any age,
@@ -256,7 +307,7 @@ enum VerdictRules {
         guard state == .working else { return AgentTurn(state: state) }
         if report?.turnEnded == true { return AgentTurn(state: .idle) }
         // The time of a transcript is its last write, not the start of the turn.
-        let startsTurn = report?.source == .claudeSessionFile || report?.source == .codexRollout
+        let startsTurn = report?.source == .claudeSessionFile || report?.source == .codexRollout || report?.source == .cursorTranscript
         return AgentTurn(state: .working, since: startsTurn ? report?.since : nil)
     }
 
@@ -275,6 +326,8 @@ enum VerdictRules {
             memory.lastReportSeenAt = now
         }
         noteHookWait(evidence, in: &memory, settings: settings, now: now)
+        let signsSince = memory.approvalSignsSince.flatMap { $0 <= now ? $0 : nil }
+        memory.approvalSignsSince = CursorApprovalRule.signs(of: evidence) ? signsSince ?? now : nil
         noteCPU(evidence, in: &memory, now: now)
         let statesWork = statedState(of: evidence, memory: memory, settings: settings, now: now) == .working
         noteWeakOnly(in: &memory, statesWork: statesWork, settings: settings, now: now)

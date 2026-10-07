@@ -84,6 +84,7 @@ final class EvidenceCollector: EvidenceCollecting {
         /// writes no session file.
         var claudeProjects = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude/projects")
         var codexRollouts = CodexRolloutReader()
+        var cursorTranscripts = CursorTranscriptReader()
         /// Bytes of a rollout that one sample searches for a turn marker.
         var rolloutSearchBudget = CodexRolloutTracker.defaultSearchBudget
         /// Session stores of the agents that are judged by activity, by
@@ -159,6 +160,8 @@ final class EvidenceCollector: EvidenceCollecting {
     private var rolloutTails: CodexRolloutTracker
     private var rolloutCwds: [String: String] = [:]
     private var rolloutListing: (at: Date, files: [CodexRolloutFile])?
+    private var cursorTails = CursorTranscriptTracker()
+    private var cursorListing: (at: Date, files: [CursorTranscriptFile])?
     private var transcriptChoices: [ProcessIdentity: (at: Date, path: String?)] = [:]
     private var activityReaders: [String: FileActivityReader] = [:]
     private var hookReader: HookStateReader?
@@ -202,7 +205,13 @@ final class EvidenceCollector: EvidenceCollecting {
             for row in instance.rows { rows[row.identity] = row }
             guard var evidence = agentEvidence(for: instance, matches: matches, now: now, activities: &activities, watched: &sample.watchedFiles) else { continue }
             noteUse(of: instance, matches: matches, interval: interval, now: now, in: &evidence, liveUnits: &liveUnits)
-            evidence.ownsSleepAssertion = instance.rows.contains { asserting.contains($0.pid) }
+            if instance.definition.id == AgentCatalog.cursorDesktopID {
+                // Cursor's own wake lock is held by the main process. A
+                // `caffeinate` in a terminal of the editor is not the agent's.
+                evidence.ownsSleepAssertion = asserting.contains(instance.rootPID)
+            } else {
+                evidence.ownsSleepAssertion = instance.rows.contains { asserting.contains($0.pid) }
+            }
             noteHooks(of: instance, matches: matches, states: hookStates, in: &evidence, watched: &sample.watchedFiles)
             sample.frame.agents.append(evidence)
             sample.roots.insert(instance.identity)
@@ -223,6 +232,7 @@ final class EvidenceCollector: EvidenceCollecting {
         jobFiles.endSample()
         transcripts.endSample()
         rolloutTails.endSample()
+        cursorTails.endSample()
         claudeSettingsFiles.endSample()
         sample.cost = TimeInterval(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
         lastSample = sample
@@ -344,6 +354,8 @@ final class EvidenceCollector: EvidenceCollecting {
             guard fillClaude(&evidence, instance: instance, matches: matches, now: now, watched: &watched) else { return nil }
         } else if Self.codexIDs.contains(definition.id) {
             fillCodex(&evidence, instance: instance, matches: matches, now: now, watched: &watched)
+        } else if definition.id == AgentCatalog.cursorDesktopID {
+            fillCursor(&evidence, instance: instance, now: now, watched: &watched)
         } else if let target = sources.fileActivityTargets[definition.id] {
             let activity = activities[definition.id] ?? pollActivity(definition.id, target: target)
             activities[definition.id] = activity
@@ -537,6 +549,29 @@ final class EvidenceCollector: EvidenceCollecting {
         URL(fileURLWithPath: path).resolvingSymlinksInPath().path
     }
 
+    // MARK: Cursor
+
+    /// One evidence for the app, as for the Codex app: the transcripts
+    /// carry no pid and no window, so every conversation of this Mac's
+    /// Cursor counts for the one running Cursor.
+    private func fillCursor(_ evidence: inout AgentEvidence, instance: AgentInstance, now: Date, watched: inout Set<String>) {
+        if cursorListing.map({ now.timeIntervalSince($0.at) >= Self.listingAge || $0.at > now }) ?? true {
+            cursorListing = (now, sources.cursorTranscripts.recentFiles(now: now))
+        }
+        let started = Date(timeIntervalSince1970: instance.rootStartTime)
+        var readings: [(file: CursorTranscriptFile, reading: CursorTranscriptTracker.Reading)] = []
+        for file in cursorListing?.files ?? [] where file.lastWrite >= started {
+            guard let reading = cursorTails.read(path: file.url.path) else { continue }
+            watched.insert(file.url.path)
+            readings.append((file, reading))
+        }
+        let summary = CursorSummary.make(of: readings, engineStarted: started)
+        evidence.reported = summary.report(now: now)
+        evidence.fileActivityAt = summary.newestWrite
+        evidence.hasLiveSession = summary.working || isRecent(summary.newestWrite, now: now)
+        sessionNames[instance.identity] = summary.projectSlug.flatMap(CursorTranscriptReader.label(forSlug:))
+    }
+
     // MARK: Process use
 
     private static func isBusy(_ samples: [CPUSample]) -> Bool {
@@ -553,17 +588,26 @@ final class EvidenceCollector: EvidenceCollecting {
         // The verdict wants no CPU number on the first sample of a process:
         // all it used since it started would count as one burst.
         let known = interval > 0 && previousRows[instance.identity] != nil
+        let cursor = instance.definition.id == AgentCatalog.cursorDesktopID
         if known {
             let delta = ProcessCensus.delta(of: instance.rows, since: previousRows)
             evidence.sampleInterval = interval
-            evidence.subtreeCPUSeconds = delta.cpuTime
+            // The CPU of an editor says nothing about its agent: the
+            // renderer is busy while the user types or scrolls.
+            evidence.subtreeCPUSeconds = cursor ? 0 : delta.cpuTime
             evidence.energyNanojoules = delta.energyNanojoules
             evidence.logicalWriteBytes = delta.logicalWriteBytes
         }
         guard instance.rows.count > 1 else { return }
+        // A busy process below Cursor is not its agent's unless a turn is
+        // in progress: a search of the editor ran at 99 percent of a core
+        // while the agent was idle.
+        if cursor, evidence.reported?.state != .working { return }
+        let byPID = cursor ? Dictionary(instance.rows.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first }) : [:]
         let agentPIDs = Set(instance.rows.lazy.map(\.pid).filter { matches[$0] != nil })
         let children = ProcessCensus.childrenIndex(of: instance.rows)
         for row in instance.rows.dropFirst() where !agentPIDs.contains(row.pid) && agentPIDs.contains(row.ppid) {
+            if cursor, !(byPID[row.ppid].map { AgentCatalog.isCursorAgentCommand(row, parent: $0) } ?? false) { continue }
             evidence.childCommands += 1
             liveUnits.insert(row.identity)
             // A command of an instance that is new to the collector may be old,
