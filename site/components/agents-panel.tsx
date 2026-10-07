@@ -35,7 +35,7 @@ const MUTED = "text-[var(--panel-muted)]";
 const ROLL = { duration: 350, easing: "cubic-bezier(0.22, 1, 0.36, 1)" };
 
 /** Text whose numbers roll when they change, as the app's do. */
-export function Flow({ children }: { children: string }) {
+function Flow({ children }: { children: string }) {
   return (
     <>
       {children.split(/(\d+)/).map((part, index) =>
@@ -50,7 +50,7 @@ export function Flow({ children }: { children: string }) {
 }
 
 /** The same text whatever its numbers are, to key a line that should not come in again when only a number changes. */
-export function shape(text: string): string {
+function shape(text: string): string {
   return text.replace(/\d+/g, "0");
 }
 

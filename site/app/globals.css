@@ -160,17 +160,6 @@
   }
 }
 
-@keyframes demo-sweep {
-  from {
-    opacity: 1;
-    transform: translateX(-100%);
-  }
-  to {
-    opacity: 0.6;
-    transform: translateX(100%);
-  }
-}
-
 .demo-in {
   animation: demo-in var(--duration-fast) var(--ease-smooth-out);
 }
@@ -191,17 +180,12 @@
   animation: demo-pulse 600ms var(--ease-smooth-out) both;
 }
 
-.demo-sweep {
-  animation: demo-sweep 700ms var(--ease-smooth-out) both;
-}
-
 @media (prefers-reduced-motion: reduce) {
   .demo-in,
   .demo-ring,
   .demo-fill,
   .demo-live,
-  .demo-pulse,
-  .demo-sweep {
+  .demo-pulse {
     animation: none;
   }
 }

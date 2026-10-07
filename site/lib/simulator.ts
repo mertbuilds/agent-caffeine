@@ -824,9 +824,6 @@ export type Bar = {
   reachableCost: string | null;
 };
 
-/** What the Mac does, in plain words, for the line below the menu. */
-export type Outcome = { lead: string; rest: string; hint: string };
-
 export type View = {
   /** The app keeps the Mac awake. */
   held: boolean;
@@ -845,7 +842,6 @@ export type View = {
   groups: readonly Group[];
   /** In place of the list when no agent is open. */
   emptyText: string | null;
-  outcome: Outcome;
 };
 
 /** `MenuModel.attention`, for the three lines the simulator can reach. */
@@ -896,77 +892,6 @@ function bar(state: SimState, line: Headline): Bar {
   };
 }
 
-function outcome(state: SimState, line: Headline, waitingFor: number | null): Outcome {
-  const awake = "Your Mac stays awake:";
-  const canSleep = "Your Mac can sleep:";
-  const battery = state.power === "battery";
-  const closed = state.lid === "closed";
-  if (keepsAwake(line) && battery && closed && !state.helper) {
-    return {
-      lead: "Your Mac sleeps:",
-      rest: "the lid is closed on battery",
-      hint: "Allow the helper once, and it stays awake with the lid closed",
-    };
-  }
-  const where = closed ? (battery ? "Lid closed, on battery" : "Lid closed, on power") : battery && !state.helper ? "Until you close the lid" : "";
-  switch (line.kind) {
-    case "working": {
-      const build = state.sessions.find((run) => run.command && run.state !== "working");
-      const working = state.sessions.filter((run) => verdict(run) === "working");
-      if (build !== undefined && working.length === 1) {
-        return { lead: awake, rest: `a command ${agentName(build.agent)} started is still running`, hint: where };
-      }
-      return { lead: awake, rest: phrase(line.subject, "is working", "are working"), hint: where };
-    }
-    case "waitingHeld":
-      return {
-        lead: `${phrase(line.subject, "is waiting for you", "are waiting for you")}.`,
-        rest: `Your Mac can sleep in ${counted(minutesLeft(waitingFor ?? WAITING_HOLD), "minute")}`,
-        hint: where,
-      };
-    case "finishedRecently":
-      return { lead: awake, rest: phrase(line.subject, "finished a moment ago", "finished a moment ago"), hint: "It can sleep 2 minutes after the last agent finishes" };
-    case "open":
-      return { lead: awake, rest: phrase(line.subject, "is open", "are open"), hint: where };
-    case "alwaysOn":
-      return { lead: "Your Mac stays awake", rest: "until you switch it off", hint: where };
-    case "idle":
-      return {
-        lead: canSleep,
-        rest: "one" in line.subject ? `${line.subject.one} is idle` : "every agent is idle",
-        hint: "Idle sessions do not keep it awake",
-      };
-    case "waitingReleased":
-      return {
-        lead: canSleep,
-        rest: `${phrase(line.subject, "has", "have")} waited 5 minutes for your answer`,
-        hint: "It stays awake again when the agent works",
-      };
-    case "noAgents":
-      return { lead: canSleep, rest: "no agent is open", hint: "" };
-    case "safetyStop":
-      return {
-        lead: `Battery at ${percent(line.percent)}.`,
-        rest: "agent caffeine lets your Mac sleep",
-        hint: `It starts again at ${percent(BATTERY_FLOOR + BATTERY_RECOVERY)}, or on power`,
-      };
-    case "switchedOff":
-      return { lead: "Your Mac sleeps as usual:", rest: "agent caffeine is off", hint: "" };
-    case "paused":
-      return {
-        lead: "Your Mac sleeps as usual:",
-        rest: `agent caffeine is paused until ${clockTime(line.until)}`,
-        hint: "It starts again by itself",
-      };
-    case "reachable":
-      return {
-        lead: awake,
-        rest: `no agent is working, and it stays reachable until ${clockTime(line.until)}`,
-        hint: "A message from your phone reaches your agent",
-      };
-  }
-}
-
 export function view(state: SimState): View {
   const line = headline(state);
   const waitingFor = line.kind === "waitingHeld" ? waitingLeft(state) : null;
@@ -989,6 +914,5 @@ export function view(state: SimState): View {
       : state.mode === "always"
         ? "No agent is open"
         : "Start an agent and agent caffeine keeps your Mac awake while it works",
-    outcome: outcome(state, line, waitingFor),
   };
 }

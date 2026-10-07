@@ -67,7 +67,6 @@ test("a busy command holds after the agent is done", () => {
   assert.equal(shown.held, true);
   assert.equal(shown.subtitle, "Claude Code is working");
   assert.equal(shown.groups[0].detail, "Running 1 command for 3 minutes");
-  assert.equal(shown.outcome.rest, "a command Claude Code started is still running");
 });
 
 test("idle sessions never hold while the mode is working, and hold while it is open", () => {
@@ -103,8 +102,6 @@ test("the safety stop wins over every mode and ends above the floor", () => {
   assert.equal(view(low).subtitle, `The battery is at ${BATTERY_FLOOR}%`);
   // The line of the battery says when it starts again, so no attention line says it a second time.
   assert.equal(view(low).attention, null);
-  assert.equal(view(low).outcome.lead, "Battery at 20%.");
-  assert.equal(view(low).outcome.hint, "It starts again at 25%, or on power");
   assert.equal(view(setMode(low, "always")).held, false);
   assert.equal(view(setPower(low, "adapter")).held, true);
   assert.equal(view(setBattery(low, BATTERY_LEVELS[0])).held, true);
@@ -118,10 +115,8 @@ test("the safety stop wins over every mode and ends above the floor", () => {
 test("a closed lid on battery needs the helper", () => {
   const lid = preset(INITIAL, "lid");
   assert.equal(view(lid).attention, null);
-  assert.equal(view(lid).outcome.hint, "Lid closed, on battery");
   const without = setLid(setPower(preset(INITIAL, "working"), "battery"), "closed");
   assert.equal(view(without).attention?.kind, "lidClosedNotSetUp");
-  assert.equal(view(without).outcome.lead, "Your Mac sleeps:");
 });
 
 test("durations are said as a person says them", () => {

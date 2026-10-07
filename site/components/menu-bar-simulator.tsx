@@ -1,6 +1,5 @@
 "use client";
 
-import { AnimatePresence, motion } from "motion/react";
 import {
   useEffect,
   useRef,
@@ -11,9 +10,9 @@ import {
   type SyntheticEvent,
 } from "react";
 import { AgentIcon } from "@/components/agent-icons";
-import { AgentsPanel, Flow, shape } from "@/components/agents-panel";
+import { AgentsPanel } from "@/components/agents-panel";
 import { MenuIcon } from "@/components/menu-icon";
-import { duration, easing } from "@/lib/motion";
+import { easing } from "@/lib/motion";
 import {
   AGENTS,
   BATTERY_LEVELS,
@@ -242,8 +241,6 @@ export function MenuBarSimulator() {
   const target = cueTarget(cue) ?? "tag";
   const waiting = cue.phase === "lead" || cue.phase === "hold";
   const fill: Fill = !waiting ? "full" : playing ? { key: `${cue.step}-${cue.phase}`, ms: cueTime(cue) } : null;
-  const outcomeKey = shape(`${shown.outcome.lead} ${shown.outcome.rest} ${shown.outcome.hint}`);
-  const swaps = useChanges(outcomeKey);
   const flips = useChanges(String(shown.held));
   const onBattery = sim.power === "battery";
 
@@ -464,78 +461,46 @@ export function MenuBarSimulator() {
             Time runs faster here. In the app an agent that waits for you keeps your Mac awake for 5 minutes, and you can change that time
           </p>
         </div>
-        <div className="order-first flex min-w-0 flex-col gap-6 lg:order-none lg:gap-8">
-          <div className="flex w-full flex-col items-end gap-1 rounded-xl border border-border p-1 pb-6">
-            <div className="flex h-6 w-full items-center justify-end rounded-md bg-[color-mix(in_srgb,var(--surface)_85%,transparent)] px-1.5 text-[13px] text-fg backdrop-blur">
-              {GLYPHS.map((width, index) => (
-                <span key={index} aria-hidden="true" className="flex h-[22px] items-center px-2">
-                  <span className="h-3.5 rounded-[3px] bg-current opacity-30" style={{ width }} />
-                </span>
-              ))}
-              <span
-                aria-label={shown.iconLabel}
-                className="relative flex h-[22px] items-center rounded-[5px] bg-[color-mix(in_srgb,var(--fg)_14%,transparent)] px-2"
-                role="img"
-              >
-                {flips > 0 && (
-                  <span key={flips} aria-hidden="true" className="demo-pulse absolute inset-0 rounded-[5px] bg-accent opacity-0" />
-                )}
-                <MenuIcon className="relative h-5 w-[21px]" look={shown.look} />
+        <div className="order-first flex w-full min-w-0 flex-col items-end gap-1 self-start rounded-xl border border-border p-1 pb-6 lg:order-none">
+          <div className="flex h-6 w-full items-center justify-end rounded-md bg-[color-mix(in_srgb,var(--surface)_85%,transparent)] px-1.5 text-[13px] text-fg backdrop-blur">
+            {GLYPHS.map((width, index) => (
+              <span key={index} aria-hidden="true" className="flex h-[22px] items-center px-2">
+                <span className="h-3.5 rounded-[3px] bg-current opacity-30" style={{ width }} />
               </span>
-              <span aria-hidden="true" className="w-14 text-center tabular-nums">
-                {shown.clock}
-              </span>
-            </div>
-            <div className="min-h-[25.5rem] w-full sm:mr-[3.875rem] sm:w-[320px]">
-              <AgentsPanel
-                enabled={sim.enabled}
-                mode={sim.mode}
-                onDismiss={() => change(dismissHint)}
-                onEnabled={(enabled) => change((state) => setEnabled(state, enabled))}
-                onHelper={() => change(allowHelper)}
-                onMode={(mode) => change((state) => setMode(state, mode))}
-                onPause={(choice) => change((state) => startPause(state, choice))}
-                onReachable={(choice) => change((state) => startReachable(state, choice))}
-                onResume={() => change(resume)}
-                onStopReachable={() => change(stopReachable)}
-                paused={!seen || hidden}
-                view={shown}
-              />
-            </div>
-          </div>
-          <div aria-live={demoing ? "off" : "polite"} className="flex min-h-28 items-start gap-3 sm:min-h-24">
-            <MenuIcon
-              className={`mt-0.5 h-[27px] w-7 shrink-0 transition-colors duration-fast motion-reduce:transition-none ${shown.held ? "text-accent" : "text-muted"}`}
-              look={shown.look}
-            />
-            <div className="relative grid min-w-0 flex-1 overflow-hidden">
-              <AnimatePresence initial={false}>
-                <motion.div
-                  key={outcomeKey}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex flex-col gap-1 [grid-area:1/1]"
-                  exit={{ opacity: 0, y: -6 }}
-                  initial={lessMotion ? false : { opacity: 0, y: 6 }}
-                  transition={{ duration: lessMotion ? 0 : duration.fast, ease: easing.smoothOut }}
-                >
-                  <p className={`text-pretty text-xl font-medium leading-snug ${shown.held ? "text-fg" : "text-muted"}`}>
-                    {shown.outcome.lead}{" "}
-                    <span className="font-normal text-muted">
-                      <Flow>{shown.outcome.rest}</Flow>
-                    </span>
-                  </p>
-                  {shown.outcome.hint !== "" && <p className="text-sm text-muted">{shown.outcome.hint}</p>}
-                </motion.div>
-              </AnimatePresence>
-              {swaps > 0 && (
-                <span
-                  key={swaps}
-                  aria-hidden="true"
-                  className="demo-sweep pointer-events-none absolute inset-0 bg-[linear-gradient(90deg,transparent,color-mix(in_srgb,var(--accent)_16%,transparent),transparent)] opacity-0"
-                />
+            ))}
+            <span
+              aria-label={shown.iconLabel}
+              className="relative flex h-[22px] items-center rounded-[5px] bg-[color-mix(in_srgb,var(--fg)_14%,transparent)] px-2"
+              role="img"
+            >
+              {flips > 0 && (
+                <span key={flips} aria-hidden="true" className="demo-pulse absolute inset-0 rounded-[5px] bg-accent opacity-0" />
               )}
-            </div>
+              <MenuIcon className="relative h-5 w-[21px]" look={shown.look} />
+            </span>
+            <span aria-hidden="true" className="w-14 text-center tabular-nums">
+              {shown.clock}
+            </span>
           </div>
+          <div className="min-h-[25.5rem] w-full sm:mr-[3.875rem] sm:w-[320px]">
+            <AgentsPanel
+              enabled={sim.enabled}
+              mode={sim.mode}
+              onDismiss={() => change(dismissHint)}
+              onEnabled={(enabled) => change((state) => setEnabled(state, enabled))}
+              onHelper={() => change(allowHelper)}
+              onMode={(mode) => change((state) => setMode(state, mode))}
+              onPause={(choice) => change((state) => startPause(state, choice))}
+              onReachable={(choice) => change((state) => startReachable(state, choice))}
+              onResume={() => change(resume)}
+              onStopReachable={() => change(stopReachable)}
+              paused={!seen || hidden}
+              view={shown}
+            />
+          </div>
+          <p aria-atomic="true" aria-live={demoing ? "off" : "polite"} className="sr-only">
+            {shown.title}. {shown.subtitle}
+          </p>
         </div>
       </div>
       {demoing && wide && ring !== null && (
