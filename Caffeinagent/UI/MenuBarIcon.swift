@@ -60,7 +60,8 @@ enum MenuBarIcon {
     static func draw(_ look: MenuBarLook, in context: CGContext, ink: CGColor, crosses: CGColor) {
         context.saveGState()
         defer { context.restoreGState() }
-        context.setAlpha(look.opacity)
+        // Paused is grey like off: the app does nothing in both.
+        context.setAlpha(look.paused ? min(look.opacity, 0.45) : look.opacity)
         context.beginTransparencyLayer(auxiliaryInfo: nil)
         defer { context.endTransparencyLayer() }
         context.setFillColor(ink)
