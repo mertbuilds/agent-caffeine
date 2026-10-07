@@ -43,15 +43,24 @@ enum ArgumentPattern: Equatable {
     case contains([String])
     /// One of the arguments ends with this.
     case anySuffix(String)
+    /// The first argument is one of these.
+    case firstIsOne(of: Set<String>)
+    /// There is one argument, and it is a file name with one of these
+    /// extensions.
+    case oneFile(extensions: Set<String>)
 }
 
 struct AgentMatcher: Equatable {
     let process: ProcessMatcher
     let arguments: ArgumentPattern
+    /// Arguments that show another tool with the same name. A process
+    /// with one of them is no agent at all, and not a helper either.
+    let unless: [ArgumentPattern]
 
-    init(_ process: ProcessMatcher, arguments: ArgumentPattern = .any) {
+    init(_ process: ProcessMatcher, arguments: ArgumentPattern = .any, unless: [ArgumentPattern] = []) {
         self.process = process
         self.arguments = arguments
+        self.unless = unless
     }
 }
 
@@ -240,7 +249,11 @@ struct AgentCatalog {
         cli("codemaker", "CodeMaker"),
         cli("codestudio", "CodeStudio"),
         cli("command-code", "Command Code"),
-        cli("copilot", "GitHub Copilot"),
+        // AWS Copilot is `copilot` too. Its commands that GitHub Copilot
+        // does not have, by the command references of both (2026-10-07):
+        // `copilot svc deploy` runs for minutes and uses the processor.
+        // `app` and `init` are commands of both and stay.
+        cli("copilot", "GitHub Copilot", unless: [.firstIsOne(of: ["env", "svc", "job", "task", "pipeline", "storage", "secret", "deploy"])]),
         cli("crush", "Crush"),
         cli("cursor-agent", "Cursor CLI"),
         cli("deepagents", "Deep Agents"),
@@ -250,12 +263,25 @@ struct AgentCatalog {
         cli("firebender", "Firebender"),
         cli("forgecode", "ForgeCode"),
         cli("gemini", "Gemini CLI", names: ["gemini", "gemini-cli"]),
-        cli("goose", "Goose"),
+        // The database migration tool pressly/goose: `goose up`, `goose
+        // postgres "<dsn>" status`, `goose -dir migrations create x sql`.
+        // The agent has none of these commands (its command reference,
+        // 2026-10-07).
+        cli("goose", "Goose", unless: [
+            .firstIsOne(of: [
+                "up", "up-by-one", "up-to", "down", "down-to", "redo", "reset", "status", "create", "fix", "validate",
+                "postgres", "mysql", "sqlite3", "mssql", "redshift", "tidb", "clickhouse", "vertica", "ydb", "turso", "starrocks",
+            ]),
+            .contains(["-dir"]),
+        ]),
         cli("grok", "Grok", verified: true),
         cli("hermes-agent", "Hermes Agent"),
         cli("iflow-cli", "iFlow CLI"),
         cli("junie", "Junie"),
-        cli("kilo", "Kilo Code"),
+        // The text editor kilo is started as `kilo <file>`. Kilo Code
+        // takes a project folder there, or a command (kilo.ai/docs/cli,
+        // 2026-10-07), so one argument that is a text file is the editor.
+        cli("kilo", "Kilo Code", unless: [.oneFile(extensions: textFileExtensions)]),
         cli("kiro-cli", "Kiro CLI"),
         cli("mcpjam", "MCPJam"),
         cli("mistral-vibe", "Mistral Vibe"),
@@ -274,11 +300,18 @@ struct AgentCatalog {
         cli("zencoder", "Zencoder"),
     ]
 
+    private static let textFileExtensions: Set<String> = [
+        "c", "h", "cc", "cpp", "hpp", "txt", "md", "py", "js", "ts", "json", "yml", "yaml", "toml", "sh", "rb", "go", "rs",
+        "java", "swift", "conf", "cfg", "ini", "log", "html", "css", "sql", "xml", "csv",
+    ]
+
     /// A CLI that is matched by name only and judged by activity.
-    private static func cli(_ id: String, _ displayName: String, names: [String]? = nil, verified: Bool = false) -> AgentDefinition {
+    private static func cli(
+        _ id: String, _ displayName: String, names: [String]? = nil, unless: [ArgumentPattern] = [], verified: Bool = false
+    ) -> AgentDefinition {
         AgentDefinition(
             id: id, displayName: displayName, level: .activity, kind: .cli,
-            matchers: (names ?? [id]).map { AgentMatcher(.name($0)) },
+            matchers: (names ?? [id]).map { AgentMatcher(.name($0), unless: unless) },
             exclusions: [],
             verified: verified
         )
@@ -385,11 +418,23 @@ struct AgentCatalog {
 
     /// The flags that take the next argument as their value. A flag that
     /// is missing here turns its value into the command: `uv run
-    /// --directory ~/code/aider pytest` would be aider.
+    /// --directory ~/code/aider pytest` would be aider, and `uv run
+    /// --extra gemini pytest` would be Gemini. The second block is from
+    /// the help of `uv run`, `uvx`, `pipx run`, `npx`, `pnpm` and `bun`:
+    /// long flags only, because a short one is a switch of another runner
+    /// (`bun -b`, `bun -i`).
     private static let launcherValuedFlags: Set<String> = [
         "-p", "--package", "--from", "--with", "--with-editable", "--with-requirements", "--python", "--spec",
         "-c", "--call", "--config", "--cwd", "--filter", "--import-map", "--lock", "--index-url",
         "--directory", "--project", "--env-file", "-w", "--workspace", "--prefix", "-C", "--dir",
+
+        "--extra", "--no-extra", "--group", "--no-group", "--only-group", "--index", "--default-index", "--extra-index-url",
+        "--find-links", "--constraints", "--overrides", "--build-constraints", "--config-file", "--config-setting", "--cache-dir",
+        "--python-preference", "--python-platform", "--resolution", "--prerelease", "--exclude-newer", "--fork-strategy",
+        "--index-strategy", "--keyring-provider", "--link-mode", "--allow-insecure-host", "--refresh-package",
+        "--reinstall-package", "--upgrade-package", "--no-binary-package", "--no-build-package", "--pip-args",
+        "--registry", "--userconfig", "--cache", "--loglevel", "--reporter", "--workspace-concurrency", "--loader", "--preload",
+        "--define", "--port", "--log-level", "--location", "--seed",
     ]
 
     /// Where one runner reads a flag of the list above as a switch:
@@ -529,8 +574,9 @@ struct AgentCatalog {
     }
 
     private static func role(of row: ProcessInfoRow, command: Command, in definition: AgentDefinition) -> AgentRole? {
-        let matched = definition.matchers.contains {
-            matches($0.process, row: row, command: command) && matches($0.arguments, command: command)
+        let matched = definition.matchers.contains { matcher in
+            matches(matcher.process, row: row, command: command) && matches(matcher.arguments, command: command)
+                && !matcher.unless.contains { matches($0, command: command) }
         }
         for exclusion in definition.exclusions {
             let processMatches = exclusion.process.map { matches($0, row: row, command: command) } ?? matched
@@ -568,6 +614,13 @@ struct AgentCatalog {
             return wanted.allSatisfy(command.arguments.contains)
         case .anySuffix(let suffix):
             return command.arguments.contains { $0.hasSuffix(suffix) }
+        case .firstIsOne(let words):
+            return command.arguments.first.map(words.contains) ?? false
+        case .oneFile(let extensions):
+            guard command.arguments.count == 1, let file = command.arguments.first, !file.hasPrefix("-") else { return false }
+            let name = baseName(file)
+            guard let dot = name.lastIndex(of: "."), dot != name.startIndex else { return false }
+            return extensions.contains(name[name.index(after: dot)...].lowercased())
         }
     }
 
