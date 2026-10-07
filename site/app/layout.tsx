@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import localFont from "next/font/local";
 import { Analytics } from "@/components/analytics";
 import { DevKnobs } from "@/components/dev-knobs";
+import { HashScroll } from "@/components/hash-scroll";
 import { Header } from "@/components/header";
 import { agentsMoreThan } from "@/lib/agents";
 import { PRICE } from "@/lib/pricing";
@@ -70,6 +71,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         </a>
         <Header />
         {children}
+        <HashScroll />
         <Analytics />
         <DevKnobs />
       </body>

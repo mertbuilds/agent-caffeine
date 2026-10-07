@@ -65,9 +65,13 @@
   color-scheme: dark;
 }
 
-/* Jumps down the page are eased, for everyone who has not asked for less motion. */
+/*
+ * Jumps down the page are eased, for everyone who has not asked for less motion. Not the
+ * first one, to the section a page is opened at: components/hash-scroll.tsx sets the
+ * attribute once the page has hydrated.
+ */
 @media (prefers-reduced-motion: no-preference) {
-  html {
+  html[data-smooth-scroll] {
     scroll-behavior: smooth;
   }
 }
