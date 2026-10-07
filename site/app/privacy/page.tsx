@@ -23,7 +23,9 @@ export default function Privacy() {
         Code and Codex keep in <code>~/.claude</code> and <code>~/.codex</code>, and the times at
         which other agents write their session files. From those files it takes only the state of
         a session (working, waiting for you or idle), its folder and its name, and shows them in
-        the menu. It also reads the battery level and the lid angle of your Mac, to let it sleep
+        the menu. For Cursor it reads the transcript files in <code>~/.cursor/projects</code>.
+        From those it takes only where a turn starts and ends and the time the file was last
+        written, never the text. It also reads the battery level and the lid angle of your Mac, to let it sleep
         when the battery is low and to dim the display as the lid closes. None of that leaves your
         Mac.
       </p>

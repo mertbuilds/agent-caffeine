@@ -23,11 +23,11 @@ const questions: FaqItem[] = [
     question: "How does it know that an agent is working?",
     answer: (
       <>
-        Claude Code and Codex say what they do: working, waiting for you, or idle. agent caffeine
-        reads that on your Mac. It also watches the commands an agent started, so a build that is
+        Claude Code, Codex and Cursor say what they do: working, waiting for you, or idle. agent
+        caffeine reads that on your Mac. It also watches the commands an agent started, so a build that is
         still busy keeps your Mac awake after the agent is done. For other agents it watches signs
         of work, such as a running command or a write to the session file. For Claude Code, Codex,
-        Droid and opencode you can switch on better detection in Preferences. The agent then tells
+        Cursor, Droid and opencode you can switch on better detection in Preferences. The agent then tells
         agent caffeine its state directly, and you can switch it off again at any time.
       </>
     ),
