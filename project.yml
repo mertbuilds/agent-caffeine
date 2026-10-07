@@ -199,6 +199,8 @@ targets:
       - Caffeinagent/License/TrialNotice.swift
       # The state of "open at login", without SMAppService.
       - Caffeinagent/LoginItem.swift
+      # Where the app runs from. The alerts are never shown by a test.
+      - Caffeinagent/AppRelocator.swift
       # Optional, so the project still generates on a branch without the folder.
       - path: Caffeinagent/Detection
         optional: true

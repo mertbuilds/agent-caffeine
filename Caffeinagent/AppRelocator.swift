@@ -12,25 +12,49 @@ enum AppRelocator {
         Bundle.main.bundleURL.standardizedFileURL.path.hasPrefix("/Applications/")
     }
 
+    /// Where the app runs from, as far as the offer to move it goes.
+    enum Location: Equatable {
+        /// In a system or user Applications folder.
+        case installed
+        /// On a mounted disk image, or on the random read-only path where
+        /// Gatekeeper runs a quarantined download. The real location is
+        /// unknown there and the original cannot be trashed, so the app
+        /// cannot move itself.
+        case cannotMove
+        case elsewhere
+    }
+
+    static func location(of path: String, home: String = NSHomeDirectory()) -> Location {
+        if path.hasPrefix("/Applications/") || path.hasPrefix(home + "/Applications/") { return .installed }
+        if path.hasPrefix("/Volumes/") || path.contains("/AppTranslocation/") { return .cannotMove }
+        return .elsewhere
+    }
+
+    static let dragTitle = "Move agent caffeine to the Applications folder"
+    static let dragText = "Drag agent caffeine to the Applications folder, then open it from there."
+    static let dragQuit = "Quit"
+    static let dragContinue = "Continue anyway"
+
     static func offerToMoveIfNeeded() {
         let bundleURL = Bundle.main.bundleURL.standardizedFileURL
-        let path = bundleURL.path
 
-        // Already installed in a system or user Applications folder.
-        if isInSystemApplications || path.hasPrefix(NSHomeDirectory() + "/Applications/") {
+        switch location(of: bundleURL.path) {
+        case .installed:
             return
-        }
-
-        // Running from a mounted disk image. The user will eject it after install,
-        // so there is no need to prompt.
-        if path.hasPrefix("/Volumes/") {
+        case .cannotMove:
+            // Without this the setup window says the app is ready, while
+            // the helper, the login item and the hooks need the copy in
+            // the Applications folder.
+            let alert = NSAlert()
+            alert.messageText = dragTitle
+            alert.informativeText = dragText
+            alert.addButton(withTitle: dragQuit)
+            alert.addButton(withTitle: dragContinue)
+            alert.alertStyle = .informational
+            if alert.runModal() == .alertFirstButtonReturn { NSApp.terminate(nil) }
             return
-        }
-
-        // Gatekeeper runs a quarantined download from a random read-only path,
-        // so the real location is unknown and the original cannot be trashed.
-        if path.contains("/AppTranslocation/") {
-            return
+        case .elsewhere:
+            break
         }
 
         if UserDefaults.standard.bool(forKey: declinedKey) { return }
