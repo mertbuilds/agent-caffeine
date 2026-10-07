@@ -99,9 +99,10 @@ enum SingleInstance {
     }
 }
 
-/// What a start of the binary does, and how a copy that runs comes back
-/// when its icon is hidden: without the icon, opening the app again is the
-/// only way to Preferences.
+/// What a start of the binary does, and how a copy that runs comes back:
+/// opening the app again shows Preferences. Without the icon that is the
+/// only way in, and macOS hides the icon on its own when the menu bar is
+/// full or the notch covers it, which the app cannot see.
 enum Reopen {
     enum Action: Equatable {
         case runLab
@@ -109,33 +110,24 @@ enum Reopen {
         case runDisplayProbe(seconds: TimeInterval)
         case refuse(String)
         case start
-        /// Another copy runs: this one leaves.
-        case quit
-        /// Another copy runs with its icon hidden: this one asks it to
-        /// show Preferences, then leaves.
+        /// Another copy runs: this one asks it to show Preferences, then
+        /// leaves.
         case askRunningCopy
     }
 
     /// The running copy shows Preferences when it gets this. It carries
-    /// nothing, and the running copy decides for itself.
+    /// nothing.
     static let notificationName = "com.caffeinagent.app.showPreferences"
 
     /// `anotherCopyRuns` counts only for a plain launch.
-    static func action(kind: LaunchArguments.Kind, anotherCopyRuns: Bool, iconHidden: Bool) -> Action {
+    static func action(kind: LaunchArguments.Kind, anotherCopyRuns: Bool) -> Action {
         switch kind {
         case .lab: return .runLab
         case .smokeTest(let seconds): return .runSmokeTest(seconds: seconds)
         case .displayProbe(let seconds): return .runDisplayProbe(seconds: seconds)
         case .refused(let argument): return .refuse(argument)
         case .app:
-            guard anotherCopyRuns else { return .start }
-            return iconHidden ? .askRunningCopy : .quit
+            return anotherCopyRuns ? .askRunningCopy : .start
         }
-    }
-
-    /// Whether the copy that runs shows Preferences when the user opens
-    /// the app again. With the icon shown, the menu is the way in.
-    static func showsPreferences(iconHidden: Bool) -> Bool {
-        iconHidden
     }
 }

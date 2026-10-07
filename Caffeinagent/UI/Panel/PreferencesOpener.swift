@@ -27,7 +27,7 @@ struct PreferencesOpener<Content: View>: View {
 /// The window of the Settings scene.
 enum PreferencesWindow {
     /// Opens Preferences with no view to ask: from the app delegate, when
-    /// the icon is hidden and the menu does not exist.
+    /// the user opens the app again.
     @MainActor
     static func show() {
         if #available(macOS 14.0, *) {

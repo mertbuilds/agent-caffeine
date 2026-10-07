@@ -23,22 +23,21 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         reopenObserver = DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name(Reopen.notificationName), object: nil, queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated { _ = self?.showPreferencesIfHidden() }
+            MainActor.assumeIsolated { self?.showPreferences() }
         }
     }
 
     /// The user opened the app again, from the Finder or Spotlight.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        !showPreferencesIfHidden()
+        showPreferences()
+        return false
     }
 
+    /// Also with the icon shown: macOS hides it when the menu bar is full.
     @MainActor
-    private func showPreferencesIfHidden() -> Bool {
-        let aggregator = StateAggregator.shared
-        guard Reopen.showsPreferences(iconHidden: !aggregator.showMenuBarIcon) else { return false }
-        aggregator.preferencesTab = .general
+    private func showPreferences() {
+        StateAggregator.shared.preferencesTab = .general
         PreferencesWindow.show()
-        return true
     }
 }
 
@@ -47,15 +46,14 @@ enum Main {
     /// The lab commands run without the app, and the smoke test runs the
     /// app with nothing behind it. A plain launch is the app when no
     /// other copy runs, and anything else is refused, so no
-    /// command line starts a second copy. A second copy leaves, and when
-    /// the icon of the first is hidden it asks for Preferences first.
+    /// command line starts a second copy. A second copy asks the first
+    /// for Preferences and leaves.
     @MainActor
     static func main() {
         let kind = LaunchArguments.kind(of: CommandLine.arguments)
         let anotherCopyRuns = kind == .app
             && !SingleInstance.mayStart(others: { otherCopies().count }, sleep: { Thread.sleep(forTimeInterval: $0) })
-        let iconHidden = anotherCopyRuns && !MenuBarVisibility.isShown(in: .standard)
-        switch Reopen.action(kind: kind, anotherCopyRuns: anotherCopyRuns, iconHidden: iconHidden) {
+        switch Reopen.action(kind: kind, anotherCopyRuns: anotherCopyRuns) {
         case .runLab:
             if LabCommand.run(CommandLine.arguments) { return }
             exit(1)
@@ -72,8 +70,6 @@ enum Main {
                 Notification.Name(Reopen.notificationName), object: nil, userInfo: nil, deliverImmediately: true
             )
             _ = otherCopies().first?.activate(options: [])
-            fallthrough
-        case .quit:
             FileHandle.standardError.write(Data("agent caffeine is already running.\n".utf8))
             exit(0)
         case .start:

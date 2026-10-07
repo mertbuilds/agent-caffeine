@@ -115,30 +115,23 @@ final class LaunchArgumentsTests: XCTestCase {
     }
 
     func testReopenAction() {
-        let cases: [(kind: LaunchArguments.Kind, anotherCopyRuns: Bool, iconHidden: Bool, want: Reopen.Action)] = [
-            (.app, false, false, .start),
-            // A hidden icon never keeps the app from starting.
-            (.app, false, true, .start),
-            (.app, true, false, .quit),
-            (.app, true, true, .askRunningCopy),
+        let cases: [(kind: LaunchArguments.Kind, anotherCopyRuns: Bool, want: Reopen.Action)] = [
+            (.app, false, .start),
+            // A second copy never starts. It asks the first for Preferences,
+            // also when the icon of the first is shown: macOS can hide it.
+            (.app, true, .askRunningCopy),
             // A command is no launch of the app, whatever else is true.
-            (.lab, false, false, .runLab),
-            (.lab, true, true, .runLab),
+            (.lab, false, .runLab),
+            (.lab, true, .runLab),
             // The smoke test runs next to a copy that is installed.
-            (.smokeTest(seconds: 8), false, false, .runSmokeTest(seconds: 8)),
-            (.smokeTest(seconds: 8), true, true, .runSmokeTest(seconds: 8)),
-            (.displayProbe(seconds: 60), true, true, .runDisplayProbe(seconds: 60)),
-            (.refused("-h"), false, false, .refuse("-h")),
-            (.refused("claude"), true, true, .refuse("claude")),
+            (.smokeTest(seconds: 8), false, .runSmokeTest(seconds: 8)),
+            (.smokeTest(seconds: 8), true, .runSmokeTest(seconds: 8)),
+            (.displayProbe(seconds: 60), true, .runDisplayProbe(seconds: 60)),
+            (.refused("-h"), false, .refuse("-h")),
+            (.refused("claude"), true, .refuse("claude")),
         ]
         for c in cases {
-            XCTAssertEqual(Reopen.action(kind: c.kind, anotherCopyRuns: c.anotherCopyRuns, iconHidden: c.iconHidden), c.want, "\(c)")
+            XCTAssertEqual(Reopen.action(kind: c.kind, anotherCopyRuns: c.anotherCopyRuns), c.want, "\(c)")
         }
-    }
-
-    /// Without the icon, opening the app again is the only way to Preferences.
-    func testRunningCopyShowsPreferencesOnlyWhenTheIconIsHidden() {
-        XCTAssertTrue(Reopen.showsPreferences(iconHidden: true))
-        XCTAssertFalse(Reopen.showsPreferences(iconHidden: false))
     }
 }
