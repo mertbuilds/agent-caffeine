@@ -107,6 +107,33 @@ final class NotifierTests: XCTestCase {
         XCTAssertEqual(center.requests, [])
     }
 
+    func testAClickFindsTheAgentOfTheNotification() throws {
+        let info = Notifier.request(for: content(.waiting, pid: 7, after: 0)).content.userInfo
+        XCTAssertEqual(AgentNoticeTarget(userInfo: info), AgentNoticeTarget(agent: ProcessIdentity(pid: 7, startTime: 5), ownerPid: 500))
+        XCTAssertEqual(AgentNoticeTarget(userInfo: Notifier.request(for: content(.finished, pid: 8, after: 0)).content.userInfo)?.agent.pid, 8)
+        // As macOS hands it back: through a property list.
+        let data = try PropertyListSerialization.data(fromPropertyList: info, format: .binary, options: 0)
+        let stored = try XCTUnwrap(PropertyListSerialization.propertyList(from: data, format: nil) as? [AnyHashable: Any])
+        XCTAssertEqual(AgentNoticeTarget(userInfo: stored), AgentNoticeTarget(agent: ProcessIdentity(pid: 7, startTime: 5), ownerPid: 500))
+
+        let precise = AgentNoticeTarget(agent: ProcessIdentity(pid: 99_999, startTime: 1_791_000_000.123456))
+        XCTAssertEqual(AgentNoticeTarget(userInfo: precise.userInfo), precise, "The start time tells a pid that was used again apart")
+        XCTAssertNil(precise.userInfo["ownerPid"])
+    }
+
+    func testAClickOnANotificationAboutSeveralAgentsGoesToNoAgent() {
+        let sessions = (1...3).map {
+            AgentNotice.Session(identity: ProcessIdentity(pid: $0, startTime: 5), agentID: "claude", displayName: "Claude Code", ownerPid: 500)
+        }
+        let summary = AgentNoticeText.content(AgentNotice(kind: .finished, sessions: sessions), waitingHold: nil, now: start)
+        XCTAssertEqual(summary.title, "3 agents finished")
+        XCTAssertNil(summary.agent)
+        let info = Notifier.request(for: summary).content.userInfo
+        XCTAssertTrue(info.isEmpty)
+        XCTAssertNil(AgentNoticeTarget(userInfo: info))
+        XCTAssertNil(AgentNoticeTarget(userInfo: ["agentPid": "7", "agentStart": 5.0]), "Not what the notifier wrote")
+    }
+
     func testTheAllowanceInTheLog() {
         XCTAssertEqual(
             NotificationAllowance(status: .authorized, banners: false, sound: true, inNotificationCenter: true).logLine,

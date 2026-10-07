@@ -17,6 +17,8 @@ struct AggregatorParts {
     var notify: (String) -> Void
     /// Nil sends no agent notification and asks macOS nothing.
     var notifier: AgentNotifying?
+    /// Nil finds the app of no agent, so no row goes to one.
+    var hosts: AgentHostFinding?
     var loginItem: LoginItemManaging
     /// The keyboard layouts the default shortcuts are looked up in, asked
     /// again when the user selects another layout. With none, the defaults
@@ -37,6 +39,7 @@ struct AggregatorParts {
             ),
             notify: Notifier.post,
             notifier: Notifier.shared,
+            hosts: SystemAgentHosts(),
             loginItem: SystemLoginItem(),
             keyLayouts: SystemKeyLayout.inUse
         )
@@ -158,6 +161,9 @@ final class StateAggregator: ObservableObject {
     /// What tells sessions with the same name and folder apart, for the
     /// menu. It is shown only, never logged.
     @PublishedOnChange private(set) var sessionHints: [ProcessIdentity: SessionHint] = [:]
+    /// The name of the app each agent is shown in, for a click on its row.
+    /// Nil for an agent with no app to go to.
+    @PublishedOnChange private(set) var agentHosts: [ProcessIdentity: String?] = [:]
     /// Since when each agent is in its state, for the menu.
     @PublishedOnChange private(set) var stateClock = StateClock()
     /// The user closed the menu's hint to set up "lid closed on battery".
@@ -197,6 +203,7 @@ final class StateAggregator: ObservableObject {
     private let display: DisplayController?
     private let notify: (String) -> Void
     private let notifier: AgentNotifying?
+    private let hosts: AgentHostFinding?
     private let loginItemService: LoginItemManaging
     private var trialNoticesTold: Set<TrialNotice>
     /// Taken when macOS says the Mac goes to sleep, read when it wakes.
@@ -251,6 +258,7 @@ final class StateAggregator: ObservableObject {
         self.display = parts.display
         self.notify = parts.notify
         self.notifier = parts.notifier
+        self.hosts = parts.hosts
         self.loginItemService = parts.loginItem
         self.trialNoticesTold = TrialNoticeStore.load(from: defaults)
         self.engine = engine
@@ -277,6 +285,7 @@ final class StateAggregator: ObservableObject {
         engine.onSample = { [weak self] sample in self?.sampled(sample) }
         notifier?.onPermission = { [weak self] permission in self?.notificationPermission = permission }
         notifier?.onDelivery = { [weak self] id, delivery in self?.noticeHistory.delivered(id, delivery) }
+        notifier?.onOpen = { [weak self] target in self?.goToAgent(target.agent, else: target.ownerPid) }
         // Asks the user nothing, and puts the permission in the log.
         notifier?.readPermission()
 
@@ -365,6 +374,7 @@ final class StateAggregator: ObservableObject {
             hasLicenseKey: license.record.key != nil,
             labels: sessionLabels,
             hints: sessionHints,
+            hosts: agentHosts.compactMapValues { $0 },
             pausedUntil: pause.until,
             clock: stateClock,
             settings: settings,
@@ -422,6 +432,42 @@ final class StateAggregator: ObservableObject {
     /// From the menu of a row. `.automatic` takes the rule away.
     func setRule(_ rule: AgentRule, for agentID: String) {
         settings.agentRules[agentID] = rule == .automatic ? nil : rule
+    }
+
+    // MARK: Go to an agent
+
+    /// Called when the menu opens, for every agent: a tmux client can come
+    /// and go while its agent runs.
+    /// - Parameter again: false asks only about the agents that are new.
+    func refreshAgentHosts(again: Bool = true) {
+        guard let hosts else { return }
+        let readings = decision.perAgent.map(\.reading)
+        let asked = readings.filter { again || agentHosts[$0.identity] == nil }
+        let found = asked.isEmpty ? [] : hosts.hosts(of: asked.map { ($0.identity.pid, $0.kind) })
+        var next: [ProcessIdentity: String?] = [:]
+        for reading in readings {
+            next.updateValue(agentHosts[reading.identity] ?? nil, forKey: reading.identity)
+        }
+        for (reading, host) in zip(asked, found) {
+            next.updateValue(host.flatMap { hosts.name(ofApp: $0.appPid) }, forKey: reading.identity)
+        }
+        if agentHosts != next { agentHosts = next }
+    }
+
+    /// Brings the app of an agent to the front. The app is looked up now,
+    /// not when the row or the notification was made.
+    /// - Parameter fallback: the app the agent ran in, for an agent that
+    ///   is gone.
+    /// - Returns: false when there is no app to bring to the front.
+    @discardableResult
+    func goToAgent(_ identity: ProcessIdentity, else fallback: Int32? = nil) -> Bool {
+        guard let hosts else { return false }
+        let reading = decision.perAgent.map(\.reading).first { $0.identity == identity }
+        let found = reading.flatMap { hosts.hosts(of: [($0.identity.pid, $0.kind)]).first ?? nil }
+        if let app = found?.appPid ?? fallback, hosts.bringForward(app: app) { return true }
+        // The row is no button any more.
+        refreshAgentHosts()
+        return false
     }
 
     // MARK: Open at login
@@ -754,6 +800,7 @@ final class StateAggregator: ObservableObject {
         if sessionLabels != next { sessionLabels = next }
         let clock = stateClock.updated(with: readings, now: Date())
         if stateClock != clock { stateClock = clock }
+        refreshAgentHosts(again: false)
     }
 
     // MARK: Helper

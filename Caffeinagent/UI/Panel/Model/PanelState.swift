@@ -49,6 +49,9 @@ enum PanelAction: Equatable {
     /// the rule away.
     case setAgentRule(agentID: String, rule: AgentRule)
     case openAgentSettings
+    /// From a click on the line of one agent: brings the app it runs in
+    /// to the front.
+    case goToAgent(ProcessIdentity, app: String)
     case dismissSleepNote
     case openHelp
 
@@ -159,6 +162,9 @@ struct PanelRow: Equatable, Identifiable {
     var detail: String
     /// The evidence, for the tooltip.
     var hint: String
+    /// What a click on the line does. Nil for a line that stands for
+    /// several sessions, and for a session with no app to go to.
+    var goTo: PanelAction?
 
     /// A title up to this long fits the menu on one line.
     static let titleFit = 36
@@ -201,6 +207,9 @@ struct PanelChild: Equatable, Identifiable {
     var detail: String?
     /// The folder and the evidence, for the tooltip.
     var hint: String
+    /// What a click on the line does. Nil for a count, and for a session
+    /// with no app to go to.
+    var goTo: PanelAction?
 
     /// "wiki-6e, working for 6 minutes".
     var accessibilityLabel: String {
@@ -402,6 +411,8 @@ struct PanelInput: Equatable {
     var labels: [ProcessIdentity: String] = [:]
     /// What tells sessions with the same name and folder apart.
     var hints: [ProcessIdentity: SessionHint] = [:]
+    /// The name of the app each session is shown in, where there is one.
+    var hosts: [ProcessIdentity: String] = [:]
     /// For the start time of a session, when nothing else tells it apart.
     var calendar = Calendar.current
     /// For the time a pause ends at, with the user's 12 or 24 hour clock.

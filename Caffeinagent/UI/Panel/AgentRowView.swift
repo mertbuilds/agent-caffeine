@@ -31,7 +31,7 @@ struct AgentRowView: View {
                 }
             }
         }
-        .help(row.hint)
+        .help(PanelText.help(goTo: row.goTo, hint: row.hint))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(row.accessibilityLabel)
     }

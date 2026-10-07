@@ -335,6 +335,7 @@ enum MenuModel {
         var group = PanelGroup(
             header: header, working: working.count, waiting: waiting.count, idle: idle.count, rule: input.settings.rule(for: first.agentID)
         )
+        if readings.count == 1 { group.header.goTo = goTo(first, input: input) }
         if active.isEmpty, isIgnored(first) {
             group.header.detail = PanelText.ignored
             group.header.hint = first.verdict.reason.text
@@ -397,8 +398,13 @@ enum MenuModel {
             id: "\(reading.identity.pid):\(reading.identity.startTime)",
             label: label,
             detail: detail,
-            hint: [input.labels[reading.identity], reading.verdict.reason.text].compactMap { $0 }.joined(separator: " · ")
+            hint: [input.labels[reading.identity], reading.verdict.reason.text].compactMap { $0 }.joined(separator: " · "),
+            goTo: goTo(reading, input: input)
         )
+    }
+
+    private static func goTo(_ reading: AgentReading, input: PanelInput) -> PanelAction? {
+        input.hosts[reading.identity].map { .goToAgent(reading.identity, app: $0) }
     }
 
     /// A line that counts sessions in place of their names.

@@ -626,6 +626,44 @@ final class MenuModelTests: XCTestCase {
         for (action, title) in titles { XCTAssertEqual(action.title, title) }
     }
 
+    // MARK: Go to an agent
+
+    func testALineOfOneSessionGoesToTheAppOfThatSession() {
+        var input = input(.working(.one("Claude Code")), [
+            claude(pid: 1, .working, .reportsBusy),
+            hold("codex", "Codex", pid: 2, .idle, .atPrompt),
+            hold("opencode", "opencode", pid: 3, .idle, .ignoredByRule),
+        ])
+        input.hosts = [identity(1): "Ghostty", identity(3): "Terminal"]
+        let groups = MenuModel.groups(input, now: now).inView
+        XCTAssertEqual(groups.map(\.header.goTo), [.goToAgent(identity(1), app: "Ghostty"), nil, .goToAgent(identity(3), app: "Terminal")])
+        XCTAssertEqual(groups[0].header.goTo?.title, "Go to Ghostty")
+        XCTAssertEqual(groups.map(\.canToggle), [false, false, false])
+        XCTAssertNil(groups[1].header.goTo, "No app is known for it, so the line is no button")
+    }
+
+    func testInAGroupTheSessionsGoToTheirAppsAndTheHeaderOpensTheGroup() {
+        var input = input(.working(.many(2)), [
+            claude(pid: 1, .working, .reportsBusy), claude(pid: 2, .working, .reportsBusy), claude(pid: 3, .idle),
+        ])
+        input.hosts = [identity(1): "Cursor", identity(3): "Terminal"]
+        let group = MenuModel.groups(input, now: now).inView[0]
+        XCTAssertTrue(group.canToggle)
+        XCTAssertNil(group.header.goTo, "The header stands for several sessions")
+        XCTAssertEqual(group.children.map(\.goTo), [.goToAgent(identity(1), app: "Cursor"), nil, nil], "A session under tmux with two clients, and the count of the idle ones")
+
+        input = self.input(.idle(.many(2)), [claude(pid: 1, .idle), claude(pid: 2, .idle)])
+        input.hosts = [identity(2): "Visual Studio Code"]
+        let idle = MenuModel.groups(input, now: now).inView[0]
+        XCTAssertEqual(idle.children.compactMap(\.goTo), [.goToAgent(identity(2), app: "Visual Studio Code")])
+    }
+
+    func testTheTooltipSaysWhereAClickGoes() {
+        XCTAssertEqual(PanelText.help(goTo: .goToAgent(identity(1), app: "Cursor"), hint: "Reports that it is busy"), "Go to Cursor\nReports that it is busy")
+        XCTAssertEqual(PanelText.help(goTo: nil, hint: "Reports that it is busy"), "Reports that it is busy")
+        XCTAssertEqual(PanelText.help(goTo: .goToAgent(identity(1), app: "Cursor"), hint: ""), "Go to Cursor")
+    }
+
     // MARK: Groups
 
     private func headers(_ input: PanelInput) -> [PanelRow] {

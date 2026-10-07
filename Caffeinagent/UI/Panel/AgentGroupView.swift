@@ -23,18 +23,26 @@ struct AgentGroupView: View {
                     .accessibilityValue(isOpen ? PanelText.expanded : PanelText.collapsed)
                 } else {
                     AgentRowView(row: group.header, summary: Self.summaryPlace(group))
-                        .contentShape(Rectangle())
+                        .goTo(group.header.goTo, radius: PanelMetrics.rowHoverRadius, perform: perform)
                 }
             }
-            .contextMenu { AgentRuleMenu(agentID: group.id, rule: group.rule, perform: perform) }
+            .contextMenu { AgentRuleMenu(agentID: group.id, rule: group.rule, goTo: group.header.goTo, perform: perform) }
             VStack(alignment: .leading, spacing: 0) {
-                ForEach(group.children) { AgentChildView(child: $0, layout: layout) }
+                ForEach(group.children) { child in
+                    AgentChildView(child: child, layout: layout)
+                        .goTo(child.goTo, radius: PanelMetrics.childHoverRadius, perform: perform)
+                        .contextMenu {
+                            if let goTo = child.goTo {
+                                AgentRuleMenu(agentID: group.id, rule: group.rule, goTo: goTo, perform: perform)
+                            }
+                        }
+                }
             }
             // The sessions take their new places at once when one comes,
             // goes or changes shape, so no text crosses another on its way.
             // The height of the group is what moves, and it cuts them.
             .transaction { $0.animation = nil }
-            .reveal(isOpen: isOpen, height: Self.childrenHeight(of: group))
+            .revealWithRowHover(isOpen: isOpen, height: Self.childrenHeight(of: group))
         }
     }
 
@@ -62,15 +70,21 @@ struct AgentGroupView: View {
     }
 }
 
-/// The menu of an agent's row: the rule of the agent, for an agent that
-/// reads idle while it works, and the way to its settings. A rule that is
-/// set has a check mark, and choosing it again takes it away.
+/// The menu of an agent's row: the way to the app of a row that is one
+/// session, the rule of the agent, for an agent that reads idle while it
+/// works, and the way to its settings. A rule that is set has a check
+/// mark, and choosing it again takes it away.
 struct AgentRuleMenu: View {
     let agentID: String
     let rule: AgentRule
+    var goTo: PanelAction?
     let perform: (PanelAction) -> Void
 
     var body: some View {
+        if let goTo {
+            Button(goTo.title) { perform(goTo) }
+            Divider()
+        }
         ForEach([AgentRule.alwaysWorkingWhileOpen, .ignore], id: \.self) { choice in
             Toggle(PanelAction.setAgentRule(agentID: agentID, rule: choice).title, isOn: Binding(
                 get: { rule == choice },

@@ -62,7 +62,7 @@ struct AgentList: View {
                 VStack(alignment: .leading, spacing: 0) {
                     ForEach(moreIdle) { view(of: $0) }
                 }
-                .reveal(isOpen: isExpanded, height: height(of: moreIdle))
+                .revealWithRowHover(isOpen: isExpanded, height: height(of: moreIdle))
             }
         }
         // The ring's slot reaches past the box, so the boxes stand on the gutter.

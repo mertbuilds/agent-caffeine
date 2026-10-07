@@ -5,6 +5,7 @@ import SwiftUI
 struct MenuBarView: View {
     @ObservedObject var aggregator: StateAggregator
     @State private var isOpen = false
+    @State private var panel = WindowVisibility.Holder()
 
     var body: some View {
         PreferencesOpener { openPreferences in
@@ -21,10 +22,12 @@ struct MenuBarView: View {
             )
         }
         .environment(\.panelIsOpen, isOpen)
-        .background(WindowVisibility(isVisible: $isOpen))
+        .background(WindowVisibility(isVisible: $isOpen, holder: panel))
         .onAppear(perform: aggregator.refreshHelperStatus)
         .onChange(of: isOpen) { open in
-            if open { aggregator.refreshHelperStatus() }
+            guard open else { return }
+            aggregator.refreshHelperStatus()
+            aggregator.refreshAgentHosts()
         }
     }
 
@@ -73,6 +76,8 @@ struct MenuBarView: View {
         case .openAgentSettings:
             aggregator.preferencesTab = .agents
             openPreferences()
+        case .goToAgent(let agent, _):
+            if aggregator.goToAgent(agent) { panel.close() }
         case .dismissSleepNote:
             aggregator.dismissSleepNote()
         case .openHelp:

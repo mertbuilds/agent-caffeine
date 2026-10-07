@@ -18,6 +18,8 @@ protocol AgentNotifying: AnyObject {
     var onPermission: ((NotificationPermission) -> Void)? { get set }
     /// Called on the main actor for each posted notification, with its id.
     var onDelivery: ((String, AgentNoticeDelivery) -> Void)? { get set }
+    /// Called on the main actor for a click on a notification about one agent.
+    var onOpen: ((AgentNoticeTarget) -> Void)? { get set }
     func post(_ content: AgentNoticeContent)
     /// macOS asks the user the first time, and never again.
     func requestPermission()
@@ -106,7 +108,7 @@ final class Notifier: NSObject, AgentNotifying, UNUserNotificationCenterDelegate
 
     @MainActor var onPermission: ((NotificationPermission) -> Void)?
     @MainActor var onDelivery: ((String, AgentNoticeDelivery) -> Void)?
-    private static let ownerKey = "ownerPid"
+    @MainActor var onOpen: ((AgentNoticeTarget) -> Void)?
     private let center: NotificationCentering
     /// The last request of each `AgentNoticeContent.key`.
     @MainActor private var lastIdentifiers: [String: String] = [:]
@@ -140,7 +142,8 @@ final class Notifier: NSObject, AgentNotifying, UNUserNotificationCenterDelegate
         content.body = notice.body ?? ""
         content.threadIdentifier = notice.thread
         content.sound = notice.sound ? .default : nil
-        if let ownerPid = notice.ownerPid { content.userInfo = [Self.ownerKey: Int(ownerPid)] }
+        // One about several agents has no agent to go to.
+        if let agent = notice.agent { content.userInfo = AgentNoticeTarget(agent: agent, ownerPid: notice.ownerPid).userInfo }
         return UNNotificationRequest(identifier: notice.id, content: content, trigger: nil)
     }
 
@@ -230,16 +233,15 @@ final class Notifier: NSObject, AgentNotifying, UNUserNotificationCenterDelegate
         completionHandler(Self.presentation(of: notification.request.content))
     }
 
-    /// A click brings the app the agent runs in to the front, when it
-    /// still runs.
+    /// A click on a notification about one agent goes to the app that
+    /// agent runs in now. Any other click does what macOS does by itself.
     func userNotificationCenter(
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
         if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
-           let pid = response.notification.request.content.userInfo[Self.ownerKey] as? Int,
-           let app = NSRunningApplication(processIdentifier: pid_t(pid)), app.activationPolicy == .regular {
-            app.activate(options: [])
+           let target = AgentNoticeTarget(userInfo: response.notification.request.content.userInfo) {
+            onMain { $0.onOpen?(target) }
         }
         completionHandler()
     }

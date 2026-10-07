@@ -28,7 +28,7 @@ struct AgentChildView: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         // Under the name of the agent.
         .padding(.leading, PanelMetrics.logoSlot + 8)
-        .help(child.hint)
+        .help(PanelText.help(goTo: child.goTo, hint: child.hint))
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(child.accessibilityLabel)
     }
