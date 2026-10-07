@@ -17,15 +17,16 @@ type MenuIconProps = {
 
 /**
  * The app's menu bar icon, the robot's head on a 21 x 20 canvas, with the
- * measures of `UI/MenuBarIcon.swift`: solid while it holds the Mac awake, an
- * outline when the Mac can sleep, and red crosses for eyes in trouble. Every
+ * measures of `UI/MenuBarIcon.swift`: an outline head whose eyes tell the
+ * state, grey when the app is off or paused, red crosses in trouble. Every
  * state is in the drawing, so a change crossfades.
  */
 export function MenuIcon({ className, held = true, look }: MenuIconProps) {
   const id = `menu-icon-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const level = typeof held === "number" ? held : held ? 1 : 0;
   const shown = look ?? (level >= 0.5 ? AWAKE : ASLEEP);
-  const solid = look === undefined ? level : look.solid ? 1 : 0;
+  // `MenuBarIcon.outlineAlways`: the head is an outline in every state.
+  const solid = 0;
   const eyes = (kind: IconLook["eyes"]) => ({ className: FADE, opacity: shown.eyes === kind ? 1 : 0 });
   return (
     <svg aria-hidden="true" className={className} fill="currentColor" viewBox="0 0 21 20">

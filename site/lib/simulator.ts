@@ -791,7 +791,7 @@ export function iconLook(of: Pose): IconLook {
     case "asleep":
       return { eyes: "closed", solid: false, opacity: 1 };
     case "paused":
-      return { eyes: "closed", solid: false, opacity: 1, paused: true };
+      return { eyes: "closed", solid: false, opacity: 0.45, paused: true };
     case "off":
       return { eyes: "closed", solid: false, opacity: 0.45 };
     case "trouble":
