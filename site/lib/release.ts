@@ -46,9 +46,9 @@ export async function getLatestRelease(): Promise<Release | null> {
       return null;
     }
     const data: unknown = await response.json();
-    if (!isRecord(data)) return null;
-    const { version, filename, size, url } = data;
+    const { version, filename, size, url } = isRecord(data) ? data : {};
     if (typeof version !== "string" || typeof filename !== "string" || typeof size !== "number") {
+      console.error(`No download on the page: ${latest} needs a version and a filename as text and a size as a number.`);
       return null;
     }
     return { version, href: hrefFor(url, filename), filename, size };
