@@ -27,7 +27,7 @@ const questions: FaqItem[] = [
         caffeine reads that on your Mac. It also watches the commands an agent started, so a build that is
         still busy keeps your Mac awake after the agent is done. For other agents it watches signs
         of work, such as a running command or a write to the session file. For Claude Code, Codex,
-        Cursor, Droid and opencode you can switch on better detection in Settings. The agent then
+        Cursor, Droid, opencode and Pi you can switch on better detection in Settings. The agent then
         tells agent caffeine its state directly, and you can switch it off again at any time.
       </>
     ),

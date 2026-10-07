@@ -13,7 +13,7 @@ const TEXT = `# agent caffeine
 
 - Detects more than ${agentsMoreThan} coding agents (Claude Code, Codex, Cursor, opencode, Gemini CLI and others). Claude Code, Codex and Cursor report their own state (working, waiting for you, or idle), and agent caffeine reads it on the Mac. It also watches the commands an agent started, so a build that is still busy keeps the Mac awake. Other agents are judged by signs of work, such as a running command or a write to the session file.
 - An agent that waits for your answer keeps the Mac awake for 5 minutes, then the Mac can sleep. Idle sessions do not keep it awake in the default mode. The times can be changed in Settings.
-- Optional better detection: Claude Code, Codex, Cursor, Droid and opencode can report their state to agent caffeine directly. It is off until you switch it on per agent, and switching it off removes it again.
+- Optional better detection: Claude Code, Codex, Cursor, Droid, opencode and Pi can report their state to agent caffeine directly. It is off until you switch it on per agent, and switching it off removes it again.
 - Three modes: always, while an agent is open, or while an agent is working (the default).
 - A closed lid on the power adapter works from the start. On battery it needs a small helper that you allow once in System Settings, and it turns on the \`SleepDisabled\` setting of macOS only while it holds the Mac awake.
 - Safety: when the battery is at 20% (adjustable, or off) or the Mac gets too hot, it lets the Mac sleep and says why in a notification. After a battery stop it starts again at 25%, or when the Mac is plugged in. Do not put a working Mac in a closed bag. On battery the menu shows the charge and that level on one line.
