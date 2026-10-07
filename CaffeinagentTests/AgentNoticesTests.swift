@@ -280,6 +280,39 @@ final class AgentNoticesTests: XCTestCase {
         XCTAssertEqual(sample(80, [reading(1, .idle)]), [])
     }
 
+    /// Cursor at the end of a turn: the inferred wait begins 15 seconds
+    /// after the assertion went, and the end line comes up to 3 seconds
+    /// later. Nothing at all was told.
+    func testWorkThatEndsInAWaitShorterThanTheDebounceIsAFinish() {
+        _ = sample(0, [reading(1, .working)])
+        XCTAssertEqual(sample(60, [reading(1, .waitingForUser)]), [])
+        XCTAssertEqual(sample(62, [reading(1, .idle)]), [])
+        XCTAssertEqual(outcomes(), [.waitEnded(after: 2)])
+        let told = sample(64, [reading(1, .idle)])
+        XCTAssertEqual(kinds(told), [.finished])
+        XCTAssertEqual(told.first?.sessions.first?.workedFor, 62)
+        XCTAssertEqual(sample(70, [reading(1, .idle)]), [], "Once")
+        // The next turn counts from its own start.
+        _ = sample(100, [reading(1, .working)])
+        _ = sample(130, [reading(1, .idle)])
+        XCTAssertEqual(sample(132, [reading(1, .idle)]).first?.sessions.first?.workedFor, 30)
+    }
+
+    func testAWaitThatWasNotToldWithTheWaitingSwitchOffEndsInAFinish() {
+        settings.waiting = false
+        _ = sample(0, [reading(1, .working)])
+        _ = sample(60, [reading(1, .waitingForUser)])
+        _ = sample(100, [reading(1, .idle)])
+        XCTAssertEqual(kinds(sample(102, [reading(1, .idle)])), [.finished])
+    }
+
+    func testAWaitWithNoWorkBeforeItEndsInNoFinish() {
+        _ = sample(0, [reading(1, .idle)])
+        _ = sample(10, [reading(1, .waitingForUser)])
+        XCTAssertEqual(sample(11, [reading(1, .idle)]), [])
+        XCTAssertEqual(sample(20, [reading(1, .idle)]), [])
+    }
+
     func testIdleForOneSampleInsideTheWorkIsNoFinish() {
         _ = sample(0, [reading(1, .idle)])
         _ = sample(10, [reading(1, .working)])
