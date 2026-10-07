@@ -7,10 +7,6 @@ import { BASE_PLAN, PLANS, dollars, macs, type Plan } from "@/lib/pricing";
 
 const PRICE_FORMAT = { style: "currency", currency: "USD", maximumFractionDigits: 0 } as const;
 
-function helper(plan: Plan): string {
-  return plan.macs === 1 ? "One key for one Mac" : "One key for three of your Macs";
-}
-
 /**
  * The words of the pricing card: the price of the picked plan, the plans to pick from, and the button that buys the picked one.
  * With a download, the free trial leads: its line stands over the price, and its button before the buy.
@@ -70,7 +66,6 @@ export function PlanCard({ download = null }: { download?: ReactNode }) {
                 </button>
               ))}
             </div>
-            <p className="text-sm">{helper(plan)}</p>
           </div>
         )}
       </div>
