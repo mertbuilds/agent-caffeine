@@ -100,7 +100,7 @@ enum HookConfigEditor {
         // the old document again once they are taken out.
         guard status(text: source.bytes, entry: entry, appPath: appPath) == .installed(version: HookCatalog.version),
               let before = normalized(cleared, keyPath: keyPath),
-              let after = normalized(try uninstalling(from: source.bytes, entry: entry, removingVersion: addsVersion), keyPath: keyPath),
+              let after = normalized(try uninstalling(from: source.bytes, entry: entry, removingVersion: addsVersion), keyPath: keyPath, withoutVersion: addsVersion),
               before.isEqual(after) else { throw HookInstallError.unexpectedShape }
         return source.bytes
     }
@@ -155,7 +155,8 @@ enum HookConfigEditor {
     /// that was empty before is the user's and stays. `keeping` names the
     /// lists and the object that were empty before our entries went in
     /// (`emptyContainers`), so they stay too. `removingVersion` is for the
-    /// `"version": 1` that "on" added to a flat document.
+    /// `"version": 1` that "on" added to a flat document. It goes only
+    /// when no hook of anyone is left: the entries of another tool need it.
     static func uninstalling(from text: [UInt8], entry: HookCatalogEntry, keeping: Set<[String]> = [], removingVersion: Bool = false) throws -> [UInt8] {
         guard let (keyPath, flat) = entry.format.jsonLayout else { return [] }
         if isBlank(text) { return text }
@@ -188,7 +189,8 @@ enum HookConfigEditor {
         }
         if removingVersion {
             let root = try validated(source.bytes)
-            if let index = root.members?.firstIndex(where: { $0.key == versionKey }), let range = root.members?[index].value.range,
+            let othersLeft = try hooksObject(in: root, keyPath: keyPath)?.members?.contains { !($0.value.elements?.isEmpty ?? false) } ?? false
+            if !othersLeft, let index = root.members?.firstIndex(where: { $0.key == versionKey }), let range = root.members?[index].value.range,
                String(decoding: source.bytes[range], as: UTF8.self) == String(flatVersion) {
                 source.removeChild(at: index, of: root)
             }
@@ -281,8 +283,11 @@ enum HookConfigEditor {
 
     /// The document as Foundation reads it, without empty lists and objects
     /// under the hooks key, for the comparison of before and after.
-    private static func normalized(_ text: [UInt8], keyPath: [String]) -> NSDictionary? {
+    /// `withoutVersion` is for a version that "on" added and that stays
+    /// for the hooks of another tool.
+    private static func normalized(_ text: [UInt8], keyPath: [String], withoutVersion: Bool = false) -> NSDictionary? {
         guard let root = (try? JSONSerialization.jsonObject(with: Data(text), options: [.mutableContainers])) as? NSMutableDictionary else { return nil }
+        if withoutVersion { root.removeObject(forKey: versionKey) }
         var chain: [NSMutableDictionary] = [root]
         for key in keyPath {
             guard let next = chain.last?[key] as? NSMutableDictionary else { return root }
@@ -447,8 +452,12 @@ struct HookInstaller {
         let cleared = try HookConfigEditor.clearedForInstall(old ?? [], entry: entry, keeping: keeping)
         let empty = HookConfigEditor.emptyContainers(in: cleared, entry: entry)
         try write(new, to: url, replacing: old, backup: true)
-        let created = old == nil || (record(for: entry)?.createdFile ?? false)
-        let addedVersion = try HookConfigEditor.lacksVersion(cleared, entry: entry) || (record(for: entry)?.addedVersion ?? false)
+        // The record of an earlier "on" counts only while its entries are
+        // still in the file. A file that was replaced since is the user's:
+        // its version and the file itself are not ours to take away.
+        let earlier = old.map { HookConfigEditor.status(text: $0, entry: entry, appPath: appPath) } == .outdated ? record(for: entry) : nil
+        let created = old == nil || (earlier?.createdFile ?? false)
+        let addedVersion = try HookConfigEditor.lacksVersion(cleared, entry: entry) || (earlier?.addedVersion ?? false)
         save(HookInstallRecord(emptyBefore: empty.sorted { $0.lexicographicallyPrecedes($1) }, createdFile: created, addedVersion: addedVersion ? true : nil), for: entry)
     }
 
