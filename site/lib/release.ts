@@ -38,9 +38,13 @@ export async function getLatestRelease(): Promise<Release | null> {
   }
   const origin = process.env.MAC_FILES_ORIGIN;
   if (!origin) return null;
+  const latest = `${origin}/mac/latest.json`;
   try {
-    const response = await fetch(`${origin}/mac/latest.json`, { next: { revalidate: 3600 } });
-    if (!response.ok) return null;
+    const response = await fetch(latest, { next: { revalidate: 3600 } });
+    if (!response.ok) {
+      console.error(`No download on the page: ${latest} answered ${response.status}.`);
+      return null;
+    }
     const data: unknown = await response.json();
     if (!isRecord(data)) return null;
     const { version, filename, size, url } = data;
@@ -48,7 +52,8 @@ export async function getLatestRelease(): Promise<Release | null> {
       return null;
     }
     return { version, href: hrefFor(url, filename), filename, size };
-  } catch {
+  } catch (error) {
+    console.error(`No download on the page: ${latest} could not be read.`, error);
     return null;
   }
 }

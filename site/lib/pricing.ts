@@ -15,20 +15,24 @@ const ALL_PLANS: readonly Plan[] = [
     macs: 1,
     price: 19,
     checkoutUrl:
-      process.env.NEXT_PUBLIC_BUY_URL ?? "https://buy.polar.sh/polar_cl_UtPTTZP0j4vXcUW47KZQalB2aVkSo3GyKubce3pvdr1",
+      process.env.NEXT_PUBLIC_BUY_URL || "https://buy.polar.sh/polar_cl_UtPTTZP0j4vXcUW47KZQalB2aVkSo3GyKubce3pvdr1",
   },
   {
     id: "three",
     macs: 3,
     price: 29,
     checkoutUrl:
-      process.env.NEXT_PUBLIC_BUY_URL_THREE_MACS ??
+      process.env.NEXT_PUBLIC_BUY_URL_THREE_MACS ||
       "https://buy.polar.sh/polar_cl_8L5mWP6HGDRU1OtZE9aUCiRGYLILln6kWyAKW0qHkIb",
   },
 ];
 
 /** The plans a reader can buy now, the one for a single Mac first. */
 export const PLANS: readonly Plan[] = ALL_PLANS.filter((plan) => plan.checkoutUrl !== "");
+
+if (PLANS.length === 0) {
+  throw new Error("lib/pricing.ts: no plan has a checkout link, so the site has nothing to sell. Give at least one plan a checkoutUrl.");
+}
 
 /** The plan every button outside the pricing card sells. */
 export const BASE_PLAN: Plan = PLANS[0];

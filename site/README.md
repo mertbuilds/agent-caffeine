@@ -4,8 +4,13 @@ The site for agent caffeine at caffeinagent.com. Next.js, run with `bun run dev`
 
 ## Downloads
 
-The app's release files (the dmg, `appcast.xml` and `latest.json`) live in a public Cloudflare R2 bucket under `mac/`, and the site serves them at `https://caffeinagent.com/mac/<file>`.
+The app's release files (the dmg, `appcast.xml` and `latest.json`) are in a Cloudflare R2 bucket under `mac/`, and the site serves them at `https://caffeinagent.com/mac/<file>`.
 
-Set `MAC_FILES_ORIGIN` to the bucket's public origin, without a trailing slash (for example `https://<bucket-domain>`). With it set, `/mac/*` is rewritten to `${MAC_FILES_ORIGIN}/mac/*`, and the page reads `latest.json` (revalidated every hour) to show the download button, the version and the size. Without it, or while `latest.json` cannot be read, the page shows only the buy button.
+The site reads them over HTTPS with no credentials. Set `MAC_FILES_ORIGIN` to an origin that answers a GET for `/mac/<file>` without a login, written without a trailing slash (for example `https://<files-domain>`).
+
+- Set it for the build. `next.config.js` reads it when the site is built and rewrites `/mac/*` to `${MAC_FILES_ORIGIN}/mac/*`. A build without it has no `/mac/` route.
+- Set it for the running site too. The server reads `${MAC_FILES_ORIGIN}/mac/latest.json` (revalidated every hour) to decide whether the page shows the download button.
+
+Without it the page shows only the buy button. The same happens while `latest.json` cannot be read, and the server log then says why.
 
 To see the page with a download while none is published, put `NEXT_PUBLIC_FAKE_RELEASE=1` in `.env.development.local`. The dev server then shows a sample release whose link goes nowhere. A production build ignores it.
