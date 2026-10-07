@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { lidBrightness, lidDegrees } from "@/components/laptop/geometry";
 import { Laptop } from "@/components/laptop/laptop";
 import { Pill } from "@/components/laptop/pill";
-import { spinnerAt, Terminal } from "@/components/laptop/terminal";
+import { Screen } from "@/components/laptop/screen";
 import { laptop } from "@/lib/motion";
 import { stretch, useLoop } from "@/lib/playhead";
 import { useSeen } from "@/lib/use-seen";
@@ -47,25 +47,23 @@ export function LaptopScene() {
     AT_CLOSE * stretch(at, ...laptop.work, linear) +
     (AT_DONE - AT_CLOSE) * stretch(at, ...laptop.race, easeInOut);
   const seconds = workedAt(time);
-  const spinner = spinnerAt(time);
 
   return (
     <div
       ref={ref}
       role="img"
-      aria-label="A laptop runs Claude Code on a refactor. The lid closes one second after the prompt is sent, the display goes dark with it, and Claude Code keeps working for 14 minutes. The lid opens on the finished work, with all tests passing"
+      aria-label="A coding agent on a laptop gets a refactor to do and starts on its steps. The lid closes one second after the prompt is sent, the display goes dark with it, and the agent keeps working for 14 minutes. The lid opens on the finished work, with every step done"
       className="relative aspect-[10/7] w-full [container-type:inline-size]"
     >
       <div className="absolute inset-0" style={{ perspective: "200cqw", perspectiveOrigin: "50% 22%" }}>
         <Laptop closed={closed} display={lidBrightness(lidDegrees(closed))}>
-          <Terminal
+          <Screen
             session={{
-              welcome: span(laptop.welcome),
               typed: span(laptop.type, linear),
               sent: span(laptop.sent),
               steps: laptop.steps.map((step) => span(step)),
               working: time >= laptop.sent[0] && !done ? seconds : null,
-              spinner,
+              seconds: time,
               done,
               shown: winding ? at : 1,
             }}
@@ -73,7 +71,7 @@ export function LaptopScene() {
         </Laptop>
         <Pill
           shown={span(laptop.pillIn) - span(laptop.pillOut)}
-          spinner={spinner}
+          at={time}
           seconds={Math.floor(workedAt(Math.floor(time * PILL_TICKS) / PILL_TICKS))}
         />
       </div>

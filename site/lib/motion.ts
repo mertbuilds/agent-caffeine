@@ -46,16 +46,12 @@ export const drawing = {
 export const laptop = {
   loop: 8.45,
   rest: 2.5,
-  welcome: [0, 0.3],
   type: [0.15, 0.95],
   sent: [1.05, 1.3],
   steps: [
     [1.5, 1.8],
-    [1.9, 2.2],
     [2.45, 2.75],
-    [2.85, 3.15],
     [3.5, 3.8],
-    [3.8, 4.1],
   ],
   work: [1.05, 3.15],
   close: [2.05, 3.15],
