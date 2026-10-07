@@ -53,7 +53,7 @@ enum HookConfigEditor {
         switch entry.format {
         case .pluginFile:
             let source = String(decoding: text, as: UTF8.self)
-            if source == HookCatalog.pluginSource(appPath: appPath) { return .installed(version: HookCatalog.version) }
+            if source == HookCatalog.pluginSource(appPath: appPath) { return .installed(version: HookCatalog.pluginVersion) }
             return source.contains(HookCatalog.pluginMarker) ? .outdated : .unreadable
         case .jsonHookGroups, .jsonFlatHooks:
             guard let (keyPath, flat) = entry.format.jsonLayout else { return .unreadable }

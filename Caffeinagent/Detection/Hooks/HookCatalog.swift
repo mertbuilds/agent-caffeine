@@ -47,6 +47,16 @@ enum HookCatalog {
     /// Raised when the command or the set of events changes, so entries of
     /// an older build read as outdated.
     static let version = 1
+    /// The same for the opencode plugin file, which is all ours. It has a
+    /// number of its own, so a new plugin does not make the entries of the
+    /// other agents read as outdated. 2: the events go to the hook command
+    /// one after the other, with a stamp of their order.
+    static let pluginVersion = 2
+    /// Two events of one name for one session this close together are one:
+    /// opencode sends `session.status` idle and `session.idle` in the same
+    /// millisecond. A later busy of the same turn is passed on: it starts
+    /// `VerdictRules.hookWorkingLimit` again.
+    static let pluginRepeatMilliseconds = 1000
     /// Every entry we write holds this, and nothing else in a config does.
     static let marker = "/Contents/MacOS/CaffeinagentHook"
     /// The hook command points here and nowhere else, so it stays valid
@@ -86,7 +96,7 @@ enum HookCatalog {
             adds: [.working, .waitingForUser, .idle],
             benefit: "Tells agent caffeine when opencode is working, waiting for you or done.",
             afterInstall: "opencode loads the plugin the next time it starts.",
-            confirmedBy: "opencode.ai/docs/plugins for the folder, the plugin form and the event names. The event payload is from the opencode source. Not run live."
+            confirmedBy: "opencode.ai/docs/plugins for the folder, the plugin form and the event names. The event payload and the call of `event` without a wait are from the opencode 1.18.16 binary. A turn was measured live."
         ),
         HookCatalogEntry(
             id: "cursor", displayName: "Cursor", configPath: ".cursor/hooks.json",
@@ -135,10 +145,15 @@ enum HookCatalog {
     }
 
     /// The opencode plugin. It hands each event to the hook command with
-    /// the session id and nothing else.
+    /// the session id, the number of the event and its time, and nothing
+    /// else. opencode calls `event` for each bus event and does not wait
+    /// for the answer, and it sends the busy of the last step and the idle
+    /// of the turn a millisecond apart. So the plugin keeps a queue: a hook
+    /// command starts when the one before it has ended. `event` never
+    /// waits for the queue.
     static func pluginSource(appPath: String = stableAppPath) -> String {
         """
-        // \(pluginMarker) v=\(version)
+        // \(pluginMarker) v=\(pluginVersion)
         // Written by agent caffeine. Turn it off in agent caffeine > Preferences > Agents.
         // It tells agent caffeine when opencode works, waits for you or is done.
         const hook = \(JSONSourceText.literal(executablePath(appPath: appPath)));
@@ -161,18 +176,35 @@ enum HookCatalog {
           }
         };
 
-        export const AgentCaffeine = async ({ $ }) => ({
-          event: async ({ event }) => {
-            try {
-              const name = named(event);
-              if (!name) return;
-              const properties = event?.properties ?? {};
-              const session = properties.sessionID ?? properties.info?.id ?? "";
-              const input = new Response(JSON.stringify({ session_id: String(session) }));
-              await $`${hook} opencode ${name} v=\(version) < ${input}`.quiet().nothrow();
-            } catch {}
-          },
-        });
+        export const AgentCaffeine = async ({ $ }) => {
+          let queue = Promise.resolve();
+          let seq = 0;
+          let last = "";
+          let lastAt = 0;
+          return {
+            event: async ({ event }) => {
+              try {
+                const name = named(event);
+                if (!name) return;
+                const properties = event?.properties ?? {};
+                const session = String(properties.sessionID ?? properties.info?.id ?? "");
+                const ts = Date.now();
+                const key = name + " " + session;
+                if (key === last && Math.abs(ts - lastAt) < \(pluginRepeatMilliseconds)) return;
+                last = key;
+                lastAt = ts;
+                seq += 1;
+                const body = JSON.stringify({ session_id: session, seq, ts });
+                queue = queue.then(async () => {
+                  try {
+                    const input = new Response(body);
+                    await $`${hook} opencode ${name} v=\(pluginVersion) < ${input}`.quiet().nothrow();
+                  } catch {}
+                });
+              } catch {}
+            },
+          };
+        };
 
         """
     }

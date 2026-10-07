@@ -650,7 +650,7 @@ final class HookInstallerTests: XCTestCase {
         let url = installer.configURL(for: opencode)
         XCTAssertEqual(installer.status(of: opencode), .notInstalled)
         try installer.install(opencode)
-        XCTAssertEqual(installer.status(of: opencode), .installed(version: HookCatalog.version))
+        XCTAssertEqual(installer.status(of: opencode), .installed(version: HookCatalog.pluginVersion))
         let source = try String(contentsOf: url, encoding: .utf8)
         XCTAssertTrue(source.contains("\"/Applications/agent caffeine.app/Contents/MacOS/CaffeinagentHook\""))
         XCTAssertEqual(HookInstaller(home: home, appPath: "/elsewhere/agent caffeine.app").status(of: opencode), .outdated)
@@ -663,6 +663,173 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertThrowsError(try installer.install(opencode)) { XCTAssertEqual($0 as? HookInstallError, .notOurFile) }
         XCTAssertThrowsError(try installer.uninstall(opencode)) { XCTAssertEqual($0 as? HookInstallError, .notOurFile) }
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
+    }
+
+    /// The plugin of version 1, as it is on a Mac that turned it on before.
+    private func pluginVersion1(appPath: String) -> String {
+        """
+        // agent-caffeine-hook v=1
+        // Written by agent caffeine. Turn it off in agent caffeine > Preferences > Agents.
+        // It tells agent caffeine when opencode works, waits for you or is done.
+        const hook = "\(appPath)/Contents/MacOS/CaffeinagentHook";
+
+        const named = (event) => {
+          const properties = event?.properties ?? {};
+          switch (event?.type) {
+            case "session.status": {
+              const status = typeof properties.status === "string" ? properties.status : properties.status?.type;
+              if (status === "busy" || status === "retry") return "session.busy";
+              return status === "idle" ? "session.idle" : null;
+            }
+            case "session.idle":
+            case "session.deleted":
+            case "permission.asked":
+            case "permission.replied":
+              return event.type;
+            default:
+              return null;
+          }
+        };
+
+        export const AgentCaffeine = async ({ $ }) => ({
+          event: async ({ event }) => {
+            try {
+              const name = named(event);
+              if (!name) return;
+              const properties = event?.properties ?? {};
+              const session = properties.sessionID ?? properties.info?.id ?? "";
+              const input = new Response(JSON.stringify({ session_id: String(session) }));
+              await $`${hook} opencode ${name} v=1 < ${input}`.quiet().nothrow();
+            } catch {}
+          },
+        });
+
+        """
+    }
+
+    func testPluginSourceHasTheQueueAndTheStamp() {
+        let source = HookCatalog.pluginSource(appPath: appPath)
+        XCTAssertEqual(HookCatalog.pluginVersion, 2)
+        XCTAssertTrue(source.hasPrefix("// agent-caffeine-hook v=2\n"))
+        XCTAssertFalse(source.contains("v=1"))
+        for piece in [
+            "let queue = Promise.resolve();",
+            "queue = queue.then(async () => {",
+            "JSON.stringify({ session_id: session, seq, ts })",
+            "const ts = Date.now();",
+            "if (key === last && Math.abs(ts - lastAt) < 1000) return;",
+            "opencode ${name} v=2 < ${input}`.quiet().nothrow();",
+        ] {
+            XCTAssertTrue(source.contains(piece), piece)
+        }
+        // `event` gives the hook command to the queue and does not wait for it.
+        XCTAssertFalse(source.contains("await queue"))
+        // The entries of the other agents keep their version, so they do not read as outdated.
+        XCTAssertEqual(HookCatalog.version, 1)
+        XCTAssertTrue(HookCatalog.command(agent: "claude", event: "Stop").contains(" v=1 "))
+    }
+
+    func testThePluginOfVersion1IsOutdatedAndReplaced() throws {
+        let url = installer.configURL(for: opencode)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(pluginVersion1(appPath: appPath).utf8).write(to: url)
+        XCTAssertEqual(installer.status(of: opencode), .outdated)
+        try installer.install(opencode)
+        XCTAssertEqual(installer.status(of: opencode), .installed(version: 2))
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), HookCatalog.pluginSource(appPath: appPath))
+        let folder = try FileManager.default.contentsOfDirectory(atPath: url.deletingLastPathComponent().path)
+        XCTAssertEqual(folder, [HookCatalog.pluginFileName], "opencode loads every file of the folder, so no backup is left there")
+
+        // "Off" takes the file away, the new one and one that is still of version 1.
+        try installer.uninstall(opencode)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        try Data(pluginVersion1(appPath: appPath).utf8).write(to: url)
+        try installer.uninstall(opencode)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: url.deletingLastPathComponent().path), [])
+    }
+
+    /// Runs the plugin as it is written, with a `$` that records. Skipped
+    /// on a Mac with no JavaScript runtime.
+    func testThePluginHandsItsEventsOverInOrder() throws {
+        let folders = (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").map(String.init)
+            + ["/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.bun/bin"]
+        let runtimes = folders.flatMap { folder in ["node", "bun"].map { "\(folder)/\($0)" } }
+        guard let runtime = runtimes.first(where: FileManager.default.isExecutableFile(atPath:)) else {
+            throw XCTSkip("No node and no bun on this Mac.")
+        }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("plugin-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        try Data(HookCatalog.pluginSource(appPath: appPath).utf8).write(to: folder.appendingPathComponent("plugin.mjs"))
+        // The first hook command is the slowest, so with no queue it would end last.
+        let runner = """
+        import { AgentCaffeine } from "./plugin.mjs";
+        const log = [];
+        let running = 0, overlap = false, calls = 0;
+        const $ = (strings, ...values) => {
+          calls += 1;
+          const call = calls;
+          const work = (async () => {
+            running += 1;
+            if (running > 1) overlap = true;
+            const body = JSON.parse(await values[2].text());
+            await new Promise((done) => setTimeout(done, call === 1 ? 60 : 2));
+            running -= 1;
+            if (call === 2) throw new Error("a hook command that fails");
+            log.push({ hook: values[0], name: values[1], session: body.session_id, seq: body.seq, ts: body.ts });
+          })();
+          const command = { quiet: () => command, nothrow: () => command, then: (a, b) => work.then(a, b) };
+          return command;
+        };
+        const plugin = await AgentCaffeine({ $ });
+        const fire = (type, properties) => plugin.event({ event: { id: "e", type, properties } });
+        const answers = [
+          fire("session.status", { sessionID: "s", status: { type: "busy" } }),
+          fire("session.status", { sessionID: "s", status: { type: "busy" } }),
+          fire("permission.asked", { sessionID: "s" }),
+          fire("permission.replied", { sessionID: "s" }),
+          fire("message.updated", { info: { id: "m" } }),
+          fire("session.status", { sessionID: "s", status: { type: "busy" } }),
+          fire("session.status", { sessionID: "s", status: { type: "idle" } }),
+          fire("session.idle", { sessionID: "s" }),
+          fire("session.status", { sessionID: "other", status: "busy" }),
+          fire(undefined, undefined),
+        ];
+        await Promise.all(answers);
+        const answered = { delivered: log.length };
+        await new Promise((done) => setTimeout(done, 400));
+        console.log(JSON.stringify({ log, overlap, calls, answered }));
+        """
+        try Data(runner.utf8).write(to: folder.appendingPathComponent("runner.mjs"))
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: runtime)
+        process.arguments = [folder.appendingPathComponent("runner.mjs").path]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = Pipe()
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0)
+        let result = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let log = try XCTUnwrap(result["log"] as? [[String: Any]])
+
+        XCTAssertEqual(result["overlap"] as? Bool, false, "One hook command at a time")
+        XCTAssertEqual(result["calls"] as? Int, 6)
+        // The second busy and the second idle are the same event again. The
+        // hook command of the permission failed, and the queue went on.
+        XCTAssertEqual(log.map { $0["name"] as? String }, ["session.busy", "permission.replied", "session.busy", "session.idle", "session.busy"])
+        XCTAssertEqual(log.map { $0["session"] as? String }, ["s", "s", "s", "s", "other"])
+        XCTAssertEqual(log.map { $0["seq"] as? Int }, [1, 3, 4, 5, 6])
+        let times = log.compactMap { $0["ts"] as? Double }
+        XCTAssertEqual(times.count, 5)
+        XCTAssertEqual(times, times.sorted())
+        XCTAssertEqual(log.first?["hook"] as? String, "\(appPath)/Contents/MacOS/CaffeinagentHook")
+        // opencode got its answer before one hook command had ended.
+        let answered = try XCTUnwrap(result["answered"] as? [String: Any])
+        XCTAssertEqual(answered["delivered"] as? Int, 0)
     }
 
     // MARK: What Preferences shows
