@@ -234,8 +234,14 @@ enum VerdictRules {
     /// The stated state before a left-over command or a background job
     /// makes it working again. `memory` is the one the verdict left.
     static func turn(of evidence: AgentEvidence, memory: AgentMemory, settings: DetectionSettings, now: Date) -> AgentTurn? {
-        guard settings.rule(for: evidence.agentID) == .automatic,
-              let state = statedState(of: evidence, memory: memory, settings: settings, now: now) else { return nil }
+        guard settings.rule(for: evidence.agentID) == .automatic else { return nil }
+        guard let state = statedState(of: evidence, memory: memory, settings: settings, now: now) else {
+            // An agent that speaks through its hooks only: the idle of a
+            // hook stands for the turn until the next event, at any age,
+            // so a command that runs on is no new work.
+            if evidence.hookState == .idle, let at = evidence.hookStateAt, !isAhead(at, of: now) { return AgentTurn(state: .idle) }
+            return nil
+        }
         let report = reportedState(memory: memory, settings: settings, now: now) == state ? memory.lastReport : nil
         guard state == .working else { return AgentTurn(state: state) }
         if report?.turnEnded == true { return AgentTurn(state: .idle) }

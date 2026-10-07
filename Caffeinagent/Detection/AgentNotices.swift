@@ -92,6 +92,8 @@ struct AgentNoticeDecision: Equatable {
         case backAtWork(after: TimeInterval)
         /// Waiting only: the wait ended before the notification was due.
         case waitEnded(after: TimeInterval)
+        /// Finished only: the end became a question, and that was told.
+        case asksInstead
     }
 
     var kind: AgentNoticeKind
@@ -112,6 +114,7 @@ struct AgentNoticeDecision: Equatable {
         case .inFront: return "\(name) skipped pid \(pid): front app is its app"
         case .backAtWork(let after): return "\(name) skipped pid \(pid): working again after \(String(format: "%.1f", after)) s"
         case .waitEnded(let after): return "\(name) skipped pid \(pid): the wait ended after \(String(format: "%.1f", after)) s"
+        case .asksInstead: return "\(name) skipped pid \(pid): it asks a question, and that was told"
         }
     }
 }
@@ -177,7 +180,7 @@ struct AgentNoticeReducer {
                 decisions.append(AgentNoticeDecision(kind: kind, pid: session.identity.pid, outcome: outcome, workedFor: session.workedFor))
                 return
             }
-            candidates.removeAll { $0.session.identity == session.identity }
+            candidates.removeAll { $0.session.identity == session.identity && $0.kind == kind }
             candidates.append(Candidate(kind: kind, session: session, at: now))
         }
 
@@ -203,11 +206,8 @@ struct AgentNoticeReducer {
                 // Back at work before it was told: it did not finish.
                 withdraw(identity, now: now)
             case .waitingForUser:
-                if old?.state != .waitingForUser {
-                    // An end that turns into a question was no end.
-                    candidates.removeAll { $0.session.identity == identity }
-                    offer(.waiting, snapshot(identity, session, waitingSince: now))
-                }
+                // An end that is on its way stays: see `due`.
+                if old?.state != .waitingForUser { offer(.waiting, snapshot(identity, session, waitingSince: now)) }
             case .idle:
                 withdraw(identity, kind: .waiting, now: now)
                 if let old, old.state == .working {
@@ -271,12 +271,17 @@ struct AgentNoticeReducer {
     /// after it are told together, when the time of the last of them has
     /// come. The group is fixed by its oldest, so a row of changes cannot
     /// push a notification back for ever, and each group is told.
+    ///
+    /// An end that turns into a question within the debounce is held
+    /// while the question is on its way. A question that is told takes
+    /// its place, and one that does not last leaves the end to be told.
     private mutating func due(now: Date) -> [AgentNotice] {
         var notices: [AgentNotice] = []
         for kind in [AgentNoticeKind.waiting, .finished] {
             let delay = kind == .waiting ? Self.waitingDebounce : Self.finishedDebounce
+            let asking = Set(candidates.filter { $0.kind == .waiting }.map(\.session.identity))
             while true {
-                let mine = candidates.filter { $0.kind == kind }.sorted { $0.at < $1.at }
+                let mine = candidates.filter { $0.kind == kind && (kind == .waiting || !asking.contains($0.session.identity)) }.sorted { $0.at < $1.at }
                 guard let first = mine.first else { break }
                 let group = mine.filter { $0.at.timeIntervalSince(first.at) <= Self.coalesceWindow }
                 guard let last = group.last, now.timeIntervalSince(last.at) >= delay else { break }
@@ -284,6 +289,7 @@ struct AgentNoticeReducer {
                 candidates.removeAll { $0.kind == kind && told.contains($0.session.identity) }
                 // The work that was told is over.
                 if kind == .finished { told.forEach { self.sessions[$0]?.workStart = nil } }
+                if kind == .waiting { drop(as: .asksInstead) { $0.kind == .finished && told.contains($0.session.identity) } }
                 // A name that was read after the change still counts.
                 let sessions = group.map { candidate -> AgentNotice.Session in
                     var session = candidate.session
@@ -360,7 +366,7 @@ struct AgentNoticeHistory: Equatable {
         switch decision.outcome {
         case .inFront: result = .inFront
         case .notActive: result = .notActive
-        case .told, .atLaunch, .backAtWork, .waitEnded: return
+        case .told, .atLaunch, .backAtWork, .waitEnded, .asksInstead: return
         }
         count += 1
         let title = decision.kind == .waiting ? "An agent started to wait for you" : "An agent finished"

@@ -52,6 +52,23 @@ final class AgentTurnTests: XCTestCase {
         XCTAssertEqual(reading(claude(.working, at: 0, hook: .waitingForUser), at: 0).turn?.state, .waitingForUser)
     }
 
+    func testAHookOnlyAgentFinishesOnceWhileItsCommandRunsOn() {
+        // Hooks only, no state file: working until 30 s, then idle. A
+        // command it started is busy from 20 s to 150 s.
+        func droid(_ seconds: TimeInterval) -> AgentEvidence {
+            let busy = seconds >= 20 && seconds < 150 ? 1 : 0
+            return AgentEvidence(
+                agentID: "droid", displayName: "Droid", level: .activity, pid: 100, startTime: Self.processStart,
+                childCommands: busy, busyChildCommands: busy, subtreeCPUSeconds: 0.01, sampleInterval: 2,
+                hookState: seconds < 30 ? .working : .idle, hookStateAt: at(seconds < 30 ? 0 : 30)
+            )
+        }
+        let samples = stride(from: 0.0, through: 460, by: 2).map { LabSample(frame: EvidenceFrame(at: at($0), agents: [droid($0)])) }
+        let told = LabNotices.lines(LabRecording(samples: samples)).filter { $0.contains(" fired pid ") }
+        XCTAssertEqual(told.count, 1, "\(told)")
+        XCTAssertTrue(told[0].contains("32.0 s    finished fired pid 100 after 30 s"), "\(told)")
+    }
+
     func testNoTurnWithoutAStateOrUnderARule() {
         XCTAssertNil(reading(claude(nil, at: 0), at: 0).turn)
         var settings = DetectionSettings()

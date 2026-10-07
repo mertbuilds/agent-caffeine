@@ -83,6 +83,33 @@ final class AgentNoticesTests: XCTestCase {
         XCTAssertEqual(sample(60.4, [reading(1, .waitingForUser)]), [])
         XCTAssertEqual(sample(62, [reading(1, .waitingForUser)]), [], "No finish")
         XCTAssertEqual(kinds(sample(64, [reading(1, .waitingForUser)])), [.waiting])
+        XCTAssertEqual(outcomes(), [.asksInstead, .told])
+        XCTAssertEqual(sample(66, [reading(1, .waitingForUser)]), [], "The finish is not told later")
+        _ = sample(70, [reading(1, .working)])
+        _ = sample(80, [reading(1, .idle)])
+        XCTAssertEqual(sample(82, [reading(1, .idle)]).first?.sessions.first?.workedFor, 80, "The work went on over the question")
+    }
+
+    func testAnEndWithAShortWaitAfterItIsStillAFinish() {
+        _ = sample(0, [reading(1, .working)])
+        _ = sample(60, [reading(1, .idle)])
+        _ = sample(60.4, [reading(1, .waitingForUser)])
+        let told = sample(62, [reading(1, .idle)])
+        XCTAssertEqual(kinds(told), [.finished])
+        XCTAssertEqual(told.first?.sessions.first?.workedFor, 60)
+        XCTAssertEqual(reducer.decisions.map(\.logLine), ["waiting skipped pid 1: the wait ended after 1.6 s", "finished fired pid 1 after 60 s"])
+        XCTAssertEqual(sample(64, [reading(1, .idle)]), [])
+        XCTAssertEqual(sample(70, [reading(1, .idle)]), [])
+    }
+
+    func testAnEndThatTurnsIntoAQuestionWithTheWaitingSwitchOffIsAFinish() {
+        settings.waiting = false
+        _ = sample(0, [reading(1, .working)])
+        _ = sample(60, [reading(1, .idle)])
+        _ = sample(60.4, [reading(1, .waitingForUser)])
+        XCTAssertEqual(kinds(sample(64, [reading(1, .waitingForUser)])), [.finished])
+        XCTAssertEqual(sample(70, [reading(1, .idle)]), [])
+        XCTAssertEqual(sample(80, [reading(1, .idle)]), [])
     }
 
     func testAWaitBehindARunningCommandIsTold() {
