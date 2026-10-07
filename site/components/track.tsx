@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSyncExternalStore, type ReactNode } from "react";
 import { checkoutUrlWith } from "@/lib/attribution";
+import { downloadLink } from "@/lib/download";
 import type { Plan } from "@/lib/pricing";
 import { rememberedUtm, track, type Placement } from "@/lib/track";
 
@@ -41,7 +42,11 @@ export function BuyCta({
   );
 }
 
-/** A link to the dmg. The click is counted with where it sits, to set trial starts beside buys. */
+/**
+ * A link to the dmg, by way of `/download`, where the server counts it. `href` is the dmg itself:
+ * it tells a sample release, which has no file, from a real one. The click is also counted in
+ * the browser with where it sits, to set trial starts beside buys.
+ */
 export function DownloadCta({
   href,
   filename,
@@ -55,9 +60,10 @@ export function DownloadCta({
   className?: string;
   children: ReactNode;
 }) {
+  const utm = useSyncExternalStore(subscribe, rememberedUtm, onServer);
   return (
     <a
-      href={href}
+      href={downloadLink(placement, utm)}
       download={href.startsWith("#") ? undefined : filename}
       onClick={() => track("download_click", { placement })}
       className={className}
