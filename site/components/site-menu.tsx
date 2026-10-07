@@ -3,6 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FocusEvent, type RefObject } from "react";
+import { WithAppleMark } from "@/components/download-button";
 import { DownloadCta } from "@/components/track";
 import { distance, duration, easing, scale } from "@/lib/motion";
 import type { Release } from "@/lib/release";
@@ -145,7 +146,7 @@ export function SiteMenu({
                 <Link
                   key={link.href}
                   href={link.href}
-                  aria-current={link.current ? "page" : undefined}
+                  aria-current={link.current ? "location" : undefined}
                   onClick={() => close(true)}
                   className={`menu-item-in ${ROW}`}
                   style={{ animationDelay: `${place * duration.stagger}s` }}
@@ -163,7 +164,7 @@ export function SiteMenu({
                   style={{ animationDelay: `${links.length * duration.stagger}s` }}
                 >
                   <DownloadCta href={release.href} filename={release.filename} placement="header" className={ROW}>
-                    Download free trial
+                    <WithAppleMark>Download free trial</WithAppleMark>
                   </DownloadCta>
                 </div>
               </>

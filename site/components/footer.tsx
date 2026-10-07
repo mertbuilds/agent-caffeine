@@ -38,6 +38,11 @@ export async function Footer() {
               How it works
             </Link>
           </li>
+          <li>
+            <Link href="/#features" className={LINK}>
+              Features
+            </Link>
+          </li>
           {release === null ? null : (
             <li>
               <DownloadCta href={release.href} filename={release.filename} placement="footer" className={LINK}>
@@ -48,6 +53,11 @@ export async function Footer() {
           <li>
             <Link href="/#pricing" className={LINK}>
               Pricing
+            </Link>
+          </li>
+          <li>
+            <Link href="/#faq" className={LINK}>
+              FAQ
             </Link>
           </li>
           <li>

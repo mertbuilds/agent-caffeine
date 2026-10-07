@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { BuyButton } from "@/components/buy-button";
 import { PRICE } from "@/lib/pricing";
-import { DownloadButton } from "@/components/download-button";
+import { DownloadButton, WithAppleMark } from "@/components/download-button";
 import { SiteMenu } from "@/components/site-menu";
 import { morph } from "@/lib/morph";
 import type { Release } from "@/lib/release";
@@ -20,11 +20,17 @@ import type { Release } from "@/lib/release";
 const PILL_FROM = 48;
 const OPEN_FROM = 16;
 
+/** The home page's sections in the order they stand. `ids` are the sections a link stands for. */
 const SECTIONS = [
-  { hash: "#how-it-works", label: "How it works", name: "header-how" },
-  { hash: "#agents", label: "Agents", name: "header-agents" },
-  { hash: "#pricing", label: "Pricing", name: "header-pricing" },
+  { hash: "#how-it-works", ids: ["how-it-works"], label: "How it works", name: "header-how" },
+  { hash: "#features", ids: ["features", "small-things"], label: "Features", name: "header-features" },
+  { hash: "#agents", ids: ["agents"], label: "Agents", name: "header-agents" },
+  { hash: "#pricing", ids: ["pricing"], label: "Pricing", name: "header-pricing" },
+  { hash: "#faq", ids: ["faq"], label: "FAQ", name: "header-faq" },
 ] as const;
+
+/** The line across the window that a section must lie on to be the one in view: 30% of the way down. */
+const VIEW_LINE = "-30% 0px -70% 0px";
 
 /** An item the morph carries, by the name a view transition knows it by. */
 function morphName(name: string) {
@@ -32,8 +38,9 @@ function morphName(name: string) {
 }
 
 /**
- * The name and the way home at the left, the home page's sections and the
- * blog in the middle, and the buy or download at the right. Once the page has
+ * The name and the way home at the left, the home page's sections in the
+ * middle, and the buy or download at the right. The link of the section in
+ * view takes the text's own colour. Once the page has
  * run a little way under it, the items gather into a pill in the middle, the
  * mark alone for the name, and open back out near the top. A window too
  * narrow for the links keeps the name and the main action, and has the
@@ -47,17 +54,47 @@ export function SiteHeader({ release }: { release: Release | null }) {
   const bar = useRef<HTMLDivElement>(null);
   const surface = useRef<HTMLSpanElement>(null);
   const mark = useRef<HTMLSpanElement>(null);
+  const [inView, setInView] = useState<string | null>(null);
   const pathname = usePathname();
-  const blog = pathname === "/blog" || pathname.startsWith("/blog/");
-  const links = [
-    ...SECTIONS.map((section) => ({
-      current: false,
-      href: `/${section.hash}`,
-      label: section.label,
-      name: section.name,
-    })),
-    { current: blog, href: "/blog", label: "Blog", name: "header-blog" },
-  ];
+  const links = SECTIONS.map((section) => ({
+    current: pathname === "/" && section.hash === inView,
+    href: `/${section.hash}`,
+    label: section.label,
+    name: section.name,
+  }));
+
+  // One observer for every section. Between two sections the last one stays
+  // in view; above the first there is none.
+  useEffect(() => {
+    if (pathname !== "/") return;
+    const hashes = new Map<Element, string>();
+    for (const section of SECTIONS) {
+      for (const id of section.ids) {
+        const element = document.getElementById(id);
+        if (element !== null) hashes.set(element, section.hash);
+      }
+    }
+    const first = document.getElementById(SECTIONS[0].ids[0]);
+    const on = new Set<Element>();
+    const observer = new IntersectionObserver(
+      (entries) => {
+        let above = false;
+        for (const entry of entries) {
+          if (entry.isIntersecting) on.add(entry.target);
+          else on.delete(entry.target);
+          if (entry.target === first) {
+            above = !entry.isIntersecting && entry.boundingClientRect.top > (entry.rootBounds?.top ?? 0);
+          }
+        }
+        const [element] = on;
+        if (element !== undefined) setInView(hashes.get(element) ?? null);
+        else if (above) setInView(null);
+      },
+      { rootMargin: VIEW_LINE },
+    );
+    for (const element of hashes.keys()) observer.observe(element);
+    return () => observer.disconnect();
+  }, [pathname]);
 
   // Only a change between the two lines moves anything; the page as it first
   // loads is drawn as it is.
@@ -124,9 +161,9 @@ export function SiteHeader({ release }: { release: Release | null }) {
             <Link
               key={link.name}
               href={link.href}
-              aria-current={link.current ? "page" : undefined}
+              aria-current={link.current ? "location" : undefined}
               {...morphName(link.name)}
-              className="whitespace-nowrap text-sm text-muted no-underline transition-colors duration-quick ease-[ease-out] hover:text-fg aria-[current=page]:text-fg motion-reduce:transition-none"
+              className="whitespace-nowrap text-sm text-muted no-underline transition-colors duration-quick ease-[ease-out] hover:text-fg aria-[current=location]:text-fg motion-reduce:transition-none"
             >
               {link.label}
             </Link>
@@ -142,7 +179,7 @@ export function SiteHeader({ release }: { release: Release | null }) {
           ) : (
             <span {...morphName("header-primary")} className="inline-flex">
               <DownloadButton release={release} placement="header" size="compact">
-                Download
+                <WithAppleMark>Download</WithAppleMark>
               </DownloadButton>
             </span>
           )}

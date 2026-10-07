@@ -124,7 +124,7 @@ function Scene({ children, text, title }: { children: ReactNode; text: string; t
 
 export function SleepScenes() {
   return (
-    <section id="sleep-scenes" className="mx-auto flex w-full max-w-[1120px] scroll-mt-20 flex-col gap-10">
+    <section id="features" className="mx-auto flex w-full max-w-[1120px] scroll-mt-20 flex-col gap-10">
       <SectionHeading lead="It keeps your Mac awake for work, and for nothing else" title="It lets your Mac sleep at the right time" />
       <ul className="mx-auto grid w-full max-w-[36rem] gap-4 lg:max-w-none lg:grid-cols-3">
         <Scene
