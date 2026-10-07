@@ -38,3 +38,16 @@ Timeline (owner's marks): 10:15:34 idle baseline ended; about 10:15:55 first pro
 - `turn_ended` statuses other than `success` (aborted, error).
 - Several agent sessions at once, a project with a real folder (slug format), background/cloud agents, worktree agents.
 - Whether the transcript path is the same for the classic editor window and the Agents Window.
+
+## Approval wait, measured later the same day (Allowlist mode)
+Marks in `cursor-run/marks.tsv`.
+- 10:25:59 prompt; the "Electron" assertion is taken. 10:26:02 the transcript gets a `user` and an `assistant` line.
+- 10:26:12 the assertion is released, 10 s after the last transcript write. The approval prompt is shown.
+  From 10:26:12 to 10:38:54 (12 minutes): the turn is open (no `turn_ended`), no assertion, no agent child command, no transcript write.
+- 10:38:54 the owner pressed Run: the assertion is held 10:38:54 to 10:39:00.
+  10:39:09 the transcript gets an `assistant` line and `{"type":"turn_ended","status":"success"}`, 9 s after the assertion dropped.
+
+So "open turn, no assertion, no agent command" is the approval wait. The end of a turn looks the same for 9 s, so the rule
+waits 15 s before it says "waiting" (`CursorApprovalRule.settle`).
+Also seen: an agent CLI in Cursor's integrated terminal, and what it runs, are descendants of Cursor. Only a shell directly
+below an extension host counts as a command of Cursor's agent.

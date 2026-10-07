@@ -426,14 +426,52 @@ final class CursorTimelineTests: XCTestCase {
         XCTAssertEqual(told.map(\.notice.kind), [.waiting, .finished])
     }
 
+    /// The times of the approval wait that was measured on 2026-10-07
+    /// (docs/research/08b-cursor-live-run.md), with the prompt at 0.
+    func testTheMeasuredApprovalWait() throws {
+        try write([Line.user, Line.ended], chat: chatA, at: -100)
+        run(-5...(-1))
+        assertions.pids = [500]
+        run(0...2) { step, second in XCTAssertEqual(step.reading?.verdict.state, .idle, "\(second): only the assertion yet") }
+        try write([Line.user, Line.ended, Line.user, Line.tool], chat: chatA, at: 3)
+        run(3...12) { step, second in XCTAssertEqual(step.reading?.verdict.state, .working, "\(second)") }
+        // The approval prompt is shown, and the assertion is released.
+        assertions.pids = []
+        // The user's own work in the editor's terminal blocks nothing.
+        census.rows = cursor(extra: [
+            .fixture(531, ppid: 530, start: processStart, path: "/bin/zsh", args: ["-zsh"], tty: 5),
+            .fixture(532, ppid: 531, start: processStart, path: "/usr/bin/xcodebuild", args: ["xcodebuild", "test"], tty: 5),
+        ])
+        run(13...27) { step, second in XCTAssertEqual(step.reading?.verdict.state, .working, "\(second)") }
+        // 12 minutes with the turn open, no assertion, no command, no write.
+        run(28...774) { step, second in
+            XCTAssertEqual(step.reading?.verdict.state, .waitingForUser, "\(second)")
+            XCTAssertEqual(step.decision.hold, second < 28 + 300, "\(second)")
+        }
+        XCTAssertEqual(told.map(\.notice.kind), [.waiting])
+        XCTAssertEqual(told.first?.at, 31, "After the settle time and the debounce")
+        // The user presses Run: the assertion is back for 6 seconds.
+        assertions.pids = [500]
+        run(775...780) { step, second in
+            XCTAssertEqual(step.reading?.verdict.state, .working, "\(second)")
+            XCTAssertTrue(step.decision.hold, "\(second)")
+        }
+        // The end line comes 9 seconds after the assertion went.
+        assertions.pids = []
+        run(781...789) { step, second in XCTAssertEqual(step.reading?.verdict.state, .working, "\(second): no wait at the end of a turn") }
+        try write([Line.user, Line.ended, Line.user, Line.tool, Line.assistant, Line.ended], chat: chatA, at: 790)
+        XCTAssertEqual(run(790...800).reading?.verdict.state, .idle)
+        XCTAssertEqual(told.map(\.notice.kind), [.waiting, .finished], "No second wait is told")
+    }
+
     func testAShortDropOfTheAssertionIsNoWait() throws {
         try write([Line.user, Line.assistant], chat: chatA, at: 0)
         assertions.pids = [500]
         run(0...9)
         assertions.pids = []
-        run(10...17) { step, second in XCTAssertEqual(step.reading?.verdict.state, .working, "\(second)") }
+        run(10...23) { step, second in XCTAssertEqual(step.reading?.verdict.state, .working, "\(second)") }
         assertions.pids = [500]
-        run(18...60) { step, second in XCTAssertEqual(step.reading?.verdict.state, .working, "\(second)") }
+        run(24...60) { step, second in XCTAssertEqual(step.reading?.verdict.state, .working, "\(second)") }
         XCTAssertTrue(told.isEmpty)
     }
 
@@ -582,10 +620,10 @@ final class CursorApprovalRuleTests: XCTestCase {
     }
 
     func testTheSettleTimeAndTheSwitch() {
-        XCTAssertEqual(CursorApprovalRule.settle, 10)
+        XCTAssertEqual(CursorApprovalRule.settle, 15)
         XCTAssertFalse(CursorApprovalRule.waits(signsSince: nil, now: at(100)))
-        XCTAssertFalse(CursorApprovalRule.waits(signsSince: at(0), now: at(9.9)))
-        XCTAssertTrue(CursorApprovalRule.waits(signsSince: at(0), now: at(10)))
+        XCTAssertFalse(CursorApprovalRule.waits(signsSince: at(0), now: at(14.9)))
+        XCTAssertTrue(CursorApprovalRule.waits(signsSince: at(0), now: at(15)))
         XCTAssertFalse(CursorApprovalRule.waits(signsSince: at(0), now: at(1000), enabled: false), "Switched off: the turn is working")
         XCTAssertTrue(CursorApprovalRule.waits(signsSince: at(0), now: at(4), settle: 4))
     }
@@ -594,8 +632,8 @@ final class CursorApprovalRuleTests: XCTestCase {
         let timeline = states(to: 60) { second in
             self.cursor(at: second, assertion: second < 20 || second >= 50)
         }
-        XCTAssertEqual(Array(timeline[0..<30]), Array(repeating: .working, count: 30))
-        XCTAssertEqual(Array(timeline[30..<50]), Array(repeating: .waitingForUser, count: 20))
+        XCTAssertEqual(Array(timeline[0..<35]), Array(repeating: .working, count: 35))
+        XCTAssertEqual(Array(timeline[35..<50]), Array(repeating: .waitingForUser, count: 15))
         XCTAssertEqual(Array(timeline[50...60]), Array(repeating: .working, count: 11))
     }
 
@@ -604,12 +642,12 @@ final class CursorApprovalRuleTests: XCTestCase {
         let timeline = states(to: 30) { second in
             self.cursor(at: second, commands: second == 8 ? 1 : 0)
         }
-        XCTAssertEqual(timeline.firstIndex(of: .waitingForUser), 19)
+        XCTAssertEqual(timeline.firstIndex(of: .waitingForUser), 24)
     }
 
     func testAFreshHookWorkingDoesNotHideTheWait() {
         let timeline = states(to: 20) { second in self.cursor(at: second, hook: .working) }
-        XCTAssertEqual(timeline.firstIndex(of: .waitingForUser), 10)
+        XCTAssertEqual(timeline.firstIndex(of: .waitingForUser), 15)
     }
 
     func testTheUsersRuleStands() {

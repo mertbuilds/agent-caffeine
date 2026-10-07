@@ -151,17 +151,21 @@ struct AgentTurn: Equatable {
 /// (docs/research/08-cursor.md): the main process holds a sleep assertion
 /// from the prompt to the end of the answer, and gives it up while an
 /// approval is pending. So a turn in progress with no assertion and no
-/// command of the agent, for longer than `settle`, reads as a wait.
+/// command of the agent, for `settle` seconds, reads as a wait.
 ///
-/// Not seen live yet. It assumes that nothing else drops the assertion in
-/// the middle of a turn for longer than `settle`. Set `enabled` to false
-/// when a recording disproves that: Cursor then counts as working for the
-/// whole turn.
+/// Measured on 2026-10-07 with Cursor 3.22.12: the assertion went 10
+/// seconds after the last transcript write, and for the 12 minutes of the
+/// wait the turn was open with no assertion, no command and no write.
+///
+/// It assumes that nothing else drops the assertion in the middle of a
+/// turn for longer than `settle`. Set `enabled` to false when a recording
+/// disproves that: Cursor then counts as working for the whole turn.
 enum CursorApprovalRule {
     static let enabled = true
-    /// The assertion was seen to drop for 8 seconds between two turns, and
-    /// the transcript gets its end line a moment after the assertion goes.
-    static let settle: TimeInterval = 10
+    /// The end of a turn looks the same for a while: Cursor was measured
+    /// to write the end line 9 seconds after it gave up the assertion.
+    /// The wait is said, and so told in a notification, only after this.
+    static let settle: TimeInterval = 15
 
     /// The three inputs, as a recording holds them: `rep` (working, from
     /// the transcript), `pwr` (the assertion) and `cmds` (the commands).
