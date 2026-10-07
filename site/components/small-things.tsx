@@ -4,7 +4,7 @@ import { Robot } from "@/components/robot";
 import { SectionHeading } from "@/components/section-heading";
 import { BATTERY_FLOOR, type Battery } from "@/lib/simulator";
 
-/** Still cuts of the app, with the words of `PanelText.swift`, `AgentNotices.swift` and `PreferencesView.swift`. */
+/** Still cuts of the app, with the words of `PanelText.swift`, `AgentNotices.swift` and `PreferencesView.swift` (the Settings window). */
 const MUTED = "text-[var(--panel-muted)]";
 const LINE = "h-px bg-[var(--panel-line)]";
 
@@ -35,7 +35,7 @@ function SwitchCut({ on }: { on: boolean }) {
   );
 }
 
-/** A group of rows in Preferences. */
+/** A group of rows in Settings. */
 function Rows({ children, label }: { children: ReactNode; label: string }) {
   return (
     <PanelSurface className="w-full max-w-[19rem] rounded-[10px] bg-[color-mix(in_srgb,var(--panel-fg)_4%,var(--panel))] px-3" label={label}>
@@ -117,7 +117,7 @@ function Thing({ children, text, title }: { children: ReactNode; text: string; t
 export function SmallThings() {
   return (
     <section id="small-things" className="mx-auto flex w-full max-w-[1120px] scroll-mt-20 flex-col gap-10">
-      <SectionHeading lead="Each one is in the menu or in Preferences" title="It does the small things too" />
+      <SectionHeading lead="Each one is in the menu or in Settings" title="It does the small things too" />
       <ul className="mx-auto grid w-full max-w-[36rem] gap-4 sm:grid-cols-2 lg:max-w-none lg:grid-cols-3">
         <Thing
           text="It dims from 45 degrees and is off with the lid closed, so it does not use battery or warm your Mac"
@@ -176,7 +176,7 @@ export function SmallThings() {
           </PanelSurface>
         </Thing>
         <Thing text="Turn agent caffeine on or off, or pause it for 1 hour, from any app. You can change the keys" title="Keyboard shortcuts">
-          <Rows label="The keyboard shortcuts in Preferences">
+          <Rows label="The keyboard shortcuts in Settings">
             {SHORTCUTS.map((shortcut, index) => (
               <div key={shortcut.title}>
                 {index > 0 && <div className={LINE} />}

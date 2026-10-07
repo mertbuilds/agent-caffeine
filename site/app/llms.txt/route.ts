@@ -12,7 +12,7 @@ const TEXT = `# agent caffeine
 > agent caffeine is a macOS menu bar app that keeps a Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are idle or wait for you. It has a 7-day free trial, then costs ${PRICE} once, and runs on macOS 13 or later (Apple silicon and Intel).
 
 - Detects more than ${agentsMoreThan} coding agents (Claude Code, Codex, Cursor, opencode, Gemini CLI and others). Claude Code, Codex and Cursor report their own state (working, waiting for you, or idle), and agent caffeine reads it on the Mac. It also watches the commands an agent started, so a build that is still busy keeps the Mac awake. Other agents are judged by signs of work, such as a running command or a write to the session file.
-- An agent that waits for your answer keeps the Mac awake for 5 minutes, then the Mac can sleep. Idle sessions do not keep it awake in the default mode. The times can be changed in Preferences.
+- An agent that waits for your answer keeps the Mac awake for 5 minutes, then the Mac can sleep. Idle sessions do not keep it awake in the default mode. The times can be changed in Settings.
 - Optional better detection: Claude Code, Codex, Cursor, Droid and opencode can report their state to agent caffeine directly. It is off until you switch it on per agent, and switching it off removes it again.
 - Three modes: always, while an agent is open, or while an agent is working (the default).
 - A closed lid on the power adapter works from the start. On battery it needs a small helper that you allow once in System Settings, and it turns on the \`SleepDisabled\` setting of macOS only while it holds the Mac awake.

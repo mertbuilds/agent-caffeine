@@ -27,8 +27,8 @@ const questions: FaqItem[] = [
         caffeine reads that on your Mac. It also watches the commands an agent started, so a build that is
         still busy keeps your Mac awake after the agent is done. For other agents it watches signs
         of work, such as a running command or a write to the session file. For Claude Code, Codex,
-        Cursor, Droid and opencode you can switch on better detection in Preferences. The agent then tells
-        agent caffeine its state directly, and you can switch it off again at any time.
+        Cursor, Droid and opencode you can switch on better detection in Settings. The agent then
+        tells agent caffeine its state directly, and you can switch it off again at any time.
       </>
     ),
   },
@@ -38,7 +38,7 @@ const questions: FaqItem[] = [
       <>
         Your Mac stays awake for 5 minutes, so you can answer. After that it can sleep. An idle
         agent does not keep your Mac awake in the default mode. You can change the times in
-        Preferences.
+        Settings.
       </>
     ),
   },
@@ -50,7 +50,7 @@ const questions: FaqItem[] = [
         closed on the power adapter, agent caffeine works from the start. The helper is a
         background item of agent caffeine. It changes one sleep setting of macOS while agent
         caffeine keeps your Mac awake, and changes it back after. You allow it once in System
-        Settings, and you can remove it in Preferences.
+        Settings, and you can remove it in the app&apos;s Settings.
       </>
     ),
   },
@@ -61,7 +61,7 @@ const questions: FaqItem[] = [
         Yes, with one rule: do not put a working Mac in a closed bag. On battery, agent caffeine
         lets your Mac sleep at {BATTERY_FLOOR}% and starts again at{" "}
         {BATTERY_FLOOR + BATTERY_RECOVERY}%, or when you plug in. You can change this level or
-        turn it off in Preferences. When your Mac gets too hot, agent caffeine always lets it
+        turn it off in Settings. When your Mac gets too hot, agent caffeine always lets it
         sleep. A notification tells you why. The display goes dark with the lid. With the lid
         closed and no agent at work, an awake Mac uses about {REACHABLE_COST}% of battery per
         hour.
@@ -92,7 +92,7 @@ const questions: FaqItem[] = [
     question: "Can I move my key to a new Mac?",
     answer: (
       <>
-        Yes. Deactivate it on the old Mac, in Preferences or in your{" "}
+        Yes. Deactivate it on the old Mac, in Settings or in your{" "}
         <a href="https://polar.sh/mertbuilds/portal">Polar purchases</a>, then enter it on the new
         Mac.
       </>
