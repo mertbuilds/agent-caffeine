@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Starts the real app for a few seconds and fails when it does not run: a
 # main thread that hangs, a busy loop, no icon in the menu bar, an engine
-# that takes no sample. The unit tests never start the app, so they pass on
-# a build that hangs at launch.
+# that takes no sample, an open menu that keeps the processor busy. The unit
+# tests never start the app, so they pass on a build that hangs at launch.
 #
 #   scripts/smoke-test.sh                 build Debug, then test that build
 #   scripts/smoke-test.sh --app <path>    test a bundle that is built already
-#   scripts/smoke-test.sh --seconds <n>   how long the app runs (default 10)
+#   scripts/smoke-test.sh --seconds <n>   how long the app runs (default 14,
+#                                         and from 12 on with the open menu)
 #
 # The app runs as `caffeinagent --smoke-test <seconds>` (see
 # Caffeinagent/SmokeTest.swift). In that mode it takes no power assertion,
@@ -15,7 +16,9 @@
 # it is safe next to a copy that is installed and running. A second robot
 # shows in the menu bar while it runs, and Preferences opens once behind the
 # app in front. A click on that robot does nothing: an open menu moves its
-# robot, and the test would measure that.
+# robot, and the test would measure that. For its last 6 seconds the app
+# shows the views of the menu, with a robot that floats and agents at work,
+# in a window that is on no screen, and measures what the open menu costs.
 #
 # Exit 0 and PASS when the app is healthy. The app prints one line of JSON
 # with what it measured.
@@ -25,7 +28,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP=""
-SECONDS_TO_RUN=10
+SECONDS_TO_RUN=14
 # The app ends itself, also when its main thread hangs. This is for a
 # process that does not even get that far.
 HARD_TIMEOUT=30

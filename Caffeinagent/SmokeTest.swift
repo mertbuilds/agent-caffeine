@@ -5,6 +5,9 @@ import SwiftUI
 /// `caffeinagent --smoke-test <seconds>`: the real app starts, with its
 /// scenes, its aggregator and the engine that reads this Mac, measures
 /// itself, prints one line of JSON and leaves with 0 when it is healthy.
+/// For its last seconds it shows the menu with a robot that floats and
+/// agents at work, in a window that is on no screen, and measures what
+/// the open menu costs.
 /// `scripts/smoke-test.sh` runs it, and no release is made without it: the
 /// unit tests never start the app, so they pass on a build that hangs.
 ///
@@ -30,6 +33,8 @@ enum SmokeTest {
     private static var clickMonitor: Any?
     private static var iconToggle = SmokeMeasurements.Step.notRun
     private static var settingsWindow = SmokeMeasurements.Step.notRun
+    private static var panel = SmokeMeasurements.Step.notRun
+    private static var panelWindow: NSWindow?
 
     /// Called before the app starts.
     @MainActor
@@ -94,6 +99,11 @@ enum SmokeTest {
         ignoreClicks()
         after(SmokeHealth.iconToggleAt) { hideIcon() }
         after(SmokeHealth.settingsWindowAt) { openSettings() }
+        if let opensAt = SmokeHealth.panelOpensAt(seconds: seconds) {
+            after(opensAt) { showPanel() }
+        } else {
+            panel = .skipped
+        }
     }
 
     /// A click on the icon opens the menu, and the robot in an open menu
@@ -156,6 +166,58 @@ enum SmokeTest {
         }
     }
 
+    /// The menu itself opens only on a click on the icon, takes the
+    /// keyboard and closes on the next click anywhere. So the views of the
+    /// menu are shown in a window of the test's own that is on no screen
+    /// and takes no focus, and they are told that the menu is open. The
+    /// state is fixed: a robot that floats over its steam, agents that
+    /// work and one that waits, so every motion of the menu runs.
+    @MainActor
+    private static func showPanel() {
+        meter.markStep()
+        let input = panelInput()
+        let view = PanelView(
+            state: { MenuModel.state(input, now: $0) }, bar: MenuModel.bar(input), enabled: .constant(true), mode: .constant(.agentWorking),
+            perform: { _ in }, openPreferences: {}, quit: {}
+        )
+        .environment(\.panelIsOpen, true)
+        let host = NSHostingView(rootView: view)
+        let size = host.fittingSize
+        let window = NSPanel(
+            contentRect: NSRect(origin: CGPoint(x: -4000, y: -4000), size: size), styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered, defer: false
+        )
+        window.contentView = host
+        window.orderFrontRegardless()
+        panelWindow = window
+        after(0.5) { meter.markStep() }
+        after(1) {
+            meter.markStep()
+            meter.markPanelOpen()
+            panel = window.isVisible && size.height > PanelMetrics.robotSize ? .ok : .failed
+        }
+    }
+
+    private static func panelInput() -> PanelInput {
+        let agents: [(id: String, name: String, state: WorkState, reason: VerdictReason, cause: HoldCause?)] = [
+            ("claude", "Claude Code", .working, .reportsBusy, .working),
+            ("claude", "Claude Code", .working, .reportsBusy, .working),
+            ("codex", "Codex", .working, .runningCommand(3), .working),
+            ("gemini", "Gemini CLI", .waitingForUser, .asksPermission, .waitingForUser),
+            ("opencode", "opencode", .idle, .atPrompt, nil),
+        ]
+        let holds = agents.enumerated().map { index, agent in
+            AgentHold(
+                reading: AgentReading(
+                    agentID: agent.id, displayName: agent.name, level: .state, identity: ProcessIdentity(pid: Int32(100 + index), startTime: 0),
+                    verdict: AgentVerdict(state: agent.state, confidence: .reported, reason: agent.reason)
+                ),
+                cause: agent.cause
+            )
+        }
+        return PanelInput(decision: HoldDecision(hold: true, lidClosedFlag: false, headline: .working(.many(3)), perAgent: holds))
+    }
+
     private static var statusWindows: [NSWindow] {
         NSApp.windows.filter { String(describing: type(of: $0)).contains("StatusBar") }
     }
@@ -208,6 +270,7 @@ enum SmokeTest {
         m.samples = StateAggregator.shared.samples
         m.iconToggle = iconToggle
         m.settingsWindow = settingsWindow
+        m.panel = panel
         StateAggregator.shared.shutdown()
         UserDefaults.standard.removePersistentDomain(forName: domain)
         print(SmokeHealth.line(m))
@@ -269,6 +332,7 @@ private final class Meter: @unchecked Sendable {
     private var cpuAtSecondBegan: TimeInterval = 0
     private var stepSeconds: Set<Int> = []
     private var clicksIgnored = 0
+    private var panelOpenFrom: Int?
 
     /// Processor time of the process so far, in seconds.
     private static var cpu: TimeInterval {
@@ -309,6 +373,13 @@ private final class Meter: @unchecked Sendable {
     func markStep() {
         lock.lock()
         stepSeconds.insert(cpuBySecond.count)
+        lock.unlock()
+    }
+
+    /// The menu is open from the next second of the run on.
+    func markPanelOpen() {
+        lock.lock()
+        panelOpenFrom = cpuBySecond.count + 1
         lock.unlock()
     }
 
@@ -364,6 +435,7 @@ private final class Meter: @unchecked Sendable {
             cpuPercent: seconds > 0 ? (cpu / seconds * 1000).rounded() / 10 : 0,
             cpuBySecond: cpuBySecond,
             stepSeconds: stepSeconds.sorted(),
+            panelSeconds: panelOpenFrom.map { Array($0..<max($0, cpuBySecond.count)) } ?? [],
             clicksIgnored: clicksIgnored,
             sceneEvaluations: sceneEvaluations,
             publishes: publishes

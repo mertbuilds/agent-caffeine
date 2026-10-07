@@ -7,8 +7,20 @@ final class SmokeHealthTests: XCTestCase {
         SmokeMeasurements(
             seconds: 8, ticks: 79, longestStallMs: 104, cpuPercent: 5.9, cpuBySecond: [13.3, 2.1, 19.2, 5.6, 1.8, 0.1, 2.7, 0.1],
             stepSeconds: [1, 2, 3], sceneEvaluations: 9, publishes: 6, samples: 3,
-            statusItem: true, statusItemImage: true, iconToggle: .ok, settingsWindow: .ok
+            statusItem: true, statusItemImage: true, iconToggle: .ok, settingsWindow: .ok, panel: .skipped
         )
+    }
+
+    /// A run of 14 seconds: the same, then the menu is open from second 8 on.
+    private var goodWithPanel: SmokeMeasurements {
+        var m = good
+        m.seconds = 14
+        m.ticks = 139
+        m.cpuBySecond += [21.4, 0.9, 0.3, 0.2, 0.4, 0.2]
+        m.stepSeconds += [8, 9]
+        m.panelSeconds = [10, 11, 12, 13]
+        m.panel = .ok
+        return m
     }
 
     private func failures(_ change: (inout SmokeMeasurements) -> Void) -> [String] {
@@ -74,6 +86,32 @@ final class SmokeHealthTests: XCTestCase {
         )
     }
 
+    func testTheOpenMenuIsJudgedByItsOwnSeconds() {
+        XCTAssertEqual(SmokeHealth.failures(goodWithPanel), [])
+        XCTAssertEqual(SmokeHealth.panelCPU(goodWithPanel), [0.3, 0.2, 0.4, 0.2])
+        XCTAssertEqual(SmokeHealth.steadyCPU(goodWithPanel), [1.8, 0.1, 2.7, 0.1])
+        XCTAssertEqual(SmokeHealth.panelOpensAt(seconds: 14), 8)
+        XCTAssertNil(SmokeHealth.panelOpensAt(seconds: 10), "No steady seconds would be left")
+
+        func open(_ cpu: [Double], _ change: (inout SmokeMeasurements) -> Void = { _ in }) -> [String] {
+            var m = goodWithPanel
+            m.cpuBySecond.replaceSubrange(10..., with: cpu)
+            change(&m)
+            return SmokeHealth.failures(m)
+        }
+        XCTAssertEqual(open([11.9, 11.9, 11.9, 11.9]), [])
+        // A menu whose motion the app works out for each frame, as it was measured.
+        XCTAssertEqual(open([36.1, 34.8, 35.5, 35.2]), ["used 35.4% of one core in the median second with the menu open"])
+        XCTAssertEqual(open([12, 12, 12, 12]), ["used 12.0% of one core in the median second with the menu open"])
+        // One busy second with the menu open.
+        XCTAssertEqual(open([0.3, 60, 0.4, 0.2]), [])
+        // The seconds with the menu open do not count for the app at rest.
+        XCTAssertEqual(open([14, 14, 14, 14]), ["used 14.0% of one core in the median second with the menu open"])
+        XCTAssertEqual(open([0.3, 0.2, 0.4, 0.2]) { $0.panelSeconds = [13] }, ["1 seconds with the menu open to judge the processor time by, expected 2 or more"])
+        XCTAssertEqual(open([0.3, 0.2, 0.4, 0.2]) { $0.panel = .failed }, ["showing the menu: failed"])
+        XCTAssertEqual(failures { $0.panel = .notRun }, ["showing the menu: notRun"])
+    }
+
     /// The hang of the menu bar scene on macOS 26, as it was measured.
     func testTheMenuBarLoopFails() {
         let hung = SmokeMeasurements(seconds: 3.1, ticks: 1, longestStallMs: 3000, cpuPercent: 99.2, sceneEvaluations: 60000, publishes: 60000)
@@ -96,6 +134,8 @@ final class SmokeHealthTests: XCTestCase {
         XCTAssertEqual(object["iconToggle"] as? String, "ok")
         XCTAssertEqual(object["settingsWindow"] as? String, "ok")
         XCTAssertEqual(object["samples"] as? Int, 3)
+        XCTAssertEqual(object["panel"] as? String, "skipped")
+        XCTAssertEqual(object["panelSeconds"] as? [Int], [])
     }
 
     func testAHangIsTheFirstFailure() throws {

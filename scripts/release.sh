@@ -312,7 +312,8 @@ echo "    $HOOK_ID: $HOOK_ARCHS, hardened runtime, silent"
 
 # The unit tests never start the app. This starts the signed app for a few
 # seconds, next to a copy that is installed, and stops the release when its
-# main thread hangs, it burns a core, it shows no icon or it takes no sample.
+# main thread hangs, it burns a core, it shows no icon, it takes no sample or
+# its open menu keeps the processor busy.
 scripts/smoke-test.sh --app "$APP"
 
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
