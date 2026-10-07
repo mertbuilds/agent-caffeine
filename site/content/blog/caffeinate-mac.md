@@ -211,7 +211,7 @@ Both work. Both fail in two ways:
 
 There is also a cost the other way: a wrapped agent holds the Mac awake while it sits idle at its prompt, waiting for you.
 
-That is why we built [agent caffeine](/), a menu bar app that does this automatically. It detects more than 40 coding agents, and reads from Claude Code and Codex whether they work, wait for you or are idle. It keeps the Mac awake in one of three modes: always, while an agent is open, or while an agent is working. A closed lid on power works out of the box. On battery it needs a small helper that you allow once. It has a 7 day free trial, then costs {{price}} once, and needs macOS 13 or later. If caffeinate in a tab works for you, keep using it.
+That is why we built [agent caffeine](/), a menu bar app that does this automatically. It detects more than 40 coding agents, and reads from Claude Code and Codex whether they work, wait for you or are idle. It keeps the Mac awake in one of three modes: always, while an agent is open, or while an agent is working. A closed lid on power works out of the box. On battery it needs a small helper that you allow once. It has a 7-day free trial, then costs {{price}} once, and needs macOS 13 or later. If caffeinate in a tab works for you, keep using it.
 
 ## caffeinate on Windows and Linux
 

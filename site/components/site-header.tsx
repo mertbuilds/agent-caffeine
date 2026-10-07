@@ -140,21 +140,14 @@ export function SiteHeader({ release }: { release: Release | null }) {
               </BuyButton>
             </span>
           ) : (
-            <>
-              <span {...morphName("header-buy")} className="hidden md:inline-flex">
-                <BuyButton placement="header" variant="text">
-                  Buy for {PRICE}
-                </BuyButton>
-              </span>
-              <span {...morphName("header-primary")} className="inline-flex">
-                <DownloadButton release={release} placement="header" size="compact">
-                  Download
-                </DownloadButton>
-              </span>
-            </>
+            <span {...morphName("header-primary")} className="inline-flex">
+              <DownloadButton release={release} placement="header" size="compact">
+                Download
+              </DownloadButton>
+            </span>
           )}
         </span>
-        <SiteMenu anchor={bar} buy={release !== null} links={links} morph="header-menu" />
+        <SiteMenu anchor={bar} links={links} morph="header-menu" release={release} />
       </div>
     </header>
   );

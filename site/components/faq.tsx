@@ -57,14 +57,15 @@ function Question({ question, answer }: { question: string; answer: ReactNode })
   );
 }
 
-export function Faq() {
+/** `trial` adds the free trial's question, for a page that has a download to offer. */
+export function Faq({ trial }: { trial: boolean }) {
   return (
     <section className="mx-auto flex w-full max-w-[640px] flex-col gap-6">
       <h2 className="text-balance text-[1.75rem] font-medium leading-[1.2] tracking-[-0.01em]">
         Questions
       </h2>
       <div>
-        {faqItems.map((item) => (
+        {faqItems(trial).map((item) => (
           <Question key={item.question} question={item.question} answer={item.answer} />
         ))}
       </div>

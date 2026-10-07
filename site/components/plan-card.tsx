@@ -11,8 +11,11 @@ function helper(plan: Plan): string {
   return plan.macs === 1 ? "One key for one Mac" : "One key for three of your Macs";
 }
 
-/** The words of the pricing card: the price of the picked plan, the plans to pick from, and the button that buys the picked one. */
-export function PlanCard({ children, download }: { children?: ReactNode; download?: ReactNode }) {
+/**
+ * The words of the pricing card: the price of the picked plan, the plans to pick from, and the button that buys the picked one.
+ * With a download, the free trial leads: its line stands over the price, and its button before the buy.
+ */
+export function PlanCard({ children, download = null }: { children?: ReactNode; download?: ReactNode }) {
   const [picked, setPicked] = useState<Plan["id"]>(BASE_PLAN.id);
   const at = Math.max(0, PLANS.findIndex((entry) => entry.id === picked));
   const plan = PLANS[at];
@@ -31,9 +34,12 @@ export function PlanCard({ children, download }: { children?: ReactNode; downloa
   return (
     <div className="flex flex-col items-center gap-8 md:items-start">
       <div className="flex flex-col items-center gap-5 md:items-start">
-        <p className="text-7xl font-medium tabular-nums leading-none tracking-[-0.02em] md:text-8xl">
-          <NumberFlow format={PRICE_FORMAT} locales="en-US" value={plan.price} />
-        </p>
+        <div className="flex flex-col items-center gap-3 md:items-start">
+          {download === null ? null : <p className="text-lg">Free for 7 days, then</p>}
+          <p className="text-7xl font-medium tabular-nums leading-none tracking-[-0.02em] md:text-8xl">
+            <NumberFlow format={PRICE_FORMAT} locales="en-US" value={plan.price} />
+          </p>
+        </div>
         {PLANS.length > 1 && (
           <div className="flex flex-col items-center gap-2.5 md:items-start">
             <div
@@ -70,10 +76,10 @@ export function PlanCard({ children, download }: { children?: ReactNode; downloa
       </div>
       <div className="flex flex-col items-center gap-4 md:items-start">
         <div className="flex flex-wrap items-center justify-center gap-3 md:justify-start">
-          <BuyButton placement="pricing" plan={plan} variant="brand">
+          {download}
+          <BuyButton placement="pricing" plan={plan} variant={download === null ? "brand" : "brandOutline"}>
             Buy agent caffeine for <span className="tabular-nums">{dollars(plan)}</span>
           </BuyButton>
-          {download}
         </div>
         <div className="flex flex-col gap-1">
           <p className="text-balance">Pay once. Lifetime updates. No subscription</p>

@@ -6,6 +6,7 @@ import { DevKnobs } from "@/components/dev-knobs";
 import { Header } from "@/components/header";
 import { agentsMoreThan } from "@/lib/agents";
 import { PRICE } from "@/lib/pricing";
+import { getLatestRelease } from "@/lib/release";
 import { THEME_SCRIPT } from "@/lib/theme";
 
 const suisse = localFont({
@@ -18,35 +19,39 @@ const suisse = localFont({
   adjustFontFallback: false,
 });
 
-export const metadata: Metadata = {
-  metadataBase: new URL("https://caffeinagent.com"),
-  alternates: { canonical: "/" },
-  title: "agent caffeine · Keep your Mac awake while AI agents work",
-  description:
-    `Agent-aware sleep prevention for macOS. Detects Claude Code, Codex, OpenCode and more than ${agentsMoreThan} AI coding agents. Lets the Mac sleep when they are idle or wait for you. ${PRICE} once.`,
-  openGraph: {
-    title: "agent caffeine",
+/** The free trial is in the descriptions only while there is a download to start it with. */
+export async function generateMetadata(): Promise<Metadata> {
+  const offer = (await getLatestRelease()) === null ? `${PRICE} once.` : `Free for 7 days, then ${PRICE} once.`;
+  return {
+    metadataBase: new URL("https://caffeinagent.com"),
+    alternates: { canonical: "/" },
+    title: "agent caffeine · Keep your Mac awake while AI agents work",
     description:
-      `Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. 7 day free trial, then ${PRICE} once.`,
-    type: "website",
-    url: "/",
-    images: [
-      {
-        url: "/og.png",
-        width: 1200,
-        height: 630,
-        alt: "Keep your Mac awake while your agents work, even with the lid closed",
-      },
-    ],
-  },
-  twitter: {
-    card: "summary_large_image",
-    title: "agent caffeine",
-    description:
-      `Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. 7 day free trial, then ${PRICE} once.`,
-    images: ["/og.png"],
-  },
-};
+      `Agent-aware sleep prevention for macOS. Detects Claude Code, Codex, OpenCode and more than ${agentsMoreThan} AI coding agents. Lets the Mac sleep when they are idle or wait for you. ${offer}`,
+    openGraph: {
+      title: "agent caffeine",
+      description:
+        `Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. ${offer}`,
+      type: "website",
+      url: "/",
+      images: [
+        {
+          url: "/og.png",
+          width: 1200,
+          height: 630,
+          alt: "Keep your Mac awake while your agents work, even with the lid closed",
+        },
+      ],
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: "agent caffeine",
+      description:
+        `Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. ${offer}`,
+      images: ["/og.png"],
+    },
+  };
+}
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

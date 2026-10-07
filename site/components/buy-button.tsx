@@ -1,5 +1,6 @@
+import Link from "next/link";
 import type { ReactNode } from "react";
-import { BuyCta } from "@/components/track";
+import { BuyCta, type Placement } from "@/components/track";
 import { BASE_PLAN, type Plan } from "@/lib/pricing";
 
 export const SIZES = {
@@ -37,7 +38,7 @@ export function BuyButton({
   variant = "solid",
   children,
 }: {
-  placement: "header" | "hero" | "pricing" | "blog";
+  placement: Placement;
   /** The plan the button sells. */
   plan?: Plan;
   size?: keyof typeof SIZES;
@@ -48,5 +49,14 @@ export function BuyButton({
     <BuyCta plan={plan} placement={placement} className={VARIANTS[variant](size)}>
       {children}
     </BuyCta>
+  );
+}
+
+/** The quiet pill beside a download: it goes to the plans, not to a checkout. */
+export function PricingButton({ children }: { children: ReactNode }) {
+  return (
+    <Link href="/#pricing" className={`${VARIANTS.outline("large")} text-center`}>
+      {children}
+    </Link>
   );
 }

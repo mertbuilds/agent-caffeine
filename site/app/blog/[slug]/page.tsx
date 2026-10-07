@@ -119,7 +119,7 @@ export default async function BlogPost({ params }: Props) {
             the lid closed.{" "}
             {release === null
               ? `${PRICE} once. macOS 13 or later, Apple silicon and Intel.`
-              : `7 day free trial, then ${PRICE} once. macOS 13 or later, Apple silicon and Intel.`}
+              : `Free for 7 days, then ${PRICE} once. macOS 13 or later, Apple silicon and Intel.`}
           </p>
           {release === null ? (
             <BuyButton placement="blog" size="small">
@@ -127,12 +127,12 @@ export default async function BlogPost({ params }: Props) {
             </BuyButton>
           ) : (
             <div className="flex shrink-0 items-center gap-4">
+              <DownloadButton release={release} placement="blog" size="small">
+                Try free for 7 days
+              </DownloadButton>
               <BuyButton placement="blog" variant="text">
                 Buy for {PRICE}
               </BuyButton>
-              <DownloadButton release={release} placement="blog" size="small">
-                Download
-              </DownloadButton>
             </div>
           )}
         </aside>

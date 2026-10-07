@@ -1,11 +1,11 @@
 import { AgentIcon } from "@/components/agent-icons";
-import { BuyButton } from "@/components/buy-button";
+import { BuyButton, PricingButton } from "@/components/buy-button";
 import { DownloadButton } from "@/components/download-button";
 import { GridTexture } from "@/components/grid-texture";
 import { LaptopScene } from "@/components/laptop-scene";
 import { agents, markedAgents } from "@/lib/agents";
 import { PRICE } from "@/lib/pricing";
-import { getLatestRelease, releaseDetails } from "@/lib/release";
+import { getLatestRelease } from "@/lib/release";
 
 const SHOWN = markedAgents.slice(0, 7);
 const MORE = agents.length - SHOWN.length;
@@ -48,18 +48,30 @@ export async function Hero() {
           </div>
         ) : (
           <div className="flex flex-col items-center gap-3 md:items-start">
-            <div className="flex flex-wrap items-center justify-center gap-3">
+            <div className="flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-none sm:flex-row">
               <DownloadButton release={release} placement="hero">
-                Download free trial
+                <span className="flex items-center justify-center gap-2">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 16 16"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    aria-hidden="true"
+                  >
+                    <path d="M8 2.5v7.5M4.75 7l3.25 3.25L11.25 7M3 13.5h10" />
+                  </svg>
+                  Try free for 7 days
+                </span>
               </DownloadButton>
-              <BuyButton placement="hero" variant="outline">
-                Buy for {PRICE}
-              </BuyButton>
+              <PricingButton>Buy from {PRICE}</PricingButton>
             </div>
-            <div className="flex flex-col gap-1 text-sm text-muted">
-              <p>7 day free trial. Then {PRICE} once, no subscription</p>
-              <p>{releaseDetails(release)}</p>
-            </div>
+            <p className="text-pretty text-sm text-muted">
+              No account, no card · macOS 13 or later, Apple silicon and Intel
+            </p>
           </div>
         )}
       </div>

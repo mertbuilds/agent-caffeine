@@ -34,7 +34,7 @@ export async function Pricing() {
           <PlanCard
             download={
               release === null ? null : (
-                <DownloadButton release={release} placement="pricing" variant="brandOutline">
+                <DownloadButton release={release} placement="pricing" variant="brand">
                   Download free trial
                 </DownloadButton>
               )
@@ -42,7 +42,9 @@ export async function Pricing() {
           >
             {release === null ? null : (
               <>
-                <p>Try it free for 7 days first</p>
+                <p className="text-balance">
+                  After 7 days, agent caffeine stops keeping your Mac awake until you enter a key
+                </p>
                 <p className="text-balance pt-2 text-sm">{releaseDetails(release)}</p>
               </>
             )}

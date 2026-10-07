@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ThemeSwitch } from "@/components/theme-switch";
+import { DownloadCta } from "@/components/track";
 import { getPosts } from "@/lib/blog";
 import { getLatestRelease } from "@/lib/release";
 import { CONTACT_EMAIL } from "@/lib/site";
@@ -37,18 +38,18 @@ export async function Footer() {
               How it works
             </Link>
           </li>
+          {release === null ? null : (
+            <li>
+              <DownloadCta href={release.href} filename={release.filename} placement="footer" className={LINK}>
+                Download free trial
+              </DownloadCta>
+            </li>
+          )}
           <li>
             <Link href="/#pricing" className={LINK}>
               Pricing
             </Link>
           </li>
-          {release === null ? null : (
-            <li>
-              <a href={release.href} download={release.filename} className={LINK}>
-                Download
-              </a>
-            </li>
-          )}
           <li>
             <a
               href="https://polar.sh/mertbuilds/portal"

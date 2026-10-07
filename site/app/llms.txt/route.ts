@@ -9,7 +9,7 @@ const KEYS = PLANS.map((plan) => `A license key for ${macs(plan)} costs ${dollar
 
 const TEXT = `# agent caffeine
 
-> agent caffeine is a macOS menu bar app that keeps a Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are idle or wait for you. It has a 7 day free trial, then costs ${PRICE} once, and runs on macOS 13 or later (Apple silicon and Intel).
+> agent caffeine is a macOS menu bar app that keeps a Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are idle or wait for you. It has a 7-day free trial, then costs ${PRICE} once, and runs on macOS 13 or later (Apple silicon and Intel).
 
 - Detects more than ${agentsMoreThan} coding agents (Claude Code, Codex, opencode, Gemini CLI, Cursor and others). Claude Code and Codex report their own state (working, waiting for you, or idle), and agent caffeine reads it on the Mac. It also watches the commands an agent started, so a build that is still busy keeps the Mac awake. Other agents are judged by signs of work, such as a running command or a write to the session file.
 - An agent that waits for your answer keeps the Mac awake for 5 minutes, then the Mac can sleep. Idle sessions do not keep it awake in the default mode. The times can be changed in Preferences.
@@ -23,7 +23,7 @@ const TEXT = `# agent caffeine
 - Notifications, each with its own switch: an agent is waiting for your answer (on by default), and an agent finished (off by default).
 - Keyboard shortcuts that work in every app, with keys you choose: turn agent caffeine on or off, and pause for 1 hour.
 - The menu bar icon can be hidden. The app keeps the Mac awake the same way without it.
-- Free 7 day trial with every feature and no card. After the trial it stops keeping the Mac awake until a license key is entered.
+- A 7-day free trial with every feature. It starts the first time the app opens and needs no account, no card and no key. After 7 days the app stops keeping the Mac awake until a license key is entered. The app and its settings stay.
 - ${KEYS} Each is a one-time purchase with lifetime updates and no subscription. Deactivate a Mac in the app or in your Polar purchases to move the key to another.
 - The app updates itself: it checks caffeinagent.com for updates and installs them when you agree.
 - No telemetry and no analytics. It reads the process list, the state and session files of Claude Code and Codex in \`~/.claude\` and \`~/.codex\`, and the battery level and lid angle, all on your own Mac. Its only network calls are the update check to caffeinagent.com and the license key check with Polar, which sends the key and the Mac's model. Nothing about you or your agents leaves the Mac.

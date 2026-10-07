@@ -4,7 +4,7 @@ import { CONTACT_EMAIL, TERMS_UPDATED } from "@/lib/site";
 
 export const metadata = legalMetadata(
   "Terms",
-  `The terms for agent caffeine: what a license key covers, a 7 day free trial, ${PRICE_LIST}, paid once through Polar, and what the app does and does not promise.`,
+  `The terms for agent caffeine: what a license key covers, a 7-day free trial, ${PRICE_LIST}, paid once through Polar, and what the app does and does not promise.`,
   "/terms"
 );
 

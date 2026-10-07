@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import { BRAND_VARIANTS, PILL, SIZES } from "@/components/buy-button";
-import { DownloadCta } from "@/components/track";
+import { DownloadCta, type Placement } from "@/components/track";
 import type { Release } from "@/lib/release";
 
 export function DownloadButton({
@@ -11,7 +11,7 @@ export function DownloadButton({
   children,
 }: {
   release: Release;
-  placement: "header" | "hero" | "pricing" | "blog";
+  placement: Placement;
   size?: keyof typeof SIZES;
   variant?: "solid" | "brand" | "brandOutline";
   children: ReactNode;

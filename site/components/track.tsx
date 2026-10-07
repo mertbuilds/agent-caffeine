@@ -4,7 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import type { Plan } from "@/lib/pricing";
 
-type Placement = "header" | "hero" | "pricing" | "blog";
+export type Placement = "header" | "hero" | "pricing" | "blog" | "footer";
 
 function fire(event: string, props?: Record<string, unknown>) {
   if (typeof window === "undefined") return;
@@ -35,6 +35,7 @@ export function BuyCta({
   );
 }
 
+/** A link to the dmg. The click is counted with where it sits, to set trial starts beside buys. */
 export function DownloadCta({
   href,
   filename,
@@ -51,7 +52,7 @@ export function DownloadCta({
   return (
     <a
       href={href}
-      download={filename}
+      download={href.startsWith("#") ? undefined : filename}
       onClick={() => fire("download_clicked", { placement })}
       className={className}
     >

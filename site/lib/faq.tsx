@@ -1,8 +1,23 @@
 import { isValidElement } from "react";
 import type { ReactNode } from "react";
+import { PRICE_LIST } from "@/lib/pricing";
 
-/** The home page questions, rendered by the FAQ and read as plain text for structured data. */
-export const faqItems: { question: string; answer: ReactNode }[] = [
+type FaqItem = { question: string; answer: ReactNode };
+
+/** The question a page with a download leads with. */
+const trialItem: FaqItem = {
+  question: "Is there a free trial?",
+  answer: (
+    <>
+      Yes. agent caffeine is a free download, and every feature works for 7 days from the first
+      time you open it, with no account, no card and no key. After 7 days it stops keeping your
+      Mac awake until you enter a license key, and your settings stay. A key costs {PRICE_LIST},
+      paid once.
+    </>
+  ),
+};
+
+const questions: FaqItem[] = [
   {
     question: "How does it know that an agent is working?",
     answer: (
@@ -59,6 +74,11 @@ export const faqItems: { question: string; answer: ReactNode }[] = [
     ),
   },
 ];
+
+/** The home page questions, rendered by the FAQ and read as plain text for structured data. */
+export function faqItems(trial: boolean): FaqItem[] {
+  return trial ? [trialItem, ...questions] : questions;
+}
 
 /** The plain text of an answer, so the structured data says exactly what the page shows. */
 export function answerText(node: ReactNode): string {

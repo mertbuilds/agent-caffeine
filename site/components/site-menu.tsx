@@ -3,9 +3,9 @@
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FocusEvent, type RefObject } from "react";
-import { BuyCta } from "@/components/track";
-import { BASE_PLAN, PRICE } from "@/lib/pricing";
+import { DownloadCta } from "@/components/track";
 import { distance, duration, easing, scale } from "@/lib/motion";
+import type { Release } from "@/lib/release";
 import { useLessMotion } from "@/lib/use-less-motion";
 
 export type MenuLink = { current: boolean; href: string; label: string };
@@ -31,17 +31,17 @@ const ROW = "flex min-h-11 items-center gap-2 text-base text-fg no-underline foc
  */
 export function SiteMenu({
   anchor,
-  buy,
   links,
   morph,
+  release,
 }: {
   /** The header's row, which the panel hangs under. */
   anchor: RefObject<HTMLElement | null>;
-  /** Whether the quiet buy link, which a wide header shows beside the download, is in the menu. */
-  buy: boolean;
   links: ReadonlyArray<MenuLink>;
   /** The name the header's morph carries the button by. */
   morph: string;
+  /** The release the menu's last row downloads. Without one the menu has only its links. */
+  release: Release | null;
 }) {
   const [top, setTop] = useState<number | null>(null);
   const open = top !== null;
@@ -154,7 +154,7 @@ export function SiteMenu({
                 </Link>
               ))}
             </nav>
-            {buy ? (
+            {release !== null ? (
               <>
                 <div aria-hidden="true" className="my-2 h-px bg-border" />
                 <div
@@ -162,9 +162,9 @@ export function SiteMenu({
                   onClick={() => close(false)}
                   style={{ animationDelay: `${links.length * duration.stagger}s` }}
                 >
-                  <BuyCta plan={BASE_PLAN} placement="header" className={ROW}>
-                    Buy for {PRICE}
-                  </BuyCta>
+                  <DownloadCta href={release.href} filename={release.filename} placement="header" className={ROW}>
+                    Download free trial
+                  </DownloadCta>
                 </div>
               </>
             ) : null}
