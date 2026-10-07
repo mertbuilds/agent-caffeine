@@ -50,8 +50,10 @@ enum HookCatalog {
     /// The same for the opencode plugin file, which is all ours. It has a
     /// number of its own, so a new plugin does not make the entries of the
     /// other agents read as outdated. 2: the events go to the hook command
-    /// one after the other, with a stamp of their order.
-    static let pluginVersion = 2
+    /// one after the other, with a stamp of their order. 3: a hook command
+    /// that does not end is left after `timeoutSeconds`, and the stamp
+    /// names the plugin instance that counts.
+    static let pluginVersion = 3
     /// The same for the Pi extension file.
     static let piExtensionVersion = 1
     /// Two events of one name for one session this close together are one:
@@ -159,8 +161,11 @@ enum HookCatalog {
     /// else. opencode calls `event` for each bus event and does not wait
     /// for the answer, and it sends the busy of the last step and the idle
     /// of the turn a millisecond apart. So the plugin keeps a queue: a hook
-    /// command starts when the one before it has ended. `event` never
-    /// waits for the queue.
+    /// command starts when the one before it has ended, or after
+    /// `timeoutSeconds`: one command that hangs must not hold back every
+    /// later event of the process. The shell of Bun (`$`) has no way to
+    /// stop a command (checked with Bun 1.3.14), so that one is left
+    /// behind. `event` never waits for the queue.
     static func pluginSource(appPath: String = stableAppPath) -> String {
         """
         // \(pluginMarker) v=\(pluginVersion)
@@ -187,10 +192,26 @@ enum HookCatalog {
         };
 
         export const AgentCaffeine = async ({ $ }) => {
+          const inst = Math.random().toString(36).slice(2) + Date.now().toString(36);
           let queue = Promise.resolve();
           let seq = 0;
           let last = "";
           let lastAt = 0;
+          const run = (name, body) =>
+            new Promise((done) => {
+              const timer = setTimeout(done, \(timeoutSeconds * 1000));
+              const end = () => {
+                clearTimeout(timer);
+                done();
+              };
+              try {
+                timer.unref?.();
+                const input = new Response(body);
+                $`${hook} opencode ${name} v=\(pluginVersion) < ${input}`.quiet().nothrow().then(end, end);
+              } catch {
+                end();
+              }
+            });
           return {
             event: async ({ event }) => {
               try {
@@ -204,13 +225,8 @@ enum HookCatalog {
                 last = key;
                 lastAt = ts;
                 seq += 1;
-                const body = JSON.stringify({ session_id: session, seq, ts });
-                queue = queue.then(async () => {
-                  try {
-                    const input = new Response(body);
-                    await $`${hook} opencode ${name} v=\(pluginVersion) < ${input}`.quiet().nothrow();
-                  } catch {}
-                });
+                const body = JSON.stringify({ session_id: session, seq, ts, inst });
+                queue = queue.then(() => run(name, body));
               } catch {}
             },
           };

@@ -710,16 +710,18 @@ final class HookInstallerTests: XCTestCase {
 
     func testPluginSourceHasTheQueueAndTheStamp() {
         let source = HookCatalog.pluginSource(appPath: appPath)
-        XCTAssertEqual(HookCatalog.pluginVersion, 2)
-        XCTAssertTrue(source.hasPrefix("// agent-caffeine-hook v=2\n"))
+        XCTAssertEqual(HookCatalog.pluginVersion, 3)
+        XCTAssertTrue(source.hasPrefix("// agent-caffeine-hook v=3\n"))
         XCTAssertFalse(source.contains("v=1"))
+        XCTAssertFalse(source.contains("v=2"))
         for piece in [
             "let queue = Promise.resolve();",
-            "queue = queue.then(async () => {",
-            "JSON.stringify({ session_id: session, seq, ts })",
+            "queue = queue.then(() => run(name, body));",
+            "JSON.stringify({ session_id: session, seq, ts, inst })",
             "const ts = Date.now();",
             "if (key === last && Math.abs(ts - lastAt) < 1000) return;",
-            "opencode ${name} v=2 < ${input}`.quiet().nothrow();",
+            "opencode ${name} v=3 < ${input}`.quiet().nothrow().then(end, end);",
+            Self.pluginTimer,
         ] {
             XCTAssertTrue(source.contains(piece), piece)
         }
@@ -736,7 +738,7 @@ final class HookInstallerTests: XCTestCase {
         try Data(pluginVersion1(appPath: appPath).utf8).write(to: url)
         XCTAssertEqual(installer.status(of: opencode), .outdated)
         try installer.install(opencode)
-        XCTAssertEqual(installer.status(of: opencode), .installed(version: 2))
+        XCTAssertEqual(installer.status(of: opencode), .installed(version: 3))
         XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), HookCatalog.pluginSource(appPath: appPath))
         let folder = try FileManager.default.contentsOfDirectory(atPath: url.deletingLastPathComponent().path)
         XCTAssertEqual(folder, [HookCatalog.pluginFileName], "opencode loads every file of the folder, so no backup is left there")
@@ -750,15 +752,98 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: url.deletingLastPathComponent().path), [])
     }
 
-    /// Runs the plugin as it is written, with a `$` that records. Skipped
-    /// on a Mac with no JavaScript runtime.
-    func testThePluginHandsItsEventsOverInOrder() throws {
+    private static let pluginTimer = "const timer = setTimeout(done, 5000);"
+
+    /// A JavaScript runtime of this Mac. Skips the test when there is none.
+    private func javaScriptRuntime() throws -> String {
         let folders = (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").map(String.init)
             + ["/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.bun/bin"]
         let runtimes = folders.flatMap { folder in ["node", "bun"].map { "\(folder)/\($0)" } }
         guard let runtime = runtimes.first(where: FileManager.default.isExecutableFile(atPath:)) else {
             throw XCTSkip("No node and no bun on this Mac.")
         }
+        return runtime
+    }
+
+    /// Runs `runner.mjs` of the folder and gives the JSON it prints.
+    private func runJavaScript(in folder: URL) throws -> [String: Any] {
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: try javaScriptRuntime())
+        process.arguments = [folder.appendingPathComponent("runner.mjs").path]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = Pipe()
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0)
+        return try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+    }
+
+    /// One hook command never ends. The events after it still reach the
+    /// hook command, in their order, when its time is over.
+    func testAHookCommandThatHangsDoesNotHoldBackTheLaterEventsOfThePlugin() throws {
+        _ = try javaScriptRuntime()
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("plugin-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let source = HookCatalog.pluginSource(appPath: appPath)
+        XCTAssertEqual(source.components(separatedBy: Self.pluginTimer).count, 2)
+        // The same file with a wait of 80 ms, so the test does not take 5 seconds.
+        let quick = source.replacingOccurrences(of: Self.pluginTimer, with: "const timer = setTimeout(done, 80);")
+        try Data(quick.utf8).write(to: folder.appendingPathComponent("plugin.mjs"))
+        let runner = """
+        import { AgentCaffeine } from "./plugin.mjs";
+        const log = [];
+        let calls = 0;
+        const $ = (strings, ...values) => {
+          calls += 1;
+          const call = calls;
+          const work = (async () => {
+            const body = JSON.parse(await values[2].text());
+            if (call === 2) await new Promise(() => {});
+            log.push({ name: values[1], seq: body.seq, inst: body.inst, at: Date.now() });
+          })();
+          const command = { quiet: () => command, nothrow: () => command, then: (a, b) => work.then(a, b) };
+          return command;
+        };
+        const plugin = await AgentCaffeine({ $ });
+        const other = await AgentCaffeine({ $ });
+        const fire = (type, properties) => plugin.event({ event: { id: "e", type, properties } });
+        const started = Date.now();
+        await fire("session.status", { sessionID: "s", status: { type: "busy" } });
+        await fire("permission.asked", { sessionID: "s" });
+        await fire("permission.replied", { sessionID: "s" });
+        await fire("session.idle", { sessionID: "s" });
+        await new Promise((done) => setTimeout(done, 40));
+        const early = log.length;
+        await new Promise((done) => setTimeout(done, 400));
+        await other.event({ event: { id: "e", type: "session.idle", properties: { sessionID: "s" } } });
+        await new Promise((done) => setTimeout(done, 40));
+        console.log(JSON.stringify({ log, calls, early, started }));
+        """
+        try Data(runner.utf8).write(to: folder.appendingPathComponent("runner.mjs"))
+        let result = try runJavaScript(in: folder)
+        let log = try XCTUnwrap(result["log"] as? [[String: Any]])
+        XCTAssertEqual(result["early"] as? Int, 1, "The queue waits for the command that hangs")
+        XCTAssertEqual(result["calls"] as? Int, 5)
+        XCTAssertEqual(log.map { $0["name"] as? String }, ["session.busy", "permission.replied", "session.idle", "session.idle"])
+        XCTAssertEqual(log.map { $0["seq"] as? Int }, [1, 3, 4, 1])
+        // Each plugin instance counts on its own and says which one it is.
+        let instances = log.compactMap { $0["inst"] as? String }
+        XCTAssertEqual(instances.count, 4)
+        XCTAssertEqual(Set(instances.prefix(3)).count, 1)
+        XCTAssertNotEqual(instances[0], instances[3])
+        XCTAssertGreaterThanOrEqual(instances[0].count, 8)
+        let started = try XCTUnwrap(result["started"] as? Double)
+        let idle = try XCTUnwrap(log[2]["at"] as? Double)
+        XCTAssertGreaterThanOrEqual(idle - started, 70, "Not before the time of the command that hangs is over")
+    }
+
+    /// Runs the plugin as it is written, with a `$` that records. Skipped
+    /// on a Mac with no JavaScript runtime.
+    func testThePluginHandsItsEventsOverInOrder() throws {
+        _ = try javaScriptRuntime()
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("plugin-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -803,18 +888,7 @@ final class HookInstallerTests: XCTestCase {
         console.log(JSON.stringify({ log, overlap, calls, answered }));
         """
         try Data(runner.utf8).write(to: folder.appendingPathComponent("runner.mjs"))
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: runtime)
-        process.arguments = [folder.appendingPathComponent("runner.mjs").path]
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = Pipe()
-        try process.run()
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        XCTAssertEqual(process.terminationStatus, 0)
-        let result = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let result = try runJavaScript(in: folder)
         let log = try XCTUnwrap(result["log"] as? [[String: Any]])
 
         XCTAssertEqual(result["overlap"] as? Bool, false, "One hook command at a time")
@@ -922,9 +996,9 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertFalse(source.contains("\u{2014}"))
         // The entries of the other agents and the opencode plugin keep their version.
         XCTAssertEqual(HookCatalog.version, 1)
-        XCTAssertEqual(HookCatalog.pluginVersion, 2)
+        XCTAssertEqual(HookCatalog.pluginVersion, 3)
         XCTAssertEqual(HookCatalog.pluginSource(for: opencode, appPath: appPath), HookCatalog.pluginSource(appPath: appPath))
-        XCTAssertEqual(HookCatalog.pluginVersion(for: opencode), 2)
+        XCTAssertEqual(HookCatalog.pluginVersion(for: opencode), 3)
         XCTAssertEqual(pi.benefit, "Lets agent caffeine see at once when Pi starts and stops working")
     }
 
@@ -934,12 +1008,7 @@ final class HookInstallerTests: XCTestCase {
     /// handlers and a `spawn` that records. All events fire in one tick,
     /// as Pi does. Skipped on a Mac with no JavaScript runtime.
     func testThePiExtensionHandsItsEventsOverInOrder() throws {
-        let folders = (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").map(String.init)
-            + ["/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.bun/bin"]
-        let runtimes = folders.flatMap { folder in ["node", "bun"].map { "\(folder)/\($0)" } }
-        guard let runtime = runtimes.first(where: FileManager.default.isExecutableFile(atPath:)) else {
-            throw XCTSkip("No node and no bun on this Mac.")
-        }
+        _ = try javaScriptRuntime()
         let folder = FileManager.default.temporaryDirectory.appendingPathComponent("pi-extension-\(UUID().uuidString)")
         try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: folder) }
@@ -1032,18 +1101,7 @@ final class HookInstallerTests: XCTestCase {
         console.log(JSON.stringify({ log: state.log, overlap: state.overlap, calls: state.calls, answered, threw, events: Object.keys(first.handlers) }));
         """
         try Data(runner.utf8).write(to: folder.appendingPathComponent("runner.mjs"))
-
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: runtime)
-        process.arguments = [folder.appendingPathComponent("runner.mjs").path]
-        let output = Pipe()
-        process.standardOutput = output
-        process.standardError = Pipe()
-        try process.run()
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        process.waitUntilExit()
-        XCTAssertEqual(process.terminationStatus, 0)
-        let result = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let result = try runJavaScript(in: folder)
         let log = try XCTUnwrap(result["log"] as? [[String: Any]])
 
         XCTAssertEqual(Set(try XCTUnwrap(result["events"] as? [String])), Set(pi.events))
