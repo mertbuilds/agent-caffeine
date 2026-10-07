@@ -30,6 +30,10 @@ enum MenuBarIcon {
     /// normal background style, so the ink stays.
     static let redCrosses = true
 
+    /// Every state has the outline head, and the eyes alone tell the state.
+    /// Off: the head is solid while the Mac is kept awake (`MenuBarLook.solid`).
+    static let outlineAlways = true
+
     private static var cache: [MenuBarLook: NSImage] = [:]
 
     static func image(for look: MenuBarLook) -> NSImage {
@@ -72,7 +76,7 @@ enum MenuBarIcon {
         // The ear pads reach out from behind the head.
         for x in [0.0, 18.0] { fill(CGRect(x: x, y: 8.5, width: 3, height: 5), radius: 1.5, in: context) }
 
-        if look.solid {
+        if look.solid && !outlineAlways {
             fill(head, radius: 6, in: context)
             context.setBlendMode(.destinationOut)
             fill(visor, radius: 4, in: context)
