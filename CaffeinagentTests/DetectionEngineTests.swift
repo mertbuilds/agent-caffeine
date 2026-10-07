@@ -550,6 +550,17 @@ final class DetectionEngineTests: XCTestCase {
         XCTAssertEqual(engine.decision.headline, .alwaysOn)
     }
 
+    /// The safety monitor starts its count of a fall on power again there.
+    func testASampleSaysThatAHoleIsBeforeIt() {
+        var seen: [Bool] = []
+        engine.onSample = { seen.append($0.afterGap) }
+        engine.start()
+        scheduler.advance(by: 4)
+        slept = 600
+        scheduler.advance(by: 4)
+        XCTAssertEqual(seen, [false, false, false, true, false])
+    }
+
     func testStopEndsTheLoopAndDropsASampleUnderWay() {
         engine.start()
         scheduler.advance(by: 1)

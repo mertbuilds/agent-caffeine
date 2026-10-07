@@ -46,6 +46,10 @@ struct SafetyInputs: Equatable {
 /// below the level at the moment the power came, or below the level it
 /// last rose to. A Mac that rests at a charge limit or at full stays at
 /// its level, so it never counts.
+///
+/// Nothing was seen during a hole between two samples (`SampleGap`): the
+/// Mac can have been off the charger for all of a sleep. So the count
+/// starts again at the level after the hole.
 struct PowerDrain: Equatable {
     static let fallPoints = 2
 
@@ -54,12 +58,20 @@ struct PowerDrain: Equatable {
     private var reference: Int?
     private var last: Int?
 
-    /// - Parameter latched: a battery stop is on. A level that rises then
-    ///   ends nothing: the Mac sleeps and uses less, so the weak charger
-    ///   gains a point, and the stop would go off and on.
-    mutating func update(percent: Int?, onBattery: Bool, latched: Bool) {
+    /// - Parameters:
+    ///   - latched: a battery stop is on. A level that rises then ends
+    ///   nothing: the Mac sleeps and uses less, so the weak charger gains
+    ///   a point, and the stop would go off and on.
+    ///   - afterGap: there is a hole between this sample and the one
+    ///   before it. A stop that is on stays: it ends as every battery stop
+    ///   does, and not with each sleep of the Mac.
+    mutating func update(percent: Int?, onBattery: Bool, latched: Bool, afterGap: Bool = false) {
         guard let percent, !onBattery else {
             self = PowerDrain()
+            return
+        }
+        if afterGap, !(latched && draining) {
+            restart(at: percent)
             return
         }
         defer { last = percent }
@@ -102,8 +114,9 @@ struct SafetyMonitor {
     var drainingOnPower: Bool { drain.draining }
 
     // Heat comes first: it is the one that can hurt the Mac.
-    mutating func update(_ inputs: SafetyInputs) -> SafetyStop? {
-        drain.update(percent: inputs.batteryPercent, onBattery: inputs.onBattery, latched: batteryStopped)
+    // `afterGap`: see `PowerDrain.update`.
+    mutating func update(_ inputs: SafetyInputs, afterGap: Bool = false) -> SafetyStop? {
+        drain.update(percent: inputs.batteryPercent, onBattery: inputs.onBattery, latched: batteryStopped, afterGap: afterGap)
         let (stop, stopped) = Self.evaluate(
             inputs, floor: batteryFloorEnabled ? batteryFloorPercent : nil, batteryStopped: batteryStopped, drainingOnPower: drain.draining
         )

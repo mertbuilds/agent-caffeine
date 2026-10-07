@@ -688,7 +688,7 @@ final class StateAggregator: ObservableObject {
         if hasBattery != (context.batteryPercent != nil) { hasBattery = context.batteryPercent != nil }
         if onBattery != context.onBattery { onBattery = context.onBattery }
         if batteryPercent != context.batteryPercent { batteryPercent = context.batteryPercent }
-        let stop = safetyMonitor.update(context.safetyInputs)
+        let stop = safetyMonitor.update(context.safetyInputs, afterGap: sample.afterGap)
         if let begun = SafetyStop.toAnnounce(previous: engine.safety, current: stop, wasHolding: power.held) {
             notify(begun.notificationText)
         }

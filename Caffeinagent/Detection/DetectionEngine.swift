@@ -10,6 +10,8 @@ struct DetectionSample: Equatable {
     var cost: TimeInterval
     /// For the menu only. See `EvidenceSample.sessionHints`.
     var sessionHints: [ProcessIdentity: SessionHint] = [:]
+    /// There is a hole between this sample and the one before it (`SampleGap`).
+    var afterGap = false
 }
 
 protocol DetectionCancellable {
@@ -202,7 +204,7 @@ final class DetectionEngine: ObservableObject {
         let cost = sample.cost + TimeInterval(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
 
         recorder?.record(frame: sample.frame, decision: decision, cost: cost)
-        onSample?(DetectionSample(frame: sample.frame, readings: readings, decision: decision, cost: cost, sessionHints: sample.sessionHints))
+        onSample?(DetectionSample(frame: sample.frame, readings: readings, decision: decision, cost: cost, sessionHints: sample.sessionHints, afterGap: gap != nil))
 
         watcher.watch(files: sample.watchedFiles, processes: sample.roots) { [weak self, scheduler] in
             scheduler.onMain { self?.requestSample() }

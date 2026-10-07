@@ -171,6 +171,38 @@ final class SafetyMonitorTests: XCTestCase {
         XCTAssertEqual(onPower(&monitor, 18), .weakCharger(percent: 18))
     }
 
+    /// A good charger at 23 percent. The Mac sleeps, is taken off the
+    /// charger and falls to 20, and is on power again when it wakes. No
+    /// sample saw it on battery.
+    func testAFallDuringASleepIsNoWeakCharger() {
+        var monitor = SafetyMonitor()
+        for _ in 0..<5 { XCTAssertNil(onPower(&monitor, 23)) }
+        let back = SafetyInputs(batteryPercent: 20, onBattery: false, thermalState: .nominal, charging: true)
+        XCTAssertNil(monitor.update(back, afterGap: true))
+        XCTAssertFalse(monitor.drainingOnPower)
+        for percent in [20, 20, 21, 23] { XCTAssertNil(onPower(&monitor, percent, charging: true), "\(percent)") }
+        // Without the hole the same levels are a fall on power.
+        var awake = SafetyMonitor()
+        XCTAssertNil(onPower(&awake, 23))
+        XCTAssertEqual(onPower(&awake, 20), .weakCharger(percent: 20))
+    }
+
+    /// The true case after a sleep: the count starts at the level after it.
+    func testAWeakChargerAfterASleepStillStops() {
+        var monitor = SafetyMonitor()
+        XCTAssertNil(onPower(&monitor, 30))
+        XCTAssertNil(monitor.update(SafetyInputs(batteryPercent: 23, onBattery: false, thermalState: .nominal), afterGap: true))
+        XCTAssertNil(onPower(&monitor, 22))
+        XCTAssertNil(onPower(&monitor, 21))
+        XCTAssertTrue(monitor.drainingOnPower)
+        XCTAssertEqual(onPower(&monitor, 20), .weakCharger(percent: 20))
+        // The stop lets the Mac sleep. A sleep does not end it: it ends 5 points above the floor.
+        let after = SafetyInputs(batteryPercent: 20, onBattery: false, thermalState: .nominal)
+        XCTAssertEqual(monitor.update(after, afterGap: true), .weakCharger(percent: 20))
+        XCTAssertEqual(monitor.update(SafetyInputs(batteryPercent: 22, onBattery: false, thermalState: .nominal), afterGap: true), .weakCharger(percent: 22))
+        XCTAssertNil(onPower(&monitor, 25))
+    }
+
     func testAWeakChargerStopDoesNotFlap() {
         var monitor = SafetyMonitor()
         for percent in [22, 21] { XCTAssertNil(onPower(&monitor, percent)) }
