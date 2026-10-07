@@ -207,6 +207,7 @@ extension VerdictReason {
         case .workedRecently(let seconds): return "workedRecently:\(seconds)"
         case .cpuActivity: return "cpuActivity"
         case .asksPermission: return "asksPermission"
+        case .awaitsApproval: return "awaitsApproval"
         case .atPrompt: return "atPrompt"
         case .noActivity(let minutes): return "noActivity:\(minutes)"
         case .onlyWeakSigns(let minutes): return "onlyWeakSigns:\(minutes)"

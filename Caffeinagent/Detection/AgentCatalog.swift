@@ -128,9 +128,22 @@ struct AgentCatalog {
 
     /// Raised when a definition changes what it matches, so a lab recording
     /// says which catalog saw its processes.
-    static let version = 3
+    static let version = 4
 
     // MARK: Data
+
+    static let cursorDesktopID = "cursor-desktop"
+
+    /// Cursor's agent runs a command as a shell below an extension host:
+    /// `Cursor Helper (Plugin)` -> `/bin/zsh -c ...` -> the command. A
+    /// language server or an MCP server below the same host is no shell,
+    /// and a terminal of the user is below another helper.
+    static func isCursorAgentCommand(_ row: ProcessInfoRow, parent: ProcessInfoRow) -> Bool {
+        parent.executablePath.contains("/Cursor.app/Contents/Frameworks/") && parent.executablePath.hasSuffix("/Cursor Helper (Plugin)")
+            && cursorShells.contains(baseName(row.executablePath))
+    }
+
+    private static let cursorShells: Set<String> = ["sh", "bash", "zsh", "fish", "dash", "ksh", "tcsh", "csh", "nu", "pwsh"]
 
     private static let codexDesktopEngine = "Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex"
 
@@ -153,11 +166,24 @@ struct AgentCatalog {
             exclusions: [],
             verified: true
         ),
+        // Seen 2026-10-07, Cursor 3.22.12 (docs/research/08-cursor.md). The
+        // engine is the main process: it owns the sleep assertion, and one
+        // window can have several extension hosts. Every other binary of
+        // the bundle is a helper, so none of them is taken for a CLI. The
+        // helpers rewrite their titles; the executable path stays.
+        AgentDefinition(
+            id: cursorDesktopID, displayName: "Cursor", level: .state, kind: .desktop,
+            matchers: [AgentMatcher(.appBundle(bundle: "Cursor.app", relativePath: "Contents/MacOS/Cursor"))],
+            exclusions: [
+                AgentExclusion(process: .executableContains("/Cursor.app/Contents/Frameworks/")),
+                AgentExclusion(process: .executableContains("/Cursor.app/Contents/Resources/")),
+            ],
+            verified: true
+        ),
         // Placeholders. Their engine paths are unconfirmed, so they have no
         // matchers and match nothing until someone measures a running app.
         AgentDefinition(id: "claude-desktop", displayName: "Claude", level: .activity, kind: .desktop, matchers: [], exclusions: [], verified: false),
         AgentDefinition(id: "t3-code", displayName: "T3 Code", level: .activity, kind: .desktop, matchers: [], exclusions: [], verified: false),
-        AgentDefinition(id: "cursor-desktop", displayName: "Cursor", level: .activity, kind: .desktop, matchers: [], exclusions: [], verified: false),
     ]
 
     static let cliDefinitions: [AgentDefinition] = [
@@ -207,7 +233,7 @@ struct AgentCatalog {
         cli("command-code", "Command Code"),
         cli("copilot", "GitHub Copilot"),
         cli("crush", "Crush"),
-        cli("cursor-agent", "Cursor Agent"),
+        cli("cursor-agent", "Cursor CLI"),
         cli("deepagents", "Deep Agents"),
         cli("devin", "Devin"),
         cli("dexto", "Dexto"),

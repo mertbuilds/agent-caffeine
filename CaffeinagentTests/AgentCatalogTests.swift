@@ -232,10 +232,10 @@ final class AgentCatalogTests: XCTestCase {
         let ids = catalog.definitions.map(\.id)
         XCTAssertEqual(Set(ids).count, ids.count)
         let stateIDs = catalog.definitions.filter { $0.level == .state }.map(\.id)
-        XCTAssertEqual(Set(stateIDs), ["claude", "codex", "codex-desktop"])
+        XCTAssertEqual(Set(stateIDs), ["claude", "codex", "codex-desktop", "cursor-desktop"])
         XCTAssertFalse(catalog.definitions.contains { $0.level == .generic })
         // Placeholders match nothing and say so.
-        for id in ["claude-desktop", "t3-code", "cursor-desktop"] {
+        for id in ["claude-desktop", "t3-code"] {
             let definition = catalog.definitions.first { $0.id == id }
             XCTAssertEqual(definition?.kind, .desktop, id)
             XCTAssertEqual(definition?.verified, false, id)

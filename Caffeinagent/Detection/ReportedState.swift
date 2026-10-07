@@ -16,6 +16,7 @@ struct StateReport: Equatable {
         case claudeJobState
         case claudeTranscript
         case codexRollout
+        case cursorTranscript
         case fileActivity
     }
 

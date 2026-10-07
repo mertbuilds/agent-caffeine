@@ -34,7 +34,7 @@ extension ReportedState: NameCoded {
 extension StateReport.Source: NameCoded {
     static let names: [(value: StateReport.Source, name: String)] = [
         (.claudeSessionFile, "claudeSession"), (.claudeJobState, "claudeJob"), (.claudeTranscript, "claudeTranscript"),
-        (.codexRollout, "codexRollout"), (.fileActivity, "fileActivity"),
+        (.codexRollout, "codexRollout"), (.cursorTranscript, "cursorTranscript"), (.fileActivity, "fileActivity"),
     ]
 }
 
@@ -103,7 +103,8 @@ struct AgentEvidence: Codable, Equatable {
     var reported: StateReport?
     /// Claude job state files in the working state that belong to this session.
     var backgroundJobsWorking: Int
-    /// Live descendants that are not the agent itself.
+    /// Live descendants that are not the agent itself. For Cursor: the
+    /// shells its agent started, counted only while a turn is in progress.
     var childCommands: Int
     /// The child commands that `VerdictRules.isBusyChild` accepts.
     var busyChildCommands: Int
@@ -117,6 +118,8 @@ struct AgentEvidence: Codable, Equatable {
     /// The last write to a session file.
     var fileActivityAt: Date?
     /// The agent, or a `caffeinate` child of it, holds a power assertion.
+    /// For Cursor: its main process holds one, as it does from the prompt
+    /// to the end of the answer.
     var ownsSleepAssertion: Bool
     /// Desktop apps only: a session file was written in the last hour, or a
     /// task is not finished.
