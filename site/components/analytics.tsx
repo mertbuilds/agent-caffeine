@@ -9,6 +9,11 @@ const OpenPanelComponent = dynamic(
   { ssr: false }
 );
 
+/** The share of sessions that are recorded. The owner wants every session during launch; lower it after. */
+const REPLAY_SAMPLE_RATE = 1;
+/** How often the recorder sends what it has, in milliseconds. */
+const REPLAY_FLUSH_INTERVAL_MS = 10_000;
+
 const subscribe = () => () => {};
 
 function onServer(): boolean {
@@ -29,7 +34,14 @@ export function Analytics() {
       trackOutgoingLinks={false}
       trackAttributes={false}
       // The recorder is a second script, fetched only after the first one runs. Page text is the same for every reader, so it is not masked.
-      sessionReplay={{ enabled: true, maskAllInputs: true, maskAllText: false, scriptUrl: "/api/op/op1-replay.js" }}
+      sessionReplay={{
+        enabled: true,
+        sampleRate: REPLAY_SAMPLE_RATE,
+        flushIntervalMs: REPLAY_FLUSH_INTERVAL_MS,
+        maskAllInputs: true,
+        maskAllText: false,
+        scriptUrl: "/api/op/op1-replay.js",
+      }}
     />
   );
 }
