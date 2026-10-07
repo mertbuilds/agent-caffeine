@@ -400,6 +400,40 @@ struct AgentNoticeContent: Equatable {
     var body: String?
     var sound: Bool
     var ownerPid: Int32?
+    /// The one session it is about, for a click. Nil for several.
+    var agent: ProcessIdentity?
+}
+
+/// Where a click on a notification goes: to the app of one agent.
+struct AgentNoticeTarget: Equatable {
+    var agent: ProcessIdentity
+    /// The app the agent ran in when the notification was made, for an
+    /// agent that is gone at the click.
+    var ownerPid: Int32?
+
+    private static let pidKey = "agentPid"
+    private static let startKey = "agentStart"
+    private static let ownerKey = "ownerPid"
+
+    /// For the `userInfo` of a notification: property list values only.
+    var userInfo: [String: Any] {
+        var info: [String: Any] = [Self.pidKey: Int(agent.pid), Self.startKey: agent.startTime]
+        if let ownerPid { info[Self.ownerKey] = Int(ownerPid) }
+        return info
+    }
+
+    /// Nil for a notification about several agents, and for any other one.
+    init?(userInfo: [AnyHashable: Any]) {
+        guard let pid = userInfo[Self.pidKey] as? Int, let start = userInfo[Self.startKey] as? Double,
+              let pid = Int32(exactly: pid) else { return nil }
+        agent = ProcessIdentity(pid: pid, startTime: start)
+        ownerPid = (userInfo[Self.ownerKey] as? Int).flatMap(Int32.init(exactly:))
+    }
+
+    init(agent: ProcessIdentity, ownerPid: Int32? = nil) {
+        self.agent = agent
+        self.ownerPid = ownerPid
+    }
 }
 
 /// The words of the agent notifications.
@@ -427,13 +461,13 @@ enum AgentNoticeText {
         case .waiting:
             return AgentNoticeContent(
                 id: "waiting-\(id)-\(stamp)", key: "waiting-\(id)", thread: "agent-\(session.agentID)", title: "\(session.displayName) is waiting for you",
-                subtitle: session.label, body: sleeps, sound: true, ownerPid: ownerPid
+                subtitle: session.label, body: sleeps, sound: true, ownerPid: ownerPid, agent: session.identity
             )
         case .finished:
             return AgentNoticeContent(
                 id: "finished-\(id)-\(stamp)", key: "finished-\(id)", thread: "agent-\(session.agentID)", title: "\(session.displayName) finished",
                 subtitle: session.label, body: session.workedFor.flatMap(HumaneDuration.length(seconds:)).map { "After \($0)" },
-                sound: true, ownerPid: ownerPid
+                sound: true, ownerPid: ownerPid, agent: session.identity
             )
         }
     }

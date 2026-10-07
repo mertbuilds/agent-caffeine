@@ -326,12 +326,18 @@ enum PanelText {
         case .setAgentRule(_, .ignore): return "Ignore this agent"
         case .setAgentRule(_, .automatic): return "Automatic"
         case .openAgentSettings: return "Open agent settings…"
+        case .goToAgent(_, let app): return "Go to \(app)"
         case .dismissSleepNote: return "Dismiss"
         case .openHelp: return help
         }
     }
 
     // MARK: Rows
+
+    /// The tooltip of a line: what a click does, then the evidence.
+    static func help(goTo: PanelAction?, hint: String) -> String {
+        ([goTo?.title, hint] as [String?]).compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: "\n")
+    }
 
     /// The line below an agent that works.
     /// - Parameters:

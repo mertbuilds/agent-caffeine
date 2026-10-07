@@ -25,6 +25,12 @@ enum PanelMetrics {
     static let chevronWidth: CGFloat = 10
     /// Below the last session of an open group.
     static let childrenBottom: CGFloat = 4
+    /// Under the pointer, a line that goes to its agent: the fill, how far
+    /// it reaches into the gutter, and its corners.
+    static let rowHoverOpacity = 0.07
+    static let rowHoverOutset: CGFloat = 5
+    static let rowHoverRadius: CGFloat = 12
+    static let childHoverRadius: CGFloat = 6
     /// The list scrolls when it is taller.
     static let listMaxHeight: CGFloat = 300
     static let controlHeight: CGFloat = 28
