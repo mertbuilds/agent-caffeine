@@ -4,7 +4,7 @@ The site for agent caffeine at caffeinagent.com. Next.js, run with `bun run dev`
 
 ## Downloads
 
-The app's release files (the dmg, `appcast.xml` and `latest.json`) are in a Cloudflare R2 bucket under `mac/`, and the site serves them at `https://caffeinagent.com/mac/<file>`.
+The app's release files (the dmg, `appcast.xml` and `latest.json`) are in the Cloudflare R2 bucket `agent-caffeine-mac` under `mac/`, public to read at `https://files.caffeinagent.com` (the value of `MAC_FILES_ORIGIN`), and the site serves them at `https://caffeinagent.com/mac/<file>`.
 
 The site reads them over HTTPS with no credentials. Set `MAC_FILES_ORIGIN` to an origin that answers a GET for `/mac/<file>` without a login, written without a trailing slash (for example `https://<files-domain>`).
 
