@@ -17,6 +17,7 @@ enum HookInstallError: Error, Equatable {
     case unexpectedShape
     case changedWhileEditing
     case notOurFile
+    case notWritable
     case writeFailed
 
     /// One plain line for Preferences. `file` is the path as the user knows it.
@@ -27,6 +28,7 @@ enum HookInstallError: Error, Equatable {
         case .unexpectedShape: return "\(file) has a layout agent caffeine does not recognize, so it did not change it."
         case .changedWhileEditing: return "\(file) changed while agent caffeine was working on it. Nothing was written. Try again."
         case .notOurFile: return "\(file) was not written by agent caffeine, so it did not change it."
+        case .notWritable: return "\(file) is read-only, so agent caffeine did not change it. Allow writing to the file, then try again."
         case .writeFailed: return "agent caffeine could not write \(file). Nothing was changed."
         }
     }
@@ -403,6 +405,9 @@ struct HookInstallRecord: Codable, Equatable {
     var blankBefore: Data?
     /// See `HookConfigEditor.emptyInteriors`. "Off" puts them back.
     var interiors: [Interior]?
+    /// The names of the backups that were written since "on", oldest
+    /// first. The first one holds the file as it was before "on".
+    var backups: [String]?
 
     struct Interior: Codable, Equatable {
         var path: [String]
@@ -495,7 +500,8 @@ struct HookInstaller {
         }
         guard entry.format.jsonLayout != nil else {
             let new = try HookConfigEditor.installing(into: old ?? [], entry: entry, appPath: appPath)
-            return try write(new, to: url, replacing: old, backup: false)
+            try write(new, to: url, replacing: old, backup: false)
+            return
         }
         let keeping = Set(record(for: entry)?.emptyBefore ?? [])
         let new = try HookConfigEditor.installing(into: old ?? [], entry: entry, appPath: appPath, keeping: keeping)
@@ -503,18 +509,20 @@ struct HookInstaller {
         guard new != old else { return }
         let cleared = try HookConfigEditor.clearedForInstall(old ?? [], entry: entry, keeping: keeping)
         let empty = HookConfigEditor.emptyContainers(in: cleared, entry: entry)
-        try write(new, to: url, replacing: old, backup: true)
+        let backup = try write(new, to: url, replacing: old, backup: true)
         // The record of an earlier "on" counts only while its entries are
         // still in the file. A file that was replaced since is the user's:
         // its version and the file itself are not ours to take away.
         let earlier = old.map { HookConfigEditor.status(text: $0, entry: entry, appPath: appPath) } == .outdated ? record(for: entry) : nil
         let created = old == nil || (earlier?.createdFile ?? false)
         let addedVersion = try HookConfigEditor.lacksVersion(cleared, entry: entry) || (earlier?.addedVersion ?? false)
+        let backups = (earlier?.backups ?? []) + [backup?.lastPathComponent].compactMap { $0 }
         let blank = earlier?.blankBefore ?? old.flatMap { HookConfigEditor.isBlank($0) ? Data($0) : nil }
         let interiors = earlier?.interiors ?? HookConfigEditor.emptyInteriors(in: cleared, entry: entry)
         save(HookInstallRecord(
             emptyBefore: empty.sorted { $0.lexicographicallyPrecedes($1) }, createdFile: created, addedVersion: addedVersion ? true : nil,
-            blankBefore: blank, interiors: interiors.isEmpty ? nil : interiors
+            blankBefore: blank, interiors: interiors.isEmpty ? nil : interiors,
+            backups: backups.isEmpty ? nil : backups
         ), for: entry)
     }
 
@@ -524,6 +532,7 @@ struct HookInstaller {
         switch entry.format {
         case .pluginFile:
             guard HookConfigEditor.status(text: old, entry: entry, appPath: appPath) != .unreadable else { throw HookInstallError.notOurFile }
+            guard FileManager.default.isWritableFile(atPath: url.path) else { throw HookInstallError.notWritable }
             guard (try? FileManager.default.removeItem(at: url)) != nil else { throw HookInstallError.writeFailed }
         case .jsonHookGroups, .jsonFlatHooks:
             let known = record(for: entry)
@@ -535,8 +544,16 @@ struct HookInstaller {
                 new = HookConfigEditor.restoring(known?.interiors ?? [], in: new)
                 if let blank = known?.blankBefore, HookConfigEditor.isBlank(Array(blank)), new == HookConfigEditor.blankDocument { new = Array(blank) }
             }
+            // A backup is for a file that is not what it was before "on".
+            // When "off" gives back those very bytes, or takes away a
+            // file that "on" made, our backups go too.
+            let folder = url.resolvingSymlinksInPath().deletingLastPathComponent()
+            let ours = (known?.backups ?? []).map { folder.appendingPathComponent($0) }
             if known?.createdFile == true, new != old, HookConfigEditor.isEmptyDocument(new) {
-                try remove(url, holding: old)
+                if try remove(url, holding: old) { removeBackups(ours) }
+            } else if new != old, let before = ours.first.flatMap({ try? Data(contentsOf: $0) }), Array(before) == new {
+                try write(new, to: url, replacing: old, backup: false)
+                removeBackups(ours)
             } else {
                 try write(new, to: url, replacing: old, backup: true)
             }
@@ -546,43 +563,54 @@ struct HookInstaller {
 
     /// Nothing is written when the text is the same. The file is replaced
     /// by a rename, a link is followed so that it stays a link, and the
-    /// file keeps its permissions.
-    private func write(_ new: [UInt8], to url: URL, replacing old: [UInt8]?, backup: Bool) throws {
-        guard new != old else { return }
+    /// file keeps its permissions. A file that the user may not write is
+    /// refused: the rename would replace it all the same. Gives the backup
+    /// that was written.
+    @discardableResult
+    private func write(_ new: [UInt8], to url: URL, replacing old: [UInt8]?, backup: Bool) throws -> URL? {
+        guard new != old else { return nil }
         let target = url.resolvingSymlinksInPath()
         let manager = FileManager.default
         guard try read(url) == old else { throw HookInstallError.changedWhileEditing }
+        if old != nil, !manager.isWritableFile(atPath: target.path) { throw HookInstallError.notWritable }
         do {
             try manager.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
             let permissions = (try? manager.attributesOfItem(atPath: target.path))?[.posixPermissions]
+            var copy: URL?
             if backup, let old {
-                let copy = backupURL(for: target)
-                try Data(old).write(to: copy, options: .atomic)
-                if let permissions { try? manager.setAttributes([.posixPermissions: permissions], ofItemAtPath: copy.path) }
+                let made = backupURL(for: target)
+                try Data(old).write(to: made, options: .atomic)
+                if let permissions { try? manager.setAttributes([.posixPermissions: permissions], ofItemAtPath: made.path) }
                 pruneBackups(of: target)
+                copy = made
             }
             try Data(new).write(to: target, options: .atomic)
             if let permissions { try? manager.setAttributes([.posixPermissions: permissions], ofItemAtPath: target.path) }
+            return copy
         } catch {
             throw HookInstallError.writeFailed
         }
     }
 
-    /// Removes a file that we made and that holds nothing any more. The
-    /// backup is written first and stays. A link is the user's: the file
-    /// behind it is emptied, not removed.
-    private func remove(_ url: URL, holding old: [UInt8]) throws {
+    /// Removes a file that we made and that holds nothing but our entries.
+    /// That is the state from before "on", so no backup is written. A link
+    /// is the user's: the file behind it is emptied, not removed, and the
+    /// backup of that stays. False when the file was emptied.
+    private func remove(_ url: URL, holding old: [UInt8]) throws -> Bool {
         let target = url.resolvingSymlinksInPath()
         guard target.path == url.standardizedFileURL.path else {
-            return try write(Array("{}\n".utf8), to: url, replacing: old, backup: true)
+            try write(HookConfigEditor.blankDocument, to: url, replacing: old, backup: true)
+            return false
         }
         guard try read(url) == old else { throw HookInstallError.changedWhileEditing }
-        do {
-            try Data(old).write(to: backupURL(for: target), options: .atomic)
-            pruneBackups(of: target)
-            try FileManager.default.removeItem(at: target)
-        } catch {
-            throw HookInstallError.writeFailed
+        guard FileManager.default.isWritableFile(atPath: target.path) else { throw HookInstallError.notWritable }
+        guard (try? FileManager.default.removeItem(at: target)) != nil else { throw HookInstallError.writeFailed }
+        return true
+    }
+
+    private func removeBackups(_ backups: [URL]) {
+        for backup in backups where backup.lastPathComponent.contains(Self.backupInfix) {
+            try? FileManager.default.removeItem(at: backup)
         }
     }
 

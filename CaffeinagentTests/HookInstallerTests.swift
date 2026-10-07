@@ -426,17 +426,15 @@ final class HookInstallerTests: XCTestCase {
     // MARK: A file that we made
 
     /// The agent had no hooks file. On made it, so off removes it again
-    /// and leaves no empty file behind. The backup stays.
+    /// and leaves no empty file and no backup behind.
     func testOffRemovesAFileThatOnCreated() throws {
         let url = installer.configURL(for: codex)
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
         try installer.install(codex)
         XCTAssertEqual(installer.record(for: codex)?.createdFile, true)
-        let installed = try text(of: codex)
         try installer.uninstall(codex)
         XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
-        XCTAssertEqual(backups(of: codex).count, 1)
-        XCTAssertEqual(try String(contentsOf: url.deletingLastPathComponent().appendingPathComponent(backups(of: codex)[0]), encoding: .utf8), installed)
+        XCTAssertEqual(backups(of: codex), [])
         XCTAssertNil(installer.record(for: codex))
         XCTAssertEqual(installer.status(of: codex), .notInstalled)
     }
@@ -528,6 +526,7 @@ final class HookInstallerTests: XCTestCase {
         installer.now = { Date(timeIntervalSince1970: 1_791_000_000) }
         try write(foreignCodex, for: codex)
         try installer.install(codex)
+        try addModel(to: codex)
         try installer.uninstall(codex)
         let names = backups(of: codex)
         XCTAssertEqual(names.count, 2)
@@ -541,10 +540,94 @@ final class HookInstallerTests: XCTestCase {
         try write(foreignCodex, for: codex)
         for _ in 0..<4 {
             try installer.install(codex)
+            try addModel(to: codex)
             try installer.uninstall(codex)
         }
         XCTAssertEqual(backups(of: codex).count, HookInstaller.backupsKept)
-        XCTAssertEqual(try text(of: codex), foreignCodex)
+        XCTAssertEqual(installer.status(of: codex), .notInstalled)
+    }
+
+    /// The user or the agent writes a setting into the file while our
+    /// entries are in it.
+    private func addModel(to entry: HookCatalogEntry) throws {
+        var source = JSONSourceText(Array(try text(of: entry).utf8))
+        source.append(to: try source.parsed()) { _ in "\"model\": \"m\"" }
+        try Data(source.bytes).write(to: installer.configURL(for: entry))
+    }
+
+    /// "Off" gave the file back as it was, and the backups of "on" and of
+    /// "off" stayed next to it for ever.
+    func testOffThatGivesBackTheSameBytesRemovesOurBackups() throws {
+        var second = 0
+        installer.now = { second += 1; return Date(timeIntervalSince1970: 1_791_000_000 + Double(second)) }
+        let folder = installer.configURL(for: claude).deletingLastPathComponent()
+        let theirs = folder.appendingPathComponent("settings.json.backup-of-the-user")
+        try Data("x".utf8).write(to: theirs)
+        for original in [foreignClaude, "", "{ }"] {
+            try write(original, for: claude)
+            try installer.install(claude)
+            XCTAssertEqual(backups(of: claude).count, 1)
+            XCTAssertEqual(installer.record(for: claude)?.backups, backups(of: claude))
+            try installer.uninstall(claude)
+            XCTAssertEqual(try text(of: claude), original)
+            XCTAssertEqual(backups(of: claude), [], original.debugDescription)
+        }
+        // Also with an update of our entries in between.
+        try write(foreignClaude, for: claude)
+        try HookInstaller(home: home, appPath: "/Users/me/Downloads/agent caffeine.app").install(claude)
+        try installer.install(claude)
+        XCTAssertEqual(backups(of: claude).count, 2)
+        try installer.uninstall(claude)
+        XCTAssertEqual(backups(of: claude), [])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: theirs.path))
+
+        // The file is not what it was: both backups stay.
+        try write(foreignClaude, for: claude)
+        try installer.install(claude)
+        try addModel(to: claude)
+        try installer.uninstall(claude)
+        XCTAssertEqual(backups(of: claude).count, 2)
+        XCTAssertEqual(try String(contentsOf: folder.appendingPathComponent(backups(of: claude)[0]), encoding: .utf8), foreignClaude)
+    }
+
+    /// A config with mode 0400. The rename replaced it without a word.
+    func testAFileThatIsNotWritableIsRefused() throws {
+        let url = installer.configURL(for: claude)
+        func mode() throws -> Int? { try FileManager.default.attributesOfItem(atPath: url.path)[.posixPermissions] as? Int }
+        try write(foreignClaude, for: claude)
+        try FileManager.default.setAttributes([.posixPermissions: 0o400], ofItemAtPath: url.path)
+        XCTAssertThrowsError(try installer.install(claude)) { XCTAssertEqual($0 as? HookInstallError, .notWritable) }
+        XCTAssertEqual(try text(of: claude), foreignClaude)
+        XCTAssertEqual(try mode(), 0o400)
+        XCTAssertEqual(backups(of: claude), [])
+        XCTAssertNil(installer.record(for: claude))
+
+        // Made read-only after "on": "off" refuses too.
+        try FileManager.default.setAttributes([.posixPermissions: 0o640], ofItemAtPath: url.path)
+        try installer.install(claude)
+        XCTAssertEqual(try mode(), 0o640, "The mode stays")
+        let installed = try text(of: claude)
+        try FileManager.default.setAttributes([.posixPermissions: 0o440], ofItemAtPath: url.path)
+        XCTAssertThrowsError(try installer.uninstall(claude)) { XCTAssertEqual($0 as? HookInstallError, .notWritable) }
+        XCTAssertEqual(try text(of: claude), installed)
+        XCTAssertNotNil(installer.record(for: claude), "The record is kept for the next try")
+        try FileManager.default.setAttributes([.posixPermissions: 0o640], ofItemAtPath: url.path)
+        try installer.uninstall(claude)
+        XCTAssertEqual(try text(of: claude), foreignClaude)
+        XCTAssertEqual(try mode(), 0o640)
+
+        // A file that "on" made, and the plugin file.
+        for entry in [codex, opencode] {
+            let made = installer.configURL(for: entry)
+            try installer.install(entry)
+            try FileManager.default.setAttributes([.posixPermissions: 0o400], ofItemAtPath: made.path)
+            XCTAssertThrowsError(try installer.uninstall(entry)) { XCTAssertEqual($0 as? HookInstallError, .notWritable) }
+            XCTAssertTrue(FileManager.default.fileExists(atPath: made.path))
+            try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: made.path)
+            try installer.uninstall(entry)
+            XCTAssertFalse(FileManager.default.fileExists(atPath: made.path))
+        }
+        XCTAssertTrue(HookInstallError.notWritable.message(file: "~/.claude/settings.json").contains("read-only"))
     }
 
     // MARK: opencode
@@ -579,7 +662,7 @@ final class HookInstallerTests: XCTestCase {
     }
 
     func testErrorMessagesArePlain() {
-        for error in [HookInstallError.configMissing, .unreadable, .unexpectedShape, .changedWhileEditing, .notOurFile, .writeFailed] {
+        for error in [HookInstallError.configMissing, .unreadable, .unexpectedShape, .changedWhileEditing, .notOurFile, .notWritable, .writeFailed] {
             let message = error.message(file: "~/.codex/hooks.json")
             XCTAssertTrue(message.contains("~/.codex/hooks.json"))
             XCTAssertFalse(message.contains("\u{2014}"))
