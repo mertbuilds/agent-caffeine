@@ -321,6 +321,145 @@ final class DetectionEngineTests: XCTestCase {
         XCTAssertEqual(collector.userNames.last, ["myagent"], "The user's names reach the collector with the next sample")
     }
 
+    // MARK: Sleep and wake
+
+    /// The Mac wakes by itself with the display off, and the app runs. The
+    /// pause is over and the state file still says "working". The old code
+    /// took the hold and the sleep flag there, in a bag.
+    func testAPauseThatEndsWhileTheMacSleepsStartsNoHoldBeforeAFullWake() {
+        state = .working
+        engine.pausedUntil = Self.start.addingTimeInterval(3600)
+        engine.start()
+        scheduler.advance(by: 4)
+        XCTAssertFalse(engine.decision.hold)
+
+        engine.willSleep()
+        slept = 7200
+        // The timer of the pause fires in the dark wake, before any sample.
+        engine.pausedUntil = nil
+        XCTAssertFalse(engine.decision.hold)
+        XCTAssertFalse(engine.decision.lidClosedFlag)
+        scheduler.advance(by: 30)
+        XCTAssertFalse(engine.decision.hold, "Samples in a dark wake start nothing")
+        XCTAssertFalse(engine.decision.lidClosedFlag)
+        XCTAssertEqual(engine.decision.headline, .idle(.one("Claude Code")))
+        // It sleeps and wakes by itself once more.
+        slept += 900
+        scheduler.advance(by: 10)
+        XCTAssertFalse(engine.decision.hold)
+
+        engine.didWake()
+        XCTAssertFalse(engine.decision.hold, "Not before a sample from after the wake")
+        scheduler.advance(by: DetectionEngine.resampleDelay)
+        XCTAssertTrue(engine.decision.hold)
+        XCTAssertTrue(engine.decision.lidClosedFlag)
+        XCTAssertEqual(engine.decision.headline, .working(.one("Claude Code")))
+    }
+
+    func testAfterAFullWakeAnAgentThatNoLongerWorksStartsNoHold() {
+        state = .working
+        engine.pausedUntil = Self.start.addingTimeInterval(3600)
+        engine.start()
+        scheduler.advance(by: 4)
+        engine.willSleep()
+        slept = 7200
+        engine.pausedUntil = nil
+        // What the sample after the wake reads is what counts.
+        state = .idle
+        engine.didWake()
+        scheduler.advance(by: 10)
+        XCTAssertFalse(engine.decision.hold)
+    }
+
+    func testASafetyStopThatEndsWhileTheMacSleepsStartsNoHoldBeforeAFullWake() {
+        state = .working
+        engine.start()
+        scheduler.advance(by: 4)
+        XCTAssertTrue(engine.decision.hold)
+        engine.safety = .batteryLow(percent: 20)
+        XCTAssertFalse(engine.decision.hold)
+
+        engine.willSleep()
+        slept = 3600
+        // On the charger in the bag: the first sample of a dark wake ends the stop.
+        scheduler.advance(by: 2)
+        engine.safety = nil
+        XCTAssertFalse(engine.decision.hold)
+        XCTAssertFalse(engine.decision.lidClosedFlag)
+        scheduler.advance(by: 20)
+        XCTAssertFalse(engine.decision.hold)
+
+        engine.didWake()
+        scheduler.advance(by: 2)
+        XCTAssertTrue(engine.decision.hold)
+    }
+
+    /// The sleep flag holds the Mac awake with the lid closed, so macOS
+    /// never says that it goes to sleep.
+    func testAHoldThroughTheNightWithNoSleepGoesOn() {
+        state = .working
+        engine.start()
+        var released = 0
+        let subscription = engine.$decision.sink { if !$0.hold || !$0.lidClosedFlag { released += 1 } }
+        defer { subscription.cancel() }
+        scheduler.advance(by: 0)
+        released = 0
+        scheduler.advance(by: 8 * 3600)
+        XCTAssertTrue(engine.decision.hold)
+        XCTAssertTrue(engine.decision.lidClosedFlag)
+        XCTAssertEqual(released, 0)
+    }
+
+    /// Lid closed on wall power without the helper: macOS says the Mac
+    /// goes to sleep, and the power assertion keeps it awake with the
+    /// display off. No sample shows a hole, so the hold is not broken.
+    func testTheWordOfSleepAloneDoesNotBreakARunningHold() {
+        state = .working
+        engine.start()
+        scheduler.advance(by: 4)
+        var released = 0
+        let subscription = engine.$decision.dropFirst().sink { if !$0.hold { released += 1 } }
+        defer { subscription.cancel() }
+        engine.willSleep()
+        scheduler.advance(by: 3600)
+        XCTAssertTrue(engine.decision.hold)
+        XCTAssertTrue(engine.decision.lidClosedFlag)
+        XCTAssertEqual(released, 0)
+        // The work ends and the Mac may sleep. Nothing starts a hold again
+        // before someone wakes the Mac.
+        state = .idle
+        scheduler.advance(by: DetectionSettings().releaseAfterState + 4)
+        XCTAssertFalse(engine.decision.hold)
+        state = .working
+        scheduler.advance(by: 10)
+        XCTAssertFalse(engine.decision.hold)
+        engine.didWake()
+        scheduler.advance(by: 2)
+        XCTAssertTrue(engine.decision.hold)
+    }
+
+    /// The Mac slept under a hold: the lid closed on battery without the
+    /// helper, or the user put it to sleep.
+    func testAHoldThatTheMacSleptUnderEndsWithTheFirstSampleAfterTheSleep() {
+        engine.mode = .always
+        state = nil
+        engine.start()
+        scheduler.advance(by: 5)
+        XCTAssertTrue(engine.decision.hold)
+        engine.willSleep()
+        slept = 1800
+        scheduler.advance(by: 5)
+        XCTAssertFalse(engine.decision.hold, "A dark wake")
+        XCTAssertFalse(engine.decision.lidClosedFlag)
+        XCTAssertEqual(engine.decision.headline, .noAgents)
+        engine.reachableUntil = .distantFuture
+        XCTAssertFalse(engine.decision.hold)
+        engine.reachableUntil = nil
+        engine.didWake()
+        scheduler.advance(by: 5)
+        XCTAssertEqual(engine.decision.headline, .alwaysOn)
+    }
+
     func testStopEndsTheLoopAndDropsASampleUnderWay() {
         engine.start()
         scheduler.advance(by: 1)

@@ -438,6 +438,41 @@ final class HoldPolicyTests: XCTestCase {
         }
     }
 
+    // MARK: After a sleep
+
+    func testNothingStartsAHoldWhileItMayNot() {
+        let reachableUntil = at(3600)
+        let cases: [(name: String, readings: [AgentReading], mode: AwakeMode, reachable: Date?, headline: HoldHeadline)] = [
+            ("working", [claude(.working)], .agentWorking, nil, .idle(.one("Claude Code"))),
+            ("two agents", [claude(.working), codex(.idle)], .agentWorking, nil, .idle(.many(2))),
+            ("waiting", [claude(.waitingForUser)], .agentWorking, nil, .waitingReleased(.one("Claude Code"))),
+            ("open", [claude(.idle)], .agentOpen, nil, .idle(.one("Claude Code"))),
+            ("always", [], .always, nil, .noAgents),
+            ("reachable", [], .agentWorking, reachableUntil, .noAgents),
+        ]
+        for c in cases {
+            func decide(mayHold: Bool) -> HoldDecision {
+                HoldPolicy.decide(
+                    readings: c.readings, memory: PolicyMemory(), mode: c.mode, enabled: true, reachableUntil: c.reachable,
+                    entitlement: .licensed, safety: nil, settings: DetectionSettings(), context: FrameContext(), mayHold: mayHold, now: at(0)
+                ).0
+            }
+            XCTAssertTrue(decide(mayHold: true).hold, c.name)
+            let decision = decide(mayHold: false)
+            XCTAssertFalse(decision.hold, c.name)
+            XCTAssertFalse(decision.lidClosedFlag, c.name)
+            XCTAssertEqual(decision.headline, c.headline, c.name)
+            XCTAssertEqual(decision.perAgent.map(\.cause), c.readings.map { _ in nil }, c.name)
+            XCTAssertNil(decision.headline.awakeReason, c.name)
+        }
+        // A stop is still named.
+        let stopped = HoldPolicy.decide(
+            readings: [claude(.working)], memory: PolicyMemory(), mode: .agentWorking, enabled: true, pausedUntil: at(60),
+            entitlement: .licensed, safety: nil, settings: DetectionSettings(), context: FrameContext(), mayHold: false, now: at(0)
+        ).0
+        XCTAssertEqual(stopped.headline, .paused(until: at(60)))
+    }
+
     // MARK: Rules
 
     func testIgnoredAgent() {

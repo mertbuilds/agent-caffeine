@@ -122,7 +122,7 @@ enum HoldPolicy {
     static func decide(
         readings: [AgentReading], memory: PolicyMemory, mode: AwakeMode, enabled: Bool, pausedUntil: Date? = nil,
         reachableUntil: Date? = nil,
-        entitlement: Entitlement?, safety: SafetyStop?, settings: DetectionSettings, context: FrameContext, now: Date
+        entitlement: Entitlement?, safety: SafetyStop?, settings: DetectionSettings, context: FrameContext, mayHold: Bool = true, now: Date
     ) -> (HoldDecision, PolicyMemory) {
         let memory = remember(readings, memory: memory, settings: settings, now: now)
         let perAgent = readings.map { reading in
@@ -135,6 +135,12 @@ enum HoldPolicy {
         let reachable = reachableUntil.flatMap { now < $0 ? $0 : nil }
         let headline = headline(perAgent, mode: mode, reachableUntil: reachable, settings: settings, context: context)
         let hold = headline.keepsAwake
+        // Between the word that the Mac goes to sleep and the first sample
+        // after its full wake nothing starts a hold. See `WakeGate`.
+        if hold, !mayHold {
+            let released = perAgent.map { AgentHold(reading: $0.reading, cause: nil) }
+            return (HoldDecision(hold: false, lidClosedFlag: false, headline: restHeadline(released, settings: settings), perAgent: released), memory)
+        }
         // Set with the hold, also on wall power: unplugging with the lid
         // closed must not race the flag. With the setting off the power
         // assertions alone cover a closed lid on wall power.
@@ -212,6 +218,11 @@ enum HoldPolicy {
         if let open = subject(.open) { return .open(open) }
         if let reachableUntil { return .reachable(until: reachableUntil) }
         if settings.stayAwakeForRemoteAccess && context.remoteAccessDetected && !context.onBattery { return .remoteAccess }
+        return restHeadline(perAgent, settings: settings)
+    }
+
+    /// What is said when nothing keeps the Mac awake.
+    private static func restHeadline(_ perAgent: [AgentHold], settings: DetectionSettings) -> HoldHeadline {
         let counted = perAgent.map(\.reading).filter { settings.rule(for: $0.agentID) != .ignore }
         if let waiting = HoldSubject(names: counted.filter { $0.verdict.state == .waitingForUser }.map(\.displayName)) {
             return .waitingReleased(waiting)

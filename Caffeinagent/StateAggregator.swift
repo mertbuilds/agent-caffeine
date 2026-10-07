@@ -308,6 +308,10 @@ final class StateAggregator: ObservableObject {
             .sink { [weak self] _ in MainActor.assumeIsolated { self?.macDidWake() } }
             .store(in: &cancellables)
 
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.screensDidWakeNotification)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.wokeInFull() } }
+            .store(in: &cancellables)
+
         // A timer does not run while the Mac sleeps, and a clock that was
         // set moves the end of a pause.
         NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
@@ -403,12 +407,20 @@ final class StateAggregator: ObservableObject {
             waitingHold: settings.waitingHold
         )
         display?.willSleep()
+        engine.willSleep()
     }
 
     private func macDidWake() {
-        display?.didWake()
+        wokeInFull()
         sleepNote = sleepSnapshot.flatMap(SleepNote.init)
         sleepSnapshot = nil
+    }
+
+    /// macOS says so, or the displays came on: both only happen at a full
+    /// wake, never while a sleeping Mac wakes by itself with the display off.
+    private func wokeInFull() {
+        display?.didWake()
+        engine.didWake()
     }
 
     func dismissSleepNote() {
