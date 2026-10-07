@@ -76,7 +76,8 @@ export function PlanCard({ download = null }: { download?: ReactNode }) {
             Buy agent caffeine for <span className="tabular-nums">{dollars(plan)}</span>
           </BuyButton>
         </div>
-        <p className="text-balance">Pay once. Lifetime updates. No subscription</p>
+        {/* A line may end only where a sentence ends. */}
+        <p>Pay&nbsp;once. Lifetime&nbsp;updates. No&nbsp;subscription</p>
       </div>
     </div>
   );

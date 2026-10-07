@@ -13,8 +13,8 @@ const NEAR_FLOOR: Battery = {
   floor: BATTERY_FLOOR,
   level: "nearFloor",
   charge: "27%",
-  consequence: `sleeps below ${BATTERY_FLOOR}%`,
-  spoken: `Battery 27 percent, agent caffeine lets your Mac sleep below ${BATTERY_FLOOR} percent`,
+  consequence: `sleeps at ${BATTERY_FLOOR}%`,
+  spoken: `Battery 27 percent, agent caffeine lets your Mac sleep at ${BATTERY_FLOOR} percent`,
 };
 
 /** The two shortcuts of Preferences > Shortcuts (`ShortcutAction.title`), each with keys a reader could record. */
@@ -57,7 +57,7 @@ const DISPLAY_OFF = "color-mix(in srgb, var(--hairline) 15%, black)";
 function LidCut() {
   return (
     <svg
-      aria-label="A laptop from the side at three lid angles. At 105 degrees the display is bright, at 24 degrees it is at half brightness, and with the lid shut it is off"
+      aria-label="A laptop from the side at three lid angles. At 105 degrees the display is bright, at 24 degrees it is at half brightness, and with the lid closed it is off"
       className="w-full max-w-[22rem]"
       role="img"
       viewBox="0 0 300 98"
@@ -117,7 +117,7 @@ export function SmallThings() {
       <SectionHeading lead="Each one is in the menu or in Preferences" title="It does the small things too" />
       <ul className="mx-auto grid w-full max-w-[36rem] gap-4 sm:grid-cols-2 lg:max-w-none lg:grid-cols-3">
         <Thing
-          text="It dims from 45 degrees and is off with the lid shut, so it does not use battery or warm your Mac"
+          text="It dims from 45 degrees and is off with the lid closed, so it does not use battery or warm your Mac"
           title="The display dims as the lid closes"
         >
           <LidCut />

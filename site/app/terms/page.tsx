@@ -25,8 +25,8 @@ export default function Terms() {
         Polar purchases, then enter it on the new one.
       </p>
       <p>
-        Your key includes updates for as long as the app is developed. I do not promise any future
-        features.
+        Your key includes lifetime updates. Lifetime updates means that updates are included for as
+        long as agent caffeine is developed. I do not promise any future features.
       </p>
 
       <h2>Free trial</h2>

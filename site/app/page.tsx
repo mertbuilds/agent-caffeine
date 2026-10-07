@@ -25,13 +25,13 @@ function structuredData(trial: boolean) {
         applicationCategory: "UtilitiesApplication",
         url: SITE_URL,
         image: `${SITE_URL}/icon.png`,
-        description: `A macOS menu bar app that keeps the Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are idle or wait for you. Detects Claude Code, Codex, OpenCode and more than ${agentsMoreThan} AI coding agents.${
+        description: `A macOS menu bar app that keeps the Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are idle or wait for you. Detects Claude Code, Codex, opencode and more than ${agentsMoreThan} AI coding agents.${
           trial ? ` Free to download, with every feature for 7 days. After that it needs a license key, from ${PRICE} once.` : ""
         }`,
         featureList: [
           "Keeps the Mac awake while an AI coding agent works, also with the lid closed",
           "Lets the Mac sleep when agents are idle or wait for you",
-          "Dims the built-in display as the lid closes and keeps it dark while the lid is shut",
+          "Dims the built-in display as the lid closes and keeps it dark while the lid is closed",
           "Pause for 30 minutes, 1 hour or until tomorrow",
           "Stay reachable for 1, 2 or 4 hours, so a message from your phone reaches your agent",
           "Notifications when an agent waits for your answer or finishes",

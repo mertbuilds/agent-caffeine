@@ -27,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
     alternates: { canonical: "/" },
     title: "agent caffeine · Keep your Mac awake while AI agents work",
     description:
-      `Agent-aware sleep prevention for macOS. Detects Claude Code, Codex, OpenCode and more than ${agentsMoreThan} AI coding agents. Lets the Mac sleep when they are idle or wait for you. ${offer}`,
+      `Agent-aware sleep prevention for macOS. Detects Claude Code, Codex, opencode and more than ${agentsMoreThan} AI coding agents. Lets the Mac sleep when they are idle or wait for you. ${offer}`,
     openGraph: {
       title: "agent caffeine",
       description:

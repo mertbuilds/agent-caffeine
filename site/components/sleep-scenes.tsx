@@ -146,14 +146,14 @@ export function SleepScenes() {
           </PanelSurface>
         </Scene>
         <Scene
-          text="Your agents keep working, and the display goes dark as you close the lid. When the battery is at 20%, or your Mac gets too hot, agent caffeine lets it sleep and tells you why"
+          text={`Your agents keep working. On battery, macOS asks you once to allow a small helper. agent caffeine lets your Mac sleep at ${BATTERY_FLOOR}% battery and when it gets too hot. Do not put a working Mac in a closed bag`}
           title="The lid is closed and your Mac runs on battery"
         >
           <BatteryStop />
         </Scene>
         <Scene
-          text="Only the session that works keeps your Mac awake. The idle ones do not count"
-          title="Ten sessions are open and one is working"
+          text="A session is one open chat with an agent. Only the one that works keeps your Mac awake"
+          title="10 sessions are open and 1 is working"
         >
           <PanelSurface className="panel-still flex h-full flex-col justify-center rounded-none border-0 px-[13px]" label="The agent caffeine menu with one working session and nine idle ones">
             {ONE_OF_TEN.map((group) => (
