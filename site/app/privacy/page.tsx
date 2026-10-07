@@ -66,10 +66,19 @@ export default function Privacy() {
 
       <h2>This website</h2>
       <p>
-        I count page views and clicks on the buy and download buttons with OpenPanel, an analytics
-        tool I run on my own server at analytics.vinena.studio. The requests go through this site
-        first, at <code>/api/op</code>, and carry your IP address and your browser&apos;s user
-        agent. There are no cookies and no session recordings.
+        I count page views and clicks on this site with OpenPanel, an analytics tool I run on my
+        own server at analytics.vinena.studio. It also records how the page is used: pointer
+        movement, scrolling and clicks. I watch these recordings to find where the page is unclear
+        and to improve it. A recording shows only this site, never the rest of your screen, and
+        anything typed into a field is hidden. The requests go through this site first, at{" "}
+        <code>/api/op</code>, and carry your IP address and your browser&apos;s user agent. There
+        are no cookies. The app itself sends none of this.
+      </p>
+      <p>
+        If the link that brought you here names its source (for example{" "}
+        <code>utm_source</code>), your browser keeps that source until you close the tab. The page
+        view carries it, and the checkout link passes it to Polar, so I can see which link led to
+        an order.
       </p>
       <p>
         If you pick a light or dark theme, the choice is kept in your browser&apos;s local storage.
