@@ -171,6 +171,12 @@ struct PreferencesView: View {
                         Button(PanelText.title(of: .buy)) { NSWorkspace.shared.open(license.config.checkoutURL) }
                     }
                 }
+                // The portal lists the keys of whoever bought before. The
+                // message of a full key has its own link to it.
+                if license.record.key == nil, license.message != .limitReached {
+                    Link("Bought before? Find your key", destination: license.config.customerPortalURL)
+                        .font(.callout)
+                }
             }
             if let message = license.message {
                 Text(message.text)
