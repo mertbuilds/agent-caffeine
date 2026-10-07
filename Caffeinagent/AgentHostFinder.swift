@@ -51,26 +51,39 @@ final class SystemAgentHosts: AgentHostFinding {
         Self.regularApp(pid)?.localizedName
     }
 
-    /// The app comes to the front with the window it had in front. Which
-    /// window or tab holds the agent is not known here: see `AgentHost`.
+    /// The app comes to the front, and shows a window that was in the
+    /// Dock when it had none on screen. Which window or tab holds the
+    /// agent is not known here: see `AgentHost`.
     func bringForward(app pid: Int32) -> Bool {
         guard let app = Self.regularApp(pid) else { return false }
         if app.isHidden { app.unhide() }
-        let activated: Bool
+        guard case .open(let bundle) = AgentHostReveal.way(bundleURL: app.bundleURL, executableURL: app.executableURL) else {
+            return Self.activate(app)
+        }
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = true
+        configuration.createsNewApplicationInstance = false
+        configuration.addsToRecentItems = false
+        NSWorkspace.shared.openApplication(at: bundle, configuration: configuration) { opened, _ in
+            // macOS refused, or another copy of the app answered.
+            if opened?.processIdentifier == pid { return }
+            Task { @MainActor in
+                if let app = Self.regularApp(pid) { _ = Self.activate(app) }
+            }
+        }
+        return true
+    }
+
+    /// The app comes to the front with the windows it has on screen.
+    private static func activate(_ app: NSRunningApplication) -> Bool {
         if #available(macOS 14.0, *) {
             // From macOS 14 an app comes to the front when the active app
             // gives way to it. A click on the menu or on a notification
             // made agent caffeine the app the user works with.
             NSApp.yieldActivation(to: app)
-            activated = app.activate(from: .current, options: [])
-        } else {
-            activated = app.activate(options: [.activateIgnoringOtherApps])
+            return app.activate(from: .current, options: [])
         }
-        if activated { return true }
-        // As a click on its icon in the Dock.
-        guard let url = app.bundleURL else { return false }
-        NSWorkspace.shared.openApplication(at: url, configuration: NSWorkspace.OpenConfiguration())
-        return true
+        return app.activate(options: [.activateIgnoringOtherApps])
     }
 
     private nonisolated static func regularApp(_ pid: Int32) -> NSRunningApplication? {

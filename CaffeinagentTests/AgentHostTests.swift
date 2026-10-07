@@ -205,3 +205,47 @@ final class AgentHostTests: XCTestCase {
         XCTAssertEqual(reads, 0)
     }
 }
+
+final class AgentHostRevealTests: XCTestCase {
+    private func way(bundle: String?, executable: String?) -> AgentHostReveal {
+        AgentHostReveal.way(
+            bundleURL: bundle.map { URL(fileURLWithPath: $0) },
+            executableURL: executable.map { URL(fileURLWithPath: $0) }
+        )
+    }
+
+    private func open(_ path: String) -> AgentHostReveal {
+        .open(bundle: URL(fileURLWithPath: path, isDirectory: true))
+    }
+
+    func testAnAppIsOpenedByItsBundle() {
+        XCTAssertEqual(
+            way(bundle: "/Applications/Ghostty.app", executable: "/Applications/Ghostty.app/Contents/MacOS/ghostty"),
+            .open(bundle: URL(fileURLWithPath: "/Applications/Ghostty.app"))
+        )
+    }
+
+    func testTheBundleOfTheRunningCopyIsTheOneOpened() {
+        let other = "/Users/me/Applications/Cursor.app"
+        XCTAssertEqual(way(bundle: other, executable: other + "/Contents/MacOS/Cursor"), .open(bundle: URL(fileURLWithPath: other)))
+    }
+
+    func testABinaryStartedFromACommandLineGoesToItsBundle() {
+        let binary = "/Applications/Ghostty.app/Contents/MacOS/ghostty"
+        XCTAssertEqual(way(bundle: nil, executable: binary), open("/Applications/Ghostty.app"))
+        XCTAssertEqual(way(bundle: binary, executable: binary), open("/Applications/Ghostty.app"), "The binary is not a bundle")
+        XCTAssertEqual(way(bundle: "/Applications/Ghostty.app/Contents/MacOS", executable: binary), open("/Applications/Ghostty.app"))
+    }
+
+    func testAnAppInsideAnAppGoesToItsOwnBundle() {
+        let inner = "/Applications/Outer.app/Contents/MacOS/Inner.app"
+        XCTAssertEqual(way(bundle: nil, executable: inner + "/Contents/MacOS/Inner"), open(inner))
+    }
+
+    func testAnExecutableOfNoBundleIsNotOpened() {
+        XCTAssertEqual(way(bundle: nil, executable: "/opt/homebrew/bin/alacritty"), .activate)
+        XCTAssertEqual(way(bundle: "/opt/homebrew/bin", executable: "/opt/homebrew/bin/alacritty"), .activate)
+        XCTAssertEqual(way(bundle: nil, executable: nil), .activate)
+        XCTAssertEqual(way(bundle: nil, executable: "/Applications/Cursor.app/Contents/Resources/app/bin/tool"), .activate, "Not the main executable of an app")
+    }
+}

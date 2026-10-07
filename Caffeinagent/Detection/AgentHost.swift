@@ -135,3 +135,33 @@ enum AgentHostResolver {
         isMultiplexer(row) && row.hasTTY
     }
 }
+
+/// How to go to the app of an agent. Pure: the caller passes what the
+/// system says of the running app.
+enum AgentHostReveal: Equatable {
+    /// Open the bundle of the running app, as a click on its icon in the
+    /// Dock: the app then shows a window that is in the Dock, or makes one
+    /// when it has none.
+    case open(bundle: URL)
+    /// The app has no bundle to open. It comes to the front with the
+    /// windows it has on screen.
+    case activate
+
+    private static let executables = ".app/Contents/MacOS/"
+
+    /// - Parameters:
+    ///   - bundleURL: what the running app gives as its bundle. For an
+    ///     executable that is in no bundle this is not an app.
+    ///   - executableURL: the binary of the running app. An app started
+    ///     from a command line still lies in its bundle.
+    static func way(bundleURL: URL?, executableURL: URL?) -> AgentHostReveal {
+        if let bundleURL, bundleURL.pathExtension == "app" { return .open(bundle: bundleURL) }
+        // The bundle the binary lies in, not one that bundle lies in. To
+        // open the binary itself would start a second copy.
+        if let path = executableURL?.path, let inner = path.range(of: executables, options: .backwards) {
+            let bundle = String(path[..<inner.lowerBound]) + ".app"
+            return .open(bundle: URL(fileURLWithPath: bundle, isDirectory: true))
+        }
+        return .activate
+    }
+}
