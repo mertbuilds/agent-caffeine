@@ -967,19 +967,24 @@ final class HookInstallerTests: XCTestCase {
 
     func testPiExtensionSourceHasTheQueueAndTheStamp() {
         let source = HookCatalog.piExtensionSource(appPath: appPath)
-        XCTAssertEqual(HookCatalog.piExtensionVersion, 1)
-        XCTAssertTrue(source.hasPrefix("// agent-caffeine-hook v=1\n"))
+        XCTAssertEqual(HookCatalog.piExtensionVersion, 2)
+        XCTAssertTrue(source.hasPrefix("// agent-caffeine-hook v=2\n"))
+        XCTAssertFalse(source.contains("v=1"))
+        XCTAssertFalse(source.contains(".v1"))
         for piece in [
             Self.piSpawnImport,
             "const hook = \"/Applications/agent caffeine.app/Contents/MacOS/CaffeinagentHook\";",
             "export default function (pi) {",
-            "{ queue: Promise.resolve(), seq: 0 }",
+            "globalThis[Symbol.for(\"agent-caffeine.pi.v2\")] ??= {",
+            "queue: Promise.resolve(),",
+            "seq: 0,",
             "shared.queue = shared.queue.then(() => run(name, body));",
-            "JSON.stringify({ session_id: session || \"pid-\" + process.pid, seq: shared.seq, ts })",
+            "JSON.stringify({ session_id: session || \"pid-\" + process.pid, seq: shared.seq, ts, inst: shared.inst })",
             "const ts = Date.now();",
             "if (key === last && Math.abs(ts - lastAt) < 1000) return;",
-            "spawn(hook, [\"pi\", name, \"v=1\"], { stdio: [\"pipe\", \"ignore\", \"ignore\"], detached: true });",
-            "const timer = setTimeout(done, 5000);",
+            "spawn(hook, [\"pi\", name, \"v=2\"], { stdio: [\"pipe\", \"ignore\", \"ignore\"], detached: true });",
+            "child?.kill(\"SIGKILL\");",
+            Self.piTimer,
             "child.unref();",
         ] {
             XCTAssertTrue(source.contains(piece), piece)
@@ -1003,6 +1008,94 @@ final class HookInstallerTests: XCTestCase {
     }
 
     private static let piSpawnImport = "import { spawn } from \"node:child_process\";"
+    private static let piTimer = "}, 5000);"
+
+    /// One hook command never exits. It is killed when its time is over,
+    /// and the events after it reach the hook command in their order.
+    func testAHookCommandThatHangsIsKilledAndThePiExtensionGoesOn() throws {
+        _ = try javaScriptRuntime()
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("pi-extension-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let source = HookCatalog.piExtensionSource(appPath: appPath)
+        XCTAssertEqual(source.components(separatedBy: Self.piSpawnImport).count, 2)
+        XCTAssertEqual(source.components(separatedBy: Self.piTimer).count, 2)
+        // The same file with a wait of 80 ms, so the test does not take 5 seconds.
+        let wired = source.replacingOccurrences(of: Self.piSpawnImport, with: "import { spawn } from \"./spawn.mjs\";")
+            .replacingOccurrences(of: Self.piTimer, with: "}, 80);")
+        try Data(wired.utf8).write(to: folder.appendingPathComponent("extension.mjs"))
+        // The second child never exits. The kill of the fourth one throws.
+        let spawn = """
+        export const state = { log: [], kills: [], calls: 0 };
+        export const spawn = (command, args) => {
+          state.calls += 1;
+          const call = state.calls;
+          const handlers = {};
+          const child = {
+            on: (name, handler) => {
+              handlers[name] = handler;
+              return child;
+            },
+            unref: () => {},
+            kill: (signal) => {
+              state.kills.push({ call, signal });
+              if (call === 4) throw new Error("ESRCH");
+            },
+            stdin: {
+              on: () => {},
+              end: (body) => {
+                if (call === 2 || call === 4) return;
+                const input = JSON.parse(body);
+                setTimeout(() => {
+                  state.log.push({ name: args[1], seq: input.seq, inst: input.inst, keys: Object.keys(input), at: Date.now() });
+                  handlers.close(0);
+                }, 2);
+              },
+            },
+          };
+          return child;
+        };
+        """
+        try Data(spawn.utf8).write(to: folder.appendingPathComponent("spawn.mjs"))
+        let runner = """
+        import extension from "./extension.mjs";
+        import { state } from "./spawn.mjs";
+        const handlers = {};
+        extension({ on: (name, handler) => { (handlers[name] ??= []).push(handler); } });
+        const context = { sessionManager: { getSessionId: () => "s" } };
+        const fire = (name) => { for (const handler of handlers[name]) handler({ type: name }, context); };
+        const started = Date.now();
+        fire("session_start");
+        fire("agent_start");
+        fire("tool_execution_start");
+        fire("tool_execution_end");
+        fire("agent_settled");
+        await new Promise((done) => setTimeout(done, 40));
+        const early = { delivered: state.log.length, kills: state.kills.length };
+        await new Promise((done) => setTimeout(done, 400));
+        console.log(JSON.stringify({ log: state.log, kills: state.kills, calls: state.calls, early, started }));
+        """
+        try Data(runner.utf8).write(to: folder.appendingPathComponent("runner.mjs"))
+        let result = try runJavaScript(in: folder)
+        let log = try XCTUnwrap(result["log"] as? [[String: Any]])
+        let early = try XCTUnwrap(result["early"] as? [String: Any])
+        XCTAssertEqual(early["delivered"] as? Int, 1, "The queue waits for the command that hangs")
+        XCTAssertEqual(early["kills"] as? Int, 0, "No kill before the time is over")
+        XCTAssertEqual(result["calls"] as? Int, 5)
+        XCTAssertEqual(log.map { $0["name"] as? String }, ["session_start", "tool_execution_start", "agent_settled"])
+        XCTAssertEqual(log.map { $0["seq"] as? Int }, [1, 3, 5])
+        let kills = try XCTUnwrap(result["kills"] as? [[String: Any]])
+        XCTAssertEqual(kills.map { $0["call"] as? Int }, [2, 4], "Only the commands that hang, and a kill that throws stops nothing")
+        XCTAssertEqual(kills.map { $0["signal"] as? String }, ["SIGKILL", "SIGKILL"])
+        // The stamp says which Pi process counts.
+        let instances = Set(log.compactMap { $0["inst"] as? String })
+        XCTAssertEqual(instances.count, 1)
+        XCTAssertGreaterThanOrEqual(instances.first?.count ?? 0, 8)
+        XCTAssertEqual(log.first?["keys"] as? [String], ["session_id", "seq", "ts", "inst"])
+        let started = try XCTUnwrap(result["started"] as? Double)
+        let settled = try XCTUnwrap(log.last?["at"] as? Double)
+        XCTAssertGreaterThanOrEqual(settled - started, 150, "Two commands ran out of their time before it")
+    }
 
     /// Runs the extension as it is written, with a `pi` that records the
     /// handlers and a `spawn` that records. All events fire in one tick,
@@ -1115,7 +1208,7 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(log.map { $0["args"] as? [String] }, [
             "session_start", "tool_execution_start", "ui_prompt_start", "ui_prompt_end", "tool_execution_end", "agent_settled",
             "session_before_compact", "session_compact", "agent_start", "session_start", "session_shutdown",
-        ].map { ["pi", $0, "v=1"] })
+        ].map { ["pi", $0, "v=2"] })
         XCTAssertEqual(log.map { $0["seq"] as? Int }, [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
         XCTAssertEqual(log.map { $0["session"] as? String }, ["s", "s", "s", "s", "s", "s", "s", "s", "s", "t", "s"])
         let times = log.compactMap { $0["ts"] as? Double }
@@ -1123,7 +1216,7 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(times, times.sorted())
         for entry in log {
             XCTAssertEqual(entry["command"] as? String, "\(appPath)/Contents/MacOS/CaffeinagentHook")
-            XCTAssertEqual(entry["keys"] as? [String], ["session_id", "seq", "ts"], "Nothing else leaves Pi")
+            XCTAssertEqual(entry["keys"] as? [String], ["session_id", "seq", "ts", "inst"], "Nothing else leaves Pi")
             XCTAssertEqual(entry["unrefed"] as? Bool, true)
             let options = try XCTUnwrap(entry["options"] as? [String: Any])
             XCTAssertEqual(options["detached"] as? Bool, true)

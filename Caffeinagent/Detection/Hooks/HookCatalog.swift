@@ -54,8 +54,10 @@ enum HookCatalog {
     /// that does not end is left after `timeoutSeconds`, and the stamp
     /// names the plugin instance that counts.
     static let pluginVersion = 3
-    /// The same for the Pi extension file.
-    static let piExtensionVersion = 1
+    /// The same for the Pi extension file. 2: a hook command that does
+    /// not end is killed after `timeoutSeconds`, and the stamp names the
+    /// Pi process that counts.
+    static let piExtensionVersion = 2
     /// Two events of one name for one session this close together are one:
     /// opencode sends `session.status` idle and `session.idle` in the same
     /// millisecond. A later busy of the same turn is passed on: it starts
@@ -255,7 +257,8 @@ enum HookCatalog {
     /// events that tell and change nothing are taken: a handler of
     /// `tool_call` that fails blocks the tool. The queue and the number are
     /// kept for the process, because `/reload` and a new session load the
-    /// extension anew.
+    /// extension anew. A hook command that does not end within
+    /// `timeoutSeconds` is killed, and the queue goes on.
     ///
     /// Pi has no permission step of its own. Another extension can ask the
     /// user (`ui_prompt_start`), and that is a wait only during a run. A
@@ -268,18 +271,28 @@ enum HookCatalog {
         import { spawn } from "node:child_process";
 
         const hook = \(JSONSourceText.literal(executablePath(appPath: appPath)));
-        const shared = (globalThis[Symbol.for("agent-caffeine.pi.v\(piExtensionVersion)")] ??= { queue: Promise.resolve(), seq: 0 });
+        const shared = (globalThis[Symbol.for("agent-caffeine.pi.v\(piExtensionVersion)")] ??= {
+          queue: Promise.resolve(),
+          seq: 0,
+          inst: Math.random().toString(36).slice(2) + Date.now().toString(36),
+        });
 
         const run = (name, body) =>
           new Promise((done) => {
-            const timer = setTimeout(done, \(timeoutSeconds * 1000));
+            let child;
+            const timer = setTimeout(() => {
+              try {
+                child?.kill("SIGKILL");
+              } catch {}
+              done();
+            }, \(timeoutSeconds * 1000));
             const end = () => {
               clearTimeout(timer);
               done();
             };
             try {
               timer.unref?.();
-              const child = spawn(hook, ["\(piID)", name, "v=\(piExtensionVersion)"], { stdio: ["pipe", "ignore", "ignore"], detached: true });
+              child = spawn(hook, ["\(piID)", name, "v=\(piExtensionVersion)"], { stdio: ["pipe", "ignore", "ignore"], detached: true });
               child.on("error", end);
               child.on("close", end);
               child.stdin.on("error", () => {});
@@ -308,7 +321,7 @@ enum HookCatalog {
               last = key;
               lastAt = ts;
               shared.seq += 1;
-              const body = JSON.stringify({ session_id: session || "pid-" + process.pid, seq: shared.seq, ts });
+              const body = JSON.stringify({ session_id: session || "pid-" + process.pid, seq: shared.seq, ts, inst: shared.inst });
               shared.queue = shared.queue.then(() => run(name, body));
             } catch {}
           };
