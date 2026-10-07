@@ -4,9 +4,9 @@ import { useId, useState } from "react";
 import type { ReactNode } from "react";
 import { faqItems } from "@/lib/faq";
 
-function Question({ question, answer }: { question: string; answer: ReactNode }) {
+function Question({ question, answer, first }: { question: string; answer: ReactNode; first: boolean }) {
   const id = useId();
-  const [open, setOpen] = useState(true);
+  const [open, setOpen] = useState(first);
   const questionId = `${id}-question`;
   const answerId = `${id}-answer`;
 
@@ -65,8 +65,8 @@ export function Faq({ trial }: { trial: boolean }) {
         Questions
       </h2>
       <div>
-        {faqItems(trial).map((item) => (
-          <Question key={item.question} question={item.question} answer={item.answer} />
+        {faqItems(trial).map((item, index) => (
+          <Question key={item.question} question={item.question} answer={item.answer} first={index === 0} />
         ))}
       </div>
     </section>

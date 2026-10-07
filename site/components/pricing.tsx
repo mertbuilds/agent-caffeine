@@ -5,6 +5,9 @@ import { getLatestRelease } from "@/lib/release";
 
 const GRID_LINE = "rgba(255, 255, 255, 0.07)";
 
+/** From the download to the menu bar. */
+const STEPS = ["Download and open the file", "Drag agent caffeine to Applications", "Open it. The robot appears in your menu bar"];
+
 export async function Pricing() {
   const release = await getLatestRelease();
   return (
@@ -41,6 +44,19 @@ export async function Pricing() {
             }
           />
         </div>
+      </div>
+      <div className="mx-auto mt-8 flex max-w-[880px] flex-col gap-4 px-2 text-sm">
+        <ol className="grid gap-x-6 gap-y-3 sm:grid-cols-3">
+          {STEPS.map((step, index) => (
+            <li key={step} className="flex items-baseline gap-2.5">
+              <span aria-hidden="true" className="flex size-5 shrink-0 items-center justify-center self-start rounded-full border border-border text-xs tabular-nums text-muted">
+                {index + 1}
+              </span>
+              <span className="text-pretty leading-5">{step}</span>
+            </li>
+          ))}
+        </ol>
+        <p className="text-pretty text-muted">macOS 13 or later, Apple silicon and Intel · Signed and notarized by Apple</p>
       </div>
     </section>
   );
