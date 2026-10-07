@@ -572,10 +572,15 @@ struct HookInstaller {
         }
     }
 
+    /// The states go only when the hooks are off for sure: after a change
+    /// that worked, and when no config is there. "Off" that fails leaves
+    /// the hooks on, and their states with them.
     func uninstall(_ entry: HookCatalogEntry) throws {
-        forgetStates(of: entry)
         let url = configURL(for: entry)
-        guard let old = try read(url) else { return }
+        guard let old = try read(url) else {
+            forgetStates(of: entry)
+            return
+        }
         switch entry.format {
         case .pluginFile:
             guard HookConfigEditor.status(text: old, entry: entry, appPath: appPath) != .unreadable else { throw HookInstallError.notOurFile }
@@ -606,6 +611,7 @@ struct HookInstaller {
             }
             forgetRecord(for: entry)
         }
+        forgetStates(of: entry)
     }
 
     /// Nothing is written when the text is the same. The file is replaced

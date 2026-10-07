@@ -454,6 +454,39 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: states.path), ["claude-300.json"])
     }
 
+    /// The hooks stay on when "off" fails, so their states stay too.
+    func testOffThatFailsKeepsTheHookStates() throws {
+        let states = home.appendingPathComponent("Library/Application Support/com.caffeinagent.app/hooks")
+        try FileManager.default.createDirectory(at: states, withIntermediateDirectories: true)
+        func leaveStates(of entry: HookCatalogEntry) throws -> [String] {
+            let name = "\(entry.id)-100.json"
+            try Data("{}".utf8).write(to: states.appendingPathComponent(name))
+            return [name]
+        }
+        // A plugin file that is not ours.
+        try FileManager.default.createDirectory(at: installer.configURL(for: opencode).deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data("export const Mine = async () => ({})".utf8).write(to: installer.configURL(for: opencode))
+        var kept = try leaveStates(of: opencode)
+        XCTAssertThrowsError(try installer.uninstall(opencode)) { XCTAssertEqual($0 as? HookInstallError, .notOurFile) }
+        // A config that may not be written.
+        try installer.install(codex)
+        try FileManager.default.setAttributes([.posixPermissions: 0o400], ofItemAtPath: installer.configURL(for: codex).path)
+        kept += try leaveStates(of: codex)
+        XCTAssertThrowsError(try installer.uninstall(codex)) { XCTAssertEqual($0 as? HookInstallError, .notWritable) }
+        // A config that cannot be read.
+        try write("{ not json", for: claude)
+        kept += try leaveStates(of: claude)
+        XCTAssertThrowsError(try installer.uninstall(claude))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: states.path).sorted(), kept.sorted())
+
+        // "Off" that works takes them, and so does "off" with no config file.
+        try FileManager.default.setAttributes([.posixPermissions: 0o600], ofItemAtPath: installer.configURL(for: codex).path)
+        try installer.uninstall(codex)
+        try FileManager.default.removeItem(at: installer.configURL(for: opencode))
+        try installer.uninstall(opencode)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: states.path), ["claude-100.json"])
+    }
+
     func testOffRemovesAFileThatOnCreatedAlsoAfterAnUpdate() throws {
         try HookInstaller(home: home, appPath: "/Users/me/Downloads/agent caffeine.app").install(codex)
         try installer.install(codex)
