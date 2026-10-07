@@ -17,8 +17,16 @@ struct SmokeMeasurements: Codable, Equatable {
     var ticks = 0
     /// The longest time between two ticks after the first second.
     var longestStallMs = 0
-    /// Processor time of the process, in percent of one core.
+    /// Processor time of the process over the whole run, in percent of
+    /// one core. With the start of the app, so it is not judged.
     var cpuPercent: Double = 0
+    /// The same for each whole second of the run, the first one first.
+    var cpuBySecond: [Double] = []
+    /// The seconds of the run, from 0, in which the test itself hid and
+    /// showed the icon or opened Preferences.
+    var stepSeconds: [Int] = []
+    /// Clicks on the icon or a window that the test kept from the app.
+    var clicksIgnored = 0
     /// How often SwiftUI worked out the scenes of the app.
     var sceneEvaluations = 0
     /// How often the aggregator said that it changes.
@@ -39,7 +47,16 @@ enum SmokeHealth {
     static let tickInterval: TimeInterval = 0.1
     static let minTickShare = 0.8
     static let maxStallMs = 500
+    /// The first seconds of the run are the start of the app.
+    static let launchSeconds = 2
+    /// The steps run early, so the seconds after them are steady.
+    static let iconToggleAt: TimeInterval = 1
+    static let settingsWindowAt: TimeInterval = 2.4
+    static let minSteadySeconds = 2
+    /// For the median of the steady seconds: one busy second is no loop.
     static let maxCPUPercent: Double = 15
+    /// For their mean: a loop that runs in less than half of them.
+    static let maxMeanCPUPercent: Double = 40
     static let maxSceneEvaluationsPerSecond: Double = 50
     static let minSamples = 2
     /// A main thread that is silent this long ends the process.
@@ -53,6 +70,23 @@ enum SmokeHealth {
         m.seconds > 0 ? Double(m.sceneEvaluations) / m.seconds : 0
     }
 
+    /// The seconds the processor time is judged by: not the start of the
+    /// app, and not the ones the test itself worked in.
+    static func steadyCPU(_ m: SmokeMeasurements) -> [Double] {
+        m.cpuBySecond.enumerated().filter { $0.offset >= launchSeconds && !m.stepSeconds.contains($0.offset) }.map(\.element)
+    }
+
+    static func median(_ values: [Double]) -> Double {
+        let sorted = values.sorted()
+        guard !sorted.isEmpty else { return 0 }
+        let middle = sorted.count / 2
+        return sorted.count % 2 == 1 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2
+    }
+
+    private static func rounded(_ percent: Double) -> Double {
+        (percent * 10).rounded() / 10
+    }
+
     /// What is wrong, in words. Empty for a healthy run.
     static func failures(_ m: SmokeMeasurements) -> [String] {
         var failures: [String] = []
@@ -63,8 +97,17 @@ enum SmokeHealth {
         if m.longestStallMs >= maxStallMs {
             failures.append("main thread stalled for \(m.longestStallMs) ms")
         }
-        if m.cpuPercent >= maxCPUPercent {
-            failures.append("used \(m.cpuPercent)% of one core")
+        let steady = steadyCPU(m)
+        if steady.count < minSteadySeconds {
+            failures.append("\(steady.count) steady seconds to judge the processor time by, expected \(minSteadySeconds) or more")
+        } else {
+            let median = median(steady), mean = steady.reduce(0, +) / Double(steady.count)
+            if median >= maxCPUPercent {
+                failures.append("used \(rounded(median))% of one core in the median steady second")
+            }
+            if mean >= maxMeanCPUPercent {
+                failures.append("used \(rounded(mean))% of one core over the steady seconds")
+            }
         }
         let rate = sceneEvaluationsPerSecond(m)
         if rate >= maxSceneEvaluationsPerSecond {

@@ -6,7 +6,7 @@
 #
 #   scripts/smoke-test.sh                 build Debug, then test that build
 #   scripts/smoke-test.sh --app <path>    test a bundle that is built already
-#   scripts/smoke-test.sh --seconds <n>   how long the app runs (default 8)
+#   scripts/smoke-test.sh --seconds <n>   how long the app runs (default 10)
 #
 # The app runs as `caffeinagent --smoke-test <seconds>` (see
 # Caffeinagent/SmokeTest.swift). In that mode it takes no power assertion,
@@ -14,7 +14,8 @@
 # notification and keeps its settings under a bundle identifier of its own, so
 # it is safe next to a copy that is installed and running. A second robot
 # shows in the menu bar while it runs, and Preferences opens once behind the
-# app in front.
+# app in front. A click on that robot does nothing: an open menu moves its
+# robot, and the test would measure that.
 #
 # Exit 0 and PASS when the app is healthy. The app prints one line of JSON
 # with what it measured.
@@ -24,7 +25,7 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 APP=""
-SECONDS_TO_RUN=8
+SECONDS_TO_RUN=10
 # The app ends itself, also when its main thread hangs. This is for a
 # process that does not even get that far.
 HARD_TIMEOUT=30
