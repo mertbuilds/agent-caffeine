@@ -619,15 +619,15 @@ export function headlineText(line: Headline, waitingFor: number | null, now = 0)
     case "open":
       return { title: awake, subtitle: phrase(line.subject, "is open", "are open") };
     case "alwaysOn":
-      return { title: awake, subtitle: "Until you switch it off" };
+      return { title: awake, subtitle: "Until you turn it off" };
     case "idle":
       return { title: canSleep, subtitle: "one" in line.subject ? `${line.subject.one} is idle` : "All agents are idle" };
     case "waitingReleased":
-      return { title: canSleep, subtitle: phrase(line.subject, "is waiting for your answer", "are waiting for your answer") };
+      return { title: canSleep, subtitle: phrase(line.subject, "is waiting for you", "are waiting for you") };
     case "noAgents":
       return { title: canSleep, subtitle: "No agent is open" };
     case "safetyStop":
-      return { title: canSleep, subtitle: `The battery is at ${percent(line.percent)}` };
+      return { title: "agent caffeine has stopped", subtitle: `The battery is at ${percent(line.percent)}` };
     case "switchedOff":
       return { title: "agent caffeine is off", subtitle: "Your Mac sleeps as usual" };
     case "paused": {
@@ -803,13 +803,14 @@ export function iconLook(of: Pose): IconLook {
 export function iconLabel(look: IconLook, reachable: number | null = null): string {
   switch (look.eyes) {
     case "happy":
+      return reachable === null ? "agent caffeine: your Mac stays awake" : `agent caffeine: reachable until ${clockTime(reachable)}`;
     case "open":
-      return reachable === null ? "agent caffeine, Mac stays awake" : `agent caffeine, reachable until ${clockTime(reachable)}`;
+      return "agent caffeine: an agent is waiting for you";
     case "closed":
-      if (look.paused === true) return "agent caffeine, paused";
-      return look.opacity < 1 ? "agent caffeine, off" : "agent caffeine, Mac can sleep";
+      if (look.paused === true) return "agent caffeine: paused";
+      return look.opacity < 1 ? "agent caffeine: off" : "agent caffeine: your Mac can sleep";
     case "dead":
-      return "agent caffeine, needs attention";
+      return "agent caffeine: needs attention";
   }
 }
 
@@ -872,7 +873,7 @@ function attention(state: SimState, line: Headline): Attention | null {
     return { kind: "safetyStop", text: `agent caffeine starts again at ${percent(BATTERY_FLOOR + BATTERY_RECOVERY)}` };
   }
   if (reachableUntil(state) !== null && line.kind !== "paused" && line.kind !== "switchedOff" && state.power === "battery" && !state.helper) {
-    return { kind: "reachableNeedsLidClosed", text: "Close the lid and your Mac still sleeps. Set up lid closed to stay reachable" };
+    return { kind: "reachableNeedsLidClosed", text: "Close the lid and your Mac still sleeps. Set up the helper to stay reachable." };
   }
   if (state.power === "battery" && !state.helper && !state.hintDismissed) {
     return { kind: "lidClosedNotSetUp", text: "Your Mac still sleeps with the lid closed on battery" };
@@ -930,11 +931,11 @@ export function view(state: SimState): View {
     bar: bar(state, line),
     clock: clockTime(state.now).replace(/^0/, ""),
     groups: groups(state),
-    // `PanelText.empty`.
+    // `PanelText.empty`: the invitation only when a new agent is all that is missing.
     emptyText: !empty
       ? null
-      : state.mode === "always"
-        ? "No agent is open"
-        : "Start an agent and agent caffeine keeps your Mac awake while it works",
+      : line.kind === "noAgents"
+        ? "Start an agent and agent caffeine keeps your Mac awake while it works"
+        : "No agent is open",
   };
 }

@@ -77,7 +77,7 @@ test("an agent that waits holds for 5 minutes, then the Mac can sleep", () => {
   const released = view(later(asked, WAITING_HOLD));
   assert.equal(released.held, false);
   assert.equal(released.pose, "asleep");
-  assert.equal(released.subtitle, "Claude Code is waiting for your answer");
+  assert.equal(released.subtitle, "Claude Code is waiting for you");
   assert.equal(released.groups[0].detail, "Waiting for your answer for 5 minutes");
 });
 
@@ -112,13 +112,22 @@ test("always holds with no agent, and the switch ends every hold", () => {
   assert.equal(view(always).emptyText, "No agent is open");
   assert.equal(view(setEnabled(always, false)).held, false);
   assert.equal(view(setEnabled(always, false)).pose, "off");
+  // The invitation shows only when a new agent is all that is missing.
+  assert.equal(view(setEnabled(always, false)).emptyText, "No agent is open");
+  assert.equal(view(startPause(setMode(always, "agentWorking"), "oneHour")).emptyText, "No agent is open");
+  assert.equal(
+    view(setMode(always, "agentWorking")).emptyText,
+    "Start an agent and agent caffeine keeps your Mac awake while it works",
+  );
 });
 
 test("the safety stop wins over every mode and ends above the floor", () => {
   const low = preset(INITIAL, "low");
   assert.equal(view(low).held, false);
   assert.equal(view(low).pose, "trouble");
+  assert.equal(view(low).title, "agent caffeine has stopped");
   assert.equal(view(low).subtitle, `The battery is at ${BATTERY_FLOOR}%`);
+  assert.equal(view(low).iconLabel, "agent caffeine: needs attention");
   // The line of the battery says when it starts again, so no attention line says it a second time.
   assert.equal(view(low).attention, null);
   assert.equal(view(setMode(low, "always")).held, false);
@@ -159,7 +168,7 @@ test("a pause holds nothing, names its end and starts again by itself", () => {
   assert.equal(shown.subtitle, "Starts again at 10:41");
   assert.equal(shown.bar.pausedLabel, "Paused until 10:41");
   assert.equal(shown.bar.timer, false);
-  assert.equal(shown.iconLabel, "agent caffeine, paused");
+  assert.equal(shown.iconLabel, "agent caffeine: paused");
   // The rows keep their states.
   assert.equal(shown.groups[0].detail, "1 working");
   assert.equal(view(startPause(working, "thirtyMinutes")).subtitle, "Starts again at 10:11");
@@ -189,7 +198,7 @@ test("stay reachable keeps the Mac awake with no agent at work, until its time",
   assert.equal(shown.subtitle, "Reachable until 11:41");
   assert.equal(shown.bar.reachableLabel, "Reachable until 11:41");
   assert.equal(shown.bar.timer, false);
-  assert.equal(shown.iconLabel, "agent caffeine, reachable until 11:41");
+  assert.equal(shown.iconLabel, "agent caffeine: reachable until 11:41");
   assert.equal(shown.groups[1].detail, "Idle for 1 hour 22 minutes");
   assert.equal(view(later(reachable, 2 * 3600)).held, false);
   assert.equal(view(stopReachable(reachable)).held, false);
