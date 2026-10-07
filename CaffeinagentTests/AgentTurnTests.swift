@@ -52,6 +52,29 @@ final class AgentTurnTests: XCTestCase {
         XCTAssertEqual(reading(claude(.working, at: 0, hook: .waitingForUser), at: 0).turn?.state, .waitingForUser)
     }
 
+    func testTheNewerOfTheHookAndTheSessionFileIsTheTurn() {
+        // As recorded: the hook says working, and the session file says
+        // waiting since a moment after it.
+        func claude(_ state: ReportedState, since: TimeInterval, hook: ReportedState, hookAt: TimeInterval) -> AgentEvidence {
+            AgentEvidence(
+                agentID: "claude", displayName: "Claude Code", level: .state, pid: 100, startTime: Self.processStart,
+                reported: StateReport(state: state, since: at(since), observedAt: at(20), source: .claudeSessionFile, detail: nil),
+                subtreeCPUSeconds: 0.02, sampleInterval: 5, hookState: hook, hookStateAt: at(hookAt)
+            )
+        }
+        let asks = reading(claude(.waitingForUser, since: 14, hook: .working, hookAt: 0), at: 20)
+        XCTAssertEqual(asks.verdict.state, .working, "The verdict is as it was")
+        XCTAssertEqual(asks.turn, AgentTurn(state: .waitingForUser))
+        let fromIdle = reading(claude(.waitingForUser, since: 14, hook: .idle, hookAt: 0), at: 20)
+        XCTAssertEqual(fromIdle.verdict.state, .idle)
+        XCTAssertEqual(fromIdle.turn, AgentTurn(state: .waitingForUser))
+        let interrupted = reading(claude(.idle, since: 14, hook: .working, hookAt: 0), at: 20)
+        XCTAssertEqual(interrupted.turn, AgentTurn(state: .idle))
+        // A hook that is newer than the file stands.
+        XCTAssertEqual(reading(claude(.idle, since: 0, hook: .working, hookAt: 14), at: 20).turn, AgentTurn(state: .working))
+        XCTAssertEqual(reading(claude(.working, since: 0, hook: .waitingForUser, hookAt: 14), at: 20).turn, AgentTurn(state: .waitingForUser))
+    }
+
     func testAHookOnlyAgentFinishesOnceWhileItsCommandRunsOn() {
         // Hooks only, no state file: working until 30 s, then idle. A
         // command it started is busy from 20 s to 150 s.

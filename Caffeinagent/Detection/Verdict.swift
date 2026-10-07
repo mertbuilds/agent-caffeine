@@ -235,14 +235,24 @@ enum VerdictRules {
     /// makes it working again. `memory` is the one the verdict left.
     static func turn(of evidence: AgentEvidence, memory: AgentMemory, settings: DetectionSettings, now: Date) -> AgentTurn? {
         guard settings.rule(for: evidence.agentID) == .automatic else { return nil }
-        guard let state = statedState(of: evidence, memory: memory, settings: settings, now: now) else {
+        guard let stated = statedState(of: evidence, memory: memory, settings: settings, now: now) else {
             // An agent that speaks through its hooks only: the idle of a
             // hook stands for the turn until the next event, at any age,
             // so a command that runs on is no new work.
             if evidence.hookState == .idle, let at = evidence.hookStateAt, !isAhead(at, of: now) { return AgentTurn(state: .idle) }
             return nil
         }
-        let report = reportedState(memory: memory, settings: settings, now: now) == state ? memory.lastReport : nil
+        var state = stated
+        var report = reportedState(memory: memory, settings: settings, now: now) == state ? memory.lastReport : nil
+        // A fresh hook state beats the agent's own in the verdict. For the
+        // turn the newer of the two counts: Claude Code was recorded with
+        // "waiting" in its session file 6 seconds before the hook said
+        // so, and an interrupt ends a turn with no hook event at all.
+        if report == nil, let own = memory.lastReport, let reported = reportedState(memory: memory, settings: settings, now: now),
+           let since = own.since, let hookAt = evidence.hookStateAt, since > hookAt, since <= now {
+            state = reported
+            report = own
+        }
         guard state == .working else { return AgentTurn(state: state) }
         if report?.turnEnded == true { return AgentTurn(state: .idle) }
         // The time of a transcript is its last write, not the start of the turn.
