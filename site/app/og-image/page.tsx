@@ -8,7 +8,7 @@ const GRID_LINE = "rgba(255, 255, 255, 0.06)";
 
 /**
  * The picture for link previews, 1200 by 630, in the dark look of the page.
- * Only the dev server draws it: `scripts/og-image.js` takes its picture and
+ * Only the dev server draws it: `scripts/og-image.sh` takes its picture and
  * saves it as `public/og.png`. A production build answers with "not found".
  */
 export default function OgImage() {
