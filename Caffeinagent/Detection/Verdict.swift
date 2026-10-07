@@ -176,11 +176,27 @@ enum CursorApprovalRule {
     /// the transcript), `pwr` (the assertion) and `cmds` (the commands).
     static func signs(of evidence: AgentEvidence) -> Bool {
         guard evidence.agentID == AgentCatalog.cursorDesktopID, let report = evidence.reported else { return false }
-        // With the hooks on, Cursor's `stop` says that the turn is over,
-        // also when the transcript got no end line.
-        if evidence.hookState == .idle { return false }
+        if endedByStopHook(evidence) { return false }
         return signs(turnInProgress: report.source == .cursorTranscript && report.state == .working,
                      holdsAssertion: evidence.ownsSleepAssertion, childCommands: evidence.childCommands)
+    }
+
+    /// With the hooks on, Cursor's `stop` says that the turn is over, also
+    /// when the transcript got no end line. Whether an aborted turn gets
+    /// one is not measured, and without this an open last line read as
+    /// working for as long as the file was listed. The stop counts while
+    /// it is newer than the turn and than the last write to a transcript:
+    /// a write after it is a turn that began with no event. The transcript
+    /// lags behind (see `settle`), so a write that close after the stop
+    /// still belongs to the turn that ended. An assertion or a command is
+    /// the turn of another conversation.
+    static func endedByStopHook(_ evidence: AgentEvidence) -> Bool {
+        guard evidence.agentID == AgentCatalog.cursorDesktopID, evidence.hookState == .idle, let stop = evidence.hookStateAt,
+              let report = evidence.reported, report.source == .cursorTranscript, report.state == .working,
+              signs(turnInProgress: true, holdsAssertion: evidence.ownsSleepAssertion, childCommands: evidence.childCommands) else { return false }
+        if let began = report.since, began > stop { return false }
+        guard let write = evidence.fileActivityAt else { return true }
+        return write.timeIntervalSince(stop) <= settle
     }
 
     static func signs(turnInProgress: Bool, holdsAssertion: Bool, childCommands: Int) -> Bool {
@@ -203,7 +219,8 @@ enum CursorApprovalRule {
 /// 3. strong signs: a busy command, a working background job, a sleep
 ///    assertion of the agent's own, a session-file write,
 /// 4. weak signs: CPU use.
-/// A hook idle does not beat a reported working.
+/// A hook idle does not beat a reported working, but for Cursor's `stop`:
+/// see `CursorApprovalRule.endedByStopHook`.
 /// A reported state beats weak signs in both directions. A reported idle or
 /// waiting does not beat a busy command or a working background job: a turn
 /// that ended is not work that ended.
@@ -470,6 +487,8 @@ enum VerdictRules {
         if let hook = evidence.hookState, let at = evidence.hookStateAt, !isAhead(at, of: now) {
             if hook == .waitingForUser {
                 if memory.endedHookWaitAt != at { return hook }
+            } else if CursorApprovalRule.endedByStopHook(evidence) {
+                return .idle
             } else if now.timeIntervalSince(at) <= hookFreshness {
                 // One process can run many sessions, and the idle of one is
                 // not the idle of all: the agent's own working stands.

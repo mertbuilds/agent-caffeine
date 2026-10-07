@@ -583,13 +583,14 @@ final class CursorApprovalRuleTests: XCTestCase {
 
     private func cursor(
         _ state: ReportedState? = .working, at seconds: TimeInterval, assertion: Bool = false, commands: Int = 0,
-        source: StateReport.Source = .cursorTranscript, hook: ReportedState? = nil, id: String = "cursor-desktop"
+        source: StateReport.Source = .cursorTranscript, hook: ReportedState? = nil, id: String = "cursor-desktop",
+        hookAt: TimeInterval? = nil, writeAt: TimeInterval? = nil
     ) -> AgentEvidence {
         AgentEvidence(
             agentID: id, displayName: "Cursor", level: .state, kind: .desktop, role: .engine, pid: 500, startTime: start.timeIntervalSince1970 - 600,
             reported: state.map { StateReport(state: $0, since: at(0), observedAt: at(seconds), source: source, detail: nil) },
-            childCommands: commands, sampleInterval: 1, ownsSleepAssertion: assertion,
-            hookState: hook, hookStateAt: hook.map { _ in at(seconds) }
+            childCommands: commands, sampleInterval: 1, fileActivityAt: writeAt.map(at), ownsSleepAssertion: assertion,
+            hookState: hook, hookStateAt: hook.map { _ in at(hookAt ?? seconds) }
         )
     }
 
@@ -648,6 +649,60 @@ final class CursorApprovalRuleTests: XCTestCase {
     func testAFreshHookWorkingDoesNotHideTheWait() {
         let timeline = states(to: 20) { second in self.cursor(at: second, hook: .working) }
         XCTAssertEqual(timeline.firstIndex(of: .waitingForUser), 15)
+    }
+
+    /// The hooks are on and the user stops a turn at 30 s. The transcript
+    /// keeps its open last line. Cursor read as working for a minute and
+    /// then for as long as the file was listed.
+    func testAStopHookEndsATurnThatGotNoEndLine() {
+        let timeline = states(to: 3600) { second in
+            second < 30
+                ? self.cursor(at: second, assertion: true, hook: .working, hookAt: 0, writeAt: min(second, 20))
+                : self.cursor(at: second, hook: .idle, hookAt: 30, writeAt: 20)
+        }
+        XCTAssertEqual(Array(timeline[0..<30]), Array(repeating: .working, count: 30))
+        XCTAssertEqual(Array(timeline[30...]), Array(repeating: .idle, count: 3571))
+        // The transcript is written a few seconds after the stop.
+        let late = states(to: 600) { second in self.cursor(at: second, hook: .idle, hookAt: 30, writeAt: min(second, 39)) }
+        XCTAssertEqual(Array(late[40...]), Array(repeating: .idle, count: 561))
+    }
+
+    /// Cursor writes an end line after all: the transcript says idle, with
+    /// the hooks and without.
+    func testATurnWithAnEndLineIsIdleWithAndWithoutTheHooks() {
+        for hook in [ReportedState.idle, nil] {
+            let timeline = states(to: 600) { second in self.cursor(.idle, at: second, hook: hook, hookAt: 0, writeAt: 1) }
+            XCTAssertEqual(timeline, Array(repeating: .idle, count: 601), "\(String(describing: hook))")
+        }
+    }
+
+    /// Without the hooks, an open turn with no assertion is a wait, as before.
+    func testWithoutTheHooksAnOpenTurnWithNoAssertionIsAWait() {
+        let timeline = states(to: 600) { second in self.cursor(at: second, writeAt: 20) }
+        XCTAssertEqual(Array(timeline[0..<15]), Array(repeating: .working, count: 15))
+        XCTAssertEqual(Array(timeline[15...]), Array(repeating: .waitingForUser, count: 586))
+    }
+
+    /// A stop that is older than the last write is the stop of an earlier
+    /// turn: the turn in progress began with an event that got lost.
+    func testAStopHookFromBeforeTheLastWriteEndsNothing() {
+        XCTAssertFalse(CursorApprovalRule.endedByStopHook(cursor(at: 200, hook: .idle, hookAt: 30, writeAt: 100)))
+        XCTAssertTrue(CursorApprovalRule.signs(of: cursor(at: 200, hook: .idle, hookAt: 30, writeAt: 100)))
+        let asks = states(to: 200) { second in self.cursor(at: second, hook: .idle, hookAt: -100, writeAt: 0) }
+        XCTAssertEqual(asks.firstIndex(of: .waitingForUser), 15)
+        let works = states(to: 200) { second in self.cursor(at: second, assertion: true, hook: .idle, hookAt: -100, writeAt: 0) }
+        XCTAssertEqual(works, Array(repeating: .working, count: 201))
+        // The stop of one conversation while another holds the assertion
+        // or runs a command.
+        XCTAssertFalse(CursorApprovalRule.endedByStopHook(cursor(at: 40, assertion: true, hook: .idle, hookAt: 30, writeAt: 20)))
+        XCTAssertFalse(CursorApprovalRule.endedByStopHook(cursor(at: 40, commands: 1, hook: .idle, hookAt: 30, writeAt: 20)))
+        // A turn that began after the stop.
+        var began = cursor(at: 40, hook: .idle, hookAt: 30, writeAt: 35)
+        began.reported?.since = at(35)
+        XCTAssertFalse(CursorApprovalRule.endedByStopHook(began))
+        XCTAssertTrue(CursorApprovalRule.endedByStopHook(cursor(at: 40, hook: .idle, hookAt: 30, writeAt: 20)))
+        XCTAssertFalse(CursorApprovalRule.endedByStopHook(cursor(at: 40, hook: .working, hookAt: 30, writeAt: 20)))
+        XCTAssertFalse(CursorApprovalRule.endedByStopHook(cursor(.idle, at: 40, hook: .idle, hookAt: 30, writeAt: 20)))
     }
 
     func testTheUsersRuleStands() {
