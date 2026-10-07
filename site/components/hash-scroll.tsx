@@ -16,12 +16,15 @@ function jump() {
  * there at once. A glide on load is stopped half way when the page hydrates,
  * so jumps are eased (app/globals.css) only from here on. The page can still
  * grow above the section while fonts and pictures land, so the jump is made
- * once more when they have, unless the reader has moved by then.
+ * once more when they have, unless the reader has moved by then. A reload or
+ * a step back keeps the place the reader was at, so only a new visit jumps.
  */
 export function HashScroll() {
   useEffect(() => {
-    jump();
     document.documentElement.dataset.smoothScroll = "";
+    const [entry] = performance.getEntriesByType("navigation") as PerformanceNavigationTiming[];
+    if (entry?.type !== "navigate") return;
+    jump();
     let live = true;
     const stop = () => {
       live = false;
