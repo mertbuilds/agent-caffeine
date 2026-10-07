@@ -25,6 +25,8 @@ struct SmokeMeasurements: Codable, Equatable {
     /// The seconds of the run, from 0, in which the test itself hid and
     /// showed the icon or opened Preferences.
     var stepSeconds: [Int] = []
+    /// The seconds of the run, from 0, in which the menu was open.
+    var panelSeconds: [Int] = []
     /// Clicks on the icon or a window that the test kept from the app.
     var clicksIgnored = 0
     /// How often SwiftUI worked out the scenes of the app.
@@ -40,6 +42,9 @@ struct SmokeMeasurements: Codable, Equatable {
     var iconToggle = Step.notRun
     /// Preferences was opened and closed.
     var settingsWindow = Step.notRun
+    /// The menu was shown, with a robot that floats and agents at work.
+    /// Skipped in a run that is too short for it.
+    var panel = Step.notRun
 }
 
 /// Whether a build that starts also runs. Pure, so the limits are tested.
@@ -58,6 +63,15 @@ enum SmokeHealth {
     /// For their mean: a loop that runs in less than half of them.
     static let maxMeanCPUPercent: Double = 40
     static let maxSceneEvaluationsPerSecond: Double = 50
+    /// The menu is open for the last seconds of the run: one to open it,
+    /// then the ones it is judged by.
+    static let panelSeconds: TimeInterval = 6
+    /// A shorter run has no steady seconds left before the menu opens.
+    static let minSecondsWithPanel: TimeInterval = 12
+    /// For the median of the seconds with the menu open. Its motion runs
+    /// in the render server, so the app has next to nothing to do. A
+    /// motion that the app works out for each frame takes 20% or more.
+    static let maxPanelCPUPercent: Double = 12
     static let minSamples = 2
     /// A main thread that is silent this long ends the process.
     static let hangSeconds: TimeInterval = 3
@@ -70,10 +84,24 @@ enum SmokeHealth {
         m.seconds > 0 ? Double(m.sceneEvaluations) / m.seconds : 0
     }
 
+    /// When the menu opens in a run of this length. Nil for a run that is
+    /// too short.
+    static func panelOpensAt(seconds: TimeInterval) -> TimeInterval? {
+        seconds >= minSecondsWithPanel ? seconds - panelSeconds : nil
+    }
+
     /// The seconds the processor time is judged by: not the start of the
-    /// app, and not the ones the test itself worked in.
+    /// app, not the ones the test itself worked in, and not the ones with
+    /// the menu open.
     static func steadyCPU(_ m: SmokeMeasurements) -> [Double] {
-        m.cpuBySecond.enumerated().filter { $0.offset >= launchSeconds && !m.stepSeconds.contains($0.offset) }.map(\.element)
+        m.cpuBySecond.enumerated()
+            .filter { $0.offset >= launchSeconds && !m.stepSeconds.contains($0.offset) && !m.panelSeconds.contains($0.offset) }
+            .map(\.element)
+    }
+
+    /// The seconds with the menu open, without the one it opened in.
+    static func panelCPU(_ m: SmokeMeasurements) -> [Double] {
+        m.cpuBySecond.enumerated().filter { m.panelSeconds.contains($0.offset) && !m.stepSeconds.contains($0.offset) }.map(\.element)
     }
 
     static func median(_ values: [Double]) -> Double {
@@ -108,6 +136,16 @@ enum SmokeHealth {
             if mean >= maxMeanCPUPercent {
                 failures.append("used \(rounded(mean))% of one core over the steady seconds")
             }
+        }
+        if m.panel == .ok {
+            let open = panelCPU(m)
+            if open.count < minSteadySeconds {
+                failures.append("\(open.count) seconds with the menu open to judge the processor time by, expected \(minSteadySeconds) or more")
+            } else if median(open) >= maxPanelCPUPercent {
+                failures.append("used \(rounded(median(open)))% of one core in the median second with the menu open")
+            }
+        } else if m.panel == .failed || m.panel == .notRun {
+            failures.append("showing the menu: \(m.panel.rawValue)")
         }
         let rate = sceneEvaluationsPerSecond(m)
         if rate >= maxSceneEvaluationsPerSecond {

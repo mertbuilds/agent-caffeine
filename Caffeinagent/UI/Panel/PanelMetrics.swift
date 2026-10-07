@@ -44,7 +44,9 @@ enum PanelMetrics {
 
     static func disclosure(opening: Bool) -> Animation { opening ? disclose : conceal }
 
-    static let stateChange = Animation.spring(response: 0.35, dampingFraction: 0.86)
+    static let stateChange = Animation.spring(response: stateChangeSpring.response, dampingFraction: stateChangeSpring.dampingFraction)
+    /// The same spring for the layers Core Animation moves.
+    static let stateChangeSpring: (response: Double, dampingFraction: Double) = (0.35, 0.86)
     /// A part that opens below its header, and one that closes a little faster.
     static let disclose = Animation.easeOut(duration: 0.26)
     static let conceal = Animation.easeInOut(duration: 0.22)
