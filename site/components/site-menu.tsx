@@ -3,7 +3,7 @@
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FocusEvent, type RefObject } from "react";
-import { WithAppleMark } from "@/components/download-button";
+import { TryFree } from "@/components/download-button";
 import { DownloadCta } from "@/components/track";
 import { distance, duration, easing, scale } from "@/lib/motion";
 import type { Release } from "@/lib/release";
@@ -164,7 +164,7 @@ export function SiteMenu({
                   style={{ animationDelay: `${links.length * duration.stagger}s` }}
                 >
                   <DownloadCta href={release.href} filename={release.filename} placement="header" className={ROW}>
-                    <WithAppleMark>Download free trial</WithAppleMark>
+                    <TryFree />
                   </DownloadCta>
                 </div>
               </>

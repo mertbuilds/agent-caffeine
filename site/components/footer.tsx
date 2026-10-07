@@ -46,7 +46,7 @@ export async function Footer() {
           {release === null ? null : (
             <li>
               <DownloadCta href={release.href} filename={release.filename} placement="footer" className={LINK}>
-                Download free trial
+                Try free for macOS
               </DownloadCta>
             </li>
           )}

@@ -8,7 +8,8 @@ export const agents: readonly Agent[] = [
   { name: "Codex", icon: "codex" },
   { name: "opencode", icon: "opencode" },
   { name: "pi", icon: "pi" },
-  { name: "Cursor", icon: "cursor" },
+  // The app finds the command line agent (`cursor-agent`), not the editor.
+  { name: "Cursor CLI", icon: "cursor" },
   { name: "Antigravity", icon: "antigravity" },
   { name: "Grok Build", icon: "grok" },
   { name: "Gemini CLI", icon: "geminicli" },

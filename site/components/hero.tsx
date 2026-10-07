@@ -24,7 +24,7 @@ const GLYPH = {
 export async function Hero() {
   const release = await getLatestRelease();
   return (
-    <section className="relative isolate mx-auto grid w-full max-w-[1120px] items-center gap-10 py-12 text-center md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] md:min-h-[calc(100svh-3.5rem)] md:gap-12 md:py-20 md:text-left">
+    <section className="relative isolate mx-auto grid w-full max-w-[1120px] items-center gap-6 pb-12 pt-8 text-center md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] md:min-h-[calc(100svh-3.5rem)] md:gap-12 md:py-20 md:text-left">
       <GridTexture />
       <div className="relative z-10 flex flex-col items-center gap-7 md:items-start">
         <div className="flex flex-col items-center gap-5 md:items-start">
@@ -32,7 +32,7 @@ export async function Hero() {
             Your agents keep working <span className="text-accent">with the lid closed</span>
           </h1>
           <p className="max-w-[26rem] text-pretty text-lg leading-relaxed text-muted md:max-w-[30rem]">
-            agent caffeine keeps your Mac awake while they work, and lets it sleep when they are done
+            A menu bar app for Mac. It keeps your Mac awake while Claude Code, Codex or another AI coding agent works, and lets it sleep when the work is done
           </p>
         </div>
         <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-sm text-muted md:justify-start">
@@ -62,22 +62,26 @@ export async function Hero() {
             <DownloadButton release={release} placement="hero">
               <TryFree />
             </DownloadButton>
-            <ul className="flex flex-col items-center gap-x-3 gap-y-1.5 text-sm text-muted sm:flex-row">
+            <ul className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-sm text-muted md:justify-start">
               <li className="flex items-center gap-1.5">
                 <svg {...GLYPH} height="10.5" viewBox="0 0 12 10.5">
                   <path d="M.75 3h10.5v2.5H.75zM1.75 5.5v4.25h8.5V5.5M6 3v6.75M6 3C4.6 3 3.4 2.6 3.4 1.7c0-.6.45-.95.95-.95C5.5.75 6 2 6 3Zm0 0c1.4 0 2.6-.4 2.6-1.3 0-.6-.45-.95-.95-.95C6.5.75 6 2 6 3Z" />
                 </svg>
-                Includes 7-day free trial
+                Free for 7 days
               </li>
+              <li aria-hidden="true" className="-translate-y-[0.09em]">
+                ·
+              </li>
+              <li>Then {PRICE} once</li>
               <li aria-hidden="true" className="hidden -translate-y-[0.09em] sm:block">
                 ·
               </li>
-              <li className="flex items-center gap-1.5">
+              <li className="flex basis-full items-center justify-center gap-1.5 sm:basis-auto">
                 <svg {...GLYPH} height="10" viewBox="0 0 13.5 10">
                   <rect height="8.5" rx="1.5" width="12" x=".75" y=".75" />
                   <path d="M.75 3.6h12M3.25 6.6h2" />
                 </svg>
-                No card required
+                No account, no card
               </li>
             </ul>
           </div>
