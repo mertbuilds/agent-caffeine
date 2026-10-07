@@ -70,6 +70,23 @@ enum HookEvents {
             Rule(event: "session.idle", action: .set(.idle)),
             Rule(event: "session.deleted", action: .end),
         ],
+        // Only events whose answer Cursor does not read
+        // (docs/research/08-cursor.md). `preToolUse`, `beforeShellExecution`,
+        // `beforeMCPExecution`, `beforeReadFile` and `subagentStart` ask for
+        // a permission, and an answer Cursor cannot read blocks the action:
+        // they are never registered. No event exists for an approval wait.
+        "cursor": [
+            Rule(event: "beforeSubmitPrompt", action: .set(.working)),
+            Rule(event: "afterAgentThought", action: .set(.working)),
+            Rule(event: "afterAgentResponse", action: .set(.working)),
+            Rule(event: "postToolUse", action: .set(.working)),
+            Rule(event: "postToolUseFailure", action: .set(.working)),
+            Rule(event: "afterShellExecution", action: .set(.working)),
+            Rule(event: "afterFileEdit", action: .set(.working)),
+            Rule(event: "afterMCPExecution", action: .set(.working)),
+            Rule(event: "stop", action: .set(.idle)),
+            Rule(event: "sessionEnd", action: .end),
+        ],
     ]
 
     /// The `AgentDefinition.id`s a hook agent id covers. The Codex app runs
@@ -79,6 +96,7 @@ enum HookEvents {
         "codex": ["codex", "codex-desktop"],
         "droid": ["droid"],
         "opencode": ["opencode"],
+        "cursor": [AgentCatalog.cursorDesktopID],
     ]
 
     static func hookAgent(forDefinition id: String) -> String? {

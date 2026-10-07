@@ -130,7 +130,8 @@ struct HookStateFile: Codable, Equatable {
 /// on stdin, without building the document: the input can hold a whole
 /// prompt or a tool result, and it can be cut off at the read limit.
 enum HookInput {
-    static let sessionKeys: [String] = ["session_id", "sessionID", "sessionId"]
+    /// Cursor names its session `conversation_id`.
+    static let sessionKeys: [String] = ["session_id", "sessionID", "sessionId", "conversation_id"]
     static let wantedKeys: Set<String> = Set(sessionKeys + ["notification_type", "agent_id"])
     static let maxValueBytes = 256
 

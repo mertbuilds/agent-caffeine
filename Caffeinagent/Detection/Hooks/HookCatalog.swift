@@ -7,8 +7,20 @@ struct HookCatalogEntry: Equatable, Identifiable {
         /// A JSON file with `<key path>.<Event>: [{matcher?, hooks: [{type, command, timeout}]}]`,
         /// the form of Claude Code, Codex and Droid.
         case jsonHookGroups(keyPath: [String])
+        /// A JSON file with a top-level `"version": 1` and
+        /// `<key path>.<event>: [{command, timeout}]`, the form of Cursor.
+        case jsonFlatHooks(keyPath: [String])
         /// A JavaScript plugin file that is all ours.
         case pluginFile
+
+        /// Nil for a file that is no JSON config.
+        var jsonLayout: (keyPath: [String], flat: Bool)? {
+            switch self {
+            case .jsonHookGroups(let keyPath): return (keyPath, false)
+            case .jsonFlatHooks(let keyPath): return (keyPath, true)
+            case .pluginFile: return nil
+            }
+        }
     }
 
     /// The hook agent id, the first argument of the hook command.
@@ -75,6 +87,14 @@ enum HookCatalog {
             benefit: "Tells agent caffeine when opencode is working, waiting for you or done",
             afterInstall: "opencode loads the plugin the next time it starts.",
             confirmedBy: "opencode.ai/docs/plugins for the folder, the plugin form and the event names. The event payload is from the opencode source. Not run live."
+        ),
+        HookCatalogEntry(
+            id: "cursor", displayName: "Cursor", configPath: ".cursor/hooks.json",
+            format: .jsonFlatHooks(keyPath: ["hooks"]),
+            adds: [],
+            benefit: "Lets agent caffeine see at once when Cursor starts and stops working",
+            afterInstall: nil,
+            confirmedBy: "cursor.com/docs/hooks for the form and the events, and the file on the test Mac. Our entries were not run live."
         ),
     ]
 

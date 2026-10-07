@@ -53,9 +53,10 @@ enum HookConfigEditor {
             let source = String(decoding: text, as: UTF8.self)
             if source == HookCatalog.pluginSource(appPath: appPath) { return .installed(version: HookCatalog.version) }
             return source.contains(HookCatalog.pluginMarker) ? .outdated : .unreadable
-        case .jsonHookGroups(let keyPath):
+        case .jsonHookGroups, .jsonFlatHooks:
+            guard let (keyPath, flat) = entry.format.jsonLayout else { return .unreadable }
             if isBlank(text) { return .notInstalled }
-            guard let root = try? validated(text), let found = try? ourHandlers(in: root, keyPath: keyPath) else { return .unreadable }
+            guard let root = try? validated(text), let found = try? ourHandlers(in: root, keyPath: keyPath, flat: flat) else { return .unreadable }
             if found.isEmpty { return .notInstalled }
             let expected = expectedHandlers(for: entry, appPath: appPath)
             let same = found.count == expected.count && expected.allSatisfy(found.contains)
@@ -70,10 +71,14 @@ enum HookConfigEditor {
     /// trust of a hook by that position. `keeping` is for the entries of an
     /// older build that are taken out first: see `uninstalling`.
     static func installing(into text: [UInt8], entry: HookCatalogEntry, appPath: String, keeping: Set<[String]> = []) throws -> [UInt8] {
-        guard case .jsonHookGroups(let keyPath) = entry.format else { return Array(HookCatalog.pluginSource(appPath: appPath).utf8) }
+        guard let (keyPath, flat) = entry.format.jsonLayout else { return Array(HookCatalog.pluginSource(appPath: appPath).utf8) }
         if status(text: text, entry: entry, appPath: appPath) == .installed(version: HookCatalog.version) { return text }
         let cleared = try clearedForInstall(text, entry: entry, keeping: keeping)
         var source = JSONSourceText(cleared)
+        let addsVersion = try lacksVersion(cleared, entry: entry)
+        if addsVersion {
+            source.append(to: try validated(source.bytes)) { _ in "\"\(versionKey)\": \(flatVersion)" }
+        }
         for handler in expectedHandlers(for: entry, appPath: appPath) {
             var path: [String] = []
             for (index, key) in (keyPath + [handler.event]).enumerated() {
@@ -89,13 +94,13 @@ enum HookConfigEditor {
             let list = try node(at: path, in: source)
             guard list.elements != nil else { throw HookInstallError.unexpectedShape }
             let unit = source.indentUnit, ending = source.lineEnding
-            source.append(to: list) { indent in group(for: handler, indent: indent, unit: unit, lineEnding: ending) }
+            source.append(to: list) { indent in group(for: handler, indent: indent, unit: unit, lineEnding: ending, flat: flat) }
         }
         // The safety net: what we wrote parses, holds our entries, and is
         // the old document again once they are taken out.
         guard status(text: source.bytes, entry: entry, appPath: appPath) == .installed(version: HookCatalog.version),
               let before = normalized(cleared, keyPath: keyPath),
-              let after = normalized(try uninstalling(from: source.bytes, entry: entry), keyPath: keyPath),
+              let after = normalized(try uninstalling(from: source.bytes, entry: entry, removingVersion: addsVersion), keyPath: keyPath),
               before.isEqual(after) else { throw HookInstallError.unexpectedShape }
         return source.bytes
     }
@@ -106,11 +111,21 @@ enum HookConfigEditor {
         try uninstalling(from: isBlank(text) ? Array("{}\n".utf8) : text, entry: entry, keeping: keeping)
     }
 
+    static let versionKey = "version"
+    static let flatVersion = 1
+
+    /// The flat form needs a top-level `"version": 1`. True when the
+    /// document has none, so that "on" adds it and "off" takes it out again.
+    static func lacksVersion(_ text: [UInt8], entry: HookCatalogEntry) throws -> Bool {
+        guard case .jsonFlatHooks = entry.format else { return false }
+        return try uniqueMember(versionKey, of: validated(text)) == nil
+    }
+
     /// The empty hooks object and the empty event lists of a document, by
     /// their key paths. They are the user's, and `uninstalling` is told to
     /// keep them.
     static func emptyContainers(in text: [UInt8], entry: HookCatalogEntry) -> Set<[String]> {
-        guard case .jsonHookGroups(let keyPath) = entry.format, !isBlank(text),
+        guard let (keyPath, _) = entry.format.jsonLayout, !isBlank(text),
               let root = try? validated(text), let hooks = try? hooksObject(in: root, keyPath: keyPath), let members = hooks.members else { return [] }
         var found: Set<[String]> = members.isEmpty ? [keyPath] : []
         for member in members where member.value.elements?.isEmpty ?? false { found.insert(keyPath + [member.key]) }
@@ -139,16 +154,17 @@ enum HookConfigEditor {
     /// object when this run took its last list out. A list or an object
     /// that was empty before is the user's and stays. `keeping` names the
     /// lists and the object that were empty before our entries went in
-    /// (`emptyContainers`), so they stay too.
-    static func uninstalling(from text: [UInt8], entry: HookCatalogEntry, keeping: Set<[String]> = []) throws -> [UInt8] {
-        guard case .jsonHookGroups(let keyPath) = entry.format else { return [] }
+    /// (`emptyContainers`), so they stay too. `removingVersion` is for the
+    /// `"version": 1` that "on" added to a flat document.
+    static func uninstalling(from text: [UInt8], entry: HookCatalogEntry, keeping: Set<[String]> = [], removingVersion: Bool = false) throws -> [UInt8] {
+        guard let (keyPath, flat) = entry.format.jsonLayout else { return [] }
         if isBlank(text) { return text }
         var source = JSONSourceText(text)
         var emptied: Set<String> = []
         while true {
             let root = try validated(source.bytes)
             guard let hooks = try hooksObject(in: root, keyPath: keyPath) else { break }
-            guard let target = firstOurs(in: hooks) else { break }
+            guard let target = firstOurs(in: hooks, flat: flat) else { break }
             source.removeChild(at: target.index, of: target.container)
             if target.wholeGroup { emptied.insert(target.event) }
         }
@@ -168,6 +184,13 @@ enum HookConfigEditor {
                let parent = try parentOfHooks(in: root, keyPath: keyPath),
                let index = parent.members?.firstIndex(where: { $0.key == keyPath.last }) {
                 source.removeChild(at: index, of: parent)
+            }
+        }
+        if removingVersion {
+            let root = try validated(source.bytes)
+            if let index = root.members?.firstIndex(where: { $0.key == versionKey }), let range = root.members?[index].value.range,
+               String(decoding: source.bytes[range], as: UTF8.self) == String(flatVersion) {
+                source.removeChild(at: index, of: root)
             }
         }
         _ = try validated(source.bytes)
@@ -216,11 +239,15 @@ enum HookConfigEditor {
 
     /// Other tools keep things in the hooks object that are no event lists
     /// (Droid: `claudeHooksImported`), and those are passed over.
-    private static func ourHandlers(in root: JSONSourceNode, keyPath: [String]) throws -> [OurHandler] {
+    private static func ourHandlers(in root: JSONSourceNode, keyPath: [String], flat: Bool) throws -> [OurHandler] {
         guard let hooks = try hooksObject(in: root, keyPath: keyPath) else { return [] }
         var found: [OurHandler] = []
         for member in hooks.members ?? [] {
             for group in member.value.elements ?? [] {
+                if flat {
+                    if isOurs(group) { found.append(OurHandler(event: member.key, matcher: nil, command: group.member("command")?.value.string ?? "")) }
+                    continue
+                }
                 for handler in group.member("hooks")?.value.elements ?? [] where isOurs(handler) {
                     found.append(OurHandler(
                         event: member.key, matcher: group.member("matcher")?.value.string,
@@ -234,9 +261,14 @@ enum HookConfigEditor {
 
     /// The first thing to remove: a whole group when all its handlers are
     /// ours, else the one handler inside a group that another tool shares.
-    private static func firstOurs(in hooks: JSONSourceNode) -> (container: JSONSourceNode, index: Int, event: String, wholeGroup: Bool)? {
+    /// In the flat form an entry of the event list is the handler itself.
+    private static func firstOurs(in hooks: JSONSourceNode, flat: Bool) -> (container: JSONSourceNode, index: Int, event: String, wholeGroup: Bool)? {
         for member in hooks.members ?? [] {
             guard let groups = member.value.elements else { continue }
+            if flat {
+                if let index = groups.firstIndex(where: isOurs) { return (member.value, index, member.key, true) }
+                continue
+            }
             for (groupIndex, group) in groups.enumerated() {
                 guard let list = group.member("hooks")?.value, let handlers = list.elements,
                       let handlerIndex = handlers.firstIndex(where: isOurs) else { continue }
@@ -270,7 +302,15 @@ enum HookConfigEditor {
 
     /// The source of one group, as it is shown in Preferences and written
     /// into the file.
-    static func group(for handler: OurHandler, indent: String, unit: String = "  ", lineEnding: String = "\n") -> String {
+    static func group(for handler: OurHandler, indent: String, unit: String = "  ", lineEnding: String = "\n", flat: Bool = false) -> String {
+        if flat {
+            return [
+                "{",
+                "\(unit)\"command\": \(JSONSourceText.literal(handler.command)),",
+                "\(unit)\"timeout\": \(HookCatalog.timeoutSeconds)",
+                "}",
+            ].joined(separator: lineEnding + indent)
+        }
         var lines = ["{"]
         if let matcher = handler.matcher { lines.append("\(unit)\"matcher\": \(JSONSourceText.literal(matcher)),") }
         lines += [
@@ -291,9 +331,10 @@ enum HookConfigEditor {
         switch entry.format {
         case .pluginFile:
             return HookCatalog.pluginSource(appPath: appPath)
-        case .jsonHookGroups(let keyPath):
+        case .jsonHookGroups, .jsonFlatHooks:
+            guard let (keyPath, flat) = entry.format.jsonLayout else { return "" }
             return expectedHandlers(for: entry, appPath: appPath).map { handler in
-                "\((keyPath + [handler.event]).joined(separator: ".")):\n" + group(for: handler, indent: "")
+                "\((keyPath + [handler.event]).joined(separator: ".")):\n" + group(for: handler, indent: "", flat: flat)
             }.joined(separator: "\n")
         }
     }
@@ -310,6 +351,9 @@ struct HookInstallRecord: Codable, Equatable {
     /// The config file was not there, and "on" made it. "Off" removes it
     /// again when nothing but our entries is in it.
     var createdFile = false
+    /// "On" added the top-level `"version": 1` of the flat form, and "off"
+    /// takes it out again. Nil in a record of an older build.
+    var addedVersion: Bool?
 }
 
 /// The thin shell around `HookConfigEditor`: it reads the file, writes a
@@ -392,7 +436,7 @@ struct HookInstaller {
         if case .pluginFile = entry.format, let old, !old.isEmpty, HookConfigEditor.status(text: old, entry: entry, appPath: appPath) == .unreadable {
             throw HookInstallError.notOurFile
         }
-        guard case .jsonHookGroups = entry.format else {
+        guard entry.format.jsonLayout != nil else {
             let new = try HookConfigEditor.installing(into: old ?? [], entry: entry, appPath: appPath)
             return try write(new, to: url, replacing: old, backup: false)
         }
@@ -404,7 +448,8 @@ struct HookInstaller {
         let empty = HookConfigEditor.emptyContainers(in: cleared, entry: entry)
         try write(new, to: url, replacing: old, backup: true)
         let created = old == nil || (record(for: entry)?.createdFile ?? false)
-        save(HookInstallRecord(emptyBefore: empty.sorted { $0.lexicographicallyPrecedes($1) }, createdFile: created), for: entry)
+        let addedVersion = try HookConfigEditor.lacksVersion(cleared, entry: entry) || (record(for: entry)?.addedVersion ?? false)
+        save(HookInstallRecord(emptyBefore: empty.sorted { $0.lexicographicallyPrecedes($1) }, createdFile: created, addedVersion: addedVersion ? true : nil), for: entry)
     }
 
     func uninstall(_ entry: HookCatalogEntry) throws {
@@ -414,9 +459,11 @@ struct HookInstaller {
         case .pluginFile:
             guard HookConfigEditor.status(text: old, entry: entry, appPath: appPath) != .unreadable else { throw HookInstallError.notOurFile }
             guard (try? FileManager.default.removeItem(at: url)) != nil else { throw HookInstallError.writeFailed }
-        case .jsonHookGroups:
+        case .jsonHookGroups, .jsonFlatHooks:
             let known = record(for: entry)
-            let new = try HookConfigEditor.uninstalling(from: old, entry: entry, keeping: Set(known?.emptyBefore ?? []))
+            let new = try HookConfigEditor.uninstalling(
+                from: old, entry: entry, keeping: Set(known?.emptyBefore ?? []), removingVersion: known?.addedVersion == true
+            )
             if known?.createdFile == true, new != old, HookConfigEditor.isEmptyDocument(new) {
                 try remove(url, holding: old)
             } else {

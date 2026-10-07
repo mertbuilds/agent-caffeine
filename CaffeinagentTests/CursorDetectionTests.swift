@@ -517,6 +517,26 @@ final class CursorTimelineTests: XCTestCase {
         census.rows = cursor(extra: [.fixture(532, ppid: 530, start: processStart, path: "/usr/bin/caffeinate", args: ["caffeinate"])])
         XCTAssertFalse(step(7).evidence?.ownsSleepAssertion ?? true)
     }
+
+    func testTheHookStateLandsOnTheMainProcess() throws {
+        let hooks = root.appendingPathComponent("hooks")
+        var sources = EvidenceCollector.Sources(census: census, assertions: assertions, power: FakePower(), openFiles: FakeOpenFiles())
+        sources.cursorTranscripts = CursorTranscriptReader(projectsDirectory: root.appendingPathComponent("projects"))
+        sources.hookDirectory = hooks
+        sources.now = { [unowned self] in self.base.addingTimeInterval(self.seconds) }
+        collector = EvidenceCollector(sources: sources)
+        // The hook runs below a shell that the extension host started.
+        let chain: [Row] = [
+            .fixture(600, ppid: 510, path: "/bin/sh", args: ["sh", "-c", "hook"]),
+            census.rows[1], census.rows[0],
+        ]
+        XCTAssertTrue(HookCommand.record(agent: "cursor", event: "beforeSubmitPrompt", input: Array(#"{"conversation_id":"c1"}"#.utf8), chain: chain, directory: hooks, now: at(0)))
+        let working = step(1)
+        XCTAssertEqual(working.evidence?.hookState, .working)
+        XCTAssertEqual(working.reading?.verdict, AgentVerdict(state: .working, confidence: .reported, reason: .reportsBusy))
+        XCTAssertTrue(HookCommand.record(agent: "cursor", event: "stop", input: Array(#"{"conversation_id":"c1","status":"completed"}"#.utf8), chain: chain, directory: hooks, now: at(2)))
+        XCTAssertEqual(step(3).reading?.verdict.state, .idle)
+    }
 }
 
 final class CursorApprovalRuleTests: XCTestCase {
