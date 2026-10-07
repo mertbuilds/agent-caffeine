@@ -132,6 +132,16 @@ final class NotifierTests: XCTestCase {
         XCTAssertTrue(info.isEmpty)
         XCTAssertNil(AgentNoticeTarget(userInfo: info))
         XCTAssertNil(AgentNoticeTarget(userInfo: ["agentPid": "7", "agentStart": 5.0]), "Not what the notifier wrote")
+
+        // A click after days: the pid of the app can belong to another
+        // process. The app of an agent started no later than the agent.
+        let target = AgentNoticeTarget(agent: ProcessIdentity(pid: 7, startTime: 1000), ownerPid: 500)
+        XCTAssertTrue(target.ownerIsStill(startTime: 400), "The terminal the agent was started in")
+        XCTAssertTrue(target.ownerIsStill(startTime: 1000), "The agent is the app")
+        XCTAssertTrue(target.ownerIsStill(startTime: 1000.0005), "Two readings of one start time")
+        XCTAssertFalse(target.ownerIsStill(startTime: 5000), "Another process got the pid")
+        XCTAssertFalse(target.ownerIsStill(startTime: nil), "No process has the pid")
+        XCTAssertFalse(AgentNoticeTarget(agent: target.agent).ownerIsStill(startTime: 400), "No app was known")
     }
 
     func testTheAllowanceInTheLog() {

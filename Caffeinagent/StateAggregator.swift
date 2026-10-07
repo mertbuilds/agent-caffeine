@@ -303,7 +303,11 @@ final class StateAggregator: ObservableObject {
         engine.onSample = { [weak self] sample in self?.sampled(sample) }
         notifier?.onPermission = { [weak self] permission in self?.notificationPermission = permission }
         notifier?.onDelivery = { [weak self] id, delivery in self?.noticeHistory.delivered(id, delivery) }
-        notifier?.onOpen = { [weak self] target in self?.goToAgent(target.agent, else: target.ownerPid) }
+        notifier?.onOpen = { [weak self] target in
+            // The pid of the app can belong to another process by now.
+            let owner = target.ownerPid.flatMap { target.ownerIsStill(startTime: SystemProcessCensus.row(of: $0)?.startTime) ? $0 : nil }
+            self?.goToAgent(target.agent, else: owner)
+        }
         // Asks the user nothing, and puts the permission in the log.
         notifier?.readPermission()
 

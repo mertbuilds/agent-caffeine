@@ -449,6 +449,22 @@ struct AgentNoticeTarget: Equatable {
         self.agent = agent
         self.ownerPid = ownerPid
     }
+
+    /// Whether the process that has `ownerPid` now is still the app the
+    /// agent ran in. A notification stays in Notification Center for days,
+    /// also over a restart of the Mac, and a pid is used again. The app is
+    /// above the agent in the process tree, or is the agent, so it started
+    /// no later than the agent. A process that started after the agent is
+    /// another one, and a click must not bring that to the front.
+    /// - Parameter startTime: of the process with `ownerPid` now. Nil when
+    ///   there is none.
+    func ownerIsStill(startTime: TimeInterval?) -> Bool {
+        guard ownerPid != nil, let startTime else { return false }
+        return startTime <= agent.startTime + Self.startTolerance
+    }
+
+    /// Two readings of one start time can differ in the last digit.
+    private static let startTolerance: TimeInterval = 0.001
 }
 
 /// The words of the agent notifications.
