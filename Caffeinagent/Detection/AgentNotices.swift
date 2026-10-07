@@ -126,7 +126,8 @@ struct AgentNoticeDecision: Equatable {
 /// its verdict: a command that runs on after the answer is no work here.
 /// Waiting: a session starts to wait for the user and stays so for
 /// `waitingDebounce`. Finished: a session that worked goes idle or is gone
-/// and is not at work again within `finishedDebounce`. What was there at
+/// and is not at work again within `finishedDebounce`. Work that ends in
+/// a wait which was never told, and then in idle, finished too. What was there at
 /// the first sample is never told, and nothing is told while agent
 /// caffeine is off or paused. Three or more sessions that change within
 /// `coalesceWindow` give one notification.
@@ -147,6 +148,8 @@ struct AgentNoticeReducer {
         /// When the work began that goes on now, also over a wait for
         /// the user and over an end that is not told yet. Nil while idle.
         var workStart: Date?
+        /// The wait that goes on now was told.
+        var waitTold = false
     }
 
     private struct Candidate {
@@ -208,9 +211,15 @@ struct AgentNoticeReducer {
             case .waitingForUser:
                 // An end that is on its way stays: see `due`.
                 if old?.state != .waitingForUser { offer(.waiting, snapshot(identity, session, waitingSince: now)) }
+                session.waitTold = old?.state == .waitingForUser && old?.waitTold == true
             case .idle:
                 withdraw(identity, kind: .waiting, now: now)
-                if let old, old.state == .working {
+                // A wait that was told brought the user, and its end is
+                // no news. One that was not told, as a wait shorter than
+                // the debounce, would swallow the end of the work.
+                let untoldWait = old?.state == .waitingForUser && old?.waitTold == false && old?.workStart != nil
+                    && !candidates.contains { $0.session.identity == identity && $0.kind == .finished }
+                if let old, old.state == .working || untoldWait {
                     offer(.finished, snapshot(identity, old, workedFor: old.workStart.map { now.timeIntervalSince($0) }))
                 }
                 if !candidates.contains(where: { $0.session.identity == identity && $0.kind == .finished }) { session.workStart = nil }
@@ -289,6 +298,7 @@ struct AgentNoticeReducer {
                 candidates.removeAll { $0.kind == kind && told.contains($0.session.identity) }
                 // The work that was told is over.
                 if kind == .finished { told.forEach { self.sessions[$0]?.workStart = nil } }
+                if kind == .waiting { told.forEach { self.sessions[$0]?.waitTold = true } }
                 if kind == .waiting { drop(as: .asksInstead) { $0.kind == .finished && told.contains($0.session.identity) } }
                 // A name that was read after the change still counts.
                 let sessions = group.map { candidate -> AgentNotice.Session in

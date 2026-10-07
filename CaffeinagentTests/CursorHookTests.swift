@@ -137,9 +137,9 @@ final class CursorHookTests: XCTestCase {
             foreign,
             "{}", "{}\n", "{\"version\": 1}", "{\n  \"version\": 1\n}\n",
             "{\"version\": 1, \"hooks\": {}}", "{\"hooks\": {\"stop\": []}, \"version\": 1}\n",
+            "{\n\t\"version\": 1,\n\t\"hooks\": {\n\t\t\"stop\": [\n\t\t\t{ \"command\": \"other\", \"timeout\": 3 }\n\t\t]\n\t}\n}\n",
             // No version yet: "on" adds one and "off" takes it out.
-            "{\"hooks\": {\"stop\": [{\"command\": \"other\"}]}}",
-            "{\n\t\"hooks\": {\n\t\t\"stop\": [\n\t\t\t{ \"command\": \"other\", \"timeout\": 3 }\n\t\t]\n\t}\n}\n",
+            "{\"hooks\": {}}", "{\"hooks\": {\"stop\": []}}\n",
             "{\r\n  \"version\": 1,\r\n  \"hooks\": {\r\n    \"sessionEnd\": [\r\n      {\"command\": \"other\"}\r\n    ]\r\n  }\r\n}\r\n",
         ]
         for original in cases {
@@ -182,6 +182,49 @@ final class CursorHookTests: XCTestCase {
         XCTAssertNil(installer.record(for: cursor)?.addedVersion)
         try installer.uninstall(cursor)
         XCTAssertEqual(try text(), "{\"version\": 1}")
+    }
+
+    /// Another tool's hooks are in a file with no version. "On" adds the
+    /// version, and "off" took it out again from under the other tool.
+    func testTheVersionWeAddedStaysWhileAnotherToolsHooksAreLeft() throws {
+        for original in ["{\"hooks\": {\"stop\": [{\"command\": \"other\"}]}}", "{\n  \"hooks\": {\n    \"stop\": [\n      {\n        \"command\": \"other\"\n      }\n    ]\n  }\n}\n"] {
+            try write(original)
+            try installer.install(cursor)
+            XCTAssertEqual(installer.record(for: cursor)?.addedVersion, true)
+            try installer.uninstall(cursor)
+            let root = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? NSDictionary, original)
+            XCTAssertEqual(root, ["version": 1, "hooks": ["stop": [["command": "other"]]]], original)
+            XCTAssertEqual(installer.status(of: cursor), .notInstalled)
+        }
+        // The other tool left in the meantime: nothing needs the version.
+        try write("{\"hooks\": {\"stop\": [{\"command\": \"other\"}]}}")
+        try installer.install(cursor)
+        var source = JSONSourceText(Array(try text().utf8))
+        let stop = try XCTUnwrap(source.parsed().member("hooks")?.value.member("stop")?.value)
+        source.removeChild(at: 0, of: stop)
+        try Data(source.bytes).write(to: url)
+        try installer.uninstall(cursor)
+        XCTAssertEqual(try text(), "{}")
+    }
+
+    /// The record of an earlier "on" says that we added the version and
+    /// made the file. The user has put a file of their own there since.
+    func testAnOldRecordDoesNotClaimAVersionOrAFileThatAreTheUsers() throws {
+        try installer.install(cursor)
+        XCTAssertEqual(installer.record(for: cursor), HookInstallRecord(emptyBefore: [], createdFile: true, addedVersion: true))
+        try write("{\"version\": 1}")
+        try installer.install(cursor)
+        XCTAssertNil(installer.record(for: cursor)?.addedVersion)
+        XCTAssertEqual(installer.record(for: cursor)?.createdFile, false)
+        try installer.uninstall(cursor)
+        XCTAssertEqual(try text(), "{\"version\": 1}")
+        // An update of our own entries keeps what the first "on" recorded.
+        try FileManager.default.removeItem(at: url)
+        try HookInstaller(home: home, appPath: "/Users/me/Downloads/agent caffeine.app").install(cursor)
+        try installer.install(cursor)
+        XCTAssertEqual(installer.record(for: cursor)?.addedVersion, true)
+        try installer.uninstall(cursor)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
     }
 
     func testEntriesOfAnotherPathAreOutdatedAndRefreshed() throws {
@@ -266,7 +309,7 @@ final class CursorHookTests: XCTestCase {
         XCTAssertTrue(record("beforeSubmitPrompt", #"{"conversation_id":"c-2"}"#, after: 1))
         XCTAssertTrue(record("stop", #"{"conversation_id":"c-1","status":"aborted"}"#, after: 2))
         XCTAssertEqual(try file().sessions[HookStateFile.sessionKey("c-1")]?.state, "idle")
-        XCTAssertEqual(try file().summary(now: now.addingTimeInterval(3), freshness: 60)?.state, .working, "The other conversation still works")
+        XCTAssertEqual(try file().summary(now: now.addingTimeInterval(3), freshness: 60, workingLimit: 1800)?.state, .working, "The other conversation still works")
         XCTAssertTrue(record("sessionEnd", #"{"conversation_id":"c-2","session_id":"c-2"}"#, after: 4))
         XCTAssertEqual(try file().sessions.count, 1)
 

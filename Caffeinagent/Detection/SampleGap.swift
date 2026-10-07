@@ -71,6 +71,8 @@ extension AgentMemory {
         memory.lastCPUAt = lastCPUAt?.addingTimeInterval(gap)
         memory.weakOnlySince = weakOnlySince?.addingTimeInterval(gap)
         memory.lastReportSeenAt = lastReportSeenAt?.addingTimeInterval(gap)
+        memory.hookWorkSince = hookWorkSince?.addingTimeInterval(gap)
+        memory.approvalSignsSince = approvalSignsSince?.addingTimeInterval(gap)
         memory.cpuSamples = cpuSamples.map { CPUSample(at: $0.at.addingTimeInterval(gap), cpuSeconds: $0.cpuSeconds, interval: $0.interval) }
         return memory
     }

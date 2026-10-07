@@ -165,6 +165,14 @@ final class CursorCatalogTests: XCTestCase {
             ("helper with a title that names a CLI", plugin, ["codex", "app-server"], "cursor-desktop", .helper),
             ("helper as node with a codex script", plugin, ["node", "/Users/me/.local/bin/codex", "exec"], "cursor-desktop", .helper),
             ("bundled launcher", "\(app)/Resources/app/bin/cursor", ["cursor", "."], "cursor-desktop", .helper),
+            ("cursor --wait", main, [main, "\(app)/Resources/app/out/cli.js", "--wait", "COMMIT_EDITMSG"], "cursor-desktop", .helper),
+            ("cursor --wait of a copy in another folder", "/Users/me/Applications/Cursor.app/Contents/MacOS/Cursor", ["/Users/me/Applications/Cursor.app/Contents/MacOS/Cursor", "/Users/me/Applications/Cursor.app/Contents/Resources/app/out/cli.js", "--wait", "a.txt"], "cursor-desktop", .helper),
+            ("main that opens a file named cli.js", main, [main, "/Users/me/code/tool/cli.js"], "cursor-desktop", .engine),
+            // The same command of the other editors is inside a bundle
+            // with no engine at that path, so it is no agent.
+            ("code --wait", "/Applications/Visual Studio Code.app/Contents/MacOS/Code", ["/Applications/Visual Studio Code.app/Contents/MacOS/Code", "/Applications/Visual Studio Code.app/Contents/Resources/app/out/cli.js", "--wait", "a.txt"], nil, nil),
+            ("antigravity --wait", "/Applications/Antigravity.app/Contents/MacOS/Antigravity", ["/Applications/Antigravity.app/Contents/MacOS/Antigravity", "/Applications/Antigravity.app/Contents/Resources/app/out/cli.js", "--wait", "a.txt"], nil, nil),
+            ("windsurf --wait", "/Applications/Windsurf.app/Contents/MacOS/Electron", ["/Applications/Windsurf.app/Contents/MacOS/Electron", "/Applications/Windsurf.app/Contents/Resources/app/out/cli.js", "--wait", "a.txt"], nil, nil),
             ("the CLI", "/Users/me/.local/bin/cursor-agent", ["cursor-agent"], "cursor-agent", .session),
             ("another app named Cursor inside", "/Applications/Other.app/Contents/MacOS/Cursor", ["Cursor"], nil, nil),
             ("system cursor service", "/System/Library/PrivateFrameworks/TextInputUIMacHelper.framework/Versions/A/XPCServices/CursorUIViewService.xpc/Contents/MacOS/CursorUIViewService", ["CursorUIViewService"], nil, nil),
@@ -196,6 +204,23 @@ final class CursorCatalogTests: XCTestCase {
         XCTAssertEqual(instances.map(\.definitionID), ["cursor-desktop", "claude"])
         XCTAssertEqual(instances.first?.rootPID, 500)
         XCTAssertEqual(Set(instances.first?.rows.map(\.pid) ?? []), [500, 510, 511, 520, 521, 530, 531])
+    }
+
+    /// `git commit` in Terminal with `cursor --wait` as the editor. It was
+    /// a second Cursor that read every transcript again: a wrong wait, and
+    /// "finished" told twice.
+    func testTheShellCommandThatWaitsIsNoSecondCursor() {
+        let cli = "\(app)/Resources/app/out/cli.js"
+        let snapshot: [Row] = [
+            .fixture(500, path: main, args: [main]),
+            .fixture(510, ppid: 500, path: plugin, args: ["Cursor Helper (Plugin): extension-host Agents Window [1-1]"]),
+            .fixture(700, path: "/bin/zsh", args: ["-zsh"], tty: 7),
+            .fixture(710, ppid: 700, path: "/bin/bash", args: ["bash", "\(app)/Resources/app/bin/cursor", "--wait", "COMMIT_EDITMSG"], tty: 7),
+            .fixture(711, ppid: 710, path: main, args: [main, cli, "--wait", "COMMIT_EDITMSG"], tty: 7),
+        ]
+        let instances = catalog.instances(in: snapshot)
+        XCTAssertEqual(instances.map(\.rootPID), [500])
+        XCTAssertNil(HookCommand.agentProcess(in: [snapshot[4], snapshot[3], snapshot[2]], hookAgent: "cursor"))
     }
 
     func testAgentCommandIsAShellBelowAnExtensionHost() {
@@ -583,13 +608,14 @@ final class CursorApprovalRuleTests: XCTestCase {
 
     private func cursor(
         _ state: ReportedState? = .working, at seconds: TimeInterval, assertion: Bool = false, commands: Int = 0,
-        source: StateReport.Source = .cursorTranscript, hook: ReportedState? = nil, id: String = "cursor-desktop"
+        source: StateReport.Source = .cursorTranscript, hook: ReportedState? = nil, id: String = "cursor-desktop",
+        hookAt: TimeInterval? = nil, writeAt: TimeInterval? = nil
     ) -> AgentEvidence {
         AgentEvidence(
             agentID: id, displayName: "Cursor", level: .state, kind: .desktop, role: .engine, pid: 500, startTime: start.timeIntervalSince1970 - 600,
             reported: state.map { StateReport(state: $0, since: at(0), observedAt: at(seconds), source: source, detail: nil) },
-            childCommands: commands, sampleInterval: 1, ownsSleepAssertion: assertion,
-            hookState: hook, hookStateAt: hook.map { _ in at(seconds) }
+            childCommands: commands, sampleInterval: 1, fileActivityAt: writeAt.map(at), ownsSleepAssertion: assertion,
+            hookState: hook, hookStateAt: hook.map { _ in at(hookAt ?? seconds) }
         )
     }
 
@@ -648,6 +674,78 @@ final class CursorApprovalRuleTests: XCTestCase {
     func testAFreshHookWorkingDoesNotHideTheWait() {
         let timeline = states(to: 20) { second in self.cursor(at: second, hook: .working) }
         XCTAssertEqual(timeline.firstIndex(of: .waitingForUser), 15)
+    }
+
+    /// The hooks are on and the user stops a turn at 30 s. The transcript
+    /// keeps its open last line. Cursor read as working for a minute and
+    /// then for as long as the file was listed.
+    func testAStopHookEndsATurnThatGotNoEndLine() {
+        let timeline = states(to: 3600) { second in
+            second < 30
+                ? self.cursor(at: second, assertion: true, hook: .working, hookAt: 0, writeAt: min(second, 20))
+                : self.cursor(at: second, hook: .idle, hookAt: 30, writeAt: 20)
+        }
+        XCTAssertEqual(Array(timeline[0..<30]), Array(repeating: .working, count: 30))
+        XCTAssertEqual(Array(timeline[30...]), Array(repeating: .idle, count: 3571))
+        // The transcript is written a few seconds after the stop.
+        let late = states(to: 600) { second in self.cursor(at: second, hook: .idle, hookAt: 30, writeAt: min(second, 39)) }
+        XCTAssertEqual(Array(late[40...]), Array(repeating: .idle, count: 561))
+    }
+
+    /// Cursor writes an end line after all: the transcript says idle, with
+    /// the hooks and without.
+    func testATurnWithAnEndLineIsIdleWithAndWithoutTheHooks() {
+        for hook in [ReportedState.idle, nil] {
+            let timeline = states(to: 600) { second in self.cursor(.idle, at: second, hook: hook, hookAt: 0, writeAt: 1) }
+            XCTAssertEqual(timeline, Array(repeating: .idle, count: 601), "\(String(describing: hook))")
+        }
+    }
+
+    /// Without the hooks, an open turn with no assertion is a wait, as before.
+    func testWithoutTheHooksAnOpenTurnWithNoAssertionIsAWait() {
+        let timeline = states(to: 600) { second in self.cursor(at: second, writeAt: 20) }
+        XCTAssertEqual(Array(timeline[0..<15]), Array(repeating: .working, count: 15))
+        XCTAssertEqual(Array(timeline[15...]), Array(repeating: .waitingForUser, count: 586))
+    }
+
+    /// A stop that is older than the last write is the stop of an earlier
+    /// turn: the turn in progress began with an event that got lost.
+    func testAStopHookFromBeforeTheLastWriteEndsNothing() {
+        XCTAssertFalse(CursorApprovalRule.endedByStopHook(cursor(at: 200, hook: .idle, hookAt: 30, writeAt: 100)))
+        XCTAssertTrue(CursorApprovalRule.signs(of: cursor(at: 200, hook: .idle, hookAt: 30, writeAt: 100)))
+        let asks = states(to: 200) { second in self.cursor(at: second, hook: .idle, hookAt: -100, writeAt: 0) }
+        XCTAssertEqual(asks.firstIndex(of: .waitingForUser), 15)
+        let works = states(to: 200) { second in self.cursor(at: second, assertion: true, hook: .idle, hookAt: -100, writeAt: 0) }
+        XCTAssertEqual(works, Array(repeating: .working, count: 201))
+        // The stop of one conversation while another holds the assertion
+        // or runs a command.
+        XCTAssertFalse(CursorApprovalRule.endedByStopHook(cursor(at: 40, assertion: true, hook: .idle, hookAt: 30, writeAt: 20)))
+        XCTAssertFalse(CursorApprovalRule.endedByStopHook(cursor(at: 40, commands: 1, hook: .idle, hookAt: 30, writeAt: 20)))
+        // A turn that began after the stop.
+        var began = cursor(at: 40, hook: .idle, hookAt: 30, writeAt: 35)
+        began.reported?.since = at(35)
+        XCTAssertFalse(CursorApprovalRule.endedByStopHook(began))
+        XCTAssertTrue(CursorApprovalRule.endedByStopHook(cursor(at: 40, hook: .idle, hookAt: 30, writeAt: 20)))
+        XCTAssertFalse(CursorApprovalRule.endedByStopHook(cursor(at: 40, hook: .working, hookAt: 30, writeAt: 20)))
+        XCTAssertFalse(CursorApprovalRule.endedByStopHook(cursor(.idle, at: 40, hook: .idle, hookAt: 30, writeAt: 20)))
+    }
+
+    /// The assertion goes at the end of a turn, and the Mac sleeps for an
+    /// hour 5 seconds later, before the end line is written. The settle
+    /// time ran out in the sleep, and Cursor read as waiting on wake.
+    func testTheSettleTimeDoesNotRunWhileTheMacSleeps() {
+        var memory: [ProcessIdentity: AgentMemory] = [:]
+        var states: [TimeInterval: WorkState] = [:]
+        for second in Array(stride(from: 0.0, through: 5, by: 1)) + Array(stride(from: 3605.0, through: 3620, by: 1)) {
+            if second == 3605 { memory = memory.mapValues { $0.shifted(by: 3600) } }
+            let frame = EvidenceFrame(at: at(second), agents: [cursor(at: second)])
+            let (readings, next) = VerdictRules.readings(for: frame, memory: memory, settings: DetectionSettings())
+            memory = next
+            states[second] = readings[0].verdict.state
+        }
+        XCTAssertEqual(states[3605], .working)
+        XCTAssertEqual(states[3614], .working)
+        XCTAssertEqual(states[3615], .waitingForUser, "15 seconds awake with the signs")
     }
 
     func testTheUsersRuleStands() {

@@ -92,6 +92,34 @@ struct CodexRolloutReader {
         return files.sorted { $0.lastWrite > $1.lastWrite }
     }
 
+    /// The rollouts in the dated folders of the last `days` days, newest
+    /// first, without a walk of the whole tree. A thread that began
+    /// earlier and is still written is not found here: the collector
+    /// finds that one through the process that holds it open. The folders
+    /// are tried by the local date and by the UTC date.
+    func filesOfLastDays(_ days: Int, now: Date = Date()) -> [CodexRolloutFile] {
+        var folders: [String] = []
+        for zone in [TimeZone.current, TimeZone(identifier: "UTC")].compactMap({ $0 }) {
+            var calendar = Calendar(identifier: .gregorian)
+            calendar.timeZone = zone
+            for back in 0..<max(days, 1) {
+                let day = calendar.dateComponents([.year, .month, .day], from: now.addingTimeInterval(-86_400 * TimeInterval(back)))
+                let folder = String(format: "%04d/%02d/%02d", day.year ?? 0, day.month ?? 0, day.day ?? 0)
+                if !folders.contains(folder) { folders.append(folder) }
+            }
+        }
+        var files: [CodexRolloutFile] = []
+        for folder in folders {
+            let directory = sessionsDirectory.appendingPathComponent(folder, isDirectory: true)
+            for name in (try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [] where name.hasPrefix("rollout-") && name.hasSuffix(".jsonl") {
+                let url = directory.appendingPathComponent(name)
+                guard let signature = FileSignature(path: url.path) else { continue }
+                files.append(CodexRolloutFile(url: url, sessionID: Self.sessionID(fromFileName: name), lastWrite: signature.modifiedAt, size: signature.size))
+            }
+        }
+        return files.sorted { $0.lastWrite > $1.lastWrite }
+    }
+
     func rollouts(maxAge: TimeInterval = 86_400, now: Date = Date()) -> [CodexRollout] {
         recentFiles(maxAge: maxAge, now: now).map(Self.rollout(for:))
     }
@@ -137,38 +165,52 @@ struct CodexRolloutReader {
 
     /// The lines are in file order and are read from the newest back.
     nonisolated static func parseTail<Lines: BidirectionalCollection>(lines: Lines) -> CodexTurnState where Lines.Element == Data {
-        var result = CodexTurnState()
-        var endedTurns: Set<String> = []
-        var endedWithoutID = false
+        var scan = BackwardScan()
         for line in lines.reversed() {
-            guard let record = record(in: line) else { continue }
+            scan.take(line)
+            if scan.settled { break }
+        }
+        return scan.turn
+    }
+
+    /// The search from the newest line back, one line at a time, so it can
+    /// go on over as many pieces of a file as it takes. Only a
+    /// `task_started` settles it: an end marker can be the end of an older
+    /// turn, written after the start of the turn that runs.
+    struct BackwardScan {
+        private(set) var turn = CodexTurnState()
+        private(set) var settled = false
+        private var endedTurns: Set<String> = []
+        private var endedWithoutID = false
+
+        mutating func take(_ line: Data) {
+            guard !settled, let record = CodexRolloutReader.record(in: line) else { return }
             switch record {
             case .context(let cwd):
-                if result.cwd == nil { result.cwd = cwd }
+                if turn.cwd == nil { turn.cwd = cwd }
             case .marker(let marker, let turnID, let at):
-                if result.lastMarker == nil {
-                    result.lastMarker = marker
-                    result.turnID = turnID
-                    result.markerAt = at
+                if turn.lastMarker == nil {
+                    turn.lastMarker = marker
+                    turn.turnID = turnID
+                    turn.markerAt = at
                 }
                 guard marker == .started else {
                     if let turnID { endedTurns.insert(turnID) } else { endedWithoutID = true }
-                    continue
+                    return
                 }
                 if let turnID {
-                    result.turnInProgress = !endedWithoutID && !endedTurns.contains(turnID)
+                    turn.turnInProgress = !endedWithoutID && !endedTurns.contains(turnID)
                 } else {
-                    result.turnInProgress = !endedWithoutID && endedTurns.isEmpty
+                    turn.turnInProgress = !endedWithoutID && endedTurns.isEmpty
                 }
-                if result.turnInProgress, result.lastMarker != .started {
-                    result.lastMarker = .started
-                    result.turnID = turnID
-                    result.markerAt = at
+                if turn.turnInProgress, turn.lastMarker != .started {
+                    turn.lastMarker = .started
+                    turn.turnID = turnID
+                    turn.markerAt = at
                 }
-                return result
+                settled = true
             }
         }
-        return result
     }
 
     enum Record {
@@ -223,7 +265,9 @@ struct CodexRolloutReader {
 /// `task_started`, and then no tail of a fixed size holds a marker.
 ///
 /// A file that is new to the tracker is searched from its end backwards
-/// until a turn marker or the start of the file. After that only the bytes
+/// until a `task_started` or the start of the file. An end marker alone
+/// does not end the search: the start of the turn that runs can be before
+/// the end marker of an older turn, in the piece that is read next. After that only the bytes
 /// that were appended are parsed. The backward search of one sample is
 /// bounded, and a file whose search is not done reads as not resolved:
 /// the caller must not take that for idle.
@@ -263,6 +307,8 @@ struct CodexRolloutTracker {
         /// of a line that begins further back.
         var carry = Data()
         var carryDropped = false
+        /// What the backward search has seen so far.
+        var scan = CodexRolloutReader.BackwardScan()
     }
 
     var searchBudget: UInt64
@@ -327,6 +373,7 @@ struct CodexRolloutTracker {
                 entry.turn.note(marker, turnID: turnID, at: at)
                 entry.resolved = true
                 entry.carry = Data()
+                entry.scan = CodexRolloutReader.BackwardScan()
             case nil:
                 break
             }
@@ -384,14 +431,18 @@ struct CodexRolloutTracker {
                     entry.carryDropped = true
                 }
             }
-            let found = CodexRolloutReader.parseTail(lines: lines.split(separator: Self.newline).map { Data($0) })
-            let cwd = entry.turn.cwd ?? found.cwd
-            if found.lastMarker != nil { entry.turn = found }
-            entry.turn.cwd = cwd
+            for line in lines.split(separator: Self.newline).reversed() {
+                entry.scan.take(Data(line))
+                if entry.scan.settled { break }
+            }
             entry.searchedFrom = from
-            if found.lastMarker != nil || from == 0 {
+            if entry.scan.settled || from == 0 {
+                let cwd = entry.turn.cwd ?? entry.scan.turn.cwd
+                if entry.scan.turn.lastMarker != nil { entry.turn = entry.scan.turn }
+                entry.turn.cwd = cwd
                 entry.resolved = true
                 entry.carry = Data()
+                entry.scan = CodexRolloutReader.BackwardScan()
             }
         }
     }

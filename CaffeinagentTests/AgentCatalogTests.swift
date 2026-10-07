@@ -162,6 +162,9 @@ final class AgentCatalogTests: XCTestCase {
             ("npx of another tool", node, ["node", "/opt/homebrew/bin/npx", "prettier", "gemini"], nil, []),
             ("value of a node flag", node, ["node", "-r", "gemini", "server.js"], nil, []),
             // The value of a runner flag is not the command.
+            ("uv run with an extra named like an agent", uv, ["uv", "run", "--extra", "gemini", "pytest"], nil, []),
+            ("uv run with a group named like an agent", uv, ["uv", "run", "--group", "aider", "--no-group", "goose", "pytest"], nil, []),
+            ("uv run with an extra, then the agent", uv, ["uv", "run", "--extra", "dev", "aider", "--yes"], "aider", ["--yes"]),
             ("uv run in a folder named like an agent", uv, ["uv", "run", "--directory", "/Users/me/code/aider", "pytest"], nil, []),
             ("uv run in a project named like an agent", uv, ["uv", "run", "--project", "/Users/me/code/aider", "pytest"], nil, []),
             ("npm exec in a workspace named like an agent", node, ["node", "/opt/homebrew/bin/npm", "exec", "-w", "packages/codex", "--", "tsc"], nil, []),
@@ -185,6 +188,43 @@ final class AgentCatalogTests: XCTestCase {
                 XCTAssertEqual(AgentCatalog.command(of: row).arguments, testCase.rest, testCase.name)
             }
         }
+    }
+
+    /// Other tools that have the name of an agent.
+    func testAnotherToolWithTheNameOfAnAgentIsNoAgent() {
+        let cases: [(name: String, path: String, args: [String], id: String?)] = [
+            ("GitHub Copilot", "/opt/homebrew/bin/copilot", ["copilot"], "copilot"),
+            ("GitHub Copilot with a prompt", "/opt/homebrew/bin/copilot", ["copilot", "-p", "deploy the svc"], "copilot"),
+            ("GitHub Copilot through node", "/opt/homebrew/bin/node", ["node", "/opt/homebrew/bin/copilot", "--resume"], "copilot"),
+            ("GitHub Copilot init", "/opt/homebrew/bin/copilot", ["copilot", "init"], "copilot"),
+            ("AWS Copilot svc deploy", "/opt/homebrew/bin/copilot", ["copilot", "svc", "deploy", "--name", "api"], nil),
+            ("AWS Copilot deploy", "/usr/local/bin/copilot", ["copilot", "deploy"], nil),
+            ("AWS Copilot env", "/usr/local/bin/copilot", ["copilot", "env", "ls"], nil),
+            ("AWS Copilot pipeline", "/usr/local/bin/copilot", ["copilot", "pipeline", "deploy"], nil),
+            ("Kilo Code", "/opt/homebrew/bin/kilo", ["kilo"], "kilo"),
+            ("Kilo Code in a project", "/opt/homebrew/bin/kilo", ["kilo", "/Users/me/code/site.com"], "kilo"),
+            ("Kilo Code run", "/opt/homebrew/bin/kilo", ["kilo", "run", "fix main.c"], "kilo"),
+            ("Kilo Code with a flag", "/opt/homebrew/bin/kilo", ["kilo", "--continue"], "kilo"),
+            ("the editor kilo", "/usr/local/bin/kilo", ["kilo", "main.c"], nil),
+            ("the editor kilo with a path", "/Users/me/code/kilo/kilo", ["./kilo", "/Users/me/notes/TODO.md"], nil),
+            ("Goose", "/Users/me/.local/bin/goose", ["goose"], "goose"),
+            ("Goose session", "/Users/me/.local/bin/goose", ["goose", "session", "--name", "up"], "goose"),
+            ("Goose run", "/Users/me/.local/bin/goose", ["goose", "run", "-t", "reset the status page"], "goose"),
+            ("goose migration", "/opt/homebrew/bin/goose", ["goose", "up"], nil),
+            ("goose migration with a driver", "/opt/homebrew/bin/goose", ["goose", "postgres", "user=me dbname=app", "status"], nil),
+            ("goose migration with a folder", "/opt/homebrew/bin/goose", ["goose", "-dir", "migrations", "create", "add_users", "sql"], nil),
+        ]
+        for c in cases {
+            XCTAssertEqual(catalog.match(.fixture(10, path: c.path, args: c.args), userNames: [])?.definition.id, c.id, c.name)
+        }
+        // No agent at all, so below an agent it is a command of that agent.
+        let snapshot: [Row] = [
+            .fixture(100, path: claudeBinary, args: ["claude"]),
+            .fixture(110, ppid: 100, path: "/opt/homebrew/bin/copilot", args: ["copilot", "svc", "deploy"]),
+        ]
+        let instances = catalog.instances(in: snapshot)
+        XCTAssertEqual(instances.map(\.definitionID), ["claude"])
+        XCTAssertEqual(instances.first?.rows.map(\.pid), [100, 110])
     }
 
     func testUserNamesMatchAtGenericLevel() {

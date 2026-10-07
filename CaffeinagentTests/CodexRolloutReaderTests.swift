@@ -220,6 +220,37 @@ final class CodexRolloutReaderTests: XCTestCase {
         XCTAssertEqual(CodexRolloutReader.parseTail(of: long).state, .working)
     }
 
+    /// A new turn B replaced turn A: `task_started` of B, a lot of output,
+    /// then `turn_aborted` of A. The first read of the tracker holds the
+    /// end marker and not the start, and it took the file for idle.
+    func testAnEndMarkerOfAnOlderTurnDoesNotEndTheSearch() throws {
+        let tail = [output(bytes: 30_000), aborted(turnA), message]
+        let tailBytes = lines(tail).utf8.count
+        // The edge of the first read: after the start line, inside it, and before it.
+        for inside in [-200, 60, 5_000] {
+            let padding = Int(CodexRolloutTracker.firstChunk) - tailBytes + inside - 1
+            let url = try makeRollout(lines([meta, started(turnA), started(turnB), output(bytes: padding - 80)] + tail))
+            XCTAssertEqual(CodexRolloutReader.parseTail(of: url).turnID, turnB, "\(inside)")
+            var tracker = CodexRolloutTracker()
+            let reading = try XCTUnwrap(tracker.read(path: url.path))
+            XCTAssertTrue(reading.resolved, "\(inside)")
+            XCTAssertEqual(reading.turn.state, .working, "\(inside)")
+            XCTAssertEqual(reading.turn.turnID, turnB, "\(inside)")
+        }
+        // The end of the turn that ran is still an end, however far its start is.
+        let ended = try makeRollout(lines([meta, started(turnA)] + Array(repeating: output(bytes: 100_000), count: 20) + [complete(turnA)]))
+        var tracker = CodexRolloutTracker()
+        let reading = try XCTUnwrap(tracker.read(path: ended.path))
+        XCTAssertTrue(reading.resolved)
+        XCTAssertEqual(reading.turn.state, .idle)
+        XCTAssertEqual(reading.turn.lastMarker, .completed)
+        // While the start is not found, the state is unknown, not idle.
+        var slow = CodexRolloutTracker(searchBudget: 1_048_576)
+        let first = try XCTUnwrap(slow.read(path: ended.path))
+        XCTAssertFalse(first.resolved)
+        XCTAssertNil(first.turn.state)
+    }
+
     func testLongSearchIsSpreadOverSamplesAndIsUnknownMeanwhile() throws {
         let filler = Array(repeating: output(bytes: 100_000), count: 35)
         let url = try makeRollout(lines([started(turnA)] + filler))

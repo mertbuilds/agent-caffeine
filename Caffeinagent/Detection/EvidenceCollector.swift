@@ -119,9 +119,15 @@ final class EvidenceCollector: EvidenceCollecting {
     static let childWindow: TimeInterval = 10
     /// A desktop app has a live session for this long after its last write.
     static let liveSessionAge: TimeInterval = 3600
-    /// How often the Codex session tree and a Claude project directory are
-    /// listed again to find a new file.
+    /// How often a Claude project directory and the Cursor transcripts
+    /// are listed again to find a new file.
     static let listingAge: TimeInterval = 5
+    /// How often the dated folders of the Codex sessions are listed, for a
+    /// session that holds no rollout open. The whole tree took 151 ms to
+    /// list at 10,000 rollouts, every 5 seconds.
+    static let rolloutListingAge: TimeInterval = 60
+    /// The dated folders that are listed: today's and yesterday's.
+    static let rolloutListingDays = 2
     static let codexIDs: Set<String> = ["codex", "codex-desktop"]
     /// For how long after the last good read the previous frame is kept
     /// while the process table cannot be read. A time and not a count of
@@ -160,6 +166,8 @@ final class EvidenceCollector: EvidenceCollecting {
     private var rolloutTails: CodexRolloutTracker
     private var rolloutCwds: [String: String] = [:]
     private var rolloutListing: (at: Date, files: [CodexRolloutFile])?
+    /// The rollouts of each Codex session of the sample that is being collected.
+    private var sessionRollouts: [ProcessIdentity: [String]] = [:]
     private var cursorTails = CursorTranscriptTracker()
     private var cursorListing: (at: Date, files: [CursorTranscriptFile])?
     private var transcriptChoices: [ProcessIdentity: (at: Date, path: String?)] = [:]
@@ -198,6 +206,7 @@ final class EvidenceCollector: EvidenceCollecting {
         let hookStates = hookReader?.states(snapshot: snapshot, now: now) ?? [:]
         // A new state file is a new entry in the folder.
         if let hookReader { sample.watchedFiles.insert(hookReader.directory.path) }
+        sessionRollouts = codexSessionRollouts(of: instances, matches: matches, now: now)
         var activities: [String: FileActivity] = [:]
         var rows: [ProcessIdentity: ProcessInfoRow] = [:]
         var liveUnits: Set<ProcessIdentity> = []
@@ -473,7 +482,7 @@ final class EvidenceCollector: EvidenceCollecting {
             guard readable else { return }
             paths = open.sorted()
         } else {
-            paths = sessionRollout(for: instance, started: started, now: now).map { [$0] } ?? []
+            paths = sessionRollouts[instance.identity] ?? []
         }
 
         var working = false
@@ -522,26 +531,59 @@ final class EvidenceCollector: EvidenceCollecting {
         return path[path.index(after: slash)...].hasPrefix("rollout-")
     }
 
-    /// `codex exec` and the TUI: the newest rollout of the process's working
-    /// directory that was written since the process started. Rollouts carry
-    /// no pid.
-    private func sessionRollout(for instance: AgentInstance, started: Date, now: Date) -> String? {
-        if rolloutListing.map({ now.timeIntervalSince($0.at) >= Self.listingAge || $0.at > now }) ?? true {
-            rolloutListing = (now, sources.codexRollouts.recentFiles(now: now))
+    /// `codex exec` and the TUI. Rollouts carry no pid, so a rollout is
+    /// tied to a session by the file the process holds open, as for the
+    /// engines. Two sessions in one folder each read their own file then:
+    /// the end of one turn is not the end of the other, and a turn that a
+    /// killed session left open is not the turn of the one that lives.
+    ///
+    /// A session that holds no rollout open gets the newest rollout of its
+    /// working directory that was written since it started, and only when
+    /// no other such session runs in that directory: with two of them
+    /// nobody can say which file is whose. No file goes to two sessions.
+    private func codexSessionRollouts(of instances: [AgentInstance], matches: [Int32: AgentMatch], now: Date) -> [ProcessIdentity: [String]] {
+        let sessions = instances.filter { Self.codexIDs.contains($0.definition.id) && $0.role != .engine }
+        guard !sessions.isEmpty else { return [:] }
+        var found: [ProcessIdentity: [String]] = [:]
+        var taken: Set<String> = []
+        var searching: [(instance: AgentInstance, cwd: String)] = []
+        for instance in sessions {
+            var open: Set<String> = []
+            for row in instance.rows where matches[row.pid].map({ $0.definition.id == instance.definition.id && $0.role == .session }) ?? false {
+                open.formUnion((sources.openFiles.openFilePaths(of: row.pid) ?? []).filter(Self.isRolloutPath).map(Self.resolved))
+            }
+            open.subtract(taken)
+            if !open.isEmpty {
+                found[instance.identity] = open.sorted()
+                taken.formUnion(open)
+            } else if let cwd = sources.openFiles.workingDirectory(of: instance.rootPID).map(Self.resolved) {
+                searching.append((instance, cwd))
+            }
+        }
+        guard !searching.isEmpty else { return found }
+        if rolloutListing.map({ now.timeIntervalSince($0.at) >= Self.rolloutListingAge || $0.at > now }) ?? true {
+            rolloutListing = (now, sources.codexRollouts.filesOfLastDays(Self.rolloutListingDays, now: now))
             let listed = Set(rolloutListing?.files.map(\.url.path) ?? [])
             rolloutCwds = rolloutCwds.filter { listed.contains($0.key) }
         }
-        let candidates = (rolloutListing?.files ?? []).filter { $0.lastWrite >= started }
-        guard !candidates.isEmpty, let cwd = sources.openFiles.workingDirectory(of: instance.rootPID).map(Self.resolved) else { return nil }
-        // Newest first, as the listing is.
-        for file in candidates {
-            let path = file.url.path
-            let fileCwd = rolloutCwds[path] ?? CodexRolloutReader.sessionCwd(of: file.url).map(Self.resolved)
-            guard let fileCwd else { continue }
-            rolloutCwds[path] = fileCwd
-            if fileCwd == cwd { return path }
+        let files = rolloutListing?.files ?? []
+        let sharing = Dictionary(searching.map { ($0.cwd, 1) }, uniquingKeysWith: +)
+        for (instance, cwd) in searching where sharing[cwd] == 1 {
+            let started = Date(timeIntervalSince1970: instance.rootStartTime)
+            // Newest first, as the listing is.
+            for file in files where file.lastWrite >= started {
+                let path = file.url.path
+                guard !taken.contains(Self.resolved(path)) else { continue }
+                let fileCwd = rolloutCwds[path] ?? CodexRolloutReader.sessionCwd(of: file.url).map(Self.resolved)
+                guard let fileCwd else { continue }
+                rolloutCwds[path] = fileCwd
+                guard fileCwd == cwd else { continue }
+                found[instance.identity] = [path]
+                taken.insert(Self.resolved(path))
+                break
+            }
         }
-        return nil
+        return found
     }
 
     /// `/tmp` and `/private/tmp` are the same directory.
