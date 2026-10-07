@@ -102,6 +102,10 @@ struct AgentMemory: Equatable {
     /// The same time, moved over the holes between samples (`SampleGap`),
     /// so `hookWorkingLimit` does not run out while the Mac sleeps.
     var hookWorkSince: Date?
+    /// The time of the hook idle that stands now, as the hook wrote it.
+    var hookIdleAt: Date?
+    /// The last strong sign of work from after that idle: see `noteHookIdle`.
+    var workAfterHookIdleAt: Date?
     /// Since when every sign of `CursorApprovalRule` holds without a break.
     var approvalSignsSince: Date?
     /// The samples of the last `cpuWindow * cpuWindowCount` seconds.
@@ -214,7 +218,7 @@ enum CursorApprovalRule {
 ///
 /// The sources, most trusted first:
 /// 1. a fresh hook state, a hook wait of any age that has not ended, or
-///    the hook working of an agent with no state of its own,
+///    the hook working or idle of an agent with no state of its own,
 /// 2. the reported state (state file or session log),
 /// 3. strong signs: a busy command, a working background job, a sleep
 ///    assertion of the agent's own, a session-file write,
@@ -257,7 +261,8 @@ enum VerdictRules {
     static let reportMemory: TimeInterval = 10
 
     /// A hook working or idle older than this no longer beats the reported
-    /// state. A hook wait has no such age: see `noteHookWait`.
+    /// state. A hook wait has no such age: see `noteHookWait`. Nor has the
+    /// idle of an agent with no state of its own: see `noteHookIdle`.
     static let hookFreshness: TimeInterval = 60
 
     /// An agent with no state of its own (Droid, opencode) says through
@@ -274,6 +279,14 @@ enum VerdictRules {
     /// that started again. The hook and the write of the tool call that
     /// asks can be a moment apart.
     static let hookWaitMargin: TimeInterval = 2
+
+    /// A sign of work counts as new work after a hook idle only when it is
+    /// this much later than the idle. opencode writes its database when it
+    /// stops (measured with 1.18.16: in the same second as `session.idle`),
+    /// and a command that ended with the turn reads as busy for up to half
+    /// of `EvidenceCollector.childWindow` more. Only the same second is
+    /// measured: 10 seconds is the whole child window.
+    static let hookIdleMargin: TimeInterval = 10
 
     /// Whether one child command counts as busy: its own subtree's CPU
     /// seconds over the collector's recent window.
@@ -296,7 +309,7 @@ enum VerdictRules {
             return (AgentVerdict(state: .waitingForUser, confidence: .inferredStrong, reason: .awaitsApproval), memory)
         }
         if let state = statedState(of: evidence, memory: memory, settings: settings, now: now) {
-            return (statedVerdict(state, evidence: evidence), memory)
+            return (statedVerdict(state, evidence: evidence, memory: memory, settings: settings, now: now), memory)
         }
         return (inferredVerdict(evidence: evidence, memory: memory, settings: settings, now: now), memory)
     }
@@ -364,6 +377,7 @@ enum VerdictRules {
         }
         noteHookWait(evidence, in: &memory, settings: settings, now: now)
         noteHookWork(evidence, in: &memory, now: now)
+        noteHookIdle(evidence, in: &memory, now: now)
         let signsSince = memory.approvalSignsSince.flatMap { $0 <= now ? $0 : nil }
         memory.approvalSignsSince = CursorApprovalRule.signs(of: evidence) ? signsSince ?? now : nil
         noteCPU(evidence, in: &memory, now: now)
@@ -419,6 +433,40 @@ enum VerdictRules {
         guard memory.hookWorkAt != at else { return }
         memory.hookWorkAt = at
         memory.hookWorkSince = min(at, now)
+    }
+
+    /// An agent with no state of its own (Droid, opencode) says through
+    /// its hooks alone that its turn ended, and it sends no event while it
+    /// rests. So its hook idle stands until the next event of the process,
+    /// at any age. CPU use does not end it: an idle opencode TUI was
+    /// measured at a steady 2 percent, which is `weakCPUFraction`, and it
+    /// read as working for 11 minutes.
+    ///
+    /// A strong sign from after the idle is work that goes on with no
+    /// event, as for an agent that states idle itself: a command that is
+    /// busy, a background job, a sleep assertion, a session-file write.
+    /// The time of the last one is kept here, and the verdict holds for
+    /// the release time after it. A sign within `hookIdleMargin` of the
+    /// idle belongs to the turn that ended. The write is compared by its
+    /// own time, which a sleep does not move, so the write of the stop
+    /// does not count after a sleep.
+    private static func noteHookIdle(_ evidence: AgentEvidence, in memory: inout AgentMemory, now: Date) {
+        guard standsOnHooks(evidence), evidence.hookState == .idle, let at = evidence.hookStateAt, !isAhead(at, of: now) else {
+            memory.hookIdleAt = nil
+            memory.workAfterHookIdleAt = nil
+            return
+        }
+        if memory.hookIdleAt != at {
+            memory.hookIdleAt = at
+            memory.workAfterHookIdleAt = nil
+        }
+        let after = at.addingTimeInterval(hookIdleMargin)
+        if now > after, evidence.busyChildCommands > 0 || evidence.backgroundJobsWorking > 0 || evidence.ownsSleepAssertion {
+            memory.workAfterHookIdleAt = now
+        }
+        if let write = fileWrite(of: evidence, now: now), write > after {
+            memory.workAfterHookIdleAt = max(memory.workAfterHookIdleAt ?? write, write)
+        }
     }
 
     /// Whether the hooks are all this agent says about itself. An agent
@@ -496,6 +544,8 @@ enum VerdictRules {
                 return hook
             } else if hook == .working, standsOnHooks(evidence), let since = memory.hookWorkSince, now.timeIntervalSince(since) < hookWorkingLimit {
                 return hook
+            } else if hook == .idle, standsOnHooks(evidence) {
+                return hook
             }
         }
         return reportedState(memory: memory, settings: settings, now: now)
@@ -528,7 +578,7 @@ enum VerdictRules {
     /// A working that the agent states itself never expires by age: a long
     /// tool call and a model wait are silent, and the instance ends when
     /// its process ends.
-    private static func statedVerdict(_ state: WorkState, evidence: AgentEvidence) -> AgentVerdict {
+    private static func statedVerdict(_ state: WorkState, evidence: AgentEvidence, memory: AgentMemory, settings: DetectionSettings, now: Date) -> AgentVerdict {
         if state == .working {
             return AgentVerdict(state: .working, confidence: .reported, reason: .reportsBusy)
         }
@@ -537,6 +587,11 @@ enum VerdictRules {
         }
         if evidence.backgroundJobsWorking > 0 {
             return AgentVerdict(state: .working, confidence: .inferredStrong, reason: .backgroundJob(evidence.backgroundJobsWorking))
+        }
+        // The policy gives no release time to an agent with no state of
+        // its own, so the verdict counts it, as `inferredVerdict` does.
+        if state == .idle, let worked = memory.workAfterHookIdleAt, isRecent(worked, within: settings.releaseAfterActivity, now: now) {
+            return AgentVerdict(state: .working, confidence: .inferredStrong, reason: strongReason(evidence: evidence, memory: memory, lastAt: worked, now: now))
         }
         if state == .waitingForUser {
             return AgentVerdict(state: .waitingForUser, confidence: .reported, reason: .asksPermission)

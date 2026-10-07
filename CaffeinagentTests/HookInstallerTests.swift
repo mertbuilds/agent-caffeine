@@ -439,6 +439,20 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(installer.status(of: codex), .notInstalled)
     }
 
+    /// A hook idle stands at any age, so "off" must not leave one behind.
+    func testOffRemovesTheHookStatesOfThatAgentOnly() throws {
+        let states = installer.statesDirectory
+        XCTAssertTrue(states.path.hasPrefix(home.path))
+        XCTAssertEqual(states.lastPathComponent, HookStateFile.directory(environment: [:]).lastPathComponent)
+        try FileManager.default.createDirectory(at: states, withIntermediateDirectories: true)
+        for name in ["codex-100.json", "codex-200.json", "claude-300.json"] {
+            try Data("{}".utf8).write(to: states.appendingPathComponent(name))
+        }
+        try installer.install(codex)
+        try installer.uninstall(codex)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: states.path), ["claude-300.json"])
+    }
+
     func testOffRemovesAFileThatOnCreatedAlsoAfterAnUpdate() throws {
         try HookInstaller(home: home, appPath: "/Users/me/Downloads/agent caffeine.app").install(codex)
         try installer.install(codex)
