@@ -2,8 +2,8 @@ import Foundation
 
 /// Where license keys are sold and checked.
 ///
-/// One key costs $9 on Polar and runs on one Mac: the license key benefit
-/// behind it allows one activation. A Debug build talks to Polar's sandbox, so
+/// A key costs $19 for one Mac or $29 for three Macs on Polar: the license key benefit
+/// behind each product sets the number of activations. A Debug build talks to Polar's sandbox, so
 /// a test purchase never touches real money or real keys; a Release build
 /// talks to Polar itself. The two are separate organizations with separate ids.
 struct LicenseConfig: Equatable, Sendable {

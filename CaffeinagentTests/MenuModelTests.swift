@@ -548,7 +548,7 @@ final class MenuModelTests: XCTestCase {
 
     func testActionTitles() {
         let titles: [(PanelAction, String)] = [
-            (.openLoginItems, "Open System Settings"), (.tryHelperAgain, "Try again"), (.buy, "Buy for $9"), (.enterKey, "Enter license key…"),
+            (.openLoginItems, "Open System Settings"), (.tryHelperAgain, "Try again"), (.buy, "Buy for $19"), (.enterKey, "Enter license key…"),
             (.checkLicense, "Check now"), (.activateAgain, "Activate again"), (.setUpLidClosed, "Set up…"),
             (.dismissLidClosedHint, "Dismiss"),
         ]
