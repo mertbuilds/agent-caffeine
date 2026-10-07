@@ -705,6 +705,24 @@ final class CursorApprovalRuleTests: XCTestCase {
         XCTAssertFalse(CursorApprovalRule.endedByStopHook(cursor(.idle, at: 40, hook: .idle, hookAt: 30, writeAt: 20)))
     }
 
+    /// The assertion goes at the end of a turn, and the Mac sleeps for an
+    /// hour 5 seconds later, before the end line is written. The settle
+    /// time ran out in the sleep, and Cursor read as waiting on wake.
+    func testTheSettleTimeDoesNotRunWhileTheMacSleeps() {
+        var memory: [ProcessIdentity: AgentMemory] = [:]
+        var states: [TimeInterval: WorkState] = [:]
+        for second in Array(stride(from: 0.0, through: 5, by: 1)) + Array(stride(from: 3605.0, through: 3620, by: 1)) {
+            if second == 3605 { memory = memory.mapValues { $0.shifted(by: 3600) } }
+            let frame = EvidenceFrame(at: at(second), agents: [cursor(at: second)])
+            let (readings, next) = VerdictRules.readings(for: frame, memory: memory, settings: DetectionSettings())
+            memory = next
+            states[second] = readings[0].verdict.state
+        }
+        XCTAssertEqual(states[3605], .working)
+        XCTAssertEqual(states[3614], .working)
+        XCTAssertEqual(states[3615], .waitingForUser, "15 seconds awake with the signs")
+    }
+
     func testTheUsersRuleStands() {
         var settings = DetectionSettings()
         settings.agentRules["cursor-desktop"] = .ignore
