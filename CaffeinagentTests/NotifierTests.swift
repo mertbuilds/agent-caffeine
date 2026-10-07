@@ -118,6 +118,8 @@ final class NotifierTests: XCTestCase {
         let waiting = Notifier.request(for: content(.waiting, after: 0)).content
         let finished = Notifier.request(for: content(.finished, after: 0)).content
         XCTAssertEqual(Notifier.presentation(of: waiting), [.banner, .list, .sound])
-        XCTAssertEqual(Notifier.presentation(of: finished), [.banner, .list], "Finished is silent")
+        XCTAssertEqual(Notifier.presentation(of: finished), [.banner, .list, .sound])
+        let silent = UNMutableNotificationContent()
+        XCTAssertEqual(Notifier.presentation(of: silent), [.banner, .list], "A request without a sound stays silent")
     }
 }

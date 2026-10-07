@@ -532,7 +532,7 @@ final class AgentNoticesTests: XCTestCase {
         XCTAssertEqual(content.title, "Claude Code finished")
         XCTAssertEqual(content.subtitle, "wiki-6e")
         XCTAssertEqual(content.body, "After 1 hour 22 minutes")
-        XCTAssertFalse(content.sound)
+        XCTAssertTrue(content.sound)
         XCTAssertEqual(content.thread, "agent-claude")
         XCTAssertEqual(content.key, "finished-7-5")
         XCTAssertEqual(content.id, "finished-7-5-1000000000")
@@ -547,7 +547,7 @@ final class AgentNoticesTests: XCTestCase {
         XCTAssertEqual(finished.title, "3 agents finished")
         XCTAssertNil(finished.subtitle)
         XCTAssertNil(finished.body)
-        XCTAssertFalse(finished.sound)
+        XCTAssertTrue(finished.sound)
         XCTAssertNil(finished.ownerPid, "They run in two apps")
         let waiting = AgentNoticeText.content(
             AgentNotice(kind: .waiting, sessions: three.map { var session = $0; session.waitingSince = start; session.ownerPid = 500; return session }),

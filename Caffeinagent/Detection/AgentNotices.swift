@@ -419,7 +419,7 @@ enum AgentNoticeText {
             return AgentNoticeContent(
                 id: "\(key)-\(stamp)", key: key, thread: "agents",
                 title: notice.kind == .waiting ? "\(sessions.count) agents are waiting for you" : "\(sessions.count) agents finished",
-                subtitle: nil, body: sleeps, sound: notice.kind == .waiting, ownerPid: ownerPid
+                subtitle: nil, body: sleeps, sound: true, ownerPid: ownerPid
             )
         }
         let id = "\(session.identity.pid)-\(Int(session.identity.startTime))"
@@ -433,7 +433,7 @@ enum AgentNoticeText {
             return AgentNoticeContent(
                 id: "finished-\(id)-\(stamp)", key: "finished-\(id)", thread: "agent-\(session.agentID)", title: "\(session.displayName) finished",
                 subtitle: session.label, body: session.workedFor.flatMap(HumaneDuration.length(seconds:)).map { "After \($0)" },
-                sound: false, ownerPid: ownerPid
+                sound: true, ownerPid: ownerPid
             )
         }
     }
