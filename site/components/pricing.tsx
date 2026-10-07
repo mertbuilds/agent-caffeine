@@ -21,7 +21,8 @@ export async function Pricing() {
               backgroundSize: "32px 32px",
             }}
           />
-          <div className="absolute left-1/2 top-0 size-[320px] -translate-x-1/2 -translate-y-1/3 bg-[radial-gradient(closest-side,rgba(160,205,255,0.5),transparent)] md:left-auto md:right-[-60px] md:top-0 md:size-[380px] lg:right-[-40px] lg:size-[520px] md:translate-x-0 md:-translate-y-[20%]" />
+          {/* On a narrow card the light ends above the first line of text, which needs the blue under it to be read. */}
+          <div className="absolute left-1/2 top-0 size-[190px] -translate-x-1/2 -translate-y-1/2 bg-[radial-gradient(closest-side,rgba(160,205,255,0.5),transparent)] md:left-auto md:right-[-60px] md:top-0 md:size-[380px] lg:right-[-40px] lg:size-[520px] md:translate-x-0 md:-translate-y-[20%]" />
         </div>
         <div className="relative grid justify-items-center gap-8 px-6 pb-10 text-center md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:justify-items-start md:gap-10 md:py-14 md:pl-14 md:pr-12 md:text-left">
           <div className="relative -mt-14 md:order-last md:-mt-24 md:self-start">

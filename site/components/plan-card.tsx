@@ -62,7 +62,7 @@ export function PlanCard({ download = null }: { download?: ReactNode }) {
                   type="button"
                 >
                   <span>{macs(entry)}</span>
-                  <span className="tabular-nums opacity-75">{dollars(entry)}</span>
+                  <span className={`tabular-nums ${entry.id === plan.id ? "" : "opacity-75"}`}>{dollars(entry)}</span>
                 </button>
               ))}
             </div>
