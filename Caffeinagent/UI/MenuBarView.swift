@@ -28,7 +28,7 @@ struct MenuBarView: View {
         }
     }
 
-    private func perform(_ action: PanelAction, openPreferences: () -> Void) {
+    private func perform(_ action: PanelAction, openPreferences: @escaping () -> Void) {
         let license = aggregator.license
         switch action {
         case .openLoginItems:
@@ -41,10 +41,16 @@ struct MenuBarView: View {
             aggregator.preferencesTab = .license
             openPreferences()
         case .checkLicense:
-            Task { await license.checkNow() }
+            Task { @MainActor in
+                await license.checkNow()
+                showLicenseMessage(openPreferences)
+            }
         case .activateAgain:
             guard let key = license.record.key else { return }
-            Task { await license.activate(key: key) }
+            Task { @MainActor in
+                await license.activate(key: key)
+                showLicenseMessage(openPreferences)
+            }
         case .setUpLidClosed:
             aggregator.preferencesTab = .lidClosed
             openPreferences()
@@ -72,5 +78,14 @@ struct MenuBarView: View {
         case .openHelp:
             NSWorkspace.shared.open(AppLinks.help)
         }
+    }
+
+    /// The menu has no place for why a license action failed. Settings
+    /// has, so it opens on the reason.
+    @MainActor
+    private func showLicenseMessage(_ openPreferences: () -> Void) {
+        guard aggregator.license.message != nil else { return }
+        aggregator.preferencesTab = .license
+        openPreferences()
     }
 }
