@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { lidBrightness, lidDegrees } from "@/components/laptop/geometry";
 import { Laptop } from "@/components/laptop/laptop";
 import { Pill } from "@/components/laptop/pill";
-import { Screen } from "@/components/laptop/screen";
+import { Screen, spinnerAt } from "@/components/laptop/screen";
 import { laptop } from "@/lib/motion";
 import { stretch, useLoop } from "@/lib/playhead";
 import { useSeen } from "@/lib/use-seen";
@@ -47,12 +47,13 @@ export function LaptopScene() {
     AT_CLOSE * stretch(at, ...laptop.work, linear) +
     (AT_DONE - AT_CLOSE) * stretch(at, ...laptop.race, easeInOut);
   const seconds = workedAt(time);
+  const spinner = spinnerAt(time);
 
   return (
     <div
       ref={ref}
       role="img"
-      aria-label="A coding agent on a laptop gets a refactor to do and starts on its steps. The lid closes one second after the prompt is sent, the display goes dark with it, and the agent keeps working for 14 minutes. The lid opens on the finished work, with every step done"
+      aria-label="A laptop runs Claude Code on a refactor. The lid closes one second after the prompt is sent, the display goes dark with it, and Claude Code keeps working for 14 minutes. The lid opens on the finished work, with all tests passing"
       className="relative aspect-[10/7] w-full [container-type:inline-size]"
     >
       <div className="absolute inset-0" style={{ perspective: "200cqw", perspectiveOrigin: "50% 22%" }}>
@@ -63,7 +64,7 @@ export function LaptopScene() {
               sent: span(laptop.sent),
               steps: laptop.steps.map((step) => span(step)),
               working: time >= laptop.sent[0] && !done ? seconds : null,
-              seconds: time,
+              spinner,
               done,
               shown: winding ? at : 1,
             }}
@@ -71,7 +72,7 @@ export function LaptopScene() {
         </Laptop>
         <Pill
           shown={span(laptop.pillIn) - span(laptop.pillOut)}
-          at={time}
+          spinner={spinner}
           seconds={Math.floor(workedAt(Math.floor(time * PILL_TICKS) / PILL_TICKS))}
         />
       </div>

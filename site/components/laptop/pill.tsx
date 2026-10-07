@@ -1,6 +1,7 @@
 import NumberFlow, { NumberFlowGroup } from "@number-flow/react";
+import { AgentIcon } from "@/components/agent-icons";
 import { MenuIcon } from "@/components/menu-icon";
-import { Working } from "./screen";
+import { CLAUDE } from "./screen";
 
 // A little longer than the timer's 100 ms step, so the rolls run into each other like fast counting.
 const ROLL = { duration: 160, easing: "ease-out" };
@@ -26,14 +27,14 @@ function Count({ amount, unit }: { amount: number; unit: string }) {
 type PillProps = {
   /** How far the pill has come in, from 0 to 1. */
   shown: number;
-  /** Seconds into the loop, which the dots of work under way keep time with. */
-  at: number;
+  /** Claude Code's spinner glyph of the moment. */
+  spinner: string;
   /** Whole seconds of work, stepped a few times a second. */
   seconds: number;
 };
 
-/** The note above the closed laptop: the agent is still working. */
-export function Pill({ shown, at, seconds }: PillProps) {
+/** The note above the closed laptop: Claude Code is still working. */
+export function Pill({ shown, spinner, seconds }: PillProps) {
   if (shown <= 0) {
     return null;
   }
@@ -46,7 +47,10 @@ export function Pill({ shown, at, seconds }: PillProps) {
         boxShadow: "0 0.5em 1.5em var(--shadow)",
       }}
     >
-      <Working seconds={at} />
+      <AgentIcon className="size-[1.15em] shrink-0" name="claudecode" />
+      <span className="inline-block w-[1ch] text-center font-mono [font-variant-emoji:text]" style={{ color: CLAUDE }}>
+        {spinner}
+      </span>
       <span>Still working</span>
       <span aria-hidden="true" className="tabular-nums text-muted">
         <NumberFlowGroup>

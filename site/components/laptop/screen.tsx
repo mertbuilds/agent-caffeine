@@ -1,83 +1,48 @@
 import type { CSSProperties, ReactNode } from "react";
+import { AgentIcon } from "@/components/agent-icons";
 
+export const CLAUDE = "#D97757";
+const GREEN = "#4eba65";
 const TEXT = "#e5e5e5";
 const DIM = "#8b8b8b";
 const EDGE = "#5c5c5c";
 
 const PROMPT = "refactor the auth module";
-const STEPS = ["Read the code", "Edit 6 files", "Run the tests"];
+const TOOLS = ["Read", "Update", "Bash(bun test)"];
+const SPINNER = ["·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢"];
 
-/** Seconds the light takes to run over the three dots of work under way. */
-const BEAT = 0.9;
-
-function count(amount: number, unit: string): string {
-  return `${amount} ${unit}${amount === 1 ? "" : "s"}`;
+/** The spinner glyph Claude Code shows `seconds` into its work. */
+export function spinnerAt(seconds: number): string {
+  return SPINNER[Math.floor(seconds / 0.12) % SPINNER.length];
 }
 
-/** Elapsed time in full words: `48 seconds`, `2 minutes 14 seconds`. */
+/** Elapsed time the way Claude Code writes it: `48s`, `2m 14s`. */
 function elapsed(seconds: number): string {
   const whole = Math.floor(seconds);
   const minutes = Math.floor(whole / 60);
-  return minutes > 0 ? `${count(minutes, "minute")} ${count(whole % 60, "second")}` : count(whole, "second");
+  return minutes > 0 ? `${minutes}m ${whole % 60}s` : `${whole}s`;
 }
 
 type Session = {
-  /** How much of the prompt is typed into the input, from 0 to 1. */
+  /** How much of the prompt is typed into the input box, from 0 to 1. */
   typed: number;
-  /** How far the sent prompt has turned into the task's title, and its steps have come in. */
+  /** How far the sent prompt has come into the transcript. */
   sent: number;
-  /** How far each step's check has come in. A step works once the one before it is checked. */
+  /** How far each tool line has come in. A tool is done once the next one starts. */
   steps: readonly number[];
   /** Seconds the agent has worked, or null once it is done or before it starts. */
   working: number | null;
-  /** Seconds into the loop, which the dots of work under way keep time with. */
-  seconds: number;
+  spinner: string;
   done: boolean;
-  /** The task's opacity, for clearing the screen before a replay. */
+  /** The transcript's opacity, for clearing the screen before a replay. */
   shown: number;
 };
 
-/** The mark of work under way: three dots, lit one after the other. */
-export function Working({ seconds }: { seconds: number }) {
-  const lit = ((seconds / BEAT) % 1) * 3;
+/** One glyph in the room of one character, drawn as text where a font has it as an emoji too. */
+function Cell({ children, color }: { children: string; color?: string }) {
   return (
-    <span className="inline-flex w-[1em] shrink-0 items-center justify-between text-[var(--accent)]">
-      {[0, 1, 2].map((dot) => {
-        const away = Math.abs(((lit - dot + 4.5) % 3) - 1.5);
-        return (
-          <span
-            key={dot}
-            className="size-[0.26em] rounded-full bg-current"
-            style={{ opacity: 0.4 + 0.6 * Math.max(0, 1 - away) }}
-          />
-        );
-      })}
-    </span>
-  );
-}
-
-/** A step's mark: a quiet dot while it waits, the dots of work under way, then a check. */
-function Mark({ working, done, seconds }: { working: number; done: number; seconds: number }) {
-  return (
-    <span className="relative inline-flex size-[1em] shrink-0 items-center justify-center">
-      <span className="absolute size-[0.26em] rounded-full" style={{ backgroundColor: DIM, opacity: 1 - working }} />
-      {working > 0 && done < 1 ? (
-        <span className="absolute inset-0 flex items-center" style={{ opacity: working * (1 - done) }}>
-          <Working seconds={seconds} />
-        </span>
-      ) : null}
-      <svg
-        viewBox="0 0 16 16"
-        className="absolute inset-0 size-full text-[var(--accent)]"
-        fill="none"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth={1.5}
-        style={{ opacity: done }}
-      >
-        <path d="M3.5 8.5l3 3 6-7" />
-      </svg>
+    <span className="inline-block w-[1ch] text-center [font-variant-emoji:text]" style={{ color }}>
+      {children}
     </span>
   );
 }
@@ -88,7 +53,7 @@ function Line({ children, shown = 1, style }: { children: ReactNode; shown?: num
   }
   return (
     <div
-      className="flex items-center gap-[0.6em] overflow-hidden whitespace-pre"
+      className="overflow-hidden whitespace-pre"
       style={{ opacity: shown, transform: `translateY(${(1 - shown) * 0.35}em)`, ...style }}
     >
       {children}
@@ -96,47 +61,47 @@ function Line({ children, shown = 1, style }: { children: ReactNode; shown?: num
   );
 }
 
+/** Claude Code in a terminal, cut down to what reads at a glance. */
 export function Screen({ session }: { session: Session }) {
-  const { typed, sent, steps, working, seconds, done, shown } = session;
-  // The input stands empty again while the finished task clears.
-  const input = 1 - sent * shown;
+  const { typed, sent, steps, working, spinner, done, shown } = session;
 
+  // On a small display the type is larger against the screen and the lines closer, so it still reads.
   return (
     <div
       aria-hidden="true"
-      className="h-full bg-[#0d0d0d] px-[9cqw] pt-[8.5cqw] text-left text-[5.2cqw] leading-[1.3]"
+      className="flex h-full flex-col gap-[0.7em] overflow-hidden bg-[#0d0d0d] px-[1.5ch] pt-[1.5em] text-left font-mono text-[calc(100cqw/30)] leading-[1.4] [font-variant-ligatures:none] [@container(max-width:299.98px)]:gap-[0.4em] [@container(max-width:299.98px)]:pt-[1.2em] [@container(max-width:299.98px)]:text-[calc(100cqw/25)]"
       style={{ color: TEXT }}
     >
-      <div
-        className="-mx-[0.7em] flex items-center whitespace-pre rounded-[0.5em] border px-[0.7em] py-[0.45em]"
-        style={{ borderColor: `color-mix(in srgb, ${EDGE} ${input * 100}%, transparent)` }}
-      >
-        <span style={{ opacity: shown }}>{sent > 0 ? PROMPT : PROMPT.slice(0, Math.round(typed * PROMPT.length))}</span>
-        <span className="h-[1.1em] w-[0.08em]" style={{ backgroundColor: TEXT, opacity: sent > 0 ? 1 - shown : 1 }} />
+      <div className="flex items-center gap-[1ch] whitespace-pre">
+        <AgentIcon className="size-[1.4em] shrink-0" name="claudecode" />
+        Claude Code
       </div>
-      <div className="mt-[0.5em] flex flex-col gap-[0.5em]" style={{ opacity: shown }}>
-        {STEPS.map((step, place) => {
-          const started = place === 0 ? sent : steps[place - 1];
-          // Only the step in hand is bright.
-          const bright = started * (1 - steps[place]);
-          return (
-            <Line key={step} shown={sent} style={{ color: `color-mix(in srgb, ${TEXT} ${bright * 100}%, ${DIM})` }}>
-              <Mark working={started} done={steps[place]} seconds={seconds} />
-              {step}
-            </Line>
-          );
-        })}
+      <div className="flex flex-col gap-[inherit]" style={{ opacity: shown }}>
+        <Line shown={sent} style={{ backgroundColor: "#262626", marginInline: "-1.5ch", paddingInline: "1.5ch" }}>
+          <span style={{ color: DIM }}>&gt;</span> {PROMPT}
+        </Line>
+        {TOOLS.map((tool, place) => (
+          <Line key={tool} shown={steps[place]}>
+            <Cell color={(place + 1 < TOOLS.length ? steps[place + 1] > 0 : done) ? GREEN : DIM}>⏺</Cell> {tool}
+          </Line>
+        ))}
         {done ? (
-          <Line style={{ marginTop: "0.5em" }}>
-            <Mark working={1} done={1} seconds={seconds} />
-            Done
+          <Line>
+            <Cell>⏺</Cell> Done. All tests pass
           </Line>
         ) : null}
         {working === null ? null : (
-          <Line style={{ color: DIM, marginTop: "0.5em", fontSize: "0.8em" }}>
-            <span className="tabular-nums">Working for {elapsed(working)}</span>
+          <Line>
+            <span style={{ color: CLAUDE }}>
+              <Cell>{spinner}</Cell> Refactoring…
+            </span>{" "}
+            <span style={{ color: DIM }}>({elapsed(working)})</span>
           </Line>
         )}
+      </div>
+      <div className="whitespace-pre rounded-[0.4em] border px-[1ch] py-[0.45em]" style={{ borderColor: EDGE }}>
+        <span style={{ color: DIM }}>&gt;</span> {sent > 0 ? null : PROMPT.slice(0, Math.round(typed * PROMPT.length))}
+        <span className="inline-block h-[1.2em] w-[1ch] align-[-0.2em]" style={{ backgroundColor: TEXT }} />
       </div>
     </div>
   );
