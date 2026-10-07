@@ -402,9 +402,11 @@ final class StateAggregator: ObservableObject {
             lidClosedWanted: settings.stayAwakeLidClosedOnBattery,
             waitingHold: settings.waitingHold
         )
+        display?.willSleep()
     }
 
     private func macDidWake() {
+        display?.didWake()
         sleepNote = sleepSnapshot.flatMap(SleepNote.init)
         sleepSnapshot = nil
     }
@@ -618,6 +620,8 @@ final class StateAggregator: ObservableObject {
         refreshRows()
         updatePower()
         syncSleepFlag()
+        // A stop gives the brightness back at once, not at the next sample.
+        display?.update(holding: decision.hold, now: Date())
     }
 
     private func sampled(_ sample: DetectionSample) {
@@ -649,8 +653,10 @@ final class StateAggregator: ObservableObject {
         announceHiddenNotice()
         announceTrial(at: sample.frame.at)
         announceAgents(sample)
+        // The hold of the decision as it is now: a stop from this sample
+        // is in it.
         display?.update(
-            lidClosed: context.lidClosed, holding: sample.decision.hold, enabled: settings.displayOffLidClosed,
+            lidClosed: context.lidClosed, holding: decision.hold, enabled: settings.displayOffLidClosed,
             fade: settings.dimAsLidCloses, now: sample.frame.at
         )
         // In case a timer is late.
