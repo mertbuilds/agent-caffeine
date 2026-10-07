@@ -196,13 +196,27 @@ enum CursorApprovalRule {
     /// lags behind (see `settle`), so a write that close after the stop
     /// still belongs to the turn that ended. An assertion or a command is
     /// the turn of another conversation.
+    ///
+    /// This reads the state of all conversations together, so it is only
+    /// for an evidence that was not set against the transcripts session by
+    /// session: a recording of an older build. The collector decides the
+    /// stop for each conversation by itself (`stopEnds`,
+    /// `CursorSummary.make`), and then the stop of one conversation here
+    /// would end the open turn of another one that waits for an approval.
     static func endedByStopHook(_ evidence: AgentEvidence) -> Bool {
-        guard evidence.agentID == AgentCatalog.cursorDesktopID, evidence.hookState == .idle, let stop = evidence.hookStateAt,
+        guard evidence.agentID == AgentCatalog.cursorDesktopID, !evidence.hookStateBySession,
+              evidence.hookState == .idle, let stop = evidence.hookStateAt,
               let report = evidence.reported, report.source == .cursorTranscript, report.state == .working,
               signs(turnInProgress: true, holdsAssertion: evidence.ownsSleepAssertion, childCommands: evidence.childCommands) else { return false }
-        if let began = report.since, began > stop { return false }
-        guard let write = evidence.fileActivityAt else { return true }
-        return write.timeIntervalSince(stop) <= settle
+        return stopEnds(turnSince: report.since, lastWrite: evidence.fileActivityAt, stop: stop)
+    }
+
+    /// The stop of one conversation ends the open turn of that
+    /// conversation: see `endedByStopHook` for the two times.
+    static func stopEnds(turnSince: Date?, lastWrite: Date?, stop: Date) -> Bool {
+        if let turnSince, turnSince > stop { return false }
+        guard let lastWrite else { return true }
+        return lastWrite.timeIntervalSince(stop) <= settle
     }
 
     static func signs(turnInProgress: Bool, holdsAssertion: Bool, childCommands: Int) -> Bool {

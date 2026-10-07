@@ -114,6 +114,16 @@ struct HookStateFile: Codable, Equatable {
         }
     }
 
+    /// When the hook of each session said that its turn is over, by
+    /// session key. A time from ahead of the clock is from before the
+    /// clock was set back, and is left out.
+    func stops(now: Date) -> [String: Date] {
+        sessions.compactMapValues { session in
+            guard Self.state(named: session.state) == .idle, session.at - now.timeIntervalSince1970 <= Self.clockTolerance else { return nil }
+            return Date(timeIntervalSince1970: session.at)
+        }
+    }
+
     /// One state for the process. Among the sessions that reported within
     /// `freshness`, working wins over waiting and waiting over idle, so a
     /// session that never sent its last event cannot hide a live one. A

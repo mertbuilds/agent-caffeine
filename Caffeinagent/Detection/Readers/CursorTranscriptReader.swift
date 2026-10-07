@@ -251,7 +251,16 @@ struct CursorSummary: Equatable {
     /// Only a file this Cursor process wrote can hold a turn of this
     /// process: a Cursor that was killed leaves a turn that never ends.
     /// `readings` is newest first.
-    static func make(of readings: [(file: CursorTranscriptFile, reading: CursorTranscriptTracker.Reading)], engineStarted: Date) -> CursorSummary {
+    ///
+    /// `stops` is when Cursor's `stop` hook said that the turn of a
+    /// conversation is over, by the key of its hook session
+    /// (`HookStateFile.stops`). A turn in progress that its own stop ends
+    /// (`CursorApprovalRule.stopEnds`) counts as ended at that time: the
+    /// transcript got no end line. The stop of one conversation says
+    /// nothing about another.
+    static func make(
+        of readings: [(file: CursorTranscriptFile, reading: CursorTranscriptTracker.Reading)], engineStarted: Date, stops: [String: Date] = [:]
+    ) -> CursorSummary {
         var summary = CursorSummary()
         var workingSlug: String?
         for (file, reading) in readings where reading.signature.modifiedAt >= engineStarted {
@@ -263,16 +272,20 @@ struct CursorSummary: Equatable {
                 summary.unknown = true
                 continue
             }
-            if reading.turn.turnInProgress {
+            let stop = file.sessionID.flatMap { stops[HookStateFile.sessionKey($0)] }
+            let stopped = reading.turn.turnInProgress
+                ? stop.flatMap { CursorApprovalRule.stopEnds(turnSince: reading.turnSince, lastWrite: written, stop: $0) ? $0 : nil } : nil
+            if reading.turn.turnInProgress, stopped == nil {
                 summary.inTurn += 1
                 if workingSlug == nil { workingSlug = file.projectSlug }
                 if let since = reading.turnSince { summary.workingSince = min(summary.workingSince ?? since, since) }
             } else {
-                if summary.newestEnd.map({ written > $0 }) ?? true {
-                    summary.newestEnd = written
+                let ended = stopped ?? written
+                if summary.newestEnd.map({ ended > $0 }) ?? true {
+                    summary.newestEnd = ended
                     summary.newestEndStatus = reading.turn.endStatus
                 }
-                if let id = file.sessionID { summary.ends[id] = written }
+                if let id = file.sessionID { summary.ends[id] = ended }
             }
         }
         summary.projectSlug = workingSlug ?? summary.projectSlug

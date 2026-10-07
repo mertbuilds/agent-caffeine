@@ -145,6 +145,28 @@ final class CursorTranscriptReaderTests: XCTestCase {
         let before = CursorSummary.make(of: [entry("b", .turnEnded(.success), written: 50), entry("a", .turnEnded(.error), written: 40)], engineStarted: start)
         XCTAssertEqual(before.report(now: start)?.failed, false, "An older error is no news")
 
+        // The stop hook of a conversation ends the open turn of that
+        // conversation, and of no other one.
+        let key = HookStateFile.sessionKey
+        func stopped(_ entries: [(file: CursorTranscriptFile, reading: CursorTranscriptTracker.Reading)], _ stops: [String: TimeInterval]) -> CursorSummary {
+            CursorSummary.make(of: entries, engineStarted: start, stops: Dictionary(uniqueKeysWithValues: stops.map { (key($0.key), start.addingTimeInterval($0.value)) }))
+        }
+        let open = [entry("a", .assistant, written: 40, since: 30), entry("c", .user, written: 20, since: 20)]
+        let one = stopped(open, ["a": 45])
+        XCTAssertEqual([one.counted, one.inTurn], [2, 1])
+        XCTAssertEqual(one.report(now: start)?.state, .working, "The other conversation is still in its turn")
+        XCTAssertEqual(one.workingSince, start.addingTimeInterval(20))
+        XCTAssertEqual(one.ends, ["a": start.addingTimeInterval(45)], "It ended at the stop")
+        let both = stopped(open, ["a": 45, "c": 25])
+        XCTAssertEqual(both.report(now: start)?.state, .idle)
+        XCTAssertEqual(both.report(now: start)?.since, start.addingTimeInterval(45))
+        XCTAssertEqual(stopped(open, ["other": 45]).inTurn, 2)
+        XCTAssertEqual(stopped(open, ["a": 29, "c": 19]).inTurn, 2, "A stop from before the turn began is the stop of the turn before")
+        XCTAssertEqual(stopped([entry("a", .assistant, written: 40)], ["a": 25]).inTurn, 0, "With no start known, the last write decides")
+        XCTAssertEqual(stopped([entry("a", .assistant, written: 41)], ["a": 25]).inTurn, 1, "A write later than the settle time after the stop is a new turn")
+        // A turn that has its end line keeps the time of that line.
+        XCTAssertEqual(stopped([entry("b", .turnEnded(.success), written: 50)], ["b": 60]).ends, ["b": start.addingTimeInterval(50)])
+
         let unknown = CursorSummary.make(of: [entry("b", nil, written: 50), entry("a", .turnEnded(.success), written: 40)], engineStarted: start)
         XCTAssertNil(unknown.report(now: start), "Idle is said only when every file was understood")
     }
@@ -653,6 +675,55 @@ final class CursorTimelineTests: XCTestCase {
         let titles = told.map { AgentNoticeText.content($0.notice, outlook: .silent, now: at(200)).title }
         XCTAssertEqual(titles, ["Cursor stopped with an error", "Cursor stopped with an error"])
     }
+
+    /// Two conversations with the hooks on. B began before the hooks were
+    /// on and waits for an approval. A runs a turn and the user stops it:
+    /// its transcript keeps the open last line. The stop of A ended B too,
+    /// and Cursor read as idle while B waited.
+    func testTheStopOfOneConversationDoesNotEndAnotherThatWaitsForApproval() throws {
+        let hooks = root.appendingPathComponent("hooks")
+        var sources = EvidenceCollector.Sources(census: census, assertions: assertions, power: FakePower(), openFiles: FakeOpenFiles())
+        sources.cursorTranscripts = CursorTranscriptReader(projectsDirectory: root.appendingPathComponent("projects"))
+        sources.hookDirectory = hooks
+        sources.now = { [unowned self] in self.base.addingTimeInterval(self.seconds) }
+        collector = EvidenceCollector(sources: sources)
+        let chain: [Row] = [.fixture(600, ppid: 510, path: "/bin/sh", args: ["sh", "-c", "hook"]), census.rows[1], census.rows[0]]
+        let slug = "projects/Users-me-code-wiki"
+        func hook(_ event: String, _ chat: String, at seconds: TimeInterval) {
+            XCTAssertTrue(HookCommand.record(agent: "cursor", event: event, input: Array(#"{"conversation_id":"\#(chat)"}"#.utf8), chain: chain, directory: hooks, now: at(seconds)))
+        }
+        try write([Line.user, Line.ended], chat: chatA, slug: slug, at: -100)
+        try write([Line.user, Line.ended], chat: chatB, slug: slug, at: -100)
+        XCTAssertEqual(run(0...4).reading?.verdict.state, .idle)
+
+        // B: a prompt with no hook event, and then an approval is pending.
+        try write([Line.user, Line.ended, Line.user, Line.tool], chat: chatB, slug: slug, at: 5)
+        assertions.pids = [500]
+        run(5...14) { step, second in XCTAssertEqual(step.reading?.verdict.state, .working, "\(second)") }
+        assertions.pids = []
+        XCTAssertEqual(run(15...39).reading?.verdict, AgentVerdict(state: .waitingForUser, confidence: .inferredStrong, reason: .awaitsApproval))
+
+        // A: a turn of 10 seconds that the user stops.
+        hook("beforeSubmitPrompt", chatA, at: 40)
+        try write([Line.user, Line.ended, Line.user], chat: chatA, slug: slug, at: 40)
+        assertions.pids = [500]
+        run(40...49) { step, second in XCTAssertEqual(step.reading?.verdict.state, .working, "\(second)") }
+        hook("stop", chatA, at: 50)
+        assertions.pids = []
+        run(50...400) { step, second in
+            XCTAssertNotEqual(step.reading?.verdict.state, .idle, "\(second)")
+            if second >= 50 + Int(CursorApprovalRule.settle) {
+                XCTAssertEqual(step.reading?.verdict, AgentVerdict(state: .waitingForUser, confidence: .inferredStrong, reason: .awaitsApproval), "\(second)")
+            }
+        }
+
+        // The user answers B and its turn ends. A still has its open last
+        // line, and its own stop ends it.
+        try write([Line.user, Line.ended, Line.user, Line.tool, Line.ended], chat: chatB, slug: slug, at: 401)
+        run(401...500) { step, second in
+            if second >= 405 { XCTAssertEqual(step.reading?.verdict.state, .idle, "\(second)") }
+        }
+    }
 }
 
 final class CursorApprovalRuleTests: XCTestCase {
@@ -781,6 +852,28 @@ final class CursorApprovalRuleTests: XCTestCase {
         XCTAssertTrue(CursorApprovalRule.endedByStopHook(cursor(at: 40, hook: .idle, hookAt: 30, writeAt: 20)))
         XCTAssertFalse(CursorApprovalRule.endedByStopHook(cursor(at: 40, hook: .working, hookAt: 30, writeAt: 20)))
         XCTAssertFalse(CursorApprovalRule.endedByStopHook(cursor(.idle, at: 40, hook: .idle, hookAt: 30, writeAt: 20)))
+    }
+
+    /// The collector set each stop against its own conversation already.
+    /// The turn that is still open is the turn of another conversation,
+    /// and the stop of the first one does not end it.
+    func testAStopThatWasSetAgainstItsOwnConversationEndsNoOtherOne() {
+        var other = cursor(at: 40, hook: .idle, hookAt: 30, writeAt: 20)
+        other.hookStateBySession = true
+        XCTAssertFalse(CursorApprovalRule.endedByStopHook(other))
+        XCTAssertTrue(CursorApprovalRule.signs(of: other))
+        let timeline = states(to: 3600) { second in
+            var evidence = self.cursor(at: second, hook: second < 30 ? nil : .idle, hookAt: 30, writeAt: 20)
+            evidence.hookStateBySession = second >= 30
+            return evidence
+        }
+        XCTAssertEqual(Array(timeline[15...]), Array(repeating: .waitingForUser, count: 3586), "The approval of the other conversation is still pending")
+
+        XCTAssertTrue(CursorApprovalRule.stopEnds(turnSince: at(0), lastWrite: at(20), stop: at(30)))
+        XCTAssertTrue(CursorApprovalRule.stopEnds(turnSince: nil, lastWrite: at(45), stop: at(30)), "The transcript lags behind the stop")
+        XCTAssertFalse(CursorApprovalRule.stopEnds(turnSince: nil, lastWrite: at(46), stop: at(30)))
+        XCTAssertFalse(CursorApprovalRule.stopEnds(turnSince: at(31), lastWrite: at(31), stop: at(30)))
+        XCTAssertTrue(CursorApprovalRule.stopEnds(turnSince: at(0), lastWrite: nil, stop: at(30)))
     }
 
     /// The assertion goes at the end of a turn, and the Mac sleeps for an

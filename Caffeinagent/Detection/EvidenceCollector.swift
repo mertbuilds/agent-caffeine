@@ -173,6 +173,8 @@ final class EvidenceCollector: EvidenceCollecting {
     /// When the turn of each Cursor conversation ended, by the key of its
     /// hook session, for the sample that is being collected.
     private var cursorEnds: [String: Date] = [:]
+    /// The hook states of the sample that is being collected, by pid.
+    private var sampleHookStates: [Int32: HookStateReader.State] = [:]
     private var transcriptChoices: [ProcessIdentity: (at: Date, path: String?)] = [:]
     private var activityReaders: [String: FileActivityReader] = [:]
     private var hookReader: HookStateReader?
@@ -207,6 +209,7 @@ final class EvidenceCollector: EvidenceCollecting {
         var sample = EvidenceSample(frame: EvidenceFrame(at: now, agents: [], context: context(snapshot: snapshot, matches: matches)))
         sample.frame.awake = time.awake
         let hookStates = hookReader?.states(snapshot: snapshot, now: now) ?? [:]
+        sampleHookStates = hookStates
         // A new state file is a new entry in the folder.
         if let hookReader { sample.watchedFiles.insert(hookReader.directory.path) }
         sessionRollouts = codexSessionRollouts(of: instances, matches: matches, now: now)
@@ -235,6 +238,7 @@ final class EvidenceCollector: EvidenceCollecting {
         }
         sessionNames.removeAll(keepingCapacity: true)
         cursorEnds.removeAll(keepingCapacity: true)
+        sampleHookStates.removeAll(keepingCapacity: true)
 
         previous = time
         previousRows = rows
@@ -624,7 +628,12 @@ final class EvidenceCollector: EvidenceCollecting {
             watched.insert(file.url.path)
             readings.append((file, reading))
         }
-        let summary = CursorSummary.make(of: readings, engineStarted: started)
+        // The stop of a conversation ends the open turn of that
+        // conversation only, so it is set against its own transcript here.
+        let hookAgent = HookEvents.hookAgent(forDefinition: instance.definition.id)
+        let stops = instance.rows.compactMap { sampleHookStates[$0.pid] }.filter { $0.agent == hookAgent }
+            .reduce(into: [String: Date]()) { stops, state in stops.merge(state.file.stops(now: now), uniquingKeysWith: max) }
+        let summary = CursorSummary.make(of: readings, engineStarted: started, stops: stops)
         evidence.reported = summary.report(now: now)
         cursorEnds = Dictionary(summary.ends.map { (HookStateFile.sessionKey($0.key), $0.value) }, uniquingKeysWith: max)
         evidence.fileActivityAt = summary.newestWrite
