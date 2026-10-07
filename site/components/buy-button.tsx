@@ -1,4 +1,3 @@
-import Link from "next/link";
 import type { ReactNode } from "react";
 import { BuyCta, type Placement } from "@/components/track";
 import { BASE_PLAN, type Plan } from "@/lib/pricing";
@@ -49,14 +48,5 @@ export function BuyButton({
     <BuyCta plan={plan} placement={placement} className={VARIANTS[variant](size)}>
       {children}
     </BuyCta>
-  );
-}
-
-/** The quiet pill beside a download: it goes to the plans, not to a checkout. */
-export function PricingButton({ children }: { children: ReactNode }) {
-  return (
-    <Link href="/#pricing" className={`${VARIANTS.outline("large")} text-center`}>
-      {children}
-    </Link>
   );
 }

@@ -1,6 +1,6 @@
 import { AgentIcon } from "@/components/agent-icons";
-import { BuyButton, PricingButton } from "@/components/buy-button";
-import { DownloadButton } from "@/components/download-button";
+import { BuyButton } from "@/components/buy-button";
+import { DownloadButton, TryFree } from "@/components/download-button";
 import { GridTexture } from "@/components/grid-texture";
 import { LaptopScene } from "@/components/laptop-scene";
 import { agents, markedAgents } from "@/lib/agents";
@@ -9,6 +9,17 @@ import { getLatestRelease } from "@/lib/release";
 
 const SHOWN = markedAgents.slice(0, 7);
 const MORE = agents.length - SHOWN.length;
+
+/** The small glyphs of the line under the download, in the stroke of the page. Each box is the ink of its glyph, at the height of the capitals. */
+const GLYPH = {
+  "aria-hidden": true,
+  className: "w-auto shrink-0 -translate-y-[0.08em]",
+  fill: "none",
+  stroke: "currentColor",
+  strokeLinecap: "round",
+  strokeLinejoin: "round",
+  strokeWidth: 1.5,
+} as const;
 
 export async function Hero() {
   const release = await getLatestRelease();
@@ -47,31 +58,28 @@ export async function Hero() {
             <p className="text-sm text-muted">Pay once. No subscription · macOS 13 or later, Apple silicon and Intel</p>
           </div>
         ) : (
-          <div className="flex flex-col items-center gap-3 md:items-start">
-            <div className="flex w-full max-w-xs flex-col gap-3 sm:w-auto sm:max-w-none sm:flex-row">
-              <DownloadButton release={release} placement="hero">
-                <span className="flex items-center justify-center gap-2">
-                  <svg
-                    width="16"
-                    height="16"
-                    viewBox="0 0 16 16"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    aria-hidden="true"
-                  >
-                    <path d="M8 2.5v7.5M4.75 7l3.25 3.25L11.25 7M3 13.5h10" />
-                  </svg>
-                  Try free for 7 days
-                </span>
-              </DownloadButton>
-              <PricingButton>Buy from {PRICE}</PricingButton>
-            </div>
-            <p className="text-pretty text-sm text-muted">
-              No account, no card · macOS 13 or later, Apple silicon and Intel
-            </p>
+          <div className="flex flex-col items-center gap-4 md:items-start">
+            <DownloadButton release={release} placement="hero">
+              <TryFree />
+            </DownloadButton>
+            <ul className="flex flex-col items-center gap-x-3 gap-y-1.5 text-sm text-muted sm:flex-row">
+              <li className="flex items-center gap-1.5">
+                <svg {...GLYPH} height="10.5" viewBox="0 0 12 10.5">
+                  <path d="M.75 3h10.5v2.5H.75zM1.75 5.5v4.25h8.5V5.5M6 3v6.75M6 3C4.6 3 3.4 2.6 3.4 1.7c0-.6.45-.95.95-.95C5.5.75 6 2 6 3Zm0 0c1.4 0 2.6-.4 2.6-1.3 0-.6-.45-.95-.95-.95C6.5.75 6 2 6 3Z" />
+                </svg>
+                Includes 7-day free trial
+              </li>
+              <li aria-hidden="true" className="hidden -translate-y-[0.09em] sm:block">
+                ·
+              </li>
+              <li className="flex items-center gap-1.5">
+                <svg {...GLYPH} height="10" viewBox="0 0 13.5 10">
+                  <rect height="8.5" rx="1.5" width="12" x=".75" y=".75" />
+                  <path d="M.75 3.6h12M3.25 6.6h2" />
+                </svg>
+                No card required
+              </li>
+            </ul>
           </div>
         )}
       </div>

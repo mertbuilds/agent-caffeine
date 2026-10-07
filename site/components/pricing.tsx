@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { DownloadButton } from "@/components/download-button";
+import { DownloadButton, TryFree } from "@/components/download-button";
 import { PlanCard } from "@/components/plan-card";
 import { getLatestRelease } from "@/lib/release";
 
@@ -35,7 +35,7 @@ export async function Pricing() {
             download={
               release === null ? null : (
                 <DownloadButton release={release} placement="pricing" variant="brand">
-                  Download free trial
+                  <TryFree />
                 </DownloadButton>
               )
             }

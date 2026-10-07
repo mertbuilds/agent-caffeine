@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BuyButton } from "@/components/buy-button";
 import { PRICE } from "@/lib/pricing";
-import { DownloadButton } from "@/components/download-button";
+import { DownloadButton, TryFree } from "@/components/download-button";
 import { Footer } from "@/components/footer";
 import { JsonLd } from "@/components/json-ld";
 import { formatDate, getPost, getPosts } from "@/lib/blog";
@@ -128,7 +128,7 @@ export default async function BlogPost({ params }: Props) {
           ) : (
             <div className="flex shrink-0 items-center gap-4">
               <DownloadButton release={release} placement="blog" size="small">
-                Try free for 7 days
+                <TryFree small />
               </DownloadButton>
               <BuyButton placement="blog" variant="text">
                 Buy for {PRICE}
