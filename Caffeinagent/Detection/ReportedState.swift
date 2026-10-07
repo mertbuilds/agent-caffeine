@@ -31,6 +31,9 @@ struct StateReport: Equatable {
     /// The turn is over and work it left behind still runs: Claude Code's
     /// `shell`. The state is working, and the agent has answered.
     var turnEnded = false
+    /// Idle only: the turn ended with an error. The error text is never
+    /// read: it can hold account details.
+    var failed = false
 }
 
 /// Timestamps as the agents write them: epoch milliseconds (Claude session

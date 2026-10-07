@@ -50,6 +50,8 @@ struct AgentNotice: Equatable {
         var ownerPid: Int32?
         /// How long it worked. Finished only.
         var workedFor: TimeInterval?
+        /// The agent says that the turn ended with an error. Finished only.
+        var failed = false
 
         var description: String { "AgentNotice.Session" }
         var debugDescription: String { description }
@@ -148,6 +150,8 @@ struct AgentNoticeReducer {
         var workStart: Date?
         /// The wait that goes on now was told.
         var waitTold = false
+        /// The turn that ended last ended with an error.
+        var failed = false
     }
 
     private struct Candidate {
@@ -192,7 +196,8 @@ struct AgentNoticeReducer {
             let state = reading.turn?.state ?? reading.verdict.state
             var session = Session(
                 state: state, agentID: reading.agentID, displayName: reading.displayName,
-                label: input.labels[identity] ?? old?.label, ownerPid: input.owners[identity] ?? old?.ownerPid, workStart: old?.workStart
+                label: input.labels[identity] ?? old?.label, ownerPid: input.owners[identity] ?? old?.ownerPid, workStart: old?.workStart,
+                failed: reading.turn?.failed ?? false
             )
             switch state {
             case .working:
@@ -298,10 +303,12 @@ struct AgentNoticeReducer {
                 if kind == .finished { told.forEach { self.sessions[$0]?.workStart = nil } }
                 if kind == .waiting { told.forEach { self.sessions[$0]?.waitTold = true } }
                 if kind == .waiting { drop(as: .asksInstead) { $0.kind == .finished && told.contains($0.session.identity) } }
-                // A name that was read after the change still counts.
+                // A name that was read after the change still counts, and
+                // so does an error: the hook can say the end before the log.
                 let sessions = group.map { candidate -> AgentNotice.Session in
                     var session = candidate.session
                     session.label = self.sessions[session.identity]?.label ?? session.label
+                    session.failed = kind == .finished && self.sessions[session.identity]?.failed == true
                     return session
                 }
                 decisions += sessions.map { AgentNoticeDecision(kind: kind, pid: $0.identity.pid, outcome: .told, workedFor: $0.workedFor) }
@@ -471,7 +478,8 @@ enum AgentNoticeText {
             )
         case .finished:
             return AgentNoticeContent(
-                id: "finished-\(id)-\(stamp)", key: "finished-\(id)", thread: "agent-\(session.agentID)", title: "\(session.displayName) finished",
+                id: "finished-\(id)-\(stamp)", key: "finished-\(id)", thread: "agent-\(session.agentID)",
+                title: session.failed ? PanelText.stoppedWithError(session.displayName) : "\(session.displayName) finished",
                 subtitle: session.label, body: session.workedFor.flatMap(HumaneDuration.length(seconds:)).map { "After \($0)" },
                 sound: true, ownerPid: ownerPid, agent: session.identity
             )

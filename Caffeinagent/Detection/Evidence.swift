@@ -56,7 +56,7 @@ extension AgentRole: NameCoded {
 
 extension StateReport: Codable {
     private enum CodingKeys: String, CodingKey {
-        case state, since, observedAt = "seen", source, detail, turnEnded = "over"
+        case state, since, observedAt = "seen", source, detail, turnEnded = "over", failed = "err"
     }
 
     init(from decoder: Decoder) throws {
@@ -67,7 +67,8 @@ extension StateReport: Codable {
             observedAt: try container.decode(Date.self, forKey: .observedAt),
             source: try container.decode(Source.self, forKey: .source),
             detail: try container.decodeIfPresent(String.self, forKey: .detail),
-            turnEnded: try container.decodeIfPresent(Bool.self, forKey: .turnEnded) ?? false
+            turnEnded: try container.decodeIfPresent(Bool.self, forKey: .turnEnded) ?? false,
+            failed: try container.decodeIfPresent(Bool.self, forKey: .failed) ?? false
         )
     }
 
@@ -79,6 +80,7 @@ extension StateReport: Codable {
         try container.encode(source, forKey: .source)
         try container.encodeIfPresent(detail, forKey: .detail)
         if turnEnded { try container.encode(true, forKey: .turnEnded) }
+        if failed { try container.encode(true, forKey: .failed) }
     }
 }
 
@@ -127,6 +129,11 @@ struct AgentEvidence: Codable, Equatable {
     /// From the optional hooks.
     var hookState: ReportedState?
     var hookStateAt: Date?
+    /// The hook state was set against the agent's own log session by
+    /// session: Cursor, where a hook session is a transcript
+    /// (`HookStateFile.summary`). The verdict does not compare the time
+    /// of the hook state with the time of the report again.
+    var hookStateBySession: Bool
 
     init(
         agentID: String, displayName: String, level: AgentDefinition.Level, kind: AgentDefinition.Kind = .cli,
@@ -134,7 +141,7 @@ struct AgentEvidence: Codable, Equatable {
         reported: StateReport? = nil, backgroundJobsWorking: Int = 0, childCommands: Int = 0, busyChildCommands: Int = 0,
         subtreeCPUSeconds: Double = 0, sampleInterval: TimeInterval = 0, energyNanojoules: UInt64? = nil,
         logicalWriteBytes: UInt64? = nil, fileActivityAt: Date? = nil, ownsSleepAssertion: Bool = false,
-        hasLiveSession: Bool = false, hookState: ReportedState? = nil, hookStateAt: Date? = nil
+        hasLiveSession: Bool = false, hookState: ReportedState? = nil, hookStateAt: Date? = nil, hookStateBySession: Bool = false
     ) {
         self.agentID = agentID
         self.displayName = displayName
@@ -156,6 +163,7 @@ struct AgentEvidence: Codable, Equatable {
         self.hasLiveSession = hasLiveSession
         self.hookState = hookState
         self.hookStateAt = hookStateAt
+        self.hookStateBySession = hookStateBySession
     }
 
     var identity: ProcessIdentity { ProcessIdentity(pid: pid, startTime: startTime) }
@@ -175,7 +183,7 @@ struct AgentEvidence: Codable, Equatable {
         case reported = "rep", backgroundJobsWorking = "jobs", childCommands = "cmds", busyChildCommands = "busy"
         case subtreeCPUSeconds = "cpu", sampleInterval = "dt", energyNanojoules = "nj", logicalWriteBytes = "wr"
         case fileActivityAt = "file", ownsSleepAssertion = "pwr", hasLiveSession = "live"
-        case hookState = "hook", hookStateAt = "hookAt"
+        case hookState = "hook", hookStateAt = "hookAt", hookStateBySession = "hookSes"
     }
 
     init(from decoder: Decoder) throws {
@@ -200,6 +208,7 @@ struct AgentEvidence: Codable, Equatable {
         hasLiveSession = try container.decodeIfPresent(Bool.self, forKey: .hasLiveSession) ?? false
         hookState = try container.decodeIfPresent(ReportedState.self, forKey: .hookState)
         hookStateAt = try container.decodeIfPresent(Date.self, forKey: .hookStateAt)
+        hookStateBySession = try container.decodeIfPresent(Bool.self, forKey: .hookStateBySession) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -224,6 +233,7 @@ struct AgentEvidence: Codable, Equatable {
         if hasLiveSession { try container.encode(true, forKey: .hasLiveSession) }
         try container.encodeIfPresent(hookState, forKey: .hookState)
         try container.encodeIfPresent(hookStateAt, forKey: .hookStateAt)
+        if hookStateBySession { try container.encode(true, forKey: .hookStateBySession) }
     }
 }
 

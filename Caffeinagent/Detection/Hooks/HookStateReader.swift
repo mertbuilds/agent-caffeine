@@ -25,6 +25,8 @@ struct HookStateReader {
         var state: ReportedState
         var at: Date
         var path: String
+        /// The sessions the state was made of.
+        var file: HookStateFile
     }
 
     /// By pid, for the processes in `snapshot` only. A file whose process is
@@ -52,7 +54,7 @@ struct HookStateReader {
                 continue
             }
             guard let summary = file.summary(now: now, freshness: freshness, workingLimit: workingLimit) else { continue }
-            states[file.pid] = State(agent: file.agent, state: summary.state, at: summary.at, path: path)
+            states[file.pid] = State(agent: file.agent, state: summary.state, at: summary.at, path: path, file: file)
         }
         return states
     }

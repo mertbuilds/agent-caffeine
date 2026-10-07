@@ -131,9 +131,18 @@ struct HookStateFile: Codable, Equatable {
     ///
     /// A state from ahead of the clock is from before the clock was set
     /// back. It is as good as too old.
-    func summary(now: Date, freshness: TimeInterval, workingLimit: TimeInterval) -> (state: ReportedState, at: Date)? {
-        let known = sessions.values.compactMap { session in
-            Self.state(named: session.state).map { (state: $0, at: Date(timeIntervalSince1970: session.at)) }
+    ///
+    /// `ended` is when the agent's own log of a session says that its
+    /// turn ended, by session key. A working that is older than that end
+    /// is an idle of that time: the newer of the two counts, and a turn
+    /// that fails at once sends no event for its end. A working of the
+    /// same time or newer stands: the log lags behind a new prompt.
+    func summary(now: Date, freshness: TimeInterval, workingLimit: TimeInterval, ended: [String: Date] = [:]) -> (state: ReportedState, at: Date)? {
+        let known = sessions.compactMap { key, session -> (state: ReportedState, at: Date)? in
+            guard let state = Self.state(named: session.state) else { return nil }
+            let at = Date(timeIntervalSince1970: session.at)
+            if state == .working, let end = ended[key], end > at { return (.idle, end) }
+            return (state, at)
         }
         let live = known.filter { state in
             let age = now.timeIntervalSince(state.at)

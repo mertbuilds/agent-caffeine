@@ -141,6 +141,23 @@ final class AgentNoticesTests: XCTestCase {
         XCTAssertEqual(sample(104, [reading(1, .idle)]), [])
     }
 
+    /// The agent says that the turn ended with an error. The hook can say
+    /// the end a moment before the log says how it ended.
+    func testAnEndWithAnErrorIsToldAsOne() {
+        func ended(failed: Bool) -> AgentReading {
+            var reading = reading(1, .idle, turn: .idle)
+            reading.turn?.failed = failed
+            return reading
+        }
+        _ = sample(0, [reading(1, .idle)])
+        _ = sample(10, [reading(1, .working)])
+        _ = sample(11, [ended(failed: false)])
+        XCTAssertEqual(sample(13, [ended(failed: true)]).first?.sessions.first?.failed, true)
+        _ = sample(20, [reading(1, .working)])
+        _ = sample(30, [ended(failed: false)])
+        XCTAssertEqual(sample(32, [ended(failed: false)]).first?.sessions.first?.failed, false)
+    }
+
     func testShortWorkIsToldToo() {
         _ = sample(0, [reading(1, .idle)])
         _ = sample(10, [reading(1, .working)])
@@ -568,6 +585,12 @@ final class AgentNoticesTests: XCTestCase {
         let short = AgentNoticeText.content(AgentNotice(kind: .finished, sessions: [session(label: nil, workedFor: 45)]), outlook: .silent, now: start)
         XCTAssertNil(short.subtitle)
         XCTAssertNil(short.body, "Under a minute there is no length to say")
+        var failed = session(workedFor: 1)
+        failed.failed = true
+        let stopped = AgentNoticeText.content(AgentNotice(kind: .finished, sessions: [failed]), outlook: .silent, now: start)
+        XCTAssertEqual(stopped.title, "Claude Code stopped with an error")
+        XCTAssertEqual(stopped.subtitle, "wiki-6e")
+        XCTAssertEqual(stopped.key, "finished-7-5", "The same notification as a finish")
     }
 
     func testWordsForSeveral() {

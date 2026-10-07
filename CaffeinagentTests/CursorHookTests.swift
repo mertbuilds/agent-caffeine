@@ -291,6 +291,36 @@ final class CursorHookTests: XCTestCase {
         XCTAssertNil(HookCommand.agentProcess(in: cli, hookAgent: "cursor"))
     }
 
+    /// A conversation is a transcript, so the working of a hook session
+    /// is set against the end of its own transcript: the newer one counts.
+    func testAWorkingThatIsOlderThanTheEndOfItsOwnTranscriptIsAnIdle() {
+        let now = Date(timeIntervalSince1970: 1_791_000_500)
+        func at(_ seconds: TimeInterval) -> Date { now.addingTimeInterval(seconds) }
+        let a = HookStateFile.sessionKey("0b8d6a34-7a3f-4c53-9f0e-2f6f4d1c9a11"), b = HookStateFile.sessionKey("5e0f2c1d-9a4b-4e7a-8c3d-1b2a3c4d5e6f")
+        var file = HookStateFile(agent: "cursor", pid: 500, start: 1)
+        file.apply(.set(.working), session: a, event: "beforeSubmitPrompt", at: at(0))
+        file.apply(.set(.working), session: b, event: "beforeSubmitPrompt", at: at(9))
+        func summary(_ seconds: TimeInterval, ended: [String: Date]) -> (ReportedState, Date)? {
+            file.summary(now: at(seconds), freshness: 60, workingLimit: 1800, ended: ended).map { ($0.state, $0.at) }
+        }
+        XCTAssertEqual(summary(41, ended: [:])?.0, .working)
+        // The end of one conversation is not the end of the other.
+        XCTAssertEqual(summary(8, ended: [a: at(1)])?.0, .working)
+        XCTAssertEqual(summary(9, ended: [a: at(1)])?.1, at(9))
+        let both = summary(41, ended: [a: at(1), b: at(10)])
+        XCTAssertEqual(both?.0, .idle)
+        XCTAssertEqual(both?.1, at(10), "The time of the end")
+        XCTAssertEqual(summary(400, ended: [a: at(1), b: at(10)])?.0, .idle, "Also when it is no longer fresh")
+        // The transcript lags behind a new prompt: its end is the end of
+        // the turn before, and the working stands. The same time too.
+        XCTAssertEqual(summary(41, ended: [a: at(-5), b: at(9)])?.0, .working)
+        XCTAssertEqual(summary(41, ended: [a: at(0), b: at(10)])?.1, at(0))
+        // An idle and a wait of a hook are not touched.
+        file.apply(.set(.idle), session: a, event: "stop", at: at(20))
+        file.apply(.set(.waitingForUser), session: b, event: "x", at: at(20))
+        XCTAssertEqual(summary(41, ended: [a: at(30), b: at(30)])?.0, .waitingForUser)
+    }
+
     func testRecordFollowsATurnByConversationAndKeepsNothingTheUserTyped() throws {
         let directory = home.appendingPathComponent("hooks")
         let now = Date(timeIntervalSince1970: 1_791_000_500)

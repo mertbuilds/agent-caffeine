@@ -153,6 +153,8 @@ struct AgentTurn: Equatable {
     var state: WorkState
     /// When the turn began, when the agent says so. Working only.
     var since: Date?
+    /// The agent says that the turn ended with an error. Idle only.
+    var failed = false
 }
 
 /// Cursor does not say that it waits for an approval: no transcript line
@@ -218,7 +220,9 @@ enum CursorApprovalRule {
 ///
 /// The sources, most trusted first:
 /// 1. a fresh hook state, a hook wait of any age that has not ended, or
-///    the hook working or idle of an agent with no state of its own,
+///    the hook working or idle of an agent with no state of its own. A
+///    fresh hook working gives way to a reported idle that is newer:
+///    see `endedAfter`,
 /// 2. the reported state (state file or session log),
 /// 3. strong signs: a busy command, a working background job, a sleep
 ///    assertion of the agent's own, a session-file write,
@@ -349,12 +353,16 @@ enum VerdictRules {
         // turn the newer of the two counts: Claude Code was recorded with
         // "waiting" in its session file 6 seconds before the hook said
         // so, and an interrupt ends a turn with no hook event at all.
-        if report == nil, let own = memory.lastReport, let reported = reportedState(memory: memory, settings: settings, now: now),
+        if report == nil, !evidence.hookStateBySession, let own = memory.lastReport,
+           let reported = reportedState(memory: memory, settings: settings, now: now),
            let since = own.since, let hookAt = evidence.hookStateAt, since > hookAt, since <= now {
             state = reported
             report = own
         }
-        guard state == .working else { return AgentTurn(state: state) }
+        guard state == .working else {
+            let failed = state == .idle && memory.lastReport?.failed == true && reportedState(memory: memory, settings: settings, now: now) == .idle
+            return AgentTurn(state: state, failed: failed)
+        }
         if report?.turnEnded == true { return AgentTurn(state: .idle) }
         // The time of a transcript is its last write, not the start of the turn.
         let startsTurn = report?.source == .claudeSessionFile || report?.source == .codexRollout || report?.source == .cursorTranscript
@@ -541,6 +549,7 @@ enum VerdictRules {
                 // One process can run many sessions, and the idle of one is
                 // not the idle of all: the agent's own working stands.
                 if hook == .idle, reportedState(memory: memory, settings: settings, now: now) == .working { return .working }
+                if hook == .working, endedAfter(at, evidence: evidence, memory: memory, settings: settings, now: now) { return .idle }
                 return hook
             } else if hook == .working, standsOnHooks(evidence), let since = memory.hookWorkSince, now.timeIntervalSince(since) < hookWorkingLimit {
                 return hook
@@ -549,6 +558,27 @@ enum VerdictRules {
             }
         }
         return reportedState(memory: memory, settings: settings, now: now)
+    }
+
+    /// The agent's own report says that the turn ended, and that is newer
+    /// than the hook's working: the newer of the two counts, as for the
+    /// turn. A turn that fails at once and an interrupt send no event for
+    /// their end, and the hook's working stood for `hookFreshness`.
+    ///
+    /// Newer is strictly newer, with no margin. A report of the same time
+    /// or older leaves the hook's working: the agent's own file lags
+    /// behind a new prompt (Cursor's transcript by about 3 seconds), and a
+    /// working that is wrong ends with `hookFreshness`, while an idle that
+    /// is wrong lets go of a turn that runs. A margin is not possible: the
+    /// end was measured 0.7 seconds after the prompt that failed.
+    ///
+    /// The two times are those of the whole process, the newest of each.
+    /// Not for an evidence that was compared session by session already.
+    private static func endedAfter(_ hookAt: Date, evidence: AgentEvidence, memory: AgentMemory, settings: DetectionSettings, now: Date) -> Bool {
+        guard !standsOnHooks(evidence), !evidence.hookStateBySession,
+              reportedState(memory: memory, settings: settings, now: now) == .idle,
+              let ended = memory.lastReport?.since else { return false }
+        return ended > hookAt && ended <= now
     }
 
     /// A hook state from ahead of the clock was written before the clock

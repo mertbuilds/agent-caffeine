@@ -116,7 +116,7 @@ final class CursorTranscriptReaderTests: XCTestCase {
             let url = URL(fileURLWithPath: "/tmp/\(slug)-\(written).jsonl")
             var signature = FileSignature(path: "/usr/bin/true")!
             signature.modifiedAt = at
-            return (CursorTranscriptFile(url: url, sessionID: nil, projectSlug: slug, lastWrite: at, size: 1),
+            return (CursorTranscriptFile(url: url, sessionID: slug, projectSlug: slug, lastWrite: at, size: 1),
                     CursorTranscriptTracker.Reading(turn: CursorTurnState(last: last), turnSince: since.map(start.addingTimeInterval), signature: signature))
         }
         // A turn that a killed Cursor left is from before this one started.
@@ -135,6 +135,15 @@ final class CursorTranscriptReaderTests: XCTestCase {
         XCTAssertEqual(ended.report(now: start)?.state, .idle)
         XCTAssertEqual(ended.report(now: start)?.since, start.addingTimeInterval(50))
         XCTAssertEqual(ended.projectSlug, "b")
+        XCTAssertEqual(ended.ends, ["b": start.addingTimeInterval(50), "a": start.addingTimeInterval(40)], "By conversation")
+        XCTAssertEqual(two.ends, ["b": start.addingTimeInterval(50)], "Only a turn that ended")
+        // The status of the newest end. An error is said, and nothing of its text.
+        XCTAssertEqual(ended.report(now: start)?.failed, false, "The user stopped it")
+        let failed = CursorSummary.make(of: [entry("b", .turnEnded(.error), written: 50), entry("a", .turnEnded(.success), written: 40)], engineStarted: start)
+        XCTAssertEqual(failed.report(now: start)?.state, .idle, "An error ends the turn as a success does")
+        XCTAssertEqual(failed.report(now: start)?.failed, true)
+        let before = CursorSummary.make(of: [entry("b", .turnEnded(.success), written: 50), entry("a", .turnEnded(.error), written: 40)], engineStarted: start)
+        XCTAssertEqual(before.report(now: start)?.failed, false, "An older error is no news")
 
         let unknown = CursorSummary.make(of: [entry("b", nil, written: 50), entry("a", .turnEnded(.success), written: 40)], engineStarted: start)
         XCTAssertNil(unknown.report(now: start), "Idle is said only when every file was understood")
@@ -599,6 +608,50 @@ final class CursorTimelineTests: XCTestCase {
         XCTAssertEqual(working.reading?.verdict, AgentVerdict(state: .working, confidence: .reported, reason: .reportsBusy))
         XCTAssertTrue(HookCommand.record(agent: "cursor", event: "stop", input: Array(#"{"conversation_id":"c1","status":"completed"}"#.utf8), chain: chain, directory: hooks, now: at(2)))
         XCTAssertEqual(step(3).reading?.verdict.state, .idle)
+    }
+
+    /// Measured on 2026-10-07 with the hooks on, at the usage limit: the
+    /// prompt of each of two conversations, 9 seconds apart, failed at
+    /// once. The hook said working, the transcript got its one line, a
+    /// `turn_ended` with the status `error`, a second later, and no `stop`
+    /// came. No assertion, no command. Cursor read as working for 60
+    /// seconds after the second prompt. A new transcript is found by the
+    /// next listing, so the end is seen up to `listingAge` late.
+    func testAPromptThatFailsAtOnceWithTheHooksOnIsIdleAtOnce() throws {
+        let hooks = root.appendingPathComponent("hooks")
+        var sources = EvidenceCollector.Sources(census: census, assertions: assertions, power: FakePower(), openFiles: FakeOpenFiles())
+        sources.cursorTranscripts = CursorTranscriptReader(projectsDirectory: root.appendingPathComponent("projects"))
+        sources.hookDirectory = hooks
+        sources.now = { [unowned self] in self.base.addingTimeInterval(self.seconds) }
+        collector = EvidenceCollector(sources: sources)
+        let chain: [Row] = [.fixture(600, ppid: 510, path: "/bin/sh", args: ["sh", "-c", "hook"]), census.rows[1], census.rows[0]]
+        let failed = #"{"type":"turn_ended","status":"error","error":"x"}"#
+        func prompt(_ chat: String, at seconds: TimeInterval) {
+            XCTAssertTrue(HookCommand.record(agent: "cursor", event: "beforeSubmitPrompt", input: Array(#"{"conversation_id":"\#(chat)"}"#.utf8), chain: chain, directory: hooks, now: at(seconds)))
+        }
+        func fail(_ chat: String, at seconds: TimeInterval) throws {
+            try write([failed], chat: chat, slug: "projects/Users-me-code-wiki", at: seconds)
+        }
+
+        prompt(chatA, at: 0)
+        XCTAssertEqual(step(0).reading?.verdict, AgentVerdict(state: .working, confidence: .reported, reason: .reportsBusy))
+        try fail(chatA, at: 1)
+        run(1...8) { step, second in
+            if second >= 5 { XCTAssertEqual(step.reading?.verdict, AgentVerdict(state: .idle, confidence: .reported, reason: .atPrompt), "\(second)") }
+        }
+        // The second conversation: its prompt is newer than the end of the first.
+        prompt(chatB, at: 9)
+        XCTAssertEqual(step(9).reading?.verdict.state, .working)
+        try fail(chatB, at: 10)
+        run(10...200) { step, second in
+            XCTAssertEqual(step.reading?.verdict.state, .idle, "\(second)")
+            XCTAssertEqual(step.reading?.turn?.state, .idle, "\(second)")
+            XCTAssertEqual(step.decision.hold, second < 9 + 120, "\(second): the release time after the last second of work")
+        }
+        XCTAssertEqual(told.map(\.notice.kind), [.finished, .finished])
+        XCTAssertEqual(told.map(\.at), [7, 12], "After the debounce")
+        let titles = told.map { AgentNoticeText.content($0.notice, outlook: .silent, now: at(200)).title }
+        XCTAssertEqual(titles, ["Cursor stopped with an error", "Cursor stopped with an error"])
     }
 }
 

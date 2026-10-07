@@ -184,6 +184,60 @@ final class VerdictTests: XCTestCase {
         }
     }
 
+    /// A turn that fails at once, and an interrupt, send no hook event for
+    /// their end. The agent's own idle that is newer than the hook's
+    /// working counts at once. An older one is a file that lags behind a
+    /// new prompt, and the hook's working stands.
+    func testAReportedIdleThatIsNewerThanAFreshHookWorkingCounts() {
+        let working = verdict(.working, .reported, .reportsBusy), idle = verdict(.idle, .reported, .atPrompt)
+        let agents: [(id: String, source: StateReport.Source)] = [("claude", .claudeSessionFile), ("codex", .codexRollout), ("cursor-desktop", .cursorTranscript)]
+        let cases: [(name: String, hookAt: TimeInterval, endedAt: TimeInterval?, bySession: Bool, want: AgentVerdict)] = [
+            ("the end is newer", 90, 91, false, idle),
+            ("the end is newer by a moment", 90, 90.001, false, idle),
+            ("the end is older: the file lags behind the prompt", 90, 84, false, working),
+            ("the same time: the hook's working stands", 90, 90, false, working),
+            ("an end with no time", 90, nil, false, working),
+            ("an end from ahead of the clock", 90, 200, false, working),
+            ("compared session by session already", 90, 91, true, working),
+        ]
+        for agent in agents {
+            for c in cases {
+                var report = StateReport(state: .idle, since: c.endedAt.map(at), observedAt: at(100), source: agent.source, detail: nil)
+                var sample = evidence(agent.id, agent.id, .state, reported: report, hook: .working, hookAt: at(c.hookAt))
+                sample.hookStateBySession = c.bySession
+                XCTAssertEqual(run([(100, sample)]).last?.verdict, c.want, "\(agent.id): \(c.name)")
+                // A command of the turn that ended still holds.
+                sample.busyChildCommands = 1
+                XCTAssertEqual(run([(100, sample)]).last?.verdict.state, .working, "\(agent.id): \(c.name)")
+                // The own state says working or waiting: the hook's working stands.
+                for state in [ReportedState.working, .waitingForUser] {
+                    report.state = state
+                    let other = evidence(agent.id, agent.id, .state, reported: report, hook: .working, hookAt: at(c.hookAt))
+                    XCTAssertEqual(run([(100, other)]).last?.verdict, working, "\(agent.id): \(c.name), \(state)")
+                }
+            }
+        }
+        // An agent with no state of its own has no such report.
+        let droid = evidence("droid", "Droid", .activity, reported: StateReport(state: .idle, since: at(91), observedAt: at(100), source: .fileActivity, detail: nil), hook: .working, hookAt: at(90))
+        XCTAssertEqual(run([(100, droid)]).last?.verdict, working)
+    }
+
+    /// Claude Code and Codex over time: the prompt at 10 s, the own state
+    /// follows 2 seconds later, the turn is interrupted at 40 s and no
+    /// Stop comes. The hook's working held for a minute more.
+    func testAnInterruptedTurnEndsWithTheAgentsOwnIdle() {
+        for (id, source) in [("claude", StateReport.Source.claudeSessionFile), ("codex", .codexRollout)] {
+            let story = samples(to: 120, every: 1) { t in
+                let own: (ReportedState, TimeInterval) = t < 12 ? (.idle, -600) : t < 40 ? (.working, 12) : (.idle, 40)
+                let report = StateReport(state: own.0, since: self.at(own.1), observedAt: self.at(t), source: source, detail: nil)
+                return self.evidence(id, id, .state, interval: 1, reported: report, hook: t < 10 ? nil : .working, hookAt: t < 10 ? nil : self.at(min(t, 39)))
+            }
+            for (seconds, got) in run(story) {
+                XCTAssertEqual(got.state, (10..<40).contains(seconds) ? .working : .idle, "\(id) at \(seconds) s")
+            }
+        }
+    }
+
     /// One Codex engine, threads A and B. A stops and its hook says idle,
     /// B is in a turn. With "An agent finishes" at 30 seconds the Mac was
     /// released while B worked.

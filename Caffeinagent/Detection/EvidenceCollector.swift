@@ -170,6 +170,9 @@ final class EvidenceCollector: EvidenceCollecting {
     private var sessionRollouts: [ProcessIdentity: [String]] = [:]
     private var cursorTails = CursorTranscriptTracker()
     private var cursorListing: (at: Date, files: [CursorTranscriptFile])?
+    /// When the turn of each Cursor conversation ended, by the key of its
+    /// hook session, for the sample that is being collected.
+    private var cursorEnds: [String: Date] = [:]
     private var transcriptChoices: [ProcessIdentity: (at: Date, path: String?)] = [:]
     private var activityReaders: [String: FileActivityReader] = [:]
     private var hookReader: HookStateReader?
@@ -221,7 +224,7 @@ final class EvidenceCollector: EvidenceCollecting {
             } else {
                 evidence.ownsSleepAssertion = instance.rows.contains { asserting.contains($0.pid) }
             }
-            noteHooks(of: instance, matches: matches, states: hookStates, in: &evidence, watched: &sample.watchedFiles)
+            noteHooks(of: instance, matches: matches, states: hookStates, now: now, in: &evidence, watched: &sample.watchedFiles)
             sample.frame.agents.append(evidence)
             sample.roots.insert(instance.identity)
             let hint = SessionHint(
@@ -231,6 +234,7 @@ final class EvidenceCollector: EvidenceCollecting {
             if !hint.isEmpty { sample.sessionHints[instance.identity] = hint }
         }
         sessionNames.removeAll(keepingCapacity: true)
+        cursorEnds.removeAll(keepingCapacity: true)
 
         previous = time
         previousRows = rows
@@ -301,20 +305,33 @@ final class EvidenceCollector: EvidenceCollecting {
     /// The state the agent's hooks left for one of the instance's own
     /// processes. A launcher and the binary it starts are one instance, and
     /// the hook runs below either.
+    ///
+    /// Cursor's hook session is a conversation, and a conversation is a
+    /// transcript: `conversation_id` is the name of the transcript's
+    /// folder (docs/research/08-cursor.md). So each hook session is set
+    /// against the end of its own transcript.
     private func noteHooks(
-        of instance: AgentInstance, matches: [Int32: AgentMatch], states: [Int32: HookStateReader.State],
+        of instance: AgentInstance, matches: [Int32: AgentMatch], states: [Int32: HookStateReader.State], now: Date,
         in evidence: inout AgentEvidence, watched: inout Set<String>
     ) {
         guard !states.isEmpty, let hookAgent = HookEvents.hookAgent(forDefinition: instance.definition.id) else { return }
+        let bySession = instance.definition.id == AgentCatalog.cursorDesktopID
         let own = instance.rows.compactMap { row -> HookStateReader.State? in
-            guard let state = states[row.pid], state.agent == hookAgent,
+            guard var state = states[row.pid], state.agent == hookAgent,
                   let match = matches[row.pid], match.definition.id == instance.definition.id, match.role != .helper else { return nil }
+            if bySession, let summary = state.file.summary(
+                now: now, freshness: VerdictRules.hookFreshness, workingLimit: VerdictRules.hookWorkingLimit, ended: cursorEnds
+            ) {
+                state.state = summary.state
+                state.at = summary.at
+            }
             return state
         }
+        own.forEach { watched.insert($0.path) }
         guard let newest = own.max(by: { $0.at < $1.at }) else { return }
         evidence.hookState = newest.state
         evidence.hookStateAt = newest.at
-        own.forEach { watched.insert($0.path) }
+        evidence.hookStateBySession = bySession
     }
 
     // MARK: Matching
@@ -609,6 +626,7 @@ final class EvidenceCollector: EvidenceCollecting {
         }
         let summary = CursorSummary.make(of: readings, engineStarted: started)
         evidence.reported = summary.report(now: now)
+        cursorEnds = Dictionary(summary.ends.map { (HookStateFile.sessionKey($0.key), $0.value) }, uniquingKeysWith: max)
         evidence.fileActivityAt = summary.newestWrite
         evidence.hasLiveSession = summary.working || isRecent(summary.newestWrite, now: now)
         sessionNames[instance.identity] = summary.projectSlug.flatMap(CursorTranscriptReader.label(forSlug:))

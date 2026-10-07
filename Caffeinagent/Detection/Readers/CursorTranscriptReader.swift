@@ -239,6 +239,10 @@ struct CursorSummary: Equatable {
     var newestWrite: Date?
     /// The newest write of a file whose turn has ended.
     var newestEnd: Date?
+    /// How that turn ended.
+    var newestEndStatus: CursorTurnState.Status?
+    /// The write of each file whose turn has ended, by conversation id.
+    var ends: [String: Date] = [:]
     /// The project of the turn in progress, else of the newest transcript.
     var projectSlug: String?
 
@@ -264,7 +268,11 @@ struct CursorSummary: Equatable {
                 if workingSlug == nil { workingSlug = file.projectSlug }
                 if let since = reading.turnSince { summary.workingSince = min(summary.workingSince ?? since, since) }
             } else {
-                summary.newestEnd = max(summary.newestEnd ?? written, written)
+                if summary.newestEnd.map({ written > $0 }) ?? true {
+                    summary.newestEnd = written
+                    summary.newestEndStatus = reading.turn.endStatus
+                }
+                if let id = file.sessionID { summary.ends[id] = written }
             }
         }
         summary.projectSlug = workingSlug ?? summary.projectSlug
@@ -280,6 +288,6 @@ struct CursorSummary: Equatable {
             return StateReport(state: .working, since: workingSince, observedAt: now, source: .cursorTranscript, detail: "in a turn")
         }
         guard counted > 0, !unknown else { return nil }
-        return StateReport(state: .idle, since: newestEnd, observedAt: now, source: .cursorTranscript, detail: nil)
+        return StateReport(state: .idle, since: newestEnd, observedAt: now, source: .cursorTranscript, detail: nil, failed: newestEndStatus == .error)
     }
 }

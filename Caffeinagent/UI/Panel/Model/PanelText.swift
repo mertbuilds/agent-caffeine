@@ -405,6 +405,12 @@ enum PanelText {
         return seconds != nil && finished ? "Finished a moment ago" : "Idle"
     }
 
+    /// The title of the "finished" notification for a turn that the agent
+    /// says ended with an error. The error itself is never shown.
+    static func stoppedWithError(_ name: String) -> String {
+        "\(name) stopped with an error"
+    }
+
     static func idleSessions(_ count: Int) -> String {
         HumaneDuration.counted(count, "idle session")
     }
