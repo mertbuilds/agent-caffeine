@@ -70,6 +70,25 @@ enum HookEvents {
             Rule(event: "session.idle", action: .set(.idle)),
             Rule(event: "session.deleted", action: .end),
         ],
+        // The names of Pi's own extension events. The extension sends
+        // `ui_prompt_*` only during a run, and the end of a compaction only
+        // outside one.
+        "pi": [
+            Rule(event: "session_start", action: .set(.idle)),
+            Rule(event: "agent_start", action: .set(.working)),
+            Rule(event: "turn_start", action: .set(.working)),
+            Rule(event: "tool_execution_start", action: .set(.working)),
+            Rule(event: "tool_execution_end", action: .set(.working)),
+            Rule(event: "ui_prompt_start", action: .set(.waitingForUser)),
+            Rule(event: "ui_prompt_end", action: .set(.working)),
+            Rule(event: "session_before_compact", action: .set(.working)),
+            Rule(event: "session_compact", action: .set(.idle)),
+            Rule(event: "session_compact_failed", action: .set(.idle)),
+            // After every run, also one that was stopped or that failed.
+            // `agent_end` is not the end: a retry or queued work can follow.
+            Rule(event: "agent_settled", action: .set(.idle)),
+            Rule(event: "session_shutdown", action: .end),
+        ],
         // Only events whose answer Cursor does not read
         // (docs/research/08-cursor.md). `preToolUse`, `beforeShellExecution`,
         // `beforeMCPExecution`, `beforeReadFile` and `subagentStart` ask for
@@ -91,7 +110,7 @@ enum HookEvents {
 
     /// The agents whose hook input holds a `HookStamp`. The `ts` or `seq`
     /// of another agent's input means something else and is not read.
-    static let stampedAgents: Set<String> = ["opencode"]
+    static let stampedAgents: Set<String> = ["opencode", "pi"]
 
     /// The `AgentDefinition.id`s a hook agent id covers. The Codex app runs
     /// the same hooks file as the Codex CLI.
@@ -100,6 +119,7 @@ enum HookEvents {
         "codex": ["codex", "codex-desktop"],
         "droid": ["droid"],
         "opencode": ["opencode"],
+        "pi": ["pi"],
         "cursor": [AgentCatalog.cursorDesktopID],
     ]
 

@@ -7,6 +7,7 @@ final class HookInstallerTests: XCTestCase {
     private let codex = HookCatalog.entry(id: "codex")!
     private let droid = HookCatalog.entry(id: "droid")!
     private let opencode = HookCatalog.entry(id: "opencode")!
+    private let pi = HookCatalog.entry(id: "pi")!
     private let appPath = "/Applications/agent caffeine.app"
 
     /// The form of a settings file that two other tools already wrote into,
@@ -94,7 +95,7 @@ final class HookInstallerTests: XCTestCase {
 
     override func setUpWithError() throws {
         home = FileManager.default.temporaryDirectory.appendingPathComponent("home-\(UUID().uuidString)")
-        for folder in [".claude", ".codex", ".factory", ".config/opencode"] {
+        for folder in [".claude", ".codex", ".factory", ".config/opencode", ".pi/agent"] {
             try FileManager.default.createDirectory(at: home.appendingPathComponent(folder), withIntermediateDirectories: true)
         }
         installer = HookInstaller(home: home, appPath: appPath)
@@ -522,7 +523,7 @@ final class HookInstallerTests: XCTestCase {
     /// mounted. A regular file took the place of the link.
     func testALinkWhoseDestinationIsGoneIsRefused() throws {
         let missing = home.appendingPathComponent("dotfiles/settings.json")
-        for entry in [claude, opencode] {
+        for entry in [claude, opencode, pi] {
             let url = installer.configURL(for: entry)
             try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
             try FileManager.default.createSymbolicLink(at: url, withDestinationURL: missing)
@@ -631,7 +632,7 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(try mode(), 0o640)
 
         // A file that "on" made, and the plugin file.
-        for entry in [codex, opencode] {
+        for entry in [codex, opencode, pi] {
             let made = installer.configURL(for: entry)
             try installer.install(entry)
             try FileManager.default.setAttributes([.posixPermissions: 0o400], ofItemAtPath: made.path)
@@ -832,6 +833,250 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(answered["delivered"] as? Int, 0)
     }
 
+    // MARK: Pi
+
+    func testPiExtensionFile() throws {
+        let url = installer.configURL(for: pi)
+        XCTAssertEqual(url.path, home.appendingPathComponent(".pi/agent/extensions/agent-caffeine.js").path)
+        // An extension of the user is in the folder, and stays as it is.
+        let mine = url.deletingLastPathComponent().appendingPathComponent("mine.ts")
+        let mineBytes = Data("export default function (pi) {\r\n\tpi.on(\"agent_start\", () => {});\r\n}".utf8)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try mineBytes.write(to: mine)
+
+        XCTAssertEqual(installer.status(of: pi), .notInstalled)
+        try installer.install(pi)
+        XCTAssertEqual(installer.status(of: pi), .installed(version: HookCatalog.piExtensionVersion))
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), HookCatalog.piExtensionSource(appPath: appPath))
+        XCTAssertNotEqual(HookCatalog.piExtensionSource(appPath: appPath), HookCatalog.pluginSource(appPath: appPath))
+        XCTAssertEqual(HookInstaller(home: home, appPath: "/elsewhere/agent caffeine.app").status(of: pi), .outdated)
+        // On again changes nothing.
+        try installer.install(pi)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: url.deletingLastPathComponent().path).sorted(), ["agent-caffeine.js", "mine.ts"])
+
+        try installer.uninstall(pi)
+        XCTAssertEqual(installer.status(of: pi), .notInstalled)
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: url.deletingLastPathComponent().path), ["mine.ts"], "Pi loads every file of the folder, so no backup is left there")
+        XCTAssertEqual(try Data(contentsOf: mine), mineBytes)
+        XCTAssertNil(installer.record(for: pi))
+
+        // A file of an older build is ours: it is replaced, and "off" takes it away.
+        let older = "// agent-caffeine-hook v=0\nexport default function (pi) {}\n"
+        try Data(older.utf8).write(to: url)
+        XCTAssertEqual(installer.status(of: pi), .outdated)
+        try installer.install(pi)
+        XCTAssertEqual(try String(contentsOf: url, encoding: .utf8), HookCatalog.piExtensionSource(appPath: appPath))
+        try Data(older.utf8).write(to: url)
+        try installer.uninstall(pi)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: url.path))
+
+        // A file of that name that is not ours is never touched.
+        let foreign = Data("export default function (pi) {}".utf8)
+        try foreign.write(to: url)
+        XCTAssertEqual(installer.status(of: pi), .unreadable)
+        XCTAssertThrowsError(try installer.install(pi)) { XCTAssertEqual($0 as? HookInstallError, .notOurFile) }
+        XCTAssertThrowsError(try installer.uninstall(pi)) { XCTAssertEqual($0 as? HookInstallError, .notOurFile) }
+        XCTAssertEqual(try Data(contentsOf: url), foreign)
+    }
+
+    func testPiIsNotOfferedOnAMacWithNoPi() throws {
+        let empty = FileManager.default.temporaryDirectory.appendingPathComponent("home-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: empty, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: empty) }
+        let other = HookInstaller(home: empty, appPath: appPath)
+        XCTAssertEqual(other.status(of: pi), .configMissing)
+        XCTAssertThrowsError(try other.install(pi)) { XCTAssertEqual($0 as? HookInstallError, .configMissing) }
+        XCTAssertFalse(FileManager.default.fileExists(atPath: empty.appendingPathComponent(".pi").path))
+        XCTAssertEqual(HookRowModel.rows(statuses: ["pi": .configMissing]), [])
+        XCTAssertEqual(HookRowModel.rows(statuses: ["pi": .notInstalled]).map(\.entry.displayName), ["Pi"])
+    }
+
+    func testPiExtensionSourceHasTheQueueAndTheStamp() {
+        let source = HookCatalog.piExtensionSource(appPath: appPath)
+        XCTAssertEqual(HookCatalog.piExtensionVersion, 1)
+        XCTAssertTrue(source.hasPrefix("// agent-caffeine-hook v=1\n"))
+        for piece in [
+            Self.piSpawnImport,
+            "const hook = \"/Applications/agent caffeine.app/Contents/MacOS/CaffeinagentHook\";",
+            "export default function (pi) {",
+            "{ queue: Promise.resolve(), seq: 0 }",
+            "shared.queue = shared.queue.then(() => run(name, body));",
+            "JSON.stringify({ session_id: session || \"pid-\" + process.pid, seq: shared.seq, ts })",
+            "const ts = Date.now();",
+            "if (key === last && Math.abs(ts - lastAt) < 1000) return;",
+            "spawn(hook, [\"pi\", name, \"v=1\"], { stdio: [\"pipe\", \"ignore\", \"ignore\"], detached: true });",
+            "const timer = setTimeout(done, 5000);",
+            "child.unref();",
+        ] {
+            XCTAssertTrue(source.contains(piece), piece)
+        }
+        // A handler gives the hook command to the queue and returns: Pi waits for each handler.
+        XCTAssertFalse(source.contains("await"))
+        XCTAssertFalse(source.contains("async"))
+        // Every event of the table is taken, and no other. A handler of
+        // `tool_call` that fails blocks the tool.
+        for event in pi.events { XCTAssertTrue(source.contains("\"\(event)\""), event) }
+        let quoted = source.components(separatedBy: "\"").enumerated().filter { $0.offset % 2 == 1 }.map(\.element)
+        let named = Set(quoted.filter { $0.contains("_") && $0.allSatisfy { $0 == "_" || $0.isLowercase } })
+        XCTAssertEqual(named, Set(pi.events))
+        XCTAssertFalse(source.contains("\u{2014}"))
+        // The entries of the other agents and the opencode plugin keep their version.
+        XCTAssertEqual(HookCatalog.version, 1)
+        XCTAssertEqual(HookCatalog.pluginVersion, 2)
+        XCTAssertEqual(HookCatalog.pluginSource(for: opencode, appPath: appPath), HookCatalog.pluginSource(appPath: appPath))
+        XCTAssertEqual(HookCatalog.pluginVersion(for: opencode), 2)
+        XCTAssertEqual(pi.benefit, "Lets agent caffeine see at once when Pi starts and stops working")
+    }
+
+    private static let piSpawnImport = "import { spawn } from \"node:child_process\";"
+
+    /// Runs the extension as it is written, with a `pi` that records the
+    /// handlers and a `spawn` that records. All events fire in one tick,
+    /// as Pi does. Skipped on a Mac with no JavaScript runtime.
+    func testThePiExtensionHandsItsEventsOverInOrder() throws {
+        let folders = (ProcessInfo.processInfo.environment["PATH"] ?? "").split(separator: ":").map(String.init)
+            + ["/opt/homebrew/bin", "/usr/local/bin", NSHomeDirectory() + "/.bun/bin"]
+        let runtimes = folders.flatMap { folder in ["node", "bun"].map { "\(folder)/\($0)" } }
+        guard let runtime = runtimes.first(where: FileManager.default.isExecutableFile(atPath:)) else {
+            throw XCTSkip("No node and no bun on this Mac.")
+        }
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("pi-extension-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder) }
+        let source = HookCatalog.piExtensionSource(appPath: appPath)
+        XCTAssertEqual(source.components(separatedBy: Self.piSpawnImport).count, 2)
+        let wired = source.replacingOccurrences(of: Self.piSpawnImport, with: "import { spawn } from \"./spawn.mjs\";")
+        try Data(wired.utf8).write(to: folder.appendingPathComponent("extension.mjs"))
+        // The first hook command is the slowest, so with no queue it would
+        // end last. The second one cannot start, and the third `spawn` throws.
+        let spawn = """
+        export const state = { log: [], running: 0, overlap: false, calls: 0 };
+        export const spawn = (command, args, options) => {
+          state.calls += 1;
+          const call = state.calls;
+          if (call === 3) throw new Error("a spawn that throws");
+          const handlers = {};
+          state.running += 1;
+          if (state.running > 1) state.overlap = true;
+          const child = {
+            unrefed: false,
+            on: (name, handler) => {
+              handlers[name] = handler;
+              return child;
+            },
+            unref: () => {
+              child.unrefed = true;
+            },
+            stdin: {
+              on: () => {},
+              end: (body) => {
+                setTimeout(() => {
+                  state.running -= 1;
+                  if (call === 2) return handlers.error(new Error("ENOENT"));
+                  const input = JSON.parse(body);
+                  state.log.push({ command, args, options, unrefed: child.unrefed, keys: Object.keys(input), session: input.session_id, seq: input.seq, ts: input.ts });
+                  handlers.close(0);
+                }, call === 1 ? 60 : 2);
+              },
+            },
+          };
+          return child;
+        };
+        """
+        try Data(spawn.utf8).write(to: folder.appendingPathComponent("spawn.mjs"))
+        let runner = """
+        import extension from "./extension.mjs";
+        import { state } from "./spawn.mjs";
+        const load = () => {
+          const handlers = {};
+          const answer = extension({ on: (name, handler) => { (handlers[name] ??= []).push(handler); } });
+          return { handlers, answer };
+        };
+        const first = load();
+        const answers = [first.answer];
+        const context = (id) => ({ sessionManager: { getSessionId: () => id } });
+        const stale = { get sessionManager() { throw new Error("a context of a session that is gone"); } };
+        const fire = (loaded, name, ctx = context("s")) => {
+          for (const handler of loaded.handlers[name]) answers.push(handler({ type: name }, ctx));
+        };
+        fire(first, "session_start");
+        fire(first, "agent_start");
+        fire(first, "turn_start");
+        fire(first, "tool_execution_start");
+        fire(first, "tool_execution_start");
+        fire(first, "ui_prompt_start");
+        fire(first, "tool_execution_end");
+        fire(first, "ui_prompt_end");
+        fire(first, "tool_execution_end");
+        fire(first, "session_compact");
+        fire(first, "agent_settled");
+        fire(first, "ui_prompt_start");
+        fire(first, "ui_prompt_end");
+        fire(first, "session_before_compact");
+        fire(first, "session_compact");
+        fire(first, "agent_start", stale);
+        // Pi loads the extension anew for `/reload` and for a new session.
+        const second = load();
+        answers.push(second.answer);
+        fire(second, "session_start", context("t"));
+        fire(first, "session_shutdown");
+        let threw = false;
+        try {
+          extension({ on: () => { throw new Error("a pi that refuses"); } });
+          extension(undefined);
+        } catch {
+          threw = true;
+        }
+        const answered = { delivered: state.log.length, plain: answers.every((answer) => answer === undefined) };
+        await new Promise((done) => setTimeout(done, 400));
+        console.log(JSON.stringify({ log: state.log, overlap: state.overlap, calls: state.calls, answered, threw, events: Object.keys(first.handlers) }));
+        """
+        try Data(runner.utf8).write(to: folder.appendingPathComponent("runner.mjs"))
+
+        let process = Process()
+        process.executableURL = URL(fileURLWithPath: runtime)
+        process.arguments = [folder.appendingPathComponent("runner.mjs").path]
+        let output = Pipe()
+        process.standardOutput = output
+        process.standardError = Pipe()
+        try process.run()
+        let data = output.fileHandleForReading.readDataToEndOfFile()
+        process.waitUntilExit()
+        XCTAssertEqual(process.terminationStatus, 0)
+        let result = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let log = try XCTUnwrap(result["log"] as? [[String: Any]])
+
+        XCTAssertEqual(Set(try XCTUnwrap(result["events"] as? [String])), Set(pi.events))
+        XCTAssertEqual(result["threw"] as? Bool, false, "The extension never throws into Pi")
+        XCTAssertEqual(result["overlap"] as? Bool, false, "One hook command at a time")
+        XCTAssertEqual(result["calls"] as? Int, 13)
+        // Left out: the same event again, the work of another tool during a
+        // question, the end of a compaction inside a run, and a question
+        // outside a run. The hook commands that could not start are passed
+        // over, and the queue went on.
+        XCTAssertEqual(log.map { $0["args"] as? [String] }, [
+            "session_start", "tool_execution_start", "ui_prompt_start", "ui_prompt_end", "tool_execution_end", "agent_settled",
+            "session_before_compact", "session_compact", "agent_start", "session_start", "session_shutdown",
+        ].map { ["pi", $0, "v=1"] })
+        XCTAssertEqual(log.map { $0["seq"] as? Int }, [1, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13])
+        XCTAssertEqual(log.map { $0["session"] as? String }, ["s", "s", "s", "s", "s", "s", "s", "s", "s", "t", "s"])
+        let times = log.compactMap { $0["ts"] as? Double }
+        XCTAssertEqual(times.count, 11)
+        XCTAssertEqual(times, times.sorted())
+        for entry in log {
+            XCTAssertEqual(entry["command"] as? String, "\(appPath)/Contents/MacOS/CaffeinagentHook")
+            XCTAssertEqual(entry["keys"] as? [String], ["session_id", "seq", "ts"], "Nothing else leaves Pi")
+            XCTAssertEqual(entry["unrefed"] as? Bool, true)
+            let options = try XCTUnwrap(entry["options"] as? [String: Any])
+            XCTAssertEqual(options["detached"] as? Bool, true)
+            XCTAssertEqual(options["stdio"] as? [String], ["pipe", "ignore", "ignore"])
+        }
+        // Pi got every answer at once, before one hook command had ended.
+        let answered = try XCTUnwrap(result["answered"] as? [String: Any])
+        XCTAssertEqual(answered["delivered"] as? Int, 0)
+        XCTAssertEqual(answered["plain"] as? Bool, true)
+    }
+
     // MARK: What Preferences shows
 
     func testPreviewShowsTheLinesThatAreAdded() throws {
@@ -840,6 +1085,8 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertTrue(preview.contains(HookCatalog.command(agent: "codex", event: "PermissionRequest", appPath: appPath).replacingOccurrences(of: "\"", with: "\\\"")))
         XCTAssertEqual(installer.displayPath(for: codex), "~/.codex/hooks.json")
         XCTAssertEqual(HookConfigEditor.preview(for: opencode, appPath: appPath), HookCatalog.pluginSource(appPath: appPath))
+        XCTAssertEqual(HookConfigEditor.preview(for: pi, appPath: appPath), HookCatalog.piExtensionSource(appPath: appPath))
+        XCTAssertEqual(installer.displayPath(for: pi), "~/.pi/agent/extensions/agent-caffeine.js")
     }
 
     func testErrorMessagesArePlain() {

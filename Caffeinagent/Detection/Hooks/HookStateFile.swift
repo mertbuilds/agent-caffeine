@@ -153,7 +153,7 @@ struct HookStateFile: Codable, Equatable {
 
 /// The order an agent gives its events: the time of the event in
 /// milliseconds since the epoch, and a number that counts up in the sender.
-/// The opencode plugin sends both. The time decides, and the number decides
+/// The opencode plugin and the Pi extension send both. The time decides, and the number decides
 /// between two events of one millisecond.
 struct HookStamp: Equatable, Comparable {
     var ts: Double

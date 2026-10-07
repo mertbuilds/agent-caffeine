@@ -351,6 +351,40 @@ final class VerdictTests: XCTestCase {
         XCTAssertTrue(told.first?.contains("712.0 s    finished fired pid 100 after 700 s") ?? false, "\(told)")
     }
 
+    /// Pi with its extension, as the hook command records it:
+    /// `session_start` when Pi opens, `agent_start` and
+    /// `tool_execution_start` at 10 s, a tool that is silent for 400 s,
+    /// `tool_execution_end` and `agent_settled` at 410 s. Pi has no state
+    /// of its own, so the working of its hooks holds for the whole call.
+    func testPiQuietToolCallIsHeldUntilItSettles() throws {
+        var file = HookStateFile(agent: "pi", pid: 100, start: Self.processStart)
+        let turn: [(TimeInterval, String, Int)] = [
+            (0, "session_start", 1), (10, "agent_start", 2), (10, "turn_start", 3), (10, "tool_execution_start", 4),
+            (410, "tool_execution_end", 5), (410, "turn_start", 6), (410, "agent_settled", 7),
+        ]
+        var story: [Sample] = []
+        for t in stride(from: 0.0, through: 500, by: 2) {
+            for (second, event, seq) in turn where second == t {
+                let action = HookEvents.action(agent: "pi", event: event, notificationType: nil, isSubagent: false)
+                file.apply(action, session: "s", event: event, at: at(second), stamp: HookStamp(ts: second * 1000, seq: seq))
+            }
+            let summary = try XCTUnwrap(file.summary(now: at(t), freshness: VerdictRules.hookFreshness, workingLimit: VerdictRules.hookWorkingLimit))
+            story.append((t, evidence("pi", "Pi", .activity, cpu: 0.4, interval: 2, hook: summary.state, hookAt: summary.at)))
+        }
+        XCTAssertEqual(AgentCatalog.standard.definitions.first { $0.id == "pi" }?.level, .activity, "The hooks are all Pi says about itself")
+        for got in runHeld(story) {
+            if (10..<410).contains(got.seconds) {
+                XCTAssertEqual(got.verdict, verdict(.working, .reported, .reportsBusy), "at \(got.seconds) s")
+            } else {
+                XCTAssertEqual(got.verdict.state, .idle, "at \(got.seconds) s")
+            }
+            XCTAssertEqual(got.hold, (10..<410).contains(got.seconds), "at \(got.seconds) s")
+        }
+        let told = told(story)
+        XCTAssertEqual(told.count, 1, "\(told)")
+        XCTAssertTrue(told.first?.contains("412.0 s    finished fired pid 100 after 400 s") ?? false, "\(told)")
+    }
+
     /// The Stop never arrives. The hook's working holds for
     /// `hookWorkingLimit`, and then the signs of activity decide. The turn
     /// stays open, so nothing is told early.
