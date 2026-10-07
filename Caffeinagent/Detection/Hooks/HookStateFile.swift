@@ -26,10 +26,12 @@ struct HookStateFile: Codable, Equatable {
         /// The stamp of the event, for an agent that sends one.
         var ts: Double?
         var seq: Int?
+        /// The sender of the stamp, for an agent that names it.
+        var inst: String?
 
         var stamp: HookStamp? {
             guard let ts, let seq else { return nil }
-            return HookStamp(ts: ts, seq: seq)
+            return HookStamp(ts: ts, seq: seq, instance: inst)
         }
     }
 
@@ -90,6 +92,10 @@ struct HookStateFile: Codable, Equatable {
     /// holds one too: the agent gave it, and the time of the hook command
     /// says less. An event with no stamp, and a session with none, are
     /// treated as before.
+    ///
+    /// Two stamps of one sender are put in order by the number alone: the
+    /// sender counts its events, and its clock can be set back between
+    /// two of them. The time decides only between two senders.
     mutating func apply(_ action: HookAction, session: String, event: String, at: Date, stamp: HookStamp? = nil) {
         let time = at.timeIntervalSince1970
         switch action {
@@ -100,12 +106,16 @@ struct HookStateFile: Codable, Equatable {
         case .set(let state):
             if let known = sessions[session] {
                 if let stamp, let held = known.stamp {
-                    if stamp < held, held.ts - stamp.ts <= Self.clockTolerance * 1000 { return }
+                    if let instance = stamp.instance, instance == held.instance {
+                        if stamp.seq < held.seq { return }
+                    } else if stamp < held, held.ts - stamp.ts <= Self.clockTolerance * 1000 {
+                        return
+                    }
                 } else if known.at > time, known.at - time <= Self.clockTolerance {
                     return
                 }
             }
-            sessions[session] = Session(state: Self.name(of: state), event: event, at: time, ts: stamp?.ts, seq: stamp?.seq)
+            sessions[session] = Session(state: Self.name(of: state), event: event, at: time, ts: stamp?.ts, seq: stamp?.seq, inst: stamp?.instance)
         }
         sessions = sessions.filter { abs(time - $0.value.at) < Self.sessionLifetime }
         if sessions.count > Self.maxSessions {
@@ -173,20 +183,24 @@ struct HookStateFile: Codable, Equatable {
 /// The order an agent gives its events: the time of the event in
 /// milliseconds since the epoch, and a number that counts up in the sender.
 /// The opencode plugin and the Pi extension send both. The time decides, and the number decides
-/// between two events of one millisecond.
+/// between two events of one millisecond. Since plugin 3 and extension 2
+/// they also name the sender that counts: a random id of the plugin
+/// instance or of the Pi process. See `HookStateFile.apply`.
 struct HookStamp: Equatable, Comparable {
     var ts: Double
     var seq: Int
+    var instance: String?
 
-    init(ts: Double, seq: Int) {
+    init(ts: Double, seq: Int, instance: String? = nil) {
         self.ts = ts
         self.seq = seq
+        self.instance = instance
     }
 
-    /// From the fields of the hook input. Nil when one of the two is not there.
+    /// From the fields of the hook input. Nil when the time or the number is not there.
     init?(fields: [String: String]) {
         guard let ts = fields[HookInput.timeKey].flatMap({ Double($0) }), let seq = fields[HookInput.sequenceKey].flatMap({ Int($0) }) else { return nil }
-        self.init(ts: ts, seq: seq)
+        self.init(ts: ts, seq: seq, instance: fields[HookInput.instanceKey].flatMap { $0.isEmpty ? nil : $0 })
     }
 
     static func < (left: HookStamp, right: HookStamp) -> Bool {
@@ -202,9 +216,10 @@ enum HookInput {
     static let sessionKeys: [String] = ["session_id", "sessionID", "sessionId", "conversation_id"]
     static let timeKey = "ts"
     static let sequenceKey = "seq"
+    static let instanceKey = "inst"
     /// The keys whose value is a whole number: the stamp of `HookStamp`.
     static let numberKeys: Set<String> = [timeKey, sequenceKey]
-    static let wantedKeys: Set<String> = Set(sessionKeys + ["notification_type", "agent_id"]).union(numberKeys)
+    static let wantedKeys: Set<String> = Set(sessionKeys + ["notification_type", "agent_id", instanceKey]).union(numberKeys)
     static let maxValueBytes = 256
     static let maxNumberDigits = 18
 

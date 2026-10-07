@@ -423,6 +423,42 @@ final class HookCommandTests: XCTestCase {
         XCTAssertEqual(file.sessions["a"]?.state, "working")
     }
 
+    /// The clock of the Mac is set back 3 seconds between two events of
+    /// one plugin. The idle has the higher number and the older time, and
+    /// it was dropped: the session stayed at working.
+    func testTwoEventsOfOneSenderAreOrderedByTheNumberAlone() {
+        var file = HookStateFile(agent: "opencode", pid: 1, start: 0)
+        file.apply(.set(.working), session: "a", event: "session.busy", at: now, stamp: HookStamp(ts: 9000, seq: 7, instance: "k3f9"))
+        file.apply(.set(.idle), session: "a", event: "session.idle", at: now, stamp: HookStamp(ts: 6000, seq: 8, instance: "k3f9"))
+        XCTAssertEqual(file.sessions["a"], .init(state: "idle", event: "session.idle", at: now.timeIntervalSince1970, ts: 6000, seq: 8, inst: "k3f9"))
+        // A lower number is older, whatever its time says.
+        file.apply(.set(.working), session: "a", event: "session.busy", at: now, stamp: HookStamp(ts: 60000, seq: 6, instance: "k3f9"))
+        XCTAssertEqual(file.sessions["a"]?.state, "idle")
+        // Another sender, as after opencode loaded the plugin anew: the time decides, as before.
+        file.apply(.set(.working), session: "a", event: "session.busy", at: now, stamp: HookStamp(ts: 5000, seq: 1, instance: "other"))
+        XCTAssertEqual(file.sessions["a"]?.state, "idle", "A moment older")
+        file.apply(.set(.working), session: "a", event: "session.busy", at: now, stamp: HookStamp(ts: 6001, seq: 1, instance: "other"))
+        XCTAssertEqual(file.sessions["a"]?.stamp, HookStamp(ts: 6001, seq: 1, instance: "other"))
+        // A stamp with no sender, from an older plugin that is still loaded: the time decides.
+        file.apply(.set(.idle), session: "a", event: "session.idle", at: now, stamp: HookStamp(ts: 6000, seq: 2))
+        XCTAssertEqual(file.sessions["a"]?.state, "working")
+        // Without the sender the first case is dropped, as it was.
+        var old = HookStateFile(agent: "opencode", pid: 1, start: 0)
+        old.apply(.set(.working), session: "a", event: "session.busy", at: now, stamp: HookStamp(ts: 9000, seq: 7))
+        old.apply(.set(.idle), session: "a", event: "session.idle", at: now, stamp: HookStamp(ts: 6000, seq: 8))
+        XCTAssertEqual(old.sessions["a"]?.state, "working")
+    }
+
+    func testRecordReadsTheSenderOfAStamp() throws {
+        let input = #"{"session_id":"s-1","seq":2,"ts":9000,"inst":"k3f9lq"}"#
+        XCTAssertEqual(HookStamp(fields: HookInput.topLevelStrings(in: Array(input.utf8))), HookStamp(ts: 9000, seq: 2, instance: "k3f9lq"))
+        XCTAssertTrue(record("session.busy", input, agent: "opencode", chain: opencodeChain, after: 0))
+        XCTAssertTrue(record("session.idle", #"{"session_id":"s-1","seq":3,"ts":7000,"inst":"k3f9lq"}"#, agent: "opencode", chain: opencodeChain, after: 0.1))
+        let session = try XCTUnwrap(try file("opencode-400.json").sessions[HookStateFile.sessionKey("s-1")])
+        XCTAssertEqual(session.state, "idle")
+        XCTAssertEqual(session.inst, "k3f9lq")
+    }
+
     func testEqualTimesAreOrderedByTheNumber() {
         var file = HookStateFile(agent: "opencode", pid: 1, start: 0)
         file.apply(.set(.idle), session: "a", event: "session.idle", at: now, stamp: HookStamp(ts: 2000, seq: 8))
