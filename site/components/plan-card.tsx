@@ -15,7 +15,7 @@ function helper(plan: Plan): string {
  * The words of the pricing card: the price of the picked plan, the plans to pick from, and the button that buys the picked one.
  * With a download, the free trial leads: its line stands over the price, and its button before the buy.
  */
-export function PlanCard({ children, download = null }: { children?: ReactNode; download?: ReactNode }) {
+export function PlanCard({ download = null }: { download?: ReactNode }) {
   const [picked, setPicked] = useState<Plan["id"]>(BASE_PLAN.id);
   const at = Math.max(0, PLANS.findIndex((entry) => entry.id === picked));
   const plan = PLANS[at];
@@ -81,10 +81,7 @@ export function PlanCard({ children, download = null }: { children?: ReactNode; 
             Buy agent caffeine for <span className="tabular-nums">{dollars(plan)}</span>
           </BuyButton>
         </div>
-        <div className="flex flex-col gap-1">
-          <p className="text-balance">Pay once. Lifetime updates. No subscription</p>
-          {children}
-        </div>
+        <p className="text-balance">Pay once. Lifetime updates. No subscription</p>
       </div>
     </div>
   );
