@@ -9,7 +9,7 @@ import SwiftUI
 /// unit tests never start the app, so they pass on a build that hangs.
 ///
 /// It runs next to a copy that is installed and touches nothing of it. It
-/// takes no power assertion, registers no keyboard shortcut, leaves the displays alone, never reaches or registers the helper, reads
+/// takes no power assertion, registers no keyboard shortcut, takes no click, leaves the displays alone, never reaches or registers the helper, reads
 /// no license from the Keychain and never calls Polar, starts no Sparkle,
 /// shows no setup window and no offer to move, sends no notification, and
 /// keeps its settings, and those AppKit writes for it, under a bundle
@@ -27,6 +27,7 @@ enum SmokeTest {
     private static var seconds: TimeInterval = 0
     private static var timers: [Timer] = []
     private static var cancellable: AnyCancellable?
+    private static var clickMonitor: Any?
     private static var iconToggle = SmokeMeasurements.Step.notRun
     private static var settingsWindow = SmokeMeasurements.Step.notRun
 
@@ -90,8 +91,21 @@ enum SmokeTest {
     static func appDidLaunch() {
         cancellable = StateAggregator.shared.objectWillChange.sink { meter.countPublish() }
         statusButton()?.toolTip = label
-        after(seconds * 0.3) { hideIcon() }
-        after(seconds * 0.6) { openSettings() }
+        ignoreClicks()
+        after(SmokeHealth.iconToggleAt) { hideIcon() }
+        after(SmokeHealth.settingsWindowAt) { openSettings() }
+    }
+
+    /// A click on the icon opens the menu, and the robot in an open menu
+    /// moves: that takes a quarter of a core for as long as the menu is
+    /// open, and the run would be judged by it. So no click reaches the
+    /// app, whoever clicks while it runs.
+    private static func ignoreClicks() {
+        let clicks: NSEvent.EventTypeMask = [.leftMouseDown, .leftMouseUp, .rightMouseDown, .rightMouseUp, .otherMouseDown, .otherMouseUp]
+        clickMonitor = NSEvent.addLocalMonitorForEvents(matching: clicks) { event in
+            if [.leftMouseDown, .rightMouseDown, .otherMouseDown].contains(event.type) { meter.countIgnoredClick() }
+            return nil
+        }
     }
 
     // MARK: Steps
@@ -110,11 +124,14 @@ enum SmokeTest {
             iconToggle = .failed
             return
         }
+        meter.markStep()
         inserted.wrappedValue = false
         after(0.6) {
+            meter.markStep()
             let hidden = !item.isVisible
             inserted.wrappedValue = true
             after(0.6) {
+                meter.markStep()
                 iconToggle = hidden && item.isVisible ? .ok : .failed
             }
         }
@@ -129,8 +146,10 @@ enum SmokeTest {
             settingsWindow = .skipped
             return
         }
+        meter.markStep()
         SettingsAction.open()
         after(0.8) {
+            meter.markStep()
             let window = NSApp.windows.first { $0.identifier?.rawValue == settingsWindowID }
             settingsWindow = window?.isVisible == true ? .ok : .failed
             window?.close()
@@ -203,6 +222,7 @@ enum SmokeTest {
         let thread = Thread {
             while true {
                 Thread.sleep(forTimeInterval: 0.05)
+                meter.readCPU()
                 guard meter.silence() > limit else { continue }
                 let line = SmokeHealth.line(
                     meter.measurements(), hang: "main thread gave no sign for more than \(Int(limit)) s, the run was cut"
@@ -244,6 +264,18 @@ private final class Meter: @unchecked Sendable {
     private var longestStall: TimeInterval = 0
     private var sceneEvaluations = 0
     private var publishes = 0
+    private var cpuBySecond: [Double] = []
+    private var secondBegan: TimeInterval = 0
+    private var cpuAtSecondBegan: TimeInterval = 0
+    private var stepSeconds: Set<Int> = []
+    private var clicksIgnored = 0
+
+    /// Processor time of the process so far, in seconds.
+    private static var cpu: TimeInterval {
+        var usage = rusage()
+        getrusage(RUSAGE_SELF, &usage)
+        return Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1_000_000
+    }
 
     private static var uptime: TimeInterval { ProcessInfo.processInfo.systemUptime }
 
@@ -251,6 +283,32 @@ private final class Meter: @unchecked Sendable {
         lock.lock()
         began = Self.uptime
         lastTick = began
+        secondBegan = began
+        cpuAtSecondBegan = Self.cpu
+        lock.unlock()
+    }
+
+    /// Called many times per second, off the main thread: closes each
+    /// second of the run that is over with the processor time it took.
+    func readCPU() {
+        let now = Self.uptime, cpu = Self.cpu
+        lock.lock()
+        defer { lock.unlock() }
+        guard now - secondBegan >= 1 else { return }
+        closeSecond(now: now, cpu: cpu)
+    }
+
+    /// The reading is a little late, so the second is a little long.
+    private func closeSecond(now: TimeInterval, cpu: TimeInterval) {
+        cpuBySecond.append(((cpu - cpuAtSecondBegan) / (now - secondBegan) * 1000).rounded() / 10)
+        secondBegan = now
+        cpuAtSecondBegan = cpu
+    }
+
+    /// The test itself works in this second of the run.
+    func markStep() {
+        lock.lock()
+        stepSeconds.insert(cpuBySecond.count)
         lock.unlock()
     }
 
@@ -276,6 +334,12 @@ private final class Meter: @unchecked Sendable {
         lock.unlock()
     }
 
+    func countIgnoredClick() {
+        lock.lock()
+        clicksIgnored += 1
+        lock.unlock()
+    }
+
     /// Seconds since the last tick.
     func silence() -> TimeInterval {
         lock.lock()
@@ -284,13 +348,13 @@ private final class Meter: @unchecked Sendable {
     }
 
     func measurements() -> SmokeMeasurements {
-        var usage = rusage()
-        getrusage(RUSAGE_SELF, &usage)
-        let cpu = Double(usage.ru_utime.tv_sec + usage.ru_stime.tv_sec) + Double(usage.ru_utime.tv_usec + usage.ru_stime.tv_usec) / 1_000_000
+        let cpu = Self.cpu
         let now = Self.uptime
         lock.lock()
         defer { lock.unlock() }
         let seconds = now - began
+        // The run ends in the middle of the reading that would close its last second.
+        if now - secondBegan >= 0.5 { closeSecond(now: now, cpu: cpu) }
         // A stall that still goes on counts with what it has so far.
         let stall = max(longestStall, lastTick - began >= 1 || now - began >= 1 ? now - lastTick : 0)
         return SmokeMeasurements(
@@ -298,6 +362,9 @@ private final class Meter: @unchecked Sendable {
             ticks: ticks,
             longestStallMs: Int(stall * 1000),
             cpuPercent: seconds > 0 ? (cpu / seconds * 1000).rounded() / 10 : 0,
+            cpuBySecond: cpuBySecond,
+            stepSeconds: stepSeconds.sorted(),
+            clicksIgnored: clicksIgnored,
             sceneEvaluations: sceneEvaluations,
             publishes: publishes
         )

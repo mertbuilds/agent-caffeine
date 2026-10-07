@@ -196,11 +196,11 @@ enum PanelText {
         case .pause(.thirtyMinutes): return "Pause for 30 minutes"
         case .pause(.oneHour): return "Pause for 1 hour"
         case .pause(.untilTomorrow): return "Pause until tomorrow"
-        case .resume: return "Resume now"
+        case .resume: return "Resume"
         case .stayReachable(.oneHour): return "Stay reachable for 1 hour"
         case .stayReachable(.twoHours): return "Stay reachable for 2 hours"
         case .stayReachable(.fourHours): return "Stay reachable for 4 hours"
-        case .stopReachable: return "Stop staying reachable"
+        case .stopReachable: return "Stop"
         }
     }
 
@@ -287,11 +287,7 @@ enum PanelText {
     static let buyInMenu = "Buy agent caffeine for $9"
     static let quit = "Quit agent caffeine"
     static let gearMenu = "Preferences and more"
-    static let pauseMenu = "Pause"
-    static let resume = "Resume"
-    static let reachableMenu = "Stay reachable"
     static let timerMenu = "Pause or stay reachable"
-    static let stop = "Stop"
     static let mainSwitch = "agent caffeine"
     static let expanded = "Expanded"
     static let collapsed = "Collapsed"

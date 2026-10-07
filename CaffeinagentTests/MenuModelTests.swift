@@ -272,8 +272,7 @@ final class MenuModelTests: XCTestCase {
             ReachableChoice.allCases.map { PanelAction.stayReachable($0).title },
             ["Stay reachable for 1 hour", "Stay reachable for 2 hours", "Stay reachable for 4 hours"]
         )
-        XCTAssertEqual(PanelAction.stopReachable.title, "Stop staying reachable")
-        XCTAssertEqual(PanelText.stop, "Stop")
+        XCTAssertEqual(PanelAction.stopReachable.title, "Stop")
         XCTAssertEqual(MenuModel.state(input(.noAgents), now: now).reachableActions, ReachableChoice.allCases.map(PanelAction.stayReachable))
     }
 
@@ -335,8 +334,7 @@ final class MenuModelTests: XCTestCase {
 
     func testThePauseActionsReadAsWholePhrases() {
         XCTAssertEqual(PauseChoice.allCases.map { PanelAction.pause($0).title }, ["Pause for 30 minutes", "Pause for 1 hour", "Pause until tomorrow"])
-        XCTAssertEqual(PanelAction.resume.title, "Resume now")
-        XCTAssertEqual(PanelText.resume, "Resume")
+        XCTAssertEqual(PanelAction.resume.title, "Resume")
     }
 
     func testEveryRobotLook() {
