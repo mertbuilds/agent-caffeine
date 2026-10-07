@@ -1228,6 +1228,105 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(answered["plain"] as? Bool, true)
     }
 
+    // MARK: Files of ours that an older build wrote
+
+    private func writeFile(_ text: String, for entry: HookCatalogEntry) throws {
+        let url = installer.configURL(for: entry)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        try Data(text.utf8).write(to: url)
+    }
+
+    func testTheTextsOfOlderBuildsAreKnown() throws {
+        XCTAssertEqual(HookPluginHistory.source(for: opencode, version: 1, appPath: appPath), pluginVersion1(appPath: appPath))
+        let opencode2 = try XCTUnwrap(HookPluginHistory.source(for: opencode, version: 2, appPath: appPath))
+        XCTAssertTrue(opencode2.hasPrefix("// agent-caffeine-hook v=2\n"))
+        XCTAssertTrue(opencode2.contains("await $`${hook} opencode ${name} v=2 < ${input}`.quiet().nothrow();"))
+        XCTAssertTrue(opencode2.contains("const hook = \"\(appPath)/Contents/MacOS/CaffeinagentHook\";"))
+        let pi1 = try XCTUnwrap(HookPluginHistory.source(for: pi, version: 1, appPath: appPath))
+        XCTAssertTrue(pi1.hasPrefix("// agent-caffeine-hook v=1\n"))
+        XCTAssertTrue(pi1.contains("const timer = setTimeout(done, 5000);"))
+        // The current ones are not history, and every older one is.
+        XCTAssertNil(HookPluginHistory.source(for: opencode, version: HookCatalog.pluginVersion, appPath: appPath))
+        XCTAssertNil(HookPluginHistory.source(for: pi, version: HookCatalog.piExtensionVersion, appPath: appPath))
+        XCTAssertNil(HookPluginHistory.source(for: claude, version: 1, appPath: appPath))
+        for version in 1..<HookCatalog.pluginVersion { XCTAssertNotNil(HookPluginHistory.source(for: opencode, version: version, appPath: appPath)) }
+        for version in 1..<HookCatalog.piExtensionVersion { XCTAssertNotNil(HookPluginHistory.source(for: pi, version: version, appPath: appPath)) }
+        XCTAssertEqual(HookPluginHistory.version(ofSource: opencode2), 2)
+        XCTAssertEqual(HookPluginHistory.version(ofSource: HookCatalog.pluginSource(appPath: appPath)), HookCatalog.pluginVersion)
+        XCTAssertNil(HookPluginHistory.version(ofSource: "export default function (pi) {}"))
+        XCTAssertNil(HookPluginHistory.version(ofSource: "// a note\n// agent-caffeine-hook v=2\n"))
+    }
+
+    func testAFileOfOursThatTheUserDidNotEditIsReplacedAtLaunch() throws {
+        for (entry, version) in [(opencode, 1), (opencode, 2), (pi, 1)] {
+            try writeFile(try XCTUnwrap(HookPluginHistory.source(for: entry, version: version, appPath: appPath)), for: entry)
+            XCTAssertEqual(installer.status(of: entry), .outdated)
+            XCTAssertEqual(installer.updateOwnFiles().map(\.id), [entry.id], "\(entry.id) \(version)")
+            XCTAssertEqual(installer.status(of: entry), .installed(version: HookCatalog.pluginVersion(for: entry)))
+            XCTAssertEqual(try text(of: entry), HookCatalog.pluginSource(for: entry, appPath: appPath))
+            let folder = try FileManager.default.contentsOfDirectory(atPath: installer.configURL(for: entry).deletingLastPathComponent().path)
+            XCTAssertEqual(folder, [HookCatalog.pluginFileName], "The agent loads every file of the folder, so no backup is left there")
+            // The second time there is nothing to do.
+            XCTAssertEqual(installer.updateOwnFiles().map(\.id), [])
+            try installer.uninstall(entry)
+        }
+    }
+
+    func testAFileThatIsNotWhatAnOlderBuildWroteIsLeftForTheUser() throws {
+        let older = try XCTUnwrap(HookPluginHistory.source(for: opencode, version: 2, appPath: appPath))
+        let elsewhere = try XCTUnwrap(HookPluginHistory.source(for: opencode, version: 2, appPath: "/elsewhere/agent caffeine.app"))
+        let kept = [
+            // The user changed a line, or added one.
+            older.replacingOccurrences(of: "let seq = 0;", with: "let seq = 100;"),
+            older + "// my note\n",
+            // A version this build does not know, and a first line that names the wrong one.
+            "// agent-caffeine-hook v=0\nexport const AgentCaffeine = async () => ({});\n",
+            older.replacingOccurrences(of: "// agent-caffeine-hook v=2\n", with: "// agent-caffeine-hook v=1\n"),
+            elsewhere,
+        ]
+        for text in kept {
+            try writeFile(text, for: opencode)
+            XCTAssertEqual(installer.status(of: opencode), .outdated)
+            XCTAssertEqual(installer.updateOwnFiles().map(\.id), [])
+            XCTAssertEqual(try self.text(of: opencode), text)
+            XCTAssertEqual(installer.status(of: opencode), .outdated, "Preferences still offers the update")
+        }
+        // The user asks for the update: that still works.
+        try installer.install(opencode)
+        XCTAssertEqual(installer.status(of: opencode), .installed(version: HookCatalog.pluginVersion))
+
+        // A file of that name that is not ours.
+        let foreign = "export const Mine = async () => ({})"
+        try writeFile(foreign, for: opencode)
+        XCTAssertEqual(installer.updateOwnFiles().map(\.id), [])
+        XCTAssertEqual(try text(of: opencode), foreign)
+
+        // A file of ours that may not be written.
+        try writeFile(older, for: opencode)
+        try FileManager.default.setAttributes([.posixPermissions: 0o400], ofItemAtPath: installer.configURL(for: opencode).path)
+        XCTAssertEqual(installer.updateOwnFiles().map(\.id), [])
+        XCTAssertEqual(try text(of: opencode), older)
+    }
+
+    func testBetterDetectionThatIsOffStaysOffAndAConfigOfTheUserIsNeverUpdated() throws {
+        // No file: the user did not turn it on.
+        XCTAssertEqual(installer.updateOwnFiles().map(\.id), [])
+        XCTAssertFalse(FileManager.default.fileExists(atPath: installer.configURL(for: opencode).path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: installer.configURL(for: pi).path))
+
+        // Entries of an older build in the user's own JSON files stay, and
+        // Preferences offers the update.
+        for entry in [claude, codex, droid] {
+            try installer.install(entry)
+            let older = try text(of: entry).replacingOccurrences(of: " v=\(HookCatalog.version) ", with: " v=0 ")
+            try write(older, for: entry)
+            XCTAssertEqual(installer.status(of: entry), .outdated)
+            XCTAssertEqual(installer.updateOwnFiles().map(\.id), [])
+            XCTAssertEqual(try text(of: entry), older)
+            XCTAssertEqual(installer.status(of: entry), .outdated)
+        }
+    }
+
     // MARK: What Preferences shows
 
     func testPreviewShowsTheLinesThatAreAdded() throws {

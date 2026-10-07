@@ -189,7 +189,8 @@ final class StateAggregator: ObservableObject {
     @PublishedOnChange private(set) var macSleep = MacSleepState()
     @PublishedOnChange private(set) var helperError: String?
     /// By hook agent id. Read at launch and when Preferences opens, and
-    /// never changed without the user's word.
+    /// never changed without the user's word, but for a file that is all
+    /// ours: see `updateOwnHookFiles`.
     @PublishedOnChange private(set) var hookStatuses: [String: HookStatus] = [:]
     @PublishedOnChange private(set) var hookErrors: [String: String] = [:]
 
@@ -371,6 +372,7 @@ final class StateAggregator: ObservableObject {
 
         license.start()
         engine.start()
+        updateOwnHookFiles()
         refreshHookStatuses()
         refreshLoginItem()
         syncSleepFlag()
@@ -936,6 +938,14 @@ final class StateAggregator: ObservableObject {
     /// they are offered only when the hook command is there.
     var hooksAvailable: Bool {
         FileManager.default.isExecutableFile(atPath: HookCatalog.executablePath())
+    }
+
+    /// At launch: see `HookInstaller.updateOwnFiles`. Only the copy in the
+    /// Applications folder does it, because the files point at its hook
+    /// command, and never the smoke test.
+    private func updateOwnHookFiles() {
+        guard !SmokeTest.isActive, Bundle.main.bundleURL.standardizedFileURL.path == HookCatalog.stableAppPath else { return }
+        hookInstaller.updateOwnFiles()
     }
 
     /// Entries with another path or from an older build read as outdated.

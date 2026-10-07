@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 enum HookStatus: Equatable {
     case notInstalled
@@ -542,6 +543,33 @@ struct HookInstaller {
             blankBefore: blank, interiors: interiors.isEmpty ? nil : interiors,
             backups: backups.isEmpty ? nil : backups
         ), for: entry)
+    }
+
+    private static let log = Logger(subsystem: "com.caffeinagent.app", category: "Hooks")
+
+    /// Replaces the plugin and extension files of ours that an older build
+    /// wrote, and gives the entries it replaced. Such a file is all ours,
+    /// so no word of the user is needed, but only while it is to the
+    /// letter what that build wrote (`HookPluginHistory`). A file the user
+    /// edited, one of a version this build does not know and one with
+    /// another app path stay as they are, and Preferences offers "Update"
+    /// for them. A file that is not there is not made: the user did not
+    /// turn it on. The entries in a JSON config are in the user's own
+    /// file and are never changed here.
+    @discardableResult
+    func updateOwnFiles() -> [HookCatalogEntry] {
+        HookCatalog.entries.filter { entry in
+            guard case .pluginFile = entry.format, agentIsSetUp(entry),
+                  let old = try? read(configURL(for: entry)),
+                  HookConfigEditor.status(text: old, entry: entry, appPath: appPath) == .outdated else { return false }
+            let source = String(decoding: old, as: UTF8.self)
+            guard let version = HookPluginHistory.version(ofSource: source),
+                  source == HookPluginHistory.source(for: entry, version: version, appPath: appPath),
+                  (try? install(entry)) != nil else { return false }
+            let name = configURL(for: entry).lastPathComponent, current = HookCatalog.pluginVersion(for: entry)
+            Self.log.notice("updated \(name, privacy: .public) of \(entry.id, privacy: .public) from v=\(version) to v=\(current)")
+            return true
+        }
     }
 
     func uninstall(_ entry: HookCatalogEntry) throws {
