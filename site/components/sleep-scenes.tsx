@@ -88,6 +88,7 @@ function BatteryStop() {
         <span className="text-lg tabular-nums">
           <NumberFlow
             animated={!lessMotion}
+            locales="en-US"
             opacityTiming={DRAIN_TIMING}
             spinTiming={DRAIN_TIMING}
             transformTiming={DRAIN_TIMING}

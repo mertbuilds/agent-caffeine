@@ -93,8 +93,10 @@ const questions: FaqItem[] = [
     answer: (
       <>
         Yes. Deactivate it on the old Mac, in Settings or in your{" "}
-        <a href="https://polar.sh/mertbuilds/portal">Polar purchases</a>, then enter it on the new
-        Mac.
+        <a href="https://polar.sh/mertbuilds/portal" target="_blank" rel="noreferrer">
+          Polar purchases
+        </a>
+        , then enter it on the new Mac.
       </>
     ),
   },

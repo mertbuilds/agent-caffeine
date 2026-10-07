@@ -21,7 +21,7 @@ const TEXT = `# agent caffeine
 - Pause for 30 minutes, 1 hour or until tomorrow. agent caffeine starts again by itself.
 - Stay reachable for 1, 2 or 4 hours: the Mac stays awake until that time, also when no agent works, so a message from a phone (Claude Code Remote Control, Codex remote) reaches the agent. On battery with the lid closed it needs the helper, and it uses about 1% of battery per hour. A message cannot wake a Mac that sleeps.
 - Notifications, each with its own switch: an agent is waiting for your answer (on by default), and an agent finished (off by default).
-- Keyboard shortcuts that work in every app, with keys you choose: turn agent caffeine on or off, and pause for 1 hour.
+- Keyboard shortcuts that work in every app. By default Control+Option+Command+C turns agent caffeine on or off, and Control+Option+Command+P pauses it for 1 hour. You can choose other keys.
 - The menu bar icon can be hidden. The app keeps the Mac awake the same way without it.
 - A 7-day free trial with every feature. It starts the first time the app opens and needs no account, no card and no key. After 7 days the app stops keeping the Mac awake until a license key is entered. The app and its settings stay.
 - ${KEYS} Each is a one-time purchase with lifetime updates and no subscription. Deactivate a Mac in the app or in your Polar purchases to move the key to another.

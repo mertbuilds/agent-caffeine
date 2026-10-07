@@ -44,6 +44,7 @@ function Flow({ children }: { children: string }) {
             key={index}
             className="tabular-nums"
             format={{ minimumIntegerDigits: part.length }}
+            locales="en-US"
             opacityTiming={ROLL}
             spinTiming={ROLL}
             transformTiming={ROLL}

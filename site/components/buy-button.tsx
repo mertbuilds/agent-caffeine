@@ -25,7 +25,6 @@ export const BRAND_VARIANTS = {
 const VARIANTS = {
   ...BRAND_VARIANTS,
   solid: (size: keyof typeof SIZES) => `${PILL} bg-fg text-bg ${SIZES[size]}`,
-  outline: (size: keyof typeof SIZES) => `${PILL} text-fg shadow-[inset_0_0_0_1px_var(--border)] ${SIZES[size]}`,
   text: () =>
     "shrink-0 text-sm text-muted no-underline transition-colors duration-quick ease-smooth-out hover:text-fg motion-reduce:transition-none",
 };

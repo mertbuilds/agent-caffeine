@@ -462,7 +462,7 @@ export function MenuBarSimulator() {
             Time runs faster here. In the app an agent that waits for you keeps your Mac awake for 5 minutes, and you can change that time
           </p>
         </div>
-        <div className="order-first flex w-full min-w-0 flex-col items-end gap-1 self-start rounded-xl border border-border p-1 pb-6 lg:order-none">
+        <div className="order-first flex w-full min-w-0 flex-col items-end gap-1 self-start rounded-[10px] border border-border p-1 pb-6 lg:order-none">
           <div className="flex h-6 w-full items-center justify-end rounded-md bg-[color-mix(in_srgb,var(--surface)_85%,transparent)] px-1.5 text-[13px] text-fg backdrop-blur">
             {GLYPHS.map((width, index) => (
               <span key={index} aria-hidden="true" className="flex h-[22px] items-center px-2">

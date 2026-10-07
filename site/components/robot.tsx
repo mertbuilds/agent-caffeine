@@ -97,17 +97,15 @@ type RobotProps = {
   paused?: boolean;
   /** A still picture of the pose, as the app shows it with Reduce Motion. */
   still?: boolean;
-  /** Loads the pictures only when the robot comes near the window. */
-  lazy?: boolean;
 };
 
-export function Robot({ pose, size = SIDE, paused = false, still = false, lazy = true }: RobotProps) {
+export function Robot({ pose, size = SIDE, paused = false, still = false }: RobotProps) {
   const id = `robot-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const look = LOOKS[pose];
   const lift = `robot-layer ${look.lively ? "robot-float" : ""}`;
   const iconEyes = look.eyes === "happy" ? 1 : look.eyes === "dim" ? 0.3 : 0;
   const filter = `saturate(${look.saturation}) contrast(${look.contrast}) brightness(${1 - look.dimming})`;
-  const picture = { alt: "", decoding: "async", draggable: false, height: PICTURE, loading: lazy ? "lazy" : "eager", width: PICTURE } as const;
+  const picture = { alt: "", decoding: "async", draggable: false, height: PICTURE, loading: "lazy", width: PICTURE } as const;
 
   return (
     <span

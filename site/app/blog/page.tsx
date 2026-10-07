@@ -18,7 +18,7 @@ export const metadata: Metadata = {
 export default function BlogIndex() {
   const posts = getPosts();
   return (
-    <main className="relative isolate flex min-h-screen flex-col gap-16 overflow-x-clip px-4 pt-[7.5rem] md:px-6">
+    <main id="main" className="relative isolate flex min-h-screen flex-col gap-16 overflow-x-clip px-4 pt-[7.5rem] md:px-6">
       <section className="mx-auto flex w-full max-w-[680px] flex-1 flex-col gap-10">
         <h1 className="text-balance text-[2rem] font-medium leading-[1.15] tracking-[-0.01em]">
           Blog

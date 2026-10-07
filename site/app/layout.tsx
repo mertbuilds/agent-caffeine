@@ -62,6 +62,12 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body className="bg-bg font-sans text-fg antialiased">
+        <a
+          href="#main"
+          className="sr-only left-2 top-2 z-40 rounded-full bg-bg text-sm no-underline shadow-[0_8px_32px_var(--shadow)] focus-visible:not-sr-only focus-visible:fixed focus-visible:px-4 focus-visible:py-1.5"
+        >
+          Skip to content
+        </a>
         <Header />
         {children}
         <Analytics />
