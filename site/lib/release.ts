@@ -1,5 +1,7 @@
 export type Release = {
   version: string;
+  /** The build number, when `latest.json` gives one. */
+  build?: string;
   /** The path of the dmg on this site, under `/mac/`. */
   href: string;
   /** The name the browser saves the dmg under. */
@@ -46,12 +48,18 @@ export async function getLatestRelease(): Promise<Release | null> {
       return null;
     }
     const data: unknown = await response.json();
-    const { version, filename, size, url } = isRecord(data) ? data : {};
+    const { version, build, filename, size, url } = isRecord(data) ? data : {};
     if (typeof version !== "string" || typeof filename !== "string" || typeof size !== "number") {
       console.error(`No download on the page: ${latest} needs a version and a filename as text and a size as a number.`);
       return null;
     }
-    return { version, href: hrefFor(url, filename), filename, size };
+    return {
+      version,
+      ...(typeof build === "string" || typeof build === "number" ? { build: String(build) } : {}),
+      href: hrefFor(url, filename),
+      filename,
+      size,
+    };
   } catch (error) {
     console.error(`No download on the page: ${latest} could not be read.`, error);
     return null;

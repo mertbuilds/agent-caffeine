@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import { createRouteHandler } from "@openpanel/nextjs/server";
+import { OPENPANEL_API_URL } from "@/lib/site";
 
 const handler = createRouteHandler({
-  apiUrl: "https://analytics.vinena.studio/api",
+  apiUrl: OPENPANEL_API_URL,
 });
 
 /** The session recorder that `op1.js` loads when recording is on. The handler above serves only `op1.js`, from the same place. */
