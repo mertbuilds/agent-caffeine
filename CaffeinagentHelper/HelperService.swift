@@ -10,6 +10,10 @@ final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProto
     private let exitProcess: (Int32) -> Void
     private var timer: DispatchSourceTimer?
     private var termination: DispatchSourceSignal?
+    /// The helper leaves after `retire`. Read and written on the queue.
+    private var retiring = false
+    /// The exit after `retire` waits for the reply to go out, at most this long.
+    private static let retireGrace: TimeInterval = 1
     private let log = Logger(subsystem: SleepFlagHelper.label, category: "HelperService")
 
     // The core and the exit are passed in, so a test can stop the service
@@ -51,6 +55,8 @@ final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProto
     }
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
+        // The next connection is for the helper that launchd starts after this one.
+        if queue.sync(execute: { retiring }) { return false }
         connection.exportedInterface = NSXPCInterface(with: SleepFlagHelperProtocol.self)
         connection.exportedObject = self
         connection.resume()
@@ -75,6 +81,24 @@ final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProto
     func heartbeat(reply: @escaping (Bool) -> Void) {
         queue.async {
             reply(self.core.heartbeat())
+        }
+    }
+
+    // The app was updated, and this process is still the helper of the
+    // version before it. It leaves as when launchd stops it, with exit code
+    // 0: KeepAlive in the plist starts the helper again only after a crash,
+    // so launchd starts the new binary on the next connection.
+    func retire(reply: @escaping () -> Void) {
+        let connection = NSXPCConnection.current()
+        queue.async {
+            if self.core.setByHelper { self.log.info("retiring, clearing SleepDisabled") }
+            self.retiring = true
+            self.core.shutdown()
+            reply()
+            guard let connection else { return self.exitProcess(0) }
+            // After the reply went out.
+            connection.scheduleSendBarrierBlock { self.exitProcess(0) }
+            self.queue.asyncAfter(deadline: .now() + Self.retireGrace) { self.exitProcess(0) }
         }
     }
 

@@ -81,6 +81,12 @@ final class XPCSleepFlagHelper: SleepFlagHelperConnecting {
         }
     }
 
+    func retire() async throws {
+        try await call { proxy, done in
+            proxy.retire { done(()) }
+        }
+    }
+
     // The reply, the error handler, the end of the connection or the
     // timeout answers the call, whichever is first. A connection that
     // gave no answer in time is dropped, and the next call makes a new one.

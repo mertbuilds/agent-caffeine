@@ -54,6 +54,9 @@ protocol SleepFlagHelperConnecting {
     func setSleepDisabled(_ on: Bool) async throws -> Bool
     func status() async throws -> (sleepDisabled: Bool, setByHelper: Bool, version: String)
     func heartbeat() async throws -> Bool
+    // The helper clears a flag it owns and exits. launchd starts it again
+    // on the next call.
+    func retire() async throws
 }
 
 // The sudoers entry of the method this helper replaced.
@@ -260,10 +263,11 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
     var flagLeftOn: Bool { helperStatus != .enabled && sleepDisabled }
 
     /// After an update the helper that runs can still be the old binary:
-    /// launchd keeps the process it started. Registering again makes it
-    /// start the new one. A helper that gives no version gets a new
-    /// connection first, and is registered again when that does not help,
-    /// once in a launch.
+    /// launchd keeps the process it started. The helper is asked to leave,
+    /// and launchd starts the new one with no change of the registration.
+    /// A helper that does not know how to leave is registered again. A
+    /// helper that gives no version gets a new connection first, and is
+    /// registered again when that does not help, once in a launch.
     func replaceHelper(ifNot appVersion: String) async {
         refreshStatus()
         guard helperStatus == .enabled, !repairing else { return }
@@ -279,14 +283,27 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         _ = await duringRepair {
             var running = running
             if running == nil { running = await self.versionOnANewConnection() }
-            if running == appVersion { return true }
-            if let running {
-                self.log.info("helper is \(running, privacy: .public), app is \(appVersion, privacy: .public): registering again")
-                // So the helper that is stopped has no flag to clear on its way out.
-                self.logSend(false, .replace)
-                _ = try? await self.helper.setSleepDisabled(false)
+            var retired = false
+            while true {
+                switch HelperRepair.replacement(running: running, app: appVersion, retired: retired) {
+                case .keep:
+                    // The flag went with the old helper, whatever a call under way says.
+                    if retired { self.sendAgain = self.sending }
+                    return true
+                case .retire:
+                    self.log.info("helper is \(running ?? "", privacy: .public), app is \(appVersion, privacy: .public): asking it to leave")
+                    running = await self.versionAfterRetire()
+                    retired = true
+                case .registerAgain:
+                    if let running {
+                        self.log.info("helper is \(running, privacy: .public), app is \(appVersion, privacy: .public): registering again")
+                        // So the helper that is stopped has no flag to clear on its way out.
+                        self.logSend(false, .replace)
+                        _ = try? await self.helper.setSleepDisabled(false)
+                    }
+                    return await self.registerAgain()
+                }
             }
-            return await self.registerAgain()
         }
         await send(.repair)
     }
@@ -368,6 +385,26 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
                 log.error("no answer on a new connection: \(String(describing: error), privacy: .public)")
                 if HelperCall.isSigningFailure(error) { return nil }
             }
+        }
+        return nil
+    }
+
+    /// Asks the helper to leave and gives the version of the one that
+    /// launchd starts after it. The version of the helper as it was when
+    /// it does not know the call or gives no answer to it, nil when no
+    /// helper answers afterwards.
+    private func versionAfterRetire() async -> String? {
+        do {
+            try await helper.retire()
+        } catch where !HelperCall.isConnectionLoss(error) {
+            log.error("the helper did not leave: \(String(describing: error), privacy: .public)")
+        } catch {
+            // It left before its reply came through.
+        }
+        for _ in 1...HelperRepair.retireTries {
+            await sleep(HelperRepair.retireInterval)
+            helper.reconnect()
+            if let version = try? await helper.status().version { return version }
         }
         return nil
     }

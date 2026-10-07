@@ -84,6 +84,14 @@ private final class FakeHelper: SleepFlagHelperConnecting {
     /// The next set waits here until the test lets it go.
     var holdsNextSet = false
     var held: CheckedContinuation<Void, Never>?
+    var version = "1.0 (1)"
+    /// What the helper that launchd starts after a retire reports. Nil for
+    /// a helper of a build that does not know the call: it gives no answer.
+    var versionAfterRetire: String?
+    /// The helper leaves and launchd starts none after it.
+    var goneAfterRetire = false
+    /// The helper exits before its reply to the retire comes through.
+    var retireLosesReply = false
     var calls: [String] = []
     var reconnects = 0
     var journal: Journal?
@@ -125,7 +133,19 @@ private final class FakeHelper: SleepFlagHelperConnecting {
         called("status")
         try fail()
         if stale { throw signingFailed }
-        return (flag, setByHelper, "1.0 (1)")
+        return (flag, setByHelper, version)
+    }
+
+    func retire() async throws {
+        called("retire")
+        try fail()
+        guard let versionAfterRetire else { throw HelperCallError.timedOut }
+        // A helper that leaves clears the flag it owns.
+        if setByHelper { flag = false }
+        setByHelper = false
+        version = versionAfterRetire
+        unreachable = goneAfterRetire
+        if retireLosesReply { throw HelperCallError.connectionLost }
     }
 
     func heartbeat() async throws -> Bool {
@@ -538,6 +558,101 @@ final class SleepFlagControllerTests: XCTestCase {
         XCTAssertEqual(controller.helperStatus, .enabled)
     }
 
+    // MARK: Retire
+
+    /// An update of the app: the helper leaves and launchd starts the new
+    /// binary. The registration is not touched, so macOS can refuse nothing.
+    func testAnOutdatedHelperIsAskedToLeaveAndIsNotRegisteredAgain() async {
+        let service = FakeService(status: .enabled)
+        let helper = FakeHelper()
+        helper.versionAfterRetire = "1.1 (2)"
+        let controller = makeController(service, helper)
+        await controller.replaceHelper(ifNot: "1.1 (2)")
+        XCTAssertEqual(journal.entries, ["status", "retire", "sleep 0.5", "reconnect", "status", "set false"])
+        XCTAssertFalse(service.unregistered)
+        XCTAssertEqual(service.registrations, 0)
+        XCTAssertEqual(controller.setup, .ready)
+        XCTAssertFalse(controller.repairTried, "Try again in the menu is still there for later")
+    }
+
+    func testTheWantedFlagComesBackAfterTheHelperLeft() async {
+        let service = FakeService(status: .enabled)
+        let helper = FakeHelper()
+        helper.versionAfterRetire = "1.1 (2)"
+        let controller = makeController(service, helper)
+        _ = await controller.setSleepDisabled(true)
+        await controller.replaceHelper(ifNot: "1.1 (2)")
+        XCTAssertEqual(helper.calls, ["set true", "status", "retire", "status", "set true"])
+        XCTAssertTrue(helper.flag)
+        XCTAssertTrue(controller.sleepDisabled)
+        XCTAssertEqual(service.registrations, 0)
+    }
+
+    /// The helper of the build before this one does not know the call.
+    func testAHelperThatDoesNotKnowHowToLeaveIsRegisteredAgain() async {
+        let service = FakeService(status: .enabled)
+        let helper = FakeHelper()
+        let controller = makeController(service, helper)
+        await controller.replaceHelper(ifNot: "1.1 (2)")
+        XCTAssertEqual(Array(journal.entries.prefix(7)), ["status", "retire", "sleep 0.5", "reconnect", "status", "set false", "unregister"])
+        XCTAssertEqual(service.registrations, 1)
+        XCTAssertEqual(helper.calls.filter { $0 == "retire" }.count, 1, "Asked once")
+        XCTAssertEqual(controller.helperStatus, .enabled)
+    }
+
+    func testAHelperThatLeftAndDidNotStartAgainIsRegisteredAgain() async {
+        let service = FakeService(status: .enabled)
+        let helper = FakeHelper()
+        helper.versionAfterRetire = "1.1 (2)"
+        helper.goneAfterRetire = true
+        service.onRegistered = { helper.unreachable = false }
+        let controller = makeController(service, helper)
+        await controller.replaceHelper(ifNot: "1.1 (2)")
+        XCTAssertEqual(helper.calls.filter { $0 == "retire" }.count, 1)
+        XCTAssertEqual(slept.prefix(3), [0.5, 0.5, 0.5], "It is asked three times, half a second apart")
+        XCTAssertTrue(service.unregistered)
+        XCTAssertEqual(service.registrations, 1)
+        XCTAssertEqual(controller.setup, .ready)
+    }
+
+    func testAHelperThatLeftBeforeItsReplyCameThroughIsNotRegisteredAgain() async {
+        let service = FakeService(status: .enabled)
+        let helper = FakeHelper()
+        helper.versionAfterRetire = "1.1 (2)"
+        helper.retireLosesReply = true
+        let controller = makeController(service, helper)
+        await controller.replaceHelper(ifNot: "1.1 (2)")
+        XCTAssertEqual(helper.calls, ["status", "retire", "status", "set false"])
+        XCTAssertFalse(service.unregistered)
+        XCTAssertEqual(service.registrations, 0)
+        XCTAssertEqual(controller.setup, .ready)
+    }
+
+    func testWhichHelperIsKeptAskedToLeaveOrRegisteredAgain() {
+        let cases: [(running: String?, retired: Bool, want: HelperReplacement)] = [
+            ("1.1 (2)", false, .keep),
+            ("1.1 (2)", true, .keep),
+            ("1.0 (1)", false, .retire),
+            ("1.0 (1)", true, .registerAgain),
+            ("unknown (unknown)", false, .retire),
+            (nil, false, .registerAgain),
+            (nil, true, .registerAgain),
+        ]
+        for c in cases {
+            XCTAssertEqual(HelperRepair.replacement(running: c.running, app: "1.1 (2)", retired: c.retired), c.want, "\(c)")
+        }
+    }
+
+    func testAStaleHelperIsNotAskedToLeave() async {
+        let service = FakeService(status: .enabled)
+        let helper = staleHelper(on: service)
+        helper.versionAfterRetire = "1.1 (2)"
+        let controller = makeController(service, helper)
+        await controller.replaceHelper(ifNot: "1.1 (2)")
+        XCTAssertFalse(helper.calls.contains("retire"), "Its answers do not pass the signing check, so it is registered again")
+        XCTAssertEqual(service.registrations, 1)
+    }
+
     func testHelperThatIsNotEnabledIsNotReplaced() async {
         let service = FakeService(status: .notRegistered)
         let helper = FakeHelper()
@@ -580,7 +695,7 @@ final class SleepFlagControllerTests: XCTestCase {
         let controller = makeController(service, helper)
         await controller.replaceHelper(ifNot: "1.1 (2)")
         XCTAssertEqual(service.registrations, 1)
-        XCTAssertEqual(helper.calls, ["status", "status", "set false", "status", "set false"], "The wanted value goes to the new helper")
+        XCTAssertEqual(helper.calls, ["status", "status", "retire", "status", "set false", "status", "set false"], "The wanted value goes to the new helper")
     }
 
     func testAHelperThatWentAwayIsAskedForItsVersionAgain() async {
@@ -600,7 +715,7 @@ final class SleepFlagControllerTests: XCTestCase {
         let controller = makeController(service, helper)
         _ = await controller.setSleepDisabled(true)
         await controller.replaceHelper(ifNot: "1.1 (2)")
-        XCTAssertEqual(helper.calls, ["set true", "status", "set false", "status", "set true"])
+        XCTAssertEqual(helper.calls, ["set true", "status", "retire", "status", "set false", "status", "set true"])
         XCTAssertTrue(controller.sleepDisabled)
         XCTAssertFalse(controller.repairTried, "Another version is no failure")
     }

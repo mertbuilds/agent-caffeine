@@ -9,6 +9,10 @@ import Foundation
     // Replies with the current value, so the app sees a flag the helper
     // cleared on its own.
     func heartbeat(reply: @escaping (Bool) -> Void)
+    // After an update of the app: the helper clears a flag it owns, replies
+    // and exits. launchd starts the binary that is in the bundle now on the
+    // next connection, and nothing about the registration changes.
+    func retire(reply: @escaping () -> Void)
 }
 
 enum SleepFlagHelper {
