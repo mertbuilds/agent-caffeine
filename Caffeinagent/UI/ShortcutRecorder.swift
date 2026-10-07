@@ -9,6 +9,8 @@ struct ShortcutRecorder: View {
     let shortcut: Shortcut?
     var problem: ShortcutProblem?
     let set: (Shortcut?) -> Void
+    /// Back to the default. Nil when the shortcut was never changed.
+    var reset: (() -> Void)?
     /// While a row records, the shortcuts are off: the keys of a shortcut
     /// that is set must reach the field, not do their work.
     let setRecording: (Bool) -> Void
@@ -27,6 +29,15 @@ struct ShortcutRecorder: View {
                         .foregroundStyle(.secondary)
                         .accessibilityLabel(Self.clear)
                         .help(Self.clear)
+                    }
+                    if let reset, !recording {
+                        Button(action: reset) {
+                            Image(systemName: "arrow.counterclockwise.circle.fill")
+                        }
+                        .buttonStyle(.borderless)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel(Self.reset)
+                        .help(Self.reset)
                     }
                     Button(action: { recording ? stop() : start() }) {
                         Text(recording ? Self.recording : shortcut?.display ?? Self.record)
@@ -49,6 +60,7 @@ struct ShortcutRecorder: View {
     static let record = "Record shortcut"
     static let recording = "Press the keys"
     static let clear = "Clear shortcut"
+    static let reset = "Restore default shortcut"
     static let none = "None"
 
     private func start() {

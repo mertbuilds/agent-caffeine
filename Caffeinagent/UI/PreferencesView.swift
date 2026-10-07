@@ -36,8 +36,8 @@ struct PreferencesView: View {
             .tabItem { Label("Notifications", systemImage: "bell") }
             .tag(PreferencesTab.alerts)
             ShortcutPreferences(
-                shortcuts: aggregator.shortcuts, shortcutProblems: aggregator.shortcutProblems,
-                setShortcut: aggregator.setShortcut, setShortcutRecording: aggregator.setShortcutRecording
+                choices: aggregator.shortcutChoices, shortcutProblems: aggregator.shortcutProblems,
+                setShortcut: aggregator.setShortcut, resetShortcut: aggregator.resetShortcut, setShortcutRecording: aggregator.setShortcutRecording
             )
             .tabItem { Label("Shortcuts", systemImage: "keyboard") }
             .tag(PreferencesTab.shortcuts)
@@ -511,9 +511,10 @@ struct AlertPreferences: View {
 }
 
 struct ShortcutPreferences: View {
-    var shortcuts: [ShortcutAction: Shortcut] = [:]
+    var choices = ShortcutChoices()
     var shortcutProblems: [ShortcutAction: ShortcutProblem] = [:]
     var setShortcut: (Shortcut?, ShortcutAction) -> Void = { _, _ in }
+    var resetShortcut: (ShortcutAction) -> Void = { _ in }
     var setShortcutRecording: (Bool) -> Void = { _ in }
 
     var body: some View {
@@ -521,8 +522,9 @@ struct ShortcutPreferences: View {
             Section("Keyboard shortcuts") {
                 ForEach(ShortcutAction.allCases, id: \.self) { action in
                     ShortcutRecorder(
-                        title: action.title, shortcut: shortcuts[action], problem: shortcutProblems[action],
-                        set: { setShortcut($0, action) }, setRecording: setShortcutRecording
+                        title: action.title, shortcut: choices.shortcuts[action], problem: shortcutProblems[action],
+                        set: { setShortcut($0, action) }, reset: choices.isChanged(action) ? { resetShortcut(action) } : nil,
+                        setRecording: setShortcutRecording
                     )
                 }
                 Text("The shortcuts work in every app. Click a field, then press the keys you want.")

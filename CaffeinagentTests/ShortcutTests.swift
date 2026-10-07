@@ -103,25 +103,136 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(ShortcutAction.pauseOneHour.title, "Pause for 1 hour")
     }
 
-    func testNoShortcutIsSetUntilTheUserRecordsOne() {
-        XCTAssertEqual(ShortcutStore.load(from: defaults), [:])
+    // MARK: Defaults
+
+    private let toggleDefault = Shortcut(keyCode: 8, modifiers: [.control, .option, .command], key: "C")
+    private let pauseDefault = Shortcut(keyCode: 35, modifiers: [.control, .option, .command], key: "P")
+
+    func testTheDefaults() {
+        XCTAssertEqual(ShortcutAction.toggle.defaultShortcut, toggleDefault)
+        XCTAssertEqual(ShortcutAction.pauseOneHour.defaultShortcut, pauseDefault)
+        XCTAssertEqual(toggleDefault.display, "⌃⌥⌘C")
+        XCTAssertEqual(pauseDefault.display, "⌃⌥⌘P")
+        XCTAssertEqual(Set(ShortcutAction.allCases.map(\.defaultShortcut.keys)).count, ShortcutAction.allCases.count)
+        for action in ShortcutAction.allCases {
+            XCTAssertNil(ShortcutRules.problem(action.defaultShortcut), action.rawValue)
+        }
+    }
+
+    func testAnActionTheUserNeverChangedHasItsDefault() {
+        let choices = ShortcutStore.load(from: defaults)
+        XCTAssertEqual(choices, ShortcutChoices())
+        XCTAssertEqual(choices.shortcuts, [.toggle: toggleDefault, .pauseOneHour: pauseDefault])
+        XCTAssertFalse(choices.isChanged(.toggle))
+    }
+
+    func testARecordedShortcutStaysAndTheOtherActionHasItsDefault() {
+        // What a build without defaults wrote.
+        defaults.set(Data(#"{"toggle":{"keyCode":37,"modifiers":10,"key":"L"}}"#.utf8), forKey: ShortcutStore.key)
+        let choices = ShortcutStore.load(from: defaults)
+        XCTAssertEqual(choices.shortcuts, [.toggle: shortcut([.option, .command], "L"), .pauseOneHour: pauseDefault])
+        XCTAssertTrue(choices.isChanged(.toggle))
+        XCTAssertFalse(choices.isChanged(.pauseOneHour))
+    }
+
+    func testAClearedShortcutStaysCleared() {
+        var choices = ShortcutChoices()
+        choices.set(nil, for: .toggle)
+        XCTAssertEqual(choices.shortcuts, [.pauseOneHour: pauseDefault])
+        ShortcutStore.save(choices, to: defaults)
+        XCTAssertNil(defaults.object(forKey: ShortcutStore.key))
+        XCTAssertEqual(defaults.stringArray(forKey: ShortcutStore.clearedKey), ["toggle"])
+        let loaded = ShortcutStore.load(from: defaults)
+        XCTAssertEqual(loaded, choices)
+        XCTAssertEqual(loaded.shortcuts, [.pauseOneHour: pauseDefault])
+        // A cleared shortcut that was recorded before.
+        choices.set(shortcut([.option, .command], "L"), for: .pauseOneHour)
+        choices.set(nil, for: .pauseOneHour)
+        ShortcutStore.save(choices, to: defaults)
+        XCTAssertEqual(ShortcutStore.load(from: defaults).shortcuts, [:])
+    }
+
+    func testADefaultIsNeverWritten() {
+        var choices = ShortcutStore.load(from: defaults)
+        ShortcutStore.save(choices, to: defaults)
+        XCTAssertNil(defaults.object(forKey: ShortcutStore.key))
+        XCTAssertNil(defaults.object(forKey: ShortcutStore.clearedKey))
+        choices.set(shortcut([.option, .command], "L"), for: .toggle)
+        ShortcutStore.save(choices, to: defaults)
+        XCTAssertEqual(ShortcutStore.load(from: defaults).recorded, [.toggle: shortcut([.option, .command], "L")])
+        XCTAssertEqual(ShortcutStore.load(from: defaults).shortcuts[.pauseOneHour], pauseDefault)
+    }
+
+    func testResetGivesTheDefaultBack() {
+        var choices = ShortcutChoices()
+        choices.set(shortcut([.option, .command], "L"), for: .toggle)
+        choices.set(nil, for: .pauseOneHour)
+        choices.reset(.toggle)
+        choices.reset(.pauseOneHour)
+        XCTAssertEqual(choices, ShortcutChoices())
+        ShortcutStore.save(choices, to: defaults)
+        XCTAssertNil(defaults.object(forKey: ShortcutStore.key))
+        XCTAssertNil(defaults.object(forKey: ShortcutStore.clearedKey))
+    }
+
+    func testRecordingAfterAClearTakesTheActionOutOfTheClearedOnes() {
+        var choices = ShortcutChoices()
+        choices.set(nil, for: .toggle)
+        choices.set(shortcut([.option, .command], "L"), for: .toggle)
+        XCTAssertEqual(choices.cleared, [])
+        // A list that names an action with a recorded shortcut is not believed.
+        ShortcutStore.save(choices, to: defaults)
+        defaults.set(["toggle", "later"], forKey: ShortcutStore.clearedKey)
+        XCTAssertEqual(ShortcutStore.load(from: defaults), choices)
+    }
+
+    func testADefaultGivesWayToTheShortcutOfTheUser() {
+        var choices = ShortcutChoices()
+        // The keys count, not what stands on the key.
+        choices.set(Shortcut(keyCode: 35, modifiers: [.control, .option, .command], key: "L"), for: .toggle)
+        XCTAssertEqual(choices.shortcuts, [.toggle: Shortcut(keyCode: 35, modifiers: [.control, .option, .command], key: "L")])
+        XCTAssertNil(choices.defaultProblem(for: .pauseOneHour, system: []))
+        // The rule for a new shortcut looks at the recorded ones alone, so
+        // the default of the other action does not stand in the way.
+        XCTAssertNil(ShortcutRules.problem(pauseDefault, others: Array(ShortcutChoices().recorded.values)))
+        choices.set(nil, for: .toggle)
+        XCTAssertEqual(choices.shortcuts, [.pauseOneHour: pauseDefault])
+        // A reset does not take the keys of the user either.
+        choices = ShortcutChoices()
+        choices.set(toggleDefault, for: .pauseOneHour)
+        XCTAssertEqual(choices.shortcuts, [.pauseOneHour: toggleDefault])
+    }
+
+    func testADefaultThatMacOSUsesIsNotRegistered() {
+        let system: Set<Shortcut.Keys> = [toggleDefault.keys]
+        var choices = ShortcutChoices()
+        XCTAssertEqual(choices.defaultProblem(for: .toggle, system: system), .usedBySystem)
+        XCTAssertNil(choices.defaultProblem(for: .pauseOneHour, system: system))
+        XCTAssertNil(choices.defaultProblem(for: .toggle, system: []))
+        // The field still shows it.
+        XCTAssertEqual(choices.shortcuts[.toggle], toggleDefault)
+        // Not a default any more: recorded or cleared.
+        choices.set(toggleDefault, for: .toggle)
+        XCTAssertNil(choices.defaultProblem(for: .toggle, system: system))
+        choices.set(nil, for: .toggle)
+        XCTAssertNil(choices.defaultProblem(for: .toggle, system: system))
     }
 
     func testSaveAndLoad() {
         let shortcuts: [ShortcutAction: Shortcut] = [.toggle: shortcut([.option, .command], "L"), .pauseOneHour: shortcut([.control, .option], "P", keyCode: 35)]
-        ShortcutStore.save(shortcuts, to: defaults)
-        XCTAssertEqual(ShortcutStore.load(from: defaults), shortcuts)
-        ShortcutStore.save([.toggle: shortcut(.control, "F5", keyCode: 96)], to: defaults)
-        XCTAssertEqual(ShortcutStore.load(from: defaults), [.toggle: shortcut(.control, "F5", keyCode: 96)])
-        ShortcutStore.save([:], to: defaults)
+        ShortcutStore.save(ShortcutChoices(recorded: shortcuts), to: defaults)
+        XCTAssertEqual(ShortcutStore.load(from: defaults).shortcuts, shortcuts)
+        ShortcutStore.save(ShortcutChoices(recorded: [.toggle: shortcut(.control, "F5", keyCode: 96)]), to: defaults)
+        XCTAssertEqual(ShortcutStore.load(from: defaults).recorded, [.toggle: shortcut(.control, "F5", keyCode: 96)])
+        ShortcutStore.save(ShortcutChoices(), to: defaults)
         XCTAssertNil(defaults.object(forKey: ShortcutStore.key))
     }
 
-    func testWhatCannotBeReadGivesNoShortcut() {
+    func testWhatCannotBeReadGivesTheDefaults() {
         defaults.set(Data("no json".utf8), forKey: ShortcutStore.key)
-        XCTAssertEqual(ShortcutStore.load(from: defaults), [:])
+        XCTAssertEqual(ShortcutStore.load(from: defaults), ShortcutChoices())
         // An action that this build does not know is left out.
         defaults.set(Data(#"{"later":{"keyCode":37,"modifiers":8,"key":"L"},"toggle":{"keyCode":35,"modifiers":10,"key":"P"}}"#.utf8), forKey: ShortcutStore.key)
-        XCTAssertEqual(ShortcutStore.load(from: defaults), [.toggle: shortcut([.option, .command], "P", keyCode: 35)])
+        XCTAssertEqual(ShortcutStore.load(from: defaults).recorded, [.toggle: shortcut([.option, .command], "P", keyCode: 35)])
     }
 }

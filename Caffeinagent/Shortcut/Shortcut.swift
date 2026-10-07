@@ -150,24 +150,92 @@ enum ShortcutRules {
     }
 }
 
-/// The shortcuts in UserDefaults, as one JSON value. None is set until the
-/// user records one.
-enum ShortcutStore {
-    static let key = "Shortcuts"
+extension ShortcutAction {
+    /// The shortcut of an action that the user never changed. Three
+    /// modifiers, so it takes no key that another app or macOS uses.
+    var defaultShortcut: Shortcut {
+        switch self {
+        case .toggle: return Shortcut(keyCode: 8, modifiers: [.control, .option, .command], key: "C")
+        case .pauseOneHour: return Shortcut(keyCode: 35, modifiers: [.control, .option, .command], key: "P")
+        }
+    }
+}
 
-    static func load(from defaults: UserDefaults) -> [ShortcutAction: Shortcut] {
-        guard let data = defaults.data(forKey: key),
-              let stored = try? JSONDecoder().decode([String: Shortcut].self, from: data) else { return [:] }
-        var shortcuts: [ShortcutAction: Shortcut] = [:]
-        for (name, shortcut) in stored {
-            if let action = ShortcutAction(rawValue: name) { shortcuts[action] = shortcut }
+/// What the user did with the shortcuts. An action that is in neither
+/// part was never changed and has its default.
+struct ShortcutChoices: Equatable {
+    /// The shortcuts the user recorded.
+    var recorded: [ShortcutAction: Shortcut] = [:]
+    /// The actions whose shortcut the user cleared.
+    var cleared: Set<ShortcutAction> = []
+
+    /// Nil clears the shortcut.
+    mutating func set(_ shortcut: Shortcut?, for action: ShortcutAction) {
+        recorded[action] = shortcut
+        if shortcut == nil { cleared.insert(action) } else { cleared.remove(action) }
+    }
+
+    /// Back to the default.
+    mutating func reset(_ action: ShortcutAction) {
+        recorded[action] = nil
+        cleared.remove(action)
+    }
+
+    /// True when the user recorded or cleared the shortcut of the action.
+    func isChanged(_ action: ShortcutAction) -> Bool {
+        recorded[action] != nil || cleared.contains(action)
+    }
+
+    /// The shortcut of each action. A default gives way to a shortcut the
+    /// user recorded for another action with the same keys.
+    var shortcuts: [ShortcutAction: Shortcut] {
+        var shortcuts = recorded
+        for action in ShortcutAction.allCases where !isChanged(action) {
+            let fallback = action.defaultShortcut
+            if !recorded.values.contains(where: { $0.keys == fallback.keys }) { shortcuts[action] = fallback }
         }
         return shortcuts
     }
 
-    static func save(_ shortcuts: [ShortcutAction: Shortcut], to defaults: UserDefaults) {
-        guard !shortcuts.isEmpty else { return defaults.removeObject(forKey: key) }
-        let stored = Dictionary(uniqueKeysWithValues: shortcuts.map { ($0.key.rawValue, $0.value) })
+    /// Why the default of an action must not be registered. Nil for a
+    /// shortcut the user recorded: the rules checked it when it was set.
+    /// - Parameter system: the shortcuts that are switched on in System Settings.
+    func defaultProblem(for action: ShortcutAction, system: Set<Shortcut.Keys>) -> ShortcutProblem? {
+        guard !isChanged(action), let shortcut = shortcuts[action] else { return nil }
+        return ShortcutRules.problem(shortcut, system: system)
+    }
+}
+
+/// What the user did with the shortcuts, in UserDefaults: the recorded
+/// ones as one JSON value, the cleared actions as a list of names. A
+/// default is never written, so a later default reaches every user who
+/// did not change the shortcut.
+enum ShortcutStore {
+    static let key = "Shortcuts"
+    static let clearedKey = "ShortcutsCleared"
+
+    static func load(from defaults: UserDefaults) -> ShortcutChoices {
+        var choices = ShortcutChoices()
+        if let data = defaults.data(forKey: key),
+           let stored = try? JSONDecoder().decode([String: Shortcut].self, from: data) {
+            for (name, shortcut) in stored {
+                if let action = ShortcutAction(rawValue: name) { choices.recorded[action] = shortcut }
+            }
+        }
+        for name in defaults.stringArray(forKey: clearedKey) ?? [] {
+            if let action = ShortcutAction(rawValue: name), choices.recorded[action] == nil { choices.cleared.insert(action) }
+        }
+        return choices
+    }
+
+    static func save(_ choices: ShortcutChoices, to defaults: UserDefaults) {
+        if choices.cleared.isEmpty {
+            defaults.removeObject(forKey: clearedKey)
+        } else {
+            defaults.set(choices.cleared.map(\.rawValue).sorted(), forKey: clearedKey)
+        }
+        guard !choices.recorded.isEmpty else { return defaults.removeObject(forKey: key) }
+        let stored = Dictionary(uniqueKeysWithValues: choices.recorded.map { ($0.key.rawValue, $0.value) })
         guard let data = try? JSONEncoder().encode(stored) else { return }
         defaults.set(data, forKey: key)
     }

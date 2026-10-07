@@ -130,9 +130,10 @@ final class StateAggregator: ObservableObject {
             MenuBarVisibility.set(showMenuBarIcon, in: defaults)
         }
     }
-    /// The keyboard shortcuts that work in every app. None until the user
-    /// records one.
-    @PublishedOnChange private(set) var shortcuts: [ShortcutAction: Shortcut]
+    /// What the user did with the keyboard shortcuts that work in every
+    /// app. An action the user never changed has its default.
+    @PublishedOnChange private(set) var shortcutChoices: ShortcutChoices
+    var shortcuts: [ShortcutAction: Shortcut] { shortcutChoices.shortcuts }
     /// Why the shortcut of an action was not taken or does not work.
     @PublishedOnChange private(set) var shortcutProblems: [ShortcutAction: ShortcutProblem] = [:]
     /// The tab Preferences shows, so the menu can open one.
@@ -249,7 +250,7 @@ final class StateAggregator: ObservableObject {
         self.enabled = enabled
         self.pause = pause
         self.reachable = reachable
-        self.shortcuts = ShortcutStore.load(from: defaults)
+        self.shortcutChoices = ShortcutStore.load(from: defaults)
         self.mode = mode
         self.settings = settings
         self.notices = AgentNoticeSettings.load(from: defaults)
@@ -514,15 +515,28 @@ final class StateAggregator: ObservableObject {
     /// one as it is, and Preferences says why.
     func setShortcut(_ shortcut: Shortcut?, for action: ShortcutAction) {
         if let shortcut {
-            let others = shortcuts.filter { $0.key != action }.map(\.value)
+            // A default of another action gives way, so it does not count.
+            let others = shortcutChoices.recorded.filter { $0.key != action }.map(\.value)
             if let problem = ShortcutRules.problem(shortcut, system: hotKeys.systemShortcuts, others: others) {
                 shortcutProblems[action] = problem
                 return
             }
         }
-        shortcuts[action] = shortcut
-        ShortcutStore.save(shortcuts, to: defaults)
-        register(action)
+        shortcutChoices.set(shortcut, for: action)
+        shortcutsChanged()
+    }
+
+    /// Back to the default shortcut of the action.
+    func resetShortcut(for action: ShortcutAction) {
+        shortcutChoices.reset(action)
+        shortcutsChanged()
+    }
+
+    /// All of them: a change of one can take or give back the default of
+    /// the other.
+    private func shortcutsChanged() {
+        ShortcutStore.save(shortcutChoices, to: defaults)
+        registerShortcuts()
     }
 
     /// While Preferences records a shortcut, none of them is registered.
@@ -540,13 +554,15 @@ final class StateAggregator: ObservableObject {
     }
 
     private func register(_ action: ShortcutAction) {
-        let registered = hotKeys.register(shortcuts[action], for: action) { [weak self] in
+        // A default that macOS uses is not registered. Preferences says why.
+        let problem = shortcutChoices.defaultProblem(for: action, system: hotKeys.systemShortcuts)
+        let registered = hotKeys.register(problem == nil ? shortcuts[action] : nil, for: action) { [weak self] in
             switch action {
             case .toggle: self?.toggleEnabled()
             case .pauseOneHour: self?.startPause(.oneHour)
             }
         }
-        shortcutProblems[action] = registered ? nil : .usedByAnotherApp
+        shortcutProblems[action] = problem ?? (registered ? nil : .usedByAnotherApp)
     }
 
     // MARK: Engine
