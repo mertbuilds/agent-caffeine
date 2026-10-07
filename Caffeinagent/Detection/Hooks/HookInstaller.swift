@@ -108,8 +108,11 @@ enum HookConfigEditor {
     /// The text that `installing` adds our entries to: the document
     /// without entries of an older build, `{}` for a blank file.
     static func clearedForInstall(_ text: [UInt8], entry: HookCatalogEntry, keeping: Set<[String]> = []) throws -> [UInt8] {
-        try uninstalling(from: isBlank(text) ? Array("{}\n".utf8) : text, entry: entry, keeping: keeping)
+        try uninstalling(from: isBlank(text) ? blankDocument : text, entry: entry, keeping: keeping)
     }
+
+    /// What "on" starts from in a blank file.
+    static let blankDocument: [UInt8] = Array("{}\n".utf8)
 
     static let versionKey = "version"
     static let flatVersion = 1
@@ -130,6 +133,41 @@ enum HookConfigEditor {
         var found: Set<[String]> = members.isEmpty ? [keyPath] : []
         for member in members where member.value.elements?.isEmpty ?? false { found.insert(keyPath + [member.key]) }
         return found
+    }
+
+    /// What "on" writes over for good: the bytes between the brackets of
+    /// an object or a list that is empty and still holds a space or a
+    /// line break (`{ }`, `"hooks": { }`, `"Stop": [ ]`). Our first entry
+    /// takes their place. The root, the objects on the key path and the
+    /// event lists are looked at.
+    static func emptyInteriors(in text: [UInt8], entry: HookCatalogEntry) -> [HookInstallRecord.Interior] {
+        guard let (keyPath, _) = entry.format.jsonLayout, !isBlank(text), let root = try? validated(text) else { return [] }
+        var found: [HookInstallRecord.Interior] = []
+        func note(_ node: JSONSourceNode, at path: [String]) {
+            guard node.childRanges.isEmpty, node.members != nil || node.elements != nil, node.range.count > 2 else { return }
+            found.append(HookInstallRecord.Interior(path: path, bytes: Data(text[(node.range.lowerBound + 1)..<(node.range.upperBound - 1)])))
+        }
+        var current = root
+        note(current, at: [])
+        for (index, key) in keyPath.enumerated() {
+            guard let next = (try? uniqueMember(key, of: current))??.value else { return found }
+            current = next
+            note(current, at: Array(keyPath.prefix(index + 1)))
+        }
+        for member in current.members ?? [] { note(member.value, at: keyPath + [member.key]) }
+        return found
+    }
+
+    /// Puts the bytes of `emptyInteriors` back, each where its object or
+    /// list is there and has nothing between its brackets.
+    static func restoring(_ interiors: [HookInstallRecord.Interior], in text: [UInt8]) -> [UInt8] {
+        var bytes = text
+        for interior in interiors where isBlank(Array(interior.bytes)) {
+            guard let node = try? node(at: interior.path, in: JSONSourceText(bytes)),
+                  node.members != nil || node.elements != nil, node.range.count == 2 else { continue }
+            bytes.insert(contentsOf: interior.bytes, at: node.range.lowerBound + 1)
+        }
+        return bytes
     }
 
     private static func node(at path: [String], in source: JSONSourceText) throws -> JSONSourceNode {
@@ -359,6 +397,17 @@ struct HookInstallRecord: Codable, Equatable {
     /// "On" added the top-level `"version": 1` of the flat form, and "off"
     /// takes it out again. Nil in a record of an older build.
     var addedVersion: Bool?
+    /// The bytes of a file that held nothing but spaces and line breaks,
+    /// or nothing at all. "On" needs a `{}` there, and "off" puts these
+    /// back.
+    var blankBefore: Data?
+    /// See `HookConfigEditor.emptyInteriors`. "Off" puts them back.
+    var interiors: [Interior]?
+
+    struct Interior: Codable, Equatable {
+        var path: [String]
+        var bytes: Data
+    }
 }
 
 /// The thin shell around `HookConfigEditor`: it reads the file, writes a
@@ -458,7 +507,12 @@ struct HookInstaller {
         let earlier = old.map { HookConfigEditor.status(text: $0, entry: entry, appPath: appPath) } == .outdated ? record(for: entry) : nil
         let created = old == nil || (earlier?.createdFile ?? false)
         let addedVersion = try HookConfigEditor.lacksVersion(cleared, entry: entry) || (earlier?.addedVersion ?? false)
-        save(HookInstallRecord(emptyBefore: empty.sorted { $0.lexicographicallyPrecedes($1) }, createdFile: created, addedVersion: addedVersion ? true : nil), for: entry)
+        let blank = earlier?.blankBefore ?? old.flatMap { HookConfigEditor.isBlank($0) ? Data($0) : nil }
+        let interiors = earlier?.interiors ?? HookConfigEditor.emptyInteriors(in: cleared, entry: entry)
+        save(HookInstallRecord(
+            emptyBefore: empty.sorted { $0.lexicographicallyPrecedes($1) }, createdFile: created, addedVersion: addedVersion ? true : nil,
+            blankBefore: blank, interiors: interiors.isEmpty ? nil : interiors
+        ), for: entry)
     }
 
     func uninstall(_ entry: HookCatalogEntry) throws {
@@ -470,9 +524,14 @@ struct HookInstaller {
             guard (try? FileManager.default.removeItem(at: url)) != nil else { throw HookInstallError.writeFailed }
         case .jsonHookGroups, .jsonFlatHooks:
             let known = record(for: entry)
-            let new = try HookConfigEditor.uninstalling(
+            var new = try HookConfigEditor.uninstalling(
                 from: old, entry: entry, keeping: Set(known?.emptyBefore ?? []), removingVersion: known?.addedVersion == true
             )
+            // The bytes that "on" could not keep in the file.
+            if new != old {
+                new = HookConfigEditor.restoring(known?.interiors ?? [], in: new)
+                if let blank = known?.blankBefore, HookConfigEditor.isBlank(Array(blank)), new == HookConfigEditor.blankDocument { new = Array(blank) }
+            }
             if known?.createdFile == true, new != old, HookConfigEditor.isEmptyDocument(new) {
                 try remove(url, holding: old)
             } else {

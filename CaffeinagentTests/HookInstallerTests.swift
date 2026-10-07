@@ -233,7 +233,54 @@ final class HookInstallerTests: XCTestCase {
         try installer.install(claude)
         XCTAssertEqual(installer.status(of: claude), .installed(version: HookCatalog.version))
         try installer.uninstall(claude)
-        XCTAssertEqual(try text(of: claude), "{}\n")
+        XCTAssertEqual(try text(of: claude), "", "The file is blank again")
+    }
+
+    /// What "on" cannot keep in the file: the bytes of a blank file, and
+    /// the space inside an empty object or list. They are in the record,
+    /// and "off" puts them back.
+    func testOnThenOffGivesTheSameBytesForABlankFileAndForSpacedEmptyContainers() throws {
+        let cases: [(HookCatalogEntry, String)] = [
+            (claude, ""), (claude, "\n"), (claude, "  \r\n\t"),
+            (claude, "{ }"), (claude, "{ }\n"), (claude, "{\n}\n"), (codex, "{\n\n}"),
+            (claude, "{\"hooks\": { }}"), (claude, "{\"hooks\": {\n  }\n}\n"),
+            (droid, "{\n  \"hooks\": {\n  },\n  \"model\": \"m\"\n}\n"),
+            (claude, "{\"hooks\": {\"Stop\": [ ]}}"), (codex, "{\"hooks\": { \"Stop\": [\n    ], \"PreCompact\": [ ] }}\n"),
+            (HookCatalog.entry(id: "cursor")!, ""), (HookCatalog.entry(id: "cursor")!, "{ }"),
+            (HookCatalog.entry(id: "cursor")!, "{\"version\": 1, \"hooks\": { }}"),
+            (HookCatalog.entry(id: "cursor")!, "{\"hooks\": {\"stop\": [ ]}}"),
+        ]
+        try FileManager.default.createDirectory(at: home.appendingPathComponent(".cursor"), withIntermediateDirectories: true)
+        for (entry, original) in cases {
+            try write(original, for: entry)
+            try installer.install(entry)
+            XCTAssertEqual(installer.status(of: entry), .installed(version: HookCatalog.version), original.debugDescription)
+            try installer.uninstall(entry)
+            XCTAssertEqual(try text(of: entry), original, original.debugDescription)
+            XCTAssertNil(installer.record(for: entry))
+        }
+        // Also after an update of our entries in between.
+        for original in ["", "{ }", "{\"hooks\": { }}"] {
+            try write(original, for: claude)
+            try HookInstaller(home: home, appPath: "/Users/me/Downloads/agent caffeine.app").install(claude)
+            try installer.install(claude)
+            try installer.uninstall(claude)
+            XCTAssertEqual(try text(of: claude), original, original.debugDescription)
+        }
+        // Without the record the file is valid, and not the same.
+        try write("{ }", for: claude)
+        try installer.install(claude)
+        try FileManager.default.removeItem(at: installer.recordsDirectory)
+        try installer.uninstall(claude)
+        XCTAssertEqual(try text(of: claude), "{}")
+        // What the user wrote into the file since stays as it is.
+        try write("", for: claude)
+        try installer.install(claude)
+        var source = JSONSourceText(Array(try text(of: claude).utf8))
+        source.append(to: try source.parsed()) { _ in "\"model\": \"m\"" }
+        try Data(source.bytes).write(to: installer.configURL(for: claude))
+        try installer.uninstall(claude)
+        XCTAssertEqual(try json(of: claude), ["model": "m"])
     }
 
     func testInstallIsRefusedWhenTheAgentIsNotSetUpOrTheFileIsBroken() throws {
