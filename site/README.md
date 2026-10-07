@@ -14,3 +14,7 @@ The site reads them over HTTPS with no credentials. Set `MAC_FILES_ORIGIN` to an
 Without it the page shows only the buy button. The same happens while `latest.json` cannot be read, and the server log then says why.
 
 To see the page with a download while none is published, put `NEXT_PUBLIC_FAKE_RELEASE=1` in `.env.development.local`. The dev server then shows a sample release whose link goes nowhere. A production build ignores it.
+
+## Link preview picture
+
+`public/og.png` (1200 by 630) is a picture of the page at `/og-image`, which only the dev server draws; a production build answers "not found" there. The page takes the price from `lib/pricing.ts`. After a change to the price, the headline or the icon, run `scripts/og-image.sh` with the dev server up and commit the new `public/og.png`. The script needs the `ego-browser` CLI.
