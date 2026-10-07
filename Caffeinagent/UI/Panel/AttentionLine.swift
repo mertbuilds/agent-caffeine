@@ -13,11 +13,21 @@ struct AttentionLine: View {
                     .fixedSize()
                 actions
             }
-            VStack(spacing: 4) {
-                message
-                    .multilineTextAlignment(.center)
-                    .fixedSize(horizontal: false, vertical: true)
-                actions
+            if attention.actions == [.dismissSleepNote] {
+                // The cross stays next to a text of two lines.
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    message
+                        .fixedSize(horizontal: false, vertical: true)
+                    Spacer(minLength: 0)
+                    actions
+                }
+            } else {
+                VStack(spacing: 4) {
+                    message
+                        .multilineTextAlignment(.center)
+                        .fixedSize(horizontal: false, vertical: true)
+                    actions
+                }
             }
         }
         .font(.callout)
@@ -37,7 +47,7 @@ struct AttentionLine: View {
         if !attention.actions.isEmpty {
             HStack(spacing: 10) {
                 ForEach(attention.actions, id: \.title) { action in
-                    if action == .dismissLidClosedHint {
+                    if action == .dismissLidClosedHint || action == .dismissSleepNote {
                         Button { perform(action) } label: {
                             Label(action.title, systemImage: "xmark")
                                 .labelStyle(.iconOnly)
@@ -62,6 +72,7 @@ struct AttentionLine: View {
         case .safetyStop, .helperSwitchedOff, .helperNotResponding, .helperLost: return "exclamationmark.triangle.fill"
         case .license: return "key.fill"
         case .lidClosedNotSetUp, .reachableNeedsLidClosed: return "laptopcomputer"
+        case .sleptAnyway: return "moon.zzz"
         }
     }
 
@@ -69,7 +80,7 @@ struct AttentionLine: View {
         switch attention.kind {
         case .safetyStop, .helperNotResponding, .helperLost, .license, .reachableNeedsLidClosed: return .orange
         case .helperSwitchedOff: return .red
-        case .lidClosedNotSetUp: return .secondary
+        case .lidClosedNotSetUp, .sleptAnyway: return .secondary
         }
     }
 }

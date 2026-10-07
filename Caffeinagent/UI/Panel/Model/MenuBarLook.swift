@@ -44,13 +44,14 @@ struct MenuBarLook: Equatable, Hashable {
         self.paused = paused
     }
 
-    /// What VoiceOver says for the item in the menu bar.
+    /// What VoiceOver says for the item in the menu bar, and its tooltip.
     var accessibilityLabel: String {
         switch eyes {
-        case .happy, .open: return "agent caffeine, Mac stays awake"
-        case .closed where paused: return "agent caffeine, paused"
-        case .closed: return opacity < 1 ? "agent caffeine, off" : "agent caffeine, Mac can sleep"
-        case .dead: return "agent caffeine, needs attention"
+        case .happy: return PanelText.menuBarAwake
+        case .open: return PanelText.menuBarWaiting
+        case .closed where paused: return PanelText.menuBarPaused
+        case .closed: return opacity < 1 ? PanelText.menuBarOff : PanelText.menuBarCanSleep
+        case .dead: return PanelText.menuBarNeedsAttention
         }
     }
 }

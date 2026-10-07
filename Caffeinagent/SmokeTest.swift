@@ -50,7 +50,8 @@ enum SmokeTest {
             hotKeys: NoHotKeys(),
             display: nil,
             notify: { _ in },
-            notifier: nil
+            notifier: nil,
+            loginItem: NoLoginItem()
         )
         meter.start()
         every(SmokeHealth.tickInterval) { meter.tick() }
@@ -464,6 +465,12 @@ private struct NoHelperService: HelperServiceManaging {
     func register() throws {}
     func unregister() async throws {}
     func openLoginItemsSettings() {}
+}
+
+private struct NoLoginItem: LoginItemManaging {
+    var status: LoginItemStatus { .notRegistered }
+    func register() throws {}
+    func unregister() throws {}
 }
 
 private struct NoHelper: SleepFlagHelperConnecting {

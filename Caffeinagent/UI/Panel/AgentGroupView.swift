@@ -6,22 +6,27 @@ import SwiftUI
 struct AgentGroupView: View {
     let group: PanelGroup
     let isOpen: Bool
+    var perform: (PanelAction) -> Void = { _ in }
     let toggle: () -> Void
 
     var body: some View {
         let layout = Self.childLayout(of: group)
         VStack(alignment: .leading, spacing: 0) {
-            if group.canToggle {
-                Button(action: toggle) {
-                    AgentRowView(row: group.header, summary: Self.summaryPlace(group), isOpen: isOpen)
+            Group {
+                if group.canToggle {
+                    Button(action: toggle) {
+                        AgentRowView(row: group.header, summary: Self.summaryPlace(group), isOpen: isOpen)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(group.accessibilityLabel)
+                    .accessibilityValue(isOpen ? PanelText.expanded : PanelText.collapsed)
+                } else {
+                    AgentRowView(row: group.header, summary: Self.summaryPlace(group))
                         .contentShape(Rectangle())
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(group.accessibilityLabel)
-                .accessibilityValue(isOpen ? PanelText.expanded : PanelText.collapsed)
-            } else {
-                AgentRowView(row: group.header, summary: Self.summaryPlace(group))
             }
+            .contextMenu { AgentRuleMenu(agentID: group.id, rule: group.rule, perform: perform) }
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(group.children) { AgentChildView(child: $0, layout: layout) }
             }
@@ -54,5 +59,25 @@ struct AgentGroupView: View {
         guard group.canToggle else { return 0 }
         let layout = childLayout(of: group)
         return group.children.reduce(PanelMetrics.childrenBottom) { $0 + AgentChildView.height(of: $1, layout: layout) }
+    }
+}
+
+/// The menu of an agent's row: the rule of the agent, for an agent that
+/// reads idle while it works, and the way to its settings. A rule that is
+/// set has a check mark, and choosing it again takes it away.
+struct AgentRuleMenu: View {
+    let agentID: String
+    let rule: AgentRule
+    let perform: (PanelAction) -> Void
+
+    var body: some View {
+        ForEach([AgentRule.alwaysWorkingWhileOpen, .ignore], id: \.self) { choice in
+            Toggle(PanelAction.setAgentRule(agentID: agentID, rule: choice).title, isOn: Binding(
+                get: { rule == choice },
+                set: { perform(.setAgentRule(agentID: agentID, rule: $0 ? choice : .automatic)) }
+            ))
+        }
+        Divider()
+        Button(PanelAction.openAgentSettings.title) { perform(.openAgentSettings) }
     }
 }

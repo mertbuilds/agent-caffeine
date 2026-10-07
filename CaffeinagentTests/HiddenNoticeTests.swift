@@ -5,7 +5,8 @@ final class HiddenNoticeTests: XCTestCase {
         let cases: [(flagLeftOn: Bool, silent: Bool, entitlement: Entitlement, want: HiddenNotice?)] = [
             (false, false, .licensed, nil),
             (false, false, .trial(daysLeft: 1), nil),
-            (false, false, .expired(.trialOver), .licenseExpired(.trialOver)),
+            // The end of the trial has a notification of its own.
+            (false, false, .expired(.trialOver), nil),
             (false, false, .expired(.unverified), .licenseExpired(.unverified)),
             (false, false, .expired(.activationRemoved), .licenseExpired(.activationRemoved)),
             (true, false, .licensed, .helperSwitchedOff),
@@ -50,10 +51,10 @@ final class HiddenNoticeTests: XCTestCase {
     }
 
     func testNotificationText() {
-        XCTAssertEqual(HiddenNotice.helperSwitchedOff.notificationText, "agent caffeine cannot let your Mac sleep because it was switched off in Login Items")
+        XCTAssertEqual(HiddenNotice.helperSwitchedOff.notificationText, "Your Mac cannot sleep. Allow agent caffeine again in System Settings > General > Login Items.")
         XCTAssertEqual(
             HiddenNotice.helperNotResponding.notificationText,
-            "agent caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery"
+            "agent caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery."
         )
         XCTAssertEqual(HiddenNotice.licenseExpired(.trialOver).notificationText, "agent caffeine cannot keep your Mac awake because your trial has ended")
         XCTAssertEqual(HiddenNotice.licenseExpired(.unverified).notificationText, "agent caffeine cannot keep your Mac awake because your license was not checked for 30 days")

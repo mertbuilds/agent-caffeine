@@ -11,9 +11,9 @@ enum LicenseMessage: Equatable {
 
     var text: String {
         switch self {
-        case .limitReached: return "This key is already in use on a Mac. If an earlier attempt on this Mac did not finish, release the key in your Polar purchases, then try again."
+        case .limitReached: return "This key is in use on as many Macs as it allows. Choose Deactivate this Mac on one of them, then try again."
         case .notFound: return "Polar does not recognize this key. Check it for typos."
-        case .revoked: return "This key was turned off. Contact support."
+        case .revoked: return "This key was turned off."
         case .unavailable: return "agent caffeine could not reach Polar. Check your connection and try again."
         case .activationGone: return "This Mac is no longer activated for this key. Activate it again."
         }
@@ -160,9 +160,10 @@ final class LicenseManager: ObservableObject {
         }
 
         switch await client.activate(key: key, label: label) {
-        case .activated(let id):
+        case .activated(let id, let macs):
             record.key = key
             record.activationID = id
+            record.macLimit = macs
             record.lastValidated = currentTime
             message = nil
         case .limitReached:
@@ -254,6 +255,11 @@ final class LicenseManager: ObservableObject {
     }
 
     // MARK: - State
+
+    /// When the trial ends or ended. Nil before the first launch is stored.
+    var trialEnd: Date? {
+        record.trialStart.map { $0.addingTimeInterval(LicenseRules.trialLength) }
+    }
 
     private var currentTime: Date {
         LicenseRules.effectiveNow(now(), latestSeen: record.latestSeen)

@@ -149,15 +149,15 @@ final class SafetyMonitorTests: XCTestCase {
     func testTexts() {
         XCTAssertEqual(
             NoLimitBatteryWarning.notificationText(percent: 10),
-            "The battery is at 10%. agent caffeine keeps your Mac awake because the battery limit is off"
+            "The battery is at 10%. agent caffeine keeps your Mac awake because the battery limit is off."
         )
         XCTAssertEqual(
             NoLimitBatteryWarning.notificationText(percent: 5),
-            "The battery is at 5%. agent caffeine keeps your Mac awake because the battery limit is off"
+            "The battery is at 5%. agent caffeine keeps your Mac awake because the battery limit is off."
         )
         var settings = DetectionSettings()
         settings.batteryFloorPercent = 35
-        XCTAssertEqual(SafetyText.stillSleeps(settings), "Your Mac still sleeps below 35% battery and when it gets too hot.")
+        XCTAssertEqual(SafetyText.stillSleeps(settings), "Your Mac still sleeps when the battery is at 35% and when it gets too hot.")
         settings.batteryFloorEnabled = false
         XCTAssertEqual(SafetyText.stillSleeps(settings), "Your Mac still sleeps when it gets too hot. The battery limit is off.")
         XCTAssertTrue(SafetyText.alwaysTold(batteryFloorEnabled: true).contains("because the battery is low or your Mac got too hot"))

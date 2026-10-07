@@ -46,6 +46,10 @@ struct LicenseRecord: Codable, Equatable {
     /// The latest time the app has seen, so a clock set back counts no time
     /// backwards, and time the app measured itself still counts forward.
     var latestSeen: Date?
+    /// On how many Macs the key runs, from Polar's answer to the
+    /// activation. Nil when it did not say, and for a key that was
+    /// activated by an older build.
+    var macLimit: Int?
 }
 
 enum LicenseRules {

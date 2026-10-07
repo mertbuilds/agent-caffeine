@@ -53,6 +53,7 @@ struct BottomBar: View, Equatable {
                     Button(action == .buy ? PanelText.buyInMenu : action.title) { perform(action) }
                 }
                 Divider()
+                Button(PanelText.help) { perform(.openHelp) }
                 Button(PanelText.quit, action: quit)
             } label: {
                 Label(PanelText.gearMenu, systemImage: "gearshape")
@@ -63,15 +64,16 @@ struct BottomBar: View, Equatable {
             .tint(.secondary)
             .fixedSize()
             .frame(minWidth: PanelMetrics.controlHeight, minHeight: PanelMetrics.controlHeight)
+            .help(PanelText.gearMenu)
 
             // One click from the switch: a pause, and its opposite. Off
             // and paused have nothing to pause, and while the Mac stays
             // reachable the bar needs the room for the time and "Stop".
             if enabled, bar.pausedLabel == nil, bar.reachableLabel == nil {
                 Menu {
-                    Section { pauseChoices }
+                    Section(PanelText.pauseHeader) { pauseChoices }
                     if !bar.reachableActions.isEmpty {
-                        Section { reachableChoices }
+                        Section(PanelText.reachableHeader) { reachableChoices }
                     }
                 } label: {
                     Label(PanelText.timerMenu, systemImage: "timer")
@@ -82,6 +84,7 @@ struct BottomBar: View, Equatable {
                 .tint(.secondary)
                 .fixedSize()
                 .frame(minWidth: PanelMetrics.controlHeight, minHeight: PanelMetrics.controlHeight)
+                .help(PanelText.timerMenu)
             }
 
             Toggle(PanelText.mainSwitch, isOn: $enabled)

@@ -42,6 +42,7 @@ final class MenuModelTests: XCTestCase {
     func testHeadlinePairs() {
         let awake = "Your Mac stays awake"
         let canSleep = "Your Mac can sleep"
+        let stopped = "agent caffeine has stopped"
         let cases: [(HoldHeadline, String, String)] = [
             (.working(.one("Claude Code")), awake, "Claude Code is working"),
             (.working(.many(2)), awake, "2 agents are working"),
@@ -51,20 +52,20 @@ final class MenuModelTests: XCTestCase {
             (.finishedRecently(.many(3)), awake, "3 agents finished a moment ago"),
             (.open(.one("opencode")), awake, "opencode is open"),
             (.open(.many(4)), awake, "4 agents are open"),
-            (.alwaysOn, awake, "Until you switch it off"),
-            (.remoteAccess, awake, "Phone access is on"),
+            (.alwaysOn, awake, "Until you turn it off"),
+            (.remoteAccess, awake, "Reachable while plugged in"),
             (.reachable(until: now.addingTimeInterval(3600)), awake, "Reachable until \(PanelText.time(now.addingTimeInterval(3600)))"),
             (.idle(.one("Codex")), canSleep, "Codex is idle"),
             (.idle(.many(5)), canSleep, "All agents are idle"),
-            (.waitingReleased(.one("Codex")), canSleep, "Codex is waiting for your answer"),
-            (.waitingReleased(.many(2)), canSleep, "2 agents are waiting for your answer"),
+            (.waitingReleased(.one("Codex")), canSleep, "Codex is waiting for you"),
+            (.waitingReleased(.many(2)), canSleep, "2 agents are waiting for you"),
             (.noAgents, canSleep, "No agent is open"),
-            (.safetyStop(.batteryLow(percent: 20)), canSleep, "The battery is at 20%"),
-            (.safetyStop(.tooHot), canSleep, "Your Mac got too hot"),
+            (.safetyStop(.batteryLow(percent: 20)), stopped, "The battery is at 20%"),
+            (.safetyStop(.tooHot), stopped, "Your Mac got too hot"),
             (.switchedOff, "agent caffeine is off", "Your Mac sleeps as usual"),
-            (.notEntitled(.trialOver), canSleep, "Your trial has ended"),
-            (.notEntitled(.unverified), canSleep, "Your license was not checked for 30 days"),
-            (.notEntitled(.activationRemoved), canSleep, "This Mac is no longer activated"),
+            (.notEntitled(.trialOver), stopped, "Your trial has ended"),
+            (.notEntitled(.unverified), stopped, "Your license was not checked for 30 days"),
+            (.notEntitled(.activationRemoved), stopped, "This Mac is no longer activated"),
         ]
         for (headline, title, subtitle) in cases {
             let state = MenuModel.state(input(headline), now: now)
@@ -164,14 +165,14 @@ final class MenuModelTests: XCTestCase {
             var input = input(headline)
             input.flagLeftOn = true
             let state = MenuModel.state(input, now: now)
-            XCTAssertEqual(state.title, "Your Mac may not sleep", "\(headline)")
-            XCTAssertEqual(state.subtitle, "agent caffeine was switched off in Login Items", "\(headline)")
+            XCTAssertEqual(state.title, "Your Mac cannot sleep", "\(headline)")
+            XCTAssertEqual(state.subtitle, "The helper of agent caffeine was turned off in Login Items", "\(headline)")
             XCTAssertEqual(state.attention?.actions.map(\.title), ["Open System Settings"], "\(headline)")
         }
         // A safety stop keeps its own headline, as it keeps its robot.
         var stopped = input(.safetyStop(.tooHot))
         stopped.flagLeftOn = true
-        XCTAssertEqual(MenuModel.state(stopped, now: now).title, "Your Mac can sleep")
+        XCTAssertEqual(MenuModel.state(stopped, now: now).title, "agent caffeine has stopped")
     }
 
     // MARK: Pause
@@ -220,7 +221,7 @@ final class MenuModelTests: XCTestCase {
         var stopped = pausedInput(until: now.addingTimeInterval(600))
         stopped.decision.headline = .safetyStop(.tooHot)
         let state = MenuModel.state(stopped, now: now)
-        XCTAssertEqual(state.title, "Your Mac can sleep")
+        XCTAssertEqual(state.title, "agent caffeine has stopped")
         XCTAssertEqual(state.pausedLabel, "Paused until 13:56")
     }
 
@@ -242,7 +243,7 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(state.title, "Your Mac stays awake")
         XCTAssertEqual(state.subtitle, "Reachable until 18:30")
         XCTAssertEqual(state.reachableLabel, "Reachable until 18:30")
-        XCTAssertEqual(state.menuBarAccessibilityLabel, "agent caffeine, reachable until 18:30")
+        XCTAssertEqual(state.menuBarAccessibilityLabel, "agent caffeine: reachable until 18:30")
         XCTAssertNil(state.pausedLabel)
         XCTAssertNil(state.attention)
         func plain(_ text: String?) -> String? { text?.replacingOccurrences(of: "\u{202F}", with: " ") }
@@ -305,7 +306,7 @@ final class MenuModelTests: XCTestCase {
         input.lidClosedHintDismissed = true
         let attention = MenuModel.state(input, now: now).attention
         XCTAssertEqual(attention?.kind, .reachableNeedsLidClosed)
-        XCTAssertEqual(attention?.text, "Close the lid and your Mac still sleeps. Set up lid closed to stay reachable")
+        XCTAssertEqual(attention?.text, "Close the lid and your Mac still sleeps. Set up the helper to stay reachable.")
         XCTAssertEqual(attention?.actions, [.setUpLidClosed])
         XCTAssertEqual(attention?.actions.map(\.title), ["Set up…"])
         // On wall power a closed lid does not put the Mac to sleep.
@@ -505,19 +506,19 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(MenuModel.battery(battery)?.consequence, "starts again at 25%")
         battery.lidClosedNeedsSetup = true
         XCTAssertEqual(MenuModel.attention(battery)?.kind, .lidClosedNotSetUp, "What else needs the user is still said")
-        XCTAssertEqual(MenuModel.attention(input(.safetyStop(.tooHot))), PanelAttention(kind: .safetyStop, text: "agent caffeine starts again when it is cool"))
+        XCTAssertEqual(MenuModel.attention(input(.safetyStop(.tooHot))), PanelAttention(kind: .safetyStop, text: "agent caffeine starts again when your Mac is cool"))
 
         var helper = input(.alwaysOn)
         helper.flagLeftOn = true
         XCTAssertEqual(MenuModel.attention(helper), PanelAttention(
             kind: .helperSwitchedOff,
-            text: "Allow it again and your Mac sleeps as usual",
+            text: "Allow agent caffeine again in Login Items, and your Mac sleeps as usual",
             actions: [.openLoginItems]
         ))
 
         var silent = input(.working(.one("Claude Code")))
         silent.helperNotResponding = true
-        let cannotReach = "agent caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery"
+        let cannotReach = "agent caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery."
         XCTAssertEqual(MenuModel.attention(silent), PanelAttention(kind: .helperNotResponding, text: cannotReach, actions: [.tryHelperAgain]))
         silent.helperRepairTried = true
         XCTAssertEqual(MenuModel.attention(silent), PanelAttention(
@@ -635,10 +636,122 @@ final class MenuModelTests: XCTestCase {
         let state = MenuModel.state(input(.noAgents), now: now)
         XCTAssertEqual(state.groups, [])
         XCTAssertEqual(state.emptyText, "Start an agent and agent caffeine keeps your Mac awake while it works")
-        XCTAssertNil(MenuModel.state(input(.idle(.one("Codex")), [hold("codex", "Codex", pid: 1, .idle, .atPrompt)]), now: now).emptyText)
+        XCTAssertEqual(state.emptyAction, .agentNotListed)
+        XCTAssertEqual(state.emptyAction?.title, "My agent is not listed")
+        let idle = MenuModel.state(input(.idle(.one("Codex")), [hold("codex", "Codex", pid: 1, .idle, .atPrompt)]), now: now)
+        XCTAssertNil(idle.emptyText)
+        XCTAssertNil(idle.emptyAction)
         var always = input(.alwaysOn)
         always.mode = .always
         XCTAssertEqual(MenuModel.state(always, now: now).emptyText, "No agent is open")
+    }
+
+    /// A stop, off, a pause and a Mac that stays awake without an agent:
+    /// a new agent would change nothing, so the list does not ask for one.
+    func testTheEmptyLineInvitesOnlyWhenAnAgentIsAllThatIsMissing() {
+        let headlines: [HoldHeadline] = [
+            .safetyStop(.tooHot), .safetyStop(.batteryLow(percent: 20)), .notEntitled(.trialOver), .notEntitled(.unverified),
+            .notEntitled(.activationRemoved), .switchedOff, .paused(until: now.addingTimeInterval(600)), .alwaysOn, .remoteAccess,
+            .reachable(until: now.addingTimeInterval(600)),
+        ]
+        for headline in headlines {
+            let state = MenuModel.state(input(headline), now: now)
+            XCTAssertEqual(state.emptyText, "No agent is open", "\(headline)")
+            XCTAssertNil(state.emptyAction, "\(headline)")
+            XCTAssertNotEqual(state.subtitle, state.emptyText, "\(headline)")
+        }
+        var helperOff = input(.noAgents)
+        helperOff.flagLeftOn = true
+        XCTAssertEqual(MenuModel.state(helperOff, now: now).emptyText, "No agent is open")
+        XCTAssertNil(MenuModel.state(helperOff, now: now).emptyAction)
+    }
+
+    /// The title of a stop names agent caffeine, so a row that says
+    /// "Working" below it is no contradiction.
+    func testAStopKeepsTheRealStatesOfTheRows() {
+        let working = claude(pid: 1, .working, .reportsBusy)
+        for headline in [HoldHeadline.safetyStop(.tooHot), .safetyStop(.batteryLow(percent: 20)), .notEntitled(.trialOver)] {
+            let state = MenuModel.state(input(headline, [working]), now: now)
+            XCTAssertEqual(state.title, "agent caffeine has stopped", "\(headline)")
+            XCTAssertEqual(state.groups.first?.header.state, .working, "\(headline)")
+        }
+    }
+
+    // MARK: Sleep note
+
+    func testTheSleepNoteIsALineOfItsOwnThatCanBeDismissed() {
+        var input = input(.working(.one("Claude Code")), [claude(pid: 1, .working, .reportsBusy)])
+        input.calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        input.locale = Locale(identifier: "en_GB")
+        XCTAssertNil(MenuModel.state(input, now: now).sleepNote)
+        input.sleepNote = SleepNote(at: Date(timeIntervalSince1970: 2 * 3600 + 14 * 60), reason: .battery(percent: 20))
+        input.entitlement = .trial(daysLeft: 1)
+        let state = MenuModel.state(input, now: now)
+        XCTAssertEqual(state.sleepNote?.kind, .sleptAnyway)
+        XCTAssertEqual(state.sleepNote?.text, "Your Mac slept at 02:14: the battery was at 20%")
+        XCTAssertEqual(state.sleepNote?.actions, [.dismissSleepNote])
+        XCTAssertEqual(state.attention?.kind, .license, "The line that asks for attention stays")
+        input.locale = Locale(identifier: "en_US")
+        XCTAssertEqual(MenuModel.state(input, now: now).sleepNote?.text.replacingOccurrences(of: "\u{202F}", with: " "), "Your Mac slept at 2:14 AM: the battery was at 20%")
+    }
+
+    func testSleepNoteTexts() {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        let at = Date(timeIntervalSince1970: 2 * 3600 + 14 * 60)
+        let cases: [(SleepReason, String)] = [
+            (.lidClosedNoHelper, "the lid was closed on battery and the helper is not set up"),
+            (.lidClosedSettingOff, "the lid was closed on battery and staying awake with the lid closed is turned off"),
+            (.battery(percent: 20), "the battery was at 20%"),
+            (.tooHot, "your Mac got too hot"),
+            (.paused, "agent caffeine was paused"),
+            (.notEntitled(.trialOver), "your trial has ended"),
+            (.notEntitled(.unverified), "your license was not checked for 30 days"),
+            (.notEntitled(.activationRemoved), "this Mac is no longer activated"),
+            (.waitedTooLong(.one("Claude Code"), hold: 300), "Claude Code waited for you longer than 5 minutes"),
+            (.waitedTooLong(.many(2), hold: 60), "2 agents waited for you longer than 1 minute"),
+        ]
+        for (reason, text) in cases {
+            let line = PanelText.slept(SleepNote(at: at, reason: reason), calendar: calendar, locale: Locale(identifier: "en_GB"))
+            XCTAssertEqual(line, "Your Mac slept at 02:14: \(text)")
+            XCTAssertFalse(line.hasSuffix("."))
+        }
+    }
+
+    // MARK: Rules
+
+    func testAGroupKnowsTheRuleOfItsAgent() {
+        var input = input(.idle(.many(2)), [claude(pid: 1, .idle), hold("codex", "Codex", pid: 2, .idle, .atPrompt)])
+        input.settings.agentRules = ["codex": .alwaysWorkingWhileOpen]
+        let rules = Dictionary(uniqueKeysWithValues: MenuModel.groups(input, now: now).inView.map { ($0.id, $0.rule) })
+        XCTAssertEqual(rules, ["claude": .automatic, "codex": .alwaysWorkingWhileOpen])
+        XCTAssertEqual(PanelAction.setAgentRule(agentID: "codex", rule: .alwaysWorkingWhileOpen).title, "This agent is working")
+        XCTAssertEqual(PanelAction.setAgentRule(agentID: "codex", rule: .ignore).title, "Ignore this agent")
+        XCTAssertEqual(PanelAction.openAgentSettings.title, "Open agent settings…")
+    }
+
+    // MARK: Menu bar
+
+    func testTheMenuBarSaysWhyAFadedIconIsNotOff() {
+        XCTAssertNil(MenuModel.state(input(.switchedOff), now: now).menuBarAccessibilityLabel)
+        XCTAssertNil(MenuModel.state(input(.working(.one("Codex"))), now: now).menuBarAccessibilityLabel)
+        let cases: [(ExpiredReason, String)] = [
+            (.trialOver, "agent caffeine: your trial has ended"),
+            (.unverified, "agent caffeine: your license was not checked for 30 days"),
+            (.activationRemoved, "agent caffeine: this Mac is no longer activated"),
+        ]
+        for (reason, label) in cases {
+            XCTAssertEqual(MenuModel.state(input(.notEntitled(reason)), now: now).menuBarAccessibilityLabel, label)
+        }
+    }
+
+    func testTheStartOfASessionFollowsTheClockOfTheUser() {
+        var input = input(.idle(.many(3)), [claude(pid: 1, .idle), claude(pid: 2, .idle), claude(pid: 3, .idle)])
+        input.calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        input.locale = Locale(identifier: "en_US")
+        XCTAssertEqual(childLabels(input).map { $0.replacingOccurrences(of: "\u{202F}", with: " ") }, Array(repeating: "since 12:00 AM", count: 3))
+        input.locale = Locale(identifier: "en_GB")
+        XCTAssertEqual(childLabels(input), Array(repeating: "since 00:00", count: 3))
     }
 
     func testModeTitles() {
@@ -958,6 +1071,7 @@ final class MenuModelTests: XCTestCase {
         input.labels = Dictionary(uniqueKeysWithValues: pids.map { (identity($0), "wiki") })
         input.hints = Dictionary(uniqueKeysWithValues: hints.map { (identity($0.key), $0.value) })
         input.calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        input.locale = Locale(identifier: "en_GB")
         return input
     }
 
@@ -994,6 +1108,7 @@ final class MenuModelTests: XCTestCase {
         var input = input(.idle(.many(3)), [claude(pid: 1, .idle), claude(pid: 2, .idle), claude(pid: 3, .idle)])
         input.hints = [identity(1): SessionHint(terminal: "ttys004"), identity(2): SessionHint(terminal: "ttys004")]
         input.calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        input.locale = Locale(identifier: "en_GB")
         XCTAssertEqual(childLabels(input), ["ttys004 · since 00:00", "ttys004 · since 00:00", "since 00:00"])
     }
 
@@ -1013,6 +1128,7 @@ final class MenuModelTests: XCTestCase {
         ])
         input.hints = [identity(1): SessionHint(terminal: "ttys009")]
         input.calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        input.locale = Locale(identifier: "en_GB")
         XCTAssertEqual(headers(input).map(\.title), ["Codex · ttys009", "Codex · since 00:00"])
     }
 

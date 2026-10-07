@@ -51,6 +51,7 @@ struct PanelPreview: View {
 #Preview("Helper gives no answer") { PanelPreview(state: PanelFixtures.helperNotResponding) }
 #Preview("Trial ending") { PanelPreview(state: PanelFixtures.trialEnding) }
 #Preview("Trial over") { PanelPreview(state: PanelFixtures.trialOver) }
+#Preview("Slept under an agent") { PanelPreview(state: PanelFixtures.sleptAnyway) }
 
 #Preview("Robot poses") {
     HStack(spacing: 16) {

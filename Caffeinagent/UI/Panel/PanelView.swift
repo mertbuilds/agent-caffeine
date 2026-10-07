@@ -55,6 +55,10 @@ private struct PanelStateView: View {
                             .transition(.opacity)
                     }
                 }
+                if let sleepNote = state.sleepNote {
+                    AttentionLine(attention: sleepNote, perform: perform)
+                        .transition(.opacity)
+                }
                 if let attention = state.attention {
                     AttentionLine(attention: attention, busy: busy, perform: perform)
                         .transition(.opacity)
@@ -66,10 +70,12 @@ private struct PanelStateView: View {
             Divider()
             AgentList(
                 groups: state.groups, moreIdle: state.moreIdle, moreIdleTitle: state.moreIdleTitle,
-                emptyText: state.emptyText, startsExpanded: startsExpanded, startsToggled: startsToggled
+                emptyText: state.emptyText, emptyAction: state.emptyAction,
+                startsExpanded: startsExpanded, startsToggled: startsToggled, perform: perform
             )
         }
         .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.attention)
+        .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.sleepNote)
         .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.battery == nil)
         .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.groups.map { [$0.id] + $0.children.map(\.id) })
     }

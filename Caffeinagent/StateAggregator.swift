@@ -17,6 +17,7 @@ struct AggregatorParts {
     var notify: (String) -> Void
     /// Nil sends no agent notification and asks macOS nothing.
     var notifier: AgentNotifying?
+    var loginItem: LoginItemManaging
 
     static func system() -> AggregatorParts {
         AggregatorParts(
@@ -31,7 +32,8 @@ struct AggregatorParts {
                 lid: SystemLidAngle(), ticker: SystemLidTicker(), trace: DisplayTraceRecorder(defaults: .standard)
             ),
             notify: Notifier.post,
-            notifier: Notifier.shared
+            notifier: Notifier.shared,
+            loginItem: SystemLoginItem()
         )
     }
 }
@@ -135,6 +137,15 @@ final class StateAggregator: ObservableObject {
     @PublishedOnChange private(set) var shortcutProblems: [ShortcutAction: ShortcutProblem] = [:]
     /// The tab Preferences shows, so the menu can open one.
     @PublishedOnChange var preferencesTab = PreferencesTab.general
+    /// The menu asked for "Other tools" of the tab Agents. The tab clears
+    /// it once it is there.
+    @PublishedOnChange var showsOtherTools = false
+    /// "Open agent caffeine at login", as macOS has it.
+    @PublishedOnChange private(set) var loginItem = LoginItemState.unavailable
+    @PublishedOnChange private(set) var loginItemError: String?
+    /// Why the Mac slept under an agent, until the user dismisses it or
+    /// the Mac sleeps again.
+    @PublishedOnChange private(set) var sleepNote: SleepNote?
     @PublishedOnChange private(set) var decision: HoldDecision
     /// The folder of each session that works or waits, for the menu.
     @PublishedOnChange private(set) var sessionLabels: [ProcessIdentity: String] = [:]
@@ -178,6 +189,11 @@ final class StateAggregator: ObservableObject {
     private let display: DisplayController?
     private let notify: (String) -> Void
     private let notifier: AgentNotifying?
+    private let loginItemService: LoginItemManaging
+    private var trialNoticesTold: Set<TrialNotice>
+    /// Taken when macOS says the Mac goes to sleep, read when it wakes.
+    private var sleepSnapshot: SleepSnapshot?
+    private let powerContext = SystemPowerContext()
     private var agentNotices = AgentNoticeReducer()
     /// The app each session runs in, looked up once. 0 for none.
     private var sessionOwners: [ProcessIdentity: Int32] = [:]
@@ -226,6 +242,8 @@ final class StateAggregator: ObservableObject {
         self.display = parts.display
         self.notify = parts.notify
         self.notifier = parts.notifier
+        self.loginItemService = parts.loginItem
+        self.trialNoticesTold = TrialNoticeStore.load(from: defaults)
         self.engine = engine
         self.entitlement = license.entitlement
         self.enabled = enabled
@@ -271,6 +289,15 @@ final class StateAggregator: ObservableObject {
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
 
+        // The snapshot is taken before the wake below settles a pause that
+        // ended while the Mac slept.
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.willSleepNotification)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.macWillSleep() } }
+            .store(in: &cancellables)
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.macDidWake() } }
+            .store(in: &cancellables)
+
         // A timer does not run while the Mac sleeps, and a clock that was
         // set moves the end of a pause.
         NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
@@ -304,6 +331,7 @@ final class StateAggregator: ObservableObject {
         license.start()
         engine.start()
         refreshHookStatuses()
+        refreshLoginItem()
         syncSleepFlag()
         registerShortcuts()
         // The display controller acts on a lid that closes by itself and at
@@ -340,8 +368,69 @@ final class StateAggregator: ObservableObject {
             reachableUntil: reachable.until,
             enabled: enabled,
             onBattery: onBattery,
-            batteryPercent: batteryPercent
+            batteryPercent: batteryPercent,
+            sleepNote: sleepNote
         )
+    }
+
+    // MARK: Sleep note
+
+    /// macOS posts both on the main thread.
+    private func macWillSleep() {
+        sleepNote = nil
+        let settings = settings
+        sleepSnapshot = SleepSnapshot(
+            at: Date(),
+            headline: decision.headline,
+            agentActive: decision.perAgent.contains {
+                $0.reading.verdict.state != .idle && settings.rule(for: $0.reading.agentID) != .ignore
+            },
+            lidClosed: powerContext.context().lidClosed,
+            onBattery: onBattery,
+            helperSetUp: sleepFlag.helperStatus == .enabled,
+            lidClosedWanted: settings.stayAwakeLidClosedOnBattery,
+            waitingHold: settings.waitingHold
+        )
+    }
+
+    private func macDidWake() {
+        sleepNote = sleepSnapshot.flatMap(SleepNote.init)
+        sleepSnapshot = nil
+    }
+
+    func dismissSleepNote() {
+        sleepNote = nil
+    }
+
+    // MARK: Agent rules
+
+    /// From the menu of a row. `.automatic` takes the rule away.
+    func setRule(_ rule: AgentRule, for agentID: String) {
+        settings.agentRules[agentID] = rule == .automatic ? nil : rule
+    }
+
+    // MARK: Open at login
+
+    /// Called at launch and when Settings opens: the user can change it
+    /// in System Settings at any time.
+    func refreshLoginItem() {
+        loginItem = LoginItemState.state(status: loginItemService.status, inApplications: canSetUpHelper)
+    }
+
+    func setOpenAtLogin(_ on: Bool) {
+        // macOS refuses to register what is registered already.
+        guard loginItem != .unavailable, loginItem != (on ? .on : .off) else { return }
+        do {
+            if on {
+                try loginItemService.register()
+            } else {
+                try loginItemService.unregister()
+            }
+            loginItemError = nil
+        } catch {
+            loginItemError = error.localizedDescription
+        }
+        refreshLoginItem()
     }
 
     // MARK: Pause
@@ -492,6 +581,7 @@ final class StateAggregator: ObservableObject {
             reachable = next.reachable
         }
         announceHiddenNotice()
+        announceTrial(at: sample.frame.at)
         announceAgents(sample)
         display?.update(
             lidClosed: context.lidClosed, holding: sample.decision.hold, enabled: settings.displayOffLidClosed,
@@ -528,6 +618,16 @@ final class StateAggregator: ObservableObject {
             notify(begun.notificationText)
         }
         hiddenNotice = current
+    }
+
+    /// The last day of the trial and its end, each told once, whether the
+    /// icon is shown or not.
+    private func announceTrial(at now: Date) {
+        guard let notice = TrialNotice.due(entitlement: entitlement, told: trialNoticesTold) else { return }
+        trialNoticesTold.insert(notice)
+        TrialNoticeStore.save(trialNoticesTold, to: defaults)
+        Notifier.log.notice("\(notice.logLine, privacy: .public)")
+        notify(PanelText.notification(notice, end: license.trialEnd, now: now))
     }
 
     /// An agent that waits for the user or finished, as a notification.

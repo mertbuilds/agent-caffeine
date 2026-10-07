@@ -13,6 +13,11 @@ struct OnboardingView: View {
     let safetyNote: String
     let helper: HelperStatus
     let helperError: String?
+    /// The line about the trial on the last page. Nil with a license.
+    var trialNote: String?
+    /// Nil when the app cannot open at login from where it is.
+    var openAtLogin: Bool?
+    var setOpenAtLogin: (Bool) -> Void = { _ in }
     /// True when every agent was changed.
     let turnOnHooks: ([HookCatalogEntry]) -> Bool
     let setUpHelper: () -> Void
@@ -21,6 +26,7 @@ struct OnboardingView: View {
     @State var index = 0
     @State private var unchecked: Set<String> = []
     @State private var askedForHelper = false
+    @State private var opensAtLogin = true
 
     private var step: OnboardingStep { steps.indices.contains(index) ? steps[index] : .done }
 
@@ -94,8 +100,9 @@ struct OnboardingView: View {
 
     @ViewBuilder
     private var hooks: some View {
-        title("See exactly what your agents are doing")
-        paragraph("An agent can tell agent caffeine when it is working, when it is waiting for you and when it is done. To make that work, agent caffeine adds a few lines to each agent's settings file. It saves a copy of the file first, and it never reads what you type.")
+        title("Know sooner when an agent waits for you")
+        paragraph(PanelText.hooksExplained)
+        paragraph(PanelText.hooksOptionalInSetup)
         VStack(alignment: .leading, spacing: 12) {
             ForEach(hookRows) { row in
                 VStack(alignment: .leading, spacing: 3) {
@@ -106,10 +113,13 @@ struct OnboardingView: View {
                     .toggleStyle(.checkbox)
                     Group {
                         Text("Changes ~/\(row.entry.configPath)")
+                            .foregroundStyle(.secondary)
+                        // A task for the user, so it is not grey.
                         if let note = row.entry.afterInstall { Text(note) }
+                        HookChanges(entry: row.entry)
                     }
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
                     .padding(.leading, 20)
                     if let error = row.error {
                         Text(error)
@@ -120,7 +130,7 @@ struct OnboardingView: View {
                 }
             }
         }
-        paragraph("You can turn this off in Preferences > Agents. That removes the lines again.")
+        paragraph("You can turn this off in Settings > Agents. That removes the lines again.")
         buttons {
             EmptyView()
         } trailing: {
@@ -137,14 +147,15 @@ struct OnboardingView: View {
     @ViewBuilder
     private var lidClosed: some View {
         title("Keep working with the lid closed")
-        paragraph("On battery, macOS puts your Mac to sleep when you close the lid, even while an agent is working. agent caffeine can prevent that with a small helper that you allow once.")
-        paragraph(safetyNote)
+        paragraph(PanelText.lidClosedExplained)
+        paragraph("\(PanelText.helperExplained) \(PanelText.helperRemoveInSettings)")
+        paragraph("\(safetyNote) \(PanelText.closedBagWarning)")
         if helper == .enabled {
-            Label("The helper is set up", systemImage: "checkmark.circle.fill")
+            Label(PanelText.helperIsSetUp, systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)
         } else if helper == .requiresApproval {
             HStack {
-                Text("Allow agent caffeine in System Settings > General > Login Items")
+                Text(PanelText.allowInLoginItems)
                 Spacer()
                 Button("Open System Settings", action: openLoginItems)
             }
@@ -176,14 +187,34 @@ struct OnboardingView: View {
     @ViewBuilder
     private var done: some View {
         title("agent caffeine is ready")
-        paragraph("It lives in the menu bar. You can change everything in Preferences, and open this setup again in Preferences > About.")
+        paragraph("It lives in the menu bar. You can change everything in Settings, and open this setup again in Settings > About.")
+        VStack(alignment: .leading, spacing: 6) {
+            Text("The icon in the menu bar")
+            ForEach(PanelText.iconLegend, id: \.text) { item in
+                HStack(spacing: 10) {
+                    Image(nsImage: MenuBarIcon.image(for: MenuBarLook(pose: item.pose)))
+                        .accessibilityHidden(true)
+                    Text(item.text)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        if let trialNote { paragraph(trialNote) }
+        if openAtLogin != nil {
+            Toggle(PanelText.openAtLoginInSetup, isOn: $opensAtLogin)
+                .toggleStyle(.checkbox)
+        }
         buttons {
             EmptyView()
         } trailing: {
-            Button("Done", action: finish)
-                .buttonStyle(.borderedProminent)
-                .keyboardShortcut(.defaultAction)
+            Button("Done") {
+                if openAtLogin != nil { setOpenAtLogin(opensAtLogin) }
+                finish()
+            }
+            .buttonStyle(.borderedProminent)
+            .keyboardShortcut(.defaultAction)
         }
+        .onAppear { opensAtLogin = openAtLogin ?? false }
     }
 }
 
@@ -194,6 +225,8 @@ private struct OnboardingContainer: View {
     let steps: [OnboardingStep]
     /// The agents that were offered when the window opened.
     let offered: Set<String>
+    /// The window opened by itself, at the first launch.
+    let firstRun: Bool
     let finish: () -> Void
 
     var body: some View {
@@ -204,6 +237,9 @@ private struct OnboardingContainer: View {
             safetyNote: SafetyText.stillSleeps(aggregator.settings),
             helper: aggregator.sleepFlag.helperStatus,
             helperError: aggregator.helperError,
+            trialNote: Onboarding.trialNote(aggregator.entitlement),
+            openAtLogin: Onboarding.openAtLoginBox(aggregator.loginItem, firstRun: firstRun),
+            setOpenAtLogin: aggregator.setOpenAtLogin,
             turnOnHooks: { entries in
                 entries.forEach { aggregator.setHooks($0, on: true) }
                 return entries.allSatisfy { aggregator.hookErrors[$0.id] == nil }
@@ -222,7 +258,7 @@ private struct OnboardingContainer: View {
 }
 
 /// The setup window. Closing it counts as done, so it is not shown again
-/// on its own. Preferences > About opens it again.
+/// on its own. Settings > About opens it again.
 @MainActor
 enum OnboardingWindow {
     private static var window: NSWindow?
@@ -242,7 +278,10 @@ enum OnboardingWindow {
             canSetUpHelper: aggregator.canSetUpHelper, hasBattery: aggregator.hasBattery,
             helperEnabled: aggregator.sleepFlag.helperStatus == .enabled
         )
-        let content = OnboardingContainer(aggregator: aggregator, steps: steps, offered: Set(rows.map(\.id))) { window?.close() }
+        aggregator.refreshLoginItem()
+        let content = OnboardingContainer(
+            aggregator: aggregator, steps: steps, offered: Set(rows.map(\.id)), firstRun: Onboarding.isPending
+        ) { window?.close() }
         let created = NSWindow(contentViewController: NSHostingController(rootView: content))
         created.title = "Set up agent caffeine"
         created.styleMask = [.titled, .closable]
@@ -272,6 +311,7 @@ private struct OnboardingPreview: View {
         OnboardingView(
             steps: [.welcome, .hooks, .lidClosed, .done], foundAgents: ["Claude Code", "Codex"], hookRows: rows,
             safetyNote: SafetyText.stillSleeps(DetectionSettings()), helper: helper, helperError: nil,
+            trialNote: PanelText.trialIntro, openAtLogin: true,
             turnOnHooks: { _ in true }, setUpHelper: {}, openLoginItems: {}, finish: {}, index: index
         )
     }

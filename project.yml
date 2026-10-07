@@ -196,6 +196,9 @@ targets:
       - Caffeinagent/License/LicenseConfig.swift
       - Caffeinagent/License/LicenseManager.swift
       - Caffeinagent/License/LicenseStore.swift
+      - Caffeinagent/License/TrialNotice.swift
+      # The state of "open at login", without SMAppService.
+      - Caffeinagent/LoginItem.swift
       # Optional, so the project still generates on a branch without the folder.
       - path: Caffeinagent/Detection
         optional: true

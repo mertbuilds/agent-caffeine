@@ -6,18 +6,22 @@ struct AgentList: View {
     let moreIdle: [PanelGroup]
     let moreIdleTitle: String?
     let emptyText: String?
+    let emptyAction: PanelAction?
+    let perform: (PanelAction) -> Void
     @State private var isExpanded: Bool
     @State private var disclosure: GroupDisclosure
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(
-        groups: [PanelGroup], moreIdle: [PanelGroup], moreIdleTitle: String?, emptyText: String?,
-        startsExpanded: Bool = false, startsToggled: Set<String> = []
+        groups: [PanelGroup], moreIdle: [PanelGroup], moreIdleTitle: String?, emptyText: String?, emptyAction: PanelAction? = nil,
+        startsExpanded: Bool = false, startsToggled: Set<String> = [], perform: @escaping (PanelAction) -> Void = { _ in }
     ) {
         self.groups = groups
         self.moreIdle = moreIdle
         self.moreIdleTitle = moreIdleTitle
         self.emptyText = emptyText
+        self.emptyAction = emptyAction
+        self.perform = perform
         _isExpanded = State(initialValue: startsExpanded)
         var disclosure = GroupDisclosure()
         for group in groups + moreIdle where startsToggled.contains(group.id) { disclosure.toggle(group) }
@@ -26,14 +30,20 @@ struct AgentList: View {
 
     var body: some View {
         if let emptyText {
-            Text(emptyText)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-                .multilineTextAlignment(.center)
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.horizontal, PanelMetrics.gutter + 8)
-                .padding(.vertical, 20)
-                .frame(maxWidth: .infinity)
+            VStack(spacing: 6) {
+                Text(emptyText)
+                    .foregroundStyle(.secondary)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
+                if let emptyAction {
+                    Button(emptyAction.title) { perform(emptyAction) }
+                        .buttonStyle(.link)
+                }
+            }
+            .font(.callout)
+            .padding(.horizontal, PanelMetrics.gutter + 8)
+            .padding(.vertical, 20)
+            .frame(maxWidth: .infinity)
         } else {
             // Always the same views, so a list that gets long changes
             // nothing but its height.
@@ -64,7 +74,7 @@ struct AgentList: View {
     }
 
     private func view(of group: PanelGroup) -> some View {
-        AgentGroupView(group: group, isOpen: disclosure.isOpen(group)) {
+        AgentGroupView(group: group, isOpen: disclosure.isOpen(group), perform: perform) {
             withAnimation(reduceMotion ? nil : PanelMetrics.disclosure(opening: !disclosure.isOpen(group))) { disclosure.toggle(group) }
         }
     }

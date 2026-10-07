@@ -1,13 +1,19 @@
 import SwiftUI
 import AppKit
+import Combine
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var reopenObserver: NSObjectProtocol?
+    private var toolTipObserver: AnyCancellable?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // No offer to move, no setup window and no word from other copies.
         guard !SmokeTest.isActive else { return SmokeTest.appDidLaunch() }
         AppRelocator.offerToMoveIfNeeded()
+        // After the change, and not more often than the icon can change.
+        toolTipObserver = StateAggregator.shared.objectWillChange
+            .throttle(for: .seconds(1), scheduler: RunLoop.main, latest: true)
+            .sink { _ in MainActor.assumeIsolated { MenuBarToolTip.update(.shared) } }
         // After the first sample, so the window can name the agents it found.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             if Onboarding.isPending { OnboardingWindow.show(aggregator: .shared) }

@@ -76,7 +76,7 @@ enum SafetyText {
     /// For the setup window.
     static func stillSleeps(_ settings: DetectionSettings) -> String {
         settings.batteryFloorEnabled
-            ? "Your Mac still sleeps below \(PanelText.percent(settings.batteryFloorPercent)) battery and when it gets too hot."
+            ? "Your Mac still sleeps when the battery is at \(PanelText.percent(settings.batteryFloorPercent)) and when it gets too hot."
             : "Your Mac still sleeps when it gets too hot. The battery limit is off."
     }
 
@@ -87,7 +87,7 @@ enum SafetyText {
             : "agent caffeine always tells you when it lets your Mac sleep because it got too hot. The battery limit is off, so it also tells you when the battery is at 10% and at 5%. These notifications have no switch, so you do not miss them."
     }
 
-    static let floorOnHelp = "agent caffeine lets your Mac sleep at this level, also while an agent works."
+    static let floorOnHelp = "agent caffeine lets your Mac sleep when the battery is at this level, even while an agent is working. This applies with the lid open too."
     static let floorOffWarning = "Your agents keep working until the battery is empty. Your Mac then turns off at once, and work that is not saved is lost."
     static let floorOffQuestion = "Let the battery run empty?"
     static let floorOffConsequence = "With this off, agent caffeine keeps your Mac awake until the battery is empty. Your Mac then turns off at once, and work that is not saved can be lost."
@@ -104,7 +104,7 @@ struct NoLimitBatteryWarning: Equatable {
     private var told: Set<Int> = []
 
     static func notificationText(percent: Int) -> String {
-        "The battery is at \(PanelText.percent(percent)). agent caffeine keeps your Mac awake because the battery limit is off"
+        "The battery is at \(PanelText.percent(percent)). agent caffeine keeps your Mac awake because the battery limit is off."
     }
 
     /// The battery level to tell the user about, nil for none.

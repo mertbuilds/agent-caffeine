@@ -40,11 +40,11 @@ struct HookPreferencesSection: View {
 
     var body: some View {
         Section("Better detection") {
-            Text("An agent can tell agent caffeine what it is doing. To make that work, agent caffeine adds a few lines to the agent's settings file. It never reads what you type.")
+            Text("\(PanelText.hooksExplained) \(PanelText.hooksOptionalInSettings)")
                 .font(.callout)
                 .foregroundStyle(.secondary)
             if !available {
-                Text("Move agent caffeine to the Applications folder to use this")
+                Text(PanelText.moveToApplicationsToUse)
                     .font(.callout)
             }
             ForEach(rows) { row in
@@ -58,7 +58,6 @@ struct HookRow: View {
     let row: HookRowModel
     let available: Bool
     let set: (Bool) -> Void
-    @State private var showsChanges = false
 
     private var path: String { "~/" + row.entry.configPath }
 
@@ -73,7 +72,7 @@ struct HookRow: View {
             switch row.status {
             case .outdated:
                 HStack {
-                    Text("These lines are from another version of agent caffeine")
+                    Text("These lines are from another version of agent caffeine.")
                         .font(.callout)
                     Spacer()
                     Button("Update") { set(true) }
@@ -94,29 +93,43 @@ struct HookRow: View {
                     .font(.caption)
                     .foregroundStyle(.red)
             }
-            DisclosureGroup("Show what changes", isExpanded: $showsChanges) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(changeSummary)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    ScrollView(.horizontal) {
-                        Text(HookConfigEditor.preview(for: row.entry, appPath: HookCatalog.stableAppPath))
-                            .font(.system(.caption, design: .monospaced))
-                            .textSelection(.enabled)
-                    }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .font(.callout)
+            HookChanges(entry: row.entry)
         }
+    }
+}
+
+/// "Show what changes": the lines agent caffeine adds for one agent, in
+/// Settings and in the setup window.
+struct HookChanges: View {
+    let entry: HookCatalogEntry
+    @State private var showsChanges = false
+
+    private var path: String { "~/" + entry.configPath }
+
+    var body: some View {
+        DisclosureGroup("Show what changes", isExpanded: $showsChanges) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(changeSummary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                ScrollView(.horizontal) {
+                    Text(HookConfigEditor.preview(for: entry, appPath: HookCatalog.stableAppPath))
+                        .font(.system(.caption, design: .monospaced))
+                        .textSelection(.enabled)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .font(.callout)
     }
 
     private var changeSummary: String {
-        switch row.entry.format {
+        switch entry.format {
         case .pluginFile:
-            return "agent caffeine writes this file: \(path). Switching this off removes the file."
+            return "agent caffeine writes this file: \(path). Turning this off removes the file."
         case .jsonHookGroups:
-            return "agent caffeine adds these lines to \(path) and saves a copy of the file next to it first. Switching this off removes the lines and nothing else. If agent caffeine created the file and nothing else is in it, the file is removed too."
+            return "agent caffeine adds these lines to \(path) and saves a copy of the file next to it first. Turning this off removes the lines and nothing else. If agent caffeine created the file and nothing else is in it, the file is removed too."
         }
     }
 }

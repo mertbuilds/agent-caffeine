@@ -65,7 +65,7 @@ enum HoldHeadline: Equatable {
         case .finishedRecently(let subject): return Self.phrase(subject, one: "finished a moment ago", many: "finished a moment ago")
         case .open(let subject): return Self.phrase(subject, one: "is open", many: "are open")
         case .alwaysOn: return "always on"
-        case .remoteAccess: return "phone access is on"
+        case .remoteAccess: return "reachable while plugged in"
         case .reachable: return "stays reachable"
         case .idle, .waitingReleased, .noAgents, .safetyStop, .switchedOff, .paused, .notEntitled: return nil
         }

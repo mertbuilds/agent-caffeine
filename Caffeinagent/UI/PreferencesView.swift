@@ -20,7 +20,11 @@ struct PreferencesView: View {
 
     var body: some View {
         TabView(selection: $aggregator.preferencesTab) {
-            GeneralPreferences(mode: $aggregator.mode, settings: $aggregator.settings, showMenuBarIcon: $aggregator.showMenuBarIcon)
+            GeneralPreferences(
+                mode: $aggregator.mode, settings: $aggregator.settings, showMenuBarIcon: $aggregator.showMenuBarIcon,
+                loginItem: aggregator.loginItem, loginItemError: aggregator.loginItemError,
+                setOpenAtLogin: aggregator.setOpenAtLogin, openLoginItems: aggregator.sleepFlag.openLoginItemsSettings
+            )
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag(PreferencesTab.general)
             AlertPreferences(
@@ -29,7 +33,7 @@ struct PreferencesView: View {
                 batteryFloorEnabled: aggregator.settings.batteryFloorEnabled,
                 openSystemSettings: aggregator.openNotificationSettings
             )
-            .tabItem { Label("Alerts", systemImage: "bell") }
+            .tabItem { Label("Notifications", systemImage: "bell") }
             .tag(PreferencesTab.alerts)
             ShortcutPreferences(
                 shortcuts: aggregator.shortcuts, shortcutProblems: aggregator.shortcutProblems,
@@ -42,7 +46,8 @@ struct PreferencesView: View {
                 foundIDs: Set(aggregator.decision.perAgent.map(\.reading.agentID)),
                 hookRows: HookRowModel.rows(statuses: aggregator.hookStatuses, errors: aggregator.hookErrors),
                 hooksAvailable: aggregator.hooksAvailable,
-                setHooks: aggregator.setHooks
+                setHooks: aggregator.setHooks,
+                showsOtherTools: $aggregator.showsOtherTools
             )
             .tabItem { Label("Agents", systemImage: "terminal") }
             .tag(PreferencesTab.agents)
@@ -61,51 +66,50 @@ struct PreferencesView: View {
                 openLoginItems: aggregator.sleepFlag.openLoginItemsSettings,
                 removeSudoersEntry: aggregator.removeSudoersEntry
             )
-            .tabItem { Label("Lid closed", systemImage: "laptopcomputer") }
+            .tabItem { Label("Battery and lid", systemImage: "laptopcomputer") }
             .tag(PreferencesTab.lidClosed)
             Form { licenseSection }
                 .formStyle(.grouped)
                 .tabItem { Label("License", systemImage: "key") }
                 .tag(PreferencesTab.license)
-            Form { aboutSection }
-                .formStyle(.grouped)
-                .tabItem { Label("About", systemImage: "info.circle") }
-                .tag(PreferencesTab.about)
+            AboutPreferences(
+                version: AppVersion.current,
+                canCheckForUpdates: updater.canCheckForUpdates,
+                hooksOn: HookRowModel.rows(statuses: aggregator.hookStatuses).filter(\.isOn).map(\.entry),
+                helperRegistered: aggregator.sleepFlag.helperStatus != .notRegistered,
+                licensed: aggregator.entitlement == .licensed && license.record.activationID != nil,
+                busy: license.busy,
+                checkForUpdates: updater.checkForUpdates,
+                showSetup: { OnboardingWindow.show(aggregator: aggregator) },
+                turnOffHooks: { $0.forEach { aggregator.setHooks($0, on: false) } },
+                removeHelper: aggregator.removeHelper,
+                deactivate: { confirmingDeactivate = true },
+                showInFinder: { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) },
+                quit: { NSApp.terminate(nil) }
+            )
+            .tabItem { Label("About", systemImage: "info.circle") }
+            .tag(PreferencesTab.about)
         }
         .frame(width: 480, height: 500)
         .tint(.brand)
+        // On the window: the tabs License and About both ask it.
+        .confirmationDialog(Self.deactivateQuestion, isPresented: $confirmingDeactivate) {
+            Button("Deactivate", role: .destructive) {
+                Task { await license.deactivate() }
+            }
+        } message: {
+            Text(Self.deactivateConsequence)
+        }
         .onAppear {
             aggregator.refreshHelperStatus()
             aggregator.refreshHookStatuses()
             aggregator.refreshNotificationPermission()
+            aggregator.refreshLoginItem()
         }
     }
 
-    private var aboutSection: some View {
-        Section("About") {
-            HStack {
-                Text(AppVersion.current)
-                Spacer()
-                Button("Check for updates…") { updater.checkForUpdates() }
-                    .disabled(!updater.canCheckForUpdates)
-            }
-            Text("While it keeps the Mac awake, agent caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. For a closed lid on battery, its helper also turns on the SleepDisabled setting of macOS, and turns it off when agent caffeine stops or quits.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            Text("agent caffeine checks caffeinagent.com for updates. It checks your license key with Polar. It sends the key and your Mac's model, and nothing about you or your agents.")
-                .font(.callout)
-                .foregroundStyle(.secondary)
-            HStack(spacing: 4) {
-                Text("a")
-                    .foregroundStyle(.secondary)
-                Link("mertbuilds.com", destination: Self.builderURL)
-                Text("utility")
-                    .foregroundStyle(.secondary)
-            }
-            .font(.callout)
-            Button("Show setup again") { OnboardingWindow.show(aggregator: aggregator) }
-        }
-    }
+    private static let deactivateQuestion = "Deactivate agent caffeine on this Mac?"
+    private static let deactivateConsequence = "You can then use the key on another Mac. agent caffeine stops keeping this Mac awake until you activate a key again."
 
     private var licenseSection: some View {
         Section("License") {
@@ -117,29 +121,24 @@ struct PreferencesView: View {
                         .font(.system(.callout, design: .monospaced))
                         .foregroundStyle(.secondary)
                 }
+                if let macs = license.record.macLimit {
+                    Text(PanelText.keyRunsOn(macs: macs))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
                 if let lastValidated = license.record.lastValidated {
                     Text("Last checked \(lastValidated.formatted(.relative(presentation: .named)))")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
                 HStack {
-                    Button("Deactivate this Mac") { confirmingDeactivate = true }
+                    Button("Deactivate this Mac…") { confirmingDeactivate = true }
                         .disabled(license.busy)
                     if license.busy {
                         ProgressView().controlSize(.small)
                     }
                     Spacer()
                     Button("Manage in Polar") { NSWorkspace.shared.open(license.config.customerPortalURL) }
-                }
-                .confirmationDialog(
-                    "Deactivate agent caffeine on this Mac?",
-                    isPresented: $confirmingDeactivate
-                ) {
-                    Button("Deactivate", role: .destructive) {
-                        Task { await license.deactivate() }
-                    }
-                } message: {
-                    Text("You can then use the key on another Mac. agent caffeine stops keeping this Mac awake until you activate a key again.")
                 }
             } else if aggregator.entitlement == .expired(.unverified) {
                 Text(ExpiredReason.unverified.text)
@@ -169,7 +168,7 @@ struct PreferencesView: View {
                     Spacer()
                     // Whoever has a key already bought one.
                     if license.record.key == nil {
-                        Button("Buy a key") { NSWorkspace.shared.open(license.config.checkoutURL) }
+                        Button(PanelText.title(of: .buy)) { NSWorkspace.shared.open(license.config.checkoutURL) }
                     }
                 }
             }
@@ -179,6 +178,10 @@ struct PreferencesView: View {
                     .foregroundStyle(.red)
                 if message == .limitReached {
                     Link("Manage in Polar", destination: license.config.customerPortalURL)
+                        .font(.callout)
+                }
+                if message == .revoked {
+                    Link("Contact support", destination: AppLinks.contact)
                         .font(.callout)
                 }
             }
@@ -196,7 +199,7 @@ struct PreferencesView: View {
     private var licenseStatus: String {
         switch aggregator.entitlement {
         case .trial(let daysLeft):
-            return "Your trial has \(HumaneDuration.counted(daysLeft, "day")) left"
+            return "\(PanelText.trialStatus(daysLeft: daysLeft, end: license.trialEnd, now: Date())) \(PanelText.trialThen)"
         case .expired(let reason):
             return reason.text
         case .licensed:
@@ -210,6 +213,117 @@ struct PreferencesView: View {
         Task { await license.activate(key: key) }
     }
 
+}
+
+/// The tab About: the version, what the app sends, help, and how to
+/// remove the app with everything it added.
+struct AboutPreferences: View {
+    let version: String
+    var canCheckForUpdates = false
+    /// The agents whose better detection is on.
+    var hooksOn: [HookCatalogEntry] = []
+    var helperRegistered = false
+    /// This Mac holds an activation of a key.
+    var licensed = false
+    var busy = false
+    var checkForUpdates: () -> Void = {}
+    var showSetup: () -> Void = {}
+    var turnOffHooks: ([HookCatalogEntry]) -> Void = { _ in }
+    var removeHelper: () -> Void = {}
+    var deactivate: () -> Void = {}
+    var showInFinder: () -> Void = {}
+    var quit: () -> Void = {}
+
+    var body: some View {
+        Form {
+            Section("About") {
+                HStack {
+                    Text(version)
+                    Spacer()
+                    Button("Check for updates…", action: checkForUpdates)
+                        .disabled(!canCheckForUpdates)
+                }
+                Text("While it keeps the Mac awake, agent caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. For a closed lid on battery, its helper also turns on the SleepDisabled setting of macOS, and turns it off when agent caffeine stops or quits.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Text("agent caffeine checks caffeinagent.com for updates. It checks your license key with Polar. It sends the key and your Mac's model, and nothing about you or your agents.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 4) {
+                    Text("a")
+                        .foregroundStyle(.secondary)
+                    Link("mertbuilds.com", destination: Self.builderURL)
+                    Text("utility")
+                        .foregroundStyle(.secondary)
+                }
+                .font(.callout)
+                HStack {
+                    Button("Show setup again", action: showSetup)
+                    Spacer()
+                    Button(PanelText.quit, action: quit)
+                }
+            }
+            Section("Help") {
+                row("Questions and answers") { Link("Open help", destination: AppLinks.help) }
+                row("Contact") { Link(AppLinks.contactAddress, destination: AppLinks.contact) }
+            }
+            Section("Remove agent caffeine") {
+                Text("Do these steps before you move agent caffeine to the Trash, so nothing of it stays on your Mac.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                step(
+                    hooksOn.isEmpty ? "Better detection is off" : "Turn off better detection for \(hooksOn.map(\.displayName).joined(separator: ", "))",
+                    help: "This removes the lines that agent caffeine added to the settings files of your agents.",
+                    done: hooksOn.isEmpty
+                ) { Button("Turn off") { turnOffHooks(hooksOn) } }
+                step(
+                    helperRegistered ? "Remove the helper" : "The helper is not set up",
+                    help: "This removes the background item for a closed lid on battery.",
+                    done: !helperRegistered
+                ) { Button("Remove", action: removeHelper) }
+                step(
+                    licensed ? "Deactivate this Mac" : "No license key is active on this Mac",
+                    help: "This frees your license key for another Mac.",
+                    done: !licensed
+                ) { Button("Deactivate…", action: deactivate).disabled(busy) }
+                step(
+                    "Quit agent caffeine and move it to the Trash",
+                    help: "The app is in your Applications folder.",
+                    done: false
+                ) { Button("Show in Finder", action: showInFinder) }
+            }
+        }
+        .formStyle(.grouped)
+    }
+
+    private func row<Trailing: View>(_ title: String, @ViewBuilder trailing: () -> Trailing) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            trailing()
+        }
+    }
+
+    /// One step: what to do, and its button until it is done.
+    private func step<Action: View>(_ title: String, help: String, done: Bool, @ViewBuilder action: () -> Action) -> some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(title)
+                Text(help)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            if done {
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
+                    .accessibilityLabel("Done")
+            } else {
+                action()
+            }
+        }
+    }
+
     private static let builderURL = URL(
         string: "https://mertbuilds.com/?utm_source=agent-caffeine-app&utm_medium=app&utm_campaign=about"
     )!
@@ -219,6 +333,10 @@ struct GeneralPreferences: View {
     @Binding var mode: AwakeMode
     @Binding var settings: DetectionSettings
     @Binding var showMenuBarIcon: Bool
+    var loginItem = LoginItemState.unavailable
+    var loginItemError: String?
+    var setOpenAtLogin: (Bool) -> Void = { _ in }
+    var openLoginItems: () -> Void = {}
 
     /// From 30 seconds to 30 minutes.
     private static let durations: [TimeInterval] = [30, 60, 120, 180, 300, 600, 900, 1200, 1800]
@@ -239,8 +357,8 @@ struct GeneralPreferences: View {
             }
             if !RemoteAccessDetector.detectedTools.isEmpty {
                 Section {
-                    Toggle("Stay awake for phone access while plugged in", isOn: $settings.stayAwakeForRemoteAccess)
-                    Text("This is for Claude Code Remote Control. While your Mac is plugged in and Remote Control is on, your Mac stays awake, even when no agent is working. On battery, choose \"Stay reachable\" in the menu to keep your Mac awake for a set time.")
+                    Toggle("Stay reachable while plugged in", isOn: $settings.stayAwakeForRemoteAccess)
+                    Text("This is for Claude Code Remote Control, which sends messages from your phone to an agent on your Mac. While your Mac is plugged in and Remote Control is on, your Mac stays awake, even when no agent is working. On battery, choose \"Stay reachable\" in the timer menu to keep your Mac awake for a set time.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -258,6 +376,32 @@ struct GeneralPreferences: View {
                     "While an agent is waiting for you", $settings.waitingHold,
                     help: "Your Mac stays awake this long while an agent is waiting for your answer. After that it can sleep."
                 )
+            }
+            Section {
+                Toggle(PanelText.openAtLogin, isOn: Binding(get: { loginItem.isOn }, set: setOpenAtLogin))
+                    .disabled(loginItem == .unavailable)
+                switch loginItem {
+                case .on, .off:
+                    Text("agent caffeine starts when you log in, so it also runs after a restart of your Mac.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                case .needsApproval:
+                    HStack {
+                        Text("Allow agent caffeine in System Settings > General > Login Items to open it at login.")
+                            .font(.callout)
+                        Spacer()
+                        Button("Open System Settings", action: openLoginItems)
+                    }
+                case .unavailable:
+                    Text(PanelText.moveToApplicationsToUse)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                if let loginItemError {
+                    Text(loginItemError)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
             }
             Section {
                 Toggle("Show agent caffeine in the menu bar", isOn: $showMenuBarIcon)
@@ -314,7 +458,7 @@ struct AlertPreferences: View {
             }
             Section("Notify me when") {
                 toggle(
-                    "An agent is waiting for your answer", $notices.waiting,
+                    "An agent is waiting for you", $notices.waiting,
                     help: "You get a notification when an agent asks you a question or needs your permission."
                 )
                 toggle(
@@ -397,12 +541,33 @@ struct AgentPreferences: View {
     var hookRows: [HookRowModel] = []
     var hooksAvailable = true
     var setHooks: (HookCatalogEntry, Bool) -> Void = { _, _ in }
+    /// The menu asked for "Other tools": the tab scrolls there once.
+    var showsOtherTools: Binding<Bool> = .constant(false)
     @State private var newName = ""
+
+    private static let otherToolsID = "otherTools"
 
     /// A definition without matchers is a placeholder that finds nothing.
     private static let definitions = AgentCatalog.standard.definitions.filter { !$0.matchers.isEmpty }
 
     var body: some View {
+        ScrollViewReader { proxy in
+            form
+                .onAppear { showOtherTools(proxy) }
+                .onChange(of: showsOtherTools.wrappedValue) { _ in showOtherTools(proxy) }
+        }
+    }
+
+    /// After the layout, or there is nothing to scroll to yet.
+    private func showOtherTools(_ proxy: ScrollViewProxy) {
+        guard showsOtherTools.wrappedValue else { return }
+        DispatchQueue.main.async {
+            proxy.scrollTo(Self.otherToolsID, anchor: .top)
+            showsOtherTools.wrappedValue = false
+        }
+    }
+
+    private var form: some View {
         Form {
             Section("Open on this Mac now") {
                 let found = Self.definitions.filter { foundIDs.contains($0.id) }
@@ -416,12 +581,16 @@ struct AgentPreferences: View {
                 HookPreferencesSection(rows: hookRows, available: hooksAvailable, set: setHooks)
             }
             Section("Other agents") {
+                Text("Agents marked Not tested yet are found by name. agent caffeine sees them as working while they use the processor or run a command.")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                 ForEach(Self.definitions.filter { !foundIDs.contains($0.id) }, id: \.id, content: row)
             }
             Section("Other tools") {
-                Text("Add the process name of a tool that is not in the list. It counts as working while it is using the processor.")
+                Text("Add a tool that is not in the list by its process name: the name of the command you type in Terminal to start the tool, for example aider. It counts as working while it is using the processor.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                    .id(Self.otherToolsID)
                 ForEach(settings.userAgentNames, id: \.self) { name in
                     HStack {
                         Text(name).font(.system(.body, design: .monospaced))
@@ -434,7 +603,7 @@ struct AgentPreferences: View {
                     }
                 }
                 HStack {
-                    TextField("Process name", text: $newName, prompt: Text("Process name, for example mytool"))
+                    TextField("Process name", text: $newName, prompt: Text("Process name, for example aider"))
                         .textFieldStyle(.roundedBorder)
                         .labelsHidden()
                         .onSubmit(add)
@@ -521,25 +690,10 @@ struct LidClosedPreferences: View {
 
     var body: some View {
         Form {
-            Section("Lid closed") {
-                Text("On battery, macOS puts your Mac to sleep when you close the lid, even while an agent is working. agent caffeine can prevent that with a small helper that you allow once.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                helperState
-                if let error {
-                    Text(error)
-                        .font(.caption)
-                        .foregroundStyle(.red)
-                }
-            }
-            Section {
-                Toggle("Stay awake with the lid closed on battery", isOn: $settings.stayAwakeLidClosedOnBattery)
-                    .disabled(helper != .enabled)
-            }
-            Section {
+            Section("Battery limit") {
                 Toggle("Let your Mac sleep when the battery is low", isOn: batteryFloorSwitch)
                 Stepper(value: $settings.batteryFloorPercent, in: DetectionSettings.batteryFloorRange, step: 5) {
-                    Text("Sleep below \(PanelText.percent(settings.batteryFloorPercent))")
+                    Text("Sleep at \(PanelText.percent(settings.batteryFloorPercent))")
                 }
                 .disabled(!settings.batteryFloorEnabled)
                 Group {
@@ -554,7 +708,27 @@ struct LidClosedPreferences: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
             }
-            Section {
+            Section("Lid closed") {
+                Group {
+                    Text(PanelText.lidClosedExplained)
+                    Text("\(PanelText.helperExplained) \(PanelText.helperRemoveHere)")
+                    Text(PanelText.closedBagWarning)
+                }
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                helperState
+                if let error {
+                    Text(error)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                }
+                Toggle("Stay awake with the lid closed on battery", isOn: $settings.stayAwakeLidClosedOnBattery)
+                    .disabled(helper != .enabled)
+                if helper != .enabled {
+                    Text("Set up the helper first.")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
                 Toggle("Turn the display off when the lid is closed", isOn: $settings.displayOffLidClosed)
                 Text("With the lid closed, agent caffeine keeps the built-in display dark so it does not use the battery or warm your Mac.")
                     .font(.callout)
@@ -562,7 +736,7 @@ struct LidClosedPreferences: View {
                 if hasLidAngleSensor {
                     Toggle("Dim the display as the lid closes", isOn: $settings.dimAsLidCloses)
                         .disabled(!settings.displayOffLidClosed)
-                    Text("The built-in display gets darker from 45 degrees and is off when the lid is shut. It gets bright again the same way when you open the lid. A lid that rests half open stays bright.")
+                    Text("The built-in display gets darker from 45 degrees and is off when the lid is closed. It gets bright again the same way when you open the lid. A lid that rests half open stays bright.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
@@ -572,7 +746,7 @@ struct LidClosedPreferences: View {
                     Text("An older version of agent caffeine added an admin entry to this Mac. It is no longer used.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                    Button("Remove the old admin entry", action: removeSudoersEntry)
+                    Button("Remove the old admin entry…", action: removeSudoersEntry)
                 }
             }
         }
@@ -606,14 +780,14 @@ struct LidClosedPreferences: View {
             }
         case .ready:
             HStack {
-                Label("The helper is set up", systemImage: "checkmark.circle.fill")
+                Label(PanelText.helperIsSetUp, systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
                 Spacer()
                 Button("Remove", action: remove)
             }
         case .requiresApproval:
             HStack {
-                Text("Allow agent caffeine in System Settings > General > Login Items")
+                Text(PanelText.allowInLoginItems)
                 Spacer()
                 Button("Open System Settings", action: openLoginItems)
             }
@@ -625,13 +799,13 @@ struct LidClosedPreferences: View {
                     Button("Set up…", action: setUp)
                 }
             } else {
-                Text("Move agent caffeine to the Applications folder to set this up")
+                Text(PanelText.moveToApplicationsToSetUp)
             }
         case .notSetUp:
             if canSetUp {
                 Button("Set up…", action: setUp)
             } else {
-                Text("Move agent caffeine to the Applications folder to set this up")
+                Text(PanelText.moveToApplicationsToSetUp)
             }
         }
     }
@@ -652,7 +826,7 @@ private struct PreferencesPreview: View {
             GeneralPreferences(mode: $mode, settings: $settings, showMenuBarIcon: $showMenuBarIcon)
                 .tabItem { Label("General", systemImage: "gearshape") }
             AlertPreferences(notices: $notices, denied: true)
-                .tabItem { Label("Alerts", systemImage: "bell") }
+                .tabItem { Label("Notifications", systemImage: "bell") }
             ShortcutPreferences()
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
             AgentPreferences(
@@ -665,7 +839,9 @@ private struct PreferencesPreview: View {
                 hasLidAngleSensor: true, error: nil,
                 setUp: {}, remove: {}, openLoginItems: {}, removeSudoersEntry: {}
             )
-            .tabItem { Label("Lid closed", systemImage: "laptopcomputer") }
+            .tabItem { Label("Battery and lid", systemImage: "laptopcomputer") }
+            AboutPreferences(version: "1.0 (1)", hooksOn: HookCatalog.entries.prefix(2).map { $0 }, helperRegistered: true, licensed: true)
+                .tabItem { Label("About", systemImage: "info.circle") }
         }
         .frame(width: 480, height: 500)
         .tint(.brand)

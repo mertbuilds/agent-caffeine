@@ -97,7 +97,7 @@ final class LicenseClientTests: XCTestCase {
     func testActivateAnswers() async {
         PolarStubURLProtocol.answerWith(Self.activated())
         var result = await client.activate(key: Self.key, label: "Mac")
-        XCTAssertEqual(result, .activated(id: Self.activationID))
+        XCTAssertEqual(result, .activated(id: Self.activationID, macs: 1))
 
         PolarStubURLProtocol.answerWith(#"{"error":"NotPermitted","detail":"License key activation limit already reached"}"#, status: 403)
         result = await client.activate(key: Self.key, label: "Mac")

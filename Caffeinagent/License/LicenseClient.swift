@@ -3,8 +3,9 @@ import Foundation
 /// How activating a key on this Mac went.
 enum LicenseActivation: Equatable, Sendable {
     /// Polar counted this Mac against the key, under this activation id.
-    case activated(id: String)
-    /// The key's one activation is held by another Mac.
+    /// - Parameter macs: on how many Macs the key runs, when Polar says so.
+    case activated(id: String, macs: Int? = nil)
+    /// Every activation of the key is held by another Mac.
     case limitReached
     /// Polar does not know the key.
     case notFound
@@ -81,7 +82,7 @@ struct LicenseClient: LicenseAPI {
                 return .unavailable
             }
             guard activated.licenseKey.status == "granted" else { return .revoked }
-            return .activated(id: activated.id)
+            return .activated(id: activated.id, macs: activated.licenseKey.limitActivations)
         case .forbidden(let detail):
             return detail.contains("limit") ? .limitReached : .revoked
         case .notFound(let detail):
@@ -210,6 +211,12 @@ struct LicenseClient: LicenseAPI {
     private struct Activated: Decodable {
         struct Key: Decodable {
             let status: String
+            let limitActivations: Int?
+
+            enum CodingKeys: String, CodingKey {
+                case status
+                case limitActivations = "limit_activations"
+            }
         }
 
         let id: String

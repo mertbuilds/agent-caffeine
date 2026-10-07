@@ -48,7 +48,7 @@ enum HookCatalog {
             id: "claude", displayName: "Claude Code", configPath: ".claude/settings.json",
             format: .jsonHookGroups(keyPath: ["hooks"]),
             adds: [.waitingForUser],
-            benefit: "Tells agent caffeine when Claude Code is waiting for your permission",
+            benefit: "Tells agent caffeine when Claude Code is waiting for your permission.",
             afterInstall: nil,
             confirmedBy: "code.claude.com/docs/en/hooks, and the file on the test Mac"
         ),
@@ -56,15 +56,15 @@ enum HookCatalog {
             id: "codex", displayName: "Codex", configPath: ".codex/hooks.json",
             format: .jsonHookGroups(keyPath: ["hooks"]),
             adds: [.waitingForUser],
-            benefit: "Tells agent caffeine when Codex is waiting for your permission",
-            afterInstall: "Codex only runs a new hook after you trust it. Run /hooks in Codex once.",
+            benefit: "Tells agent caffeine when Codex is waiting for your permission.",
+            afterInstall: "One more step for Codex: type /hooks in Codex and approve agent caffeine.",
             confirmedBy: "learn.chatgpt.com/docs/hooks, the Codex 0.159 binary, and the file on the test Mac"
         ),
         HookCatalogEntry(
             id: "droid", displayName: "Droid", configPath: ".factory/settings.json",
             format: .jsonHookGroups(keyPath: ["hooks"]),
             adds: [.working, .waitingForUser, .idle],
-            benefit: "Tells agent caffeine when Droid is working, waiting for you or done",
+            benefit: "Tells agent caffeine when Droid is working, waiting for you or done.",
             afterInstall: nil,
             confirmedBy: "docs.factory.com/cli/configuration/hooks-guide, and the file on the test Mac"
         ),
@@ -72,7 +72,7 @@ enum HookCatalog {
             id: "opencode", displayName: "opencode", configPath: ".config/opencode/plugins/\(pluginFileName)",
             format: .pluginFile,
             adds: [.working, .waitingForUser, .idle],
-            benefit: "Tells agent caffeine when opencode is working, waiting for you or done",
+            benefit: "Tells agent caffeine when opencode is working, waiting for you or done.",
             afterInstall: "opencode loads the plugin the next time it starts.",
             confirmedBy: "opencode.ai/docs/plugins for the folder, the plugin form and the event names. The event payload is from the opencode source. Not run live."
         ),

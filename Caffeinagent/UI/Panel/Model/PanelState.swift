@@ -43,6 +43,14 @@ enum PanelAction: Equatable {
     case resume
     case stayReachable(ReachableChoice)
     case stopReachable
+    /// Opens the settings where a tool that is not in the list is added.
+    case agentNotListed
+    /// From the menu of a row: the rule of one agent. `.automatic` takes
+    /// the rule away.
+    case setAgentRule(agentID: String, rule: AgentRule)
+    case openAgentSettings
+    case dismissSleepNote
+    case openHelp
 
     var title: String { PanelText.title(of: self) }
 }
@@ -60,6 +68,9 @@ struct PanelAttention: Equatable {
         /// puts the Mac to sleep.
         case reachableNeedsLidClosed
         case lidClosedNotSetUp
+        /// Why the Mac slept while an agent worked or waited. A line of
+        /// its own, above the one that asks for attention.
+        case sleptAnyway
     }
 
     var kind: Kind
@@ -84,7 +95,7 @@ struct PanelBattery: Equatable {
 
     /// 0 to 100.
     var percent: Int
-    /// The setting "sleep below". Nil when the battery floor is off.
+    /// The battery limit. Nil when it is off.
     var floor: Int?
     var level: Level
 
@@ -113,7 +124,7 @@ struct PanelBattery: Equatable {
         guard let floor else { return PanelText.batteryNoLimit }
         return level == .stopped
             ? PanelText.batteryStartsAgain(atPercent: floor + SafetyMonitor.batteryRecoveryPoints)
-            : PanelText.batterySleepsBelow(percent: floor)
+            : PanelText.batterySleepsAt(percent: floor)
     }
     /// One reading for VoiceOver.
     var accessibilityLabel: String {
@@ -218,6 +229,8 @@ struct PanelGroup: Equatable, Identifiable {
     var working = 0
     var waiting = 0
     var idle = 0
+    /// What the user set for this agent, for the menu of the row.
+    var rule = AgentRule.automatic
 
     /// `AgentDefinition.id`: the group keeps its place when its sessions
     /// change state.
@@ -271,6 +284,9 @@ struct PanelState: Equatable {
     var title: String
     var subtitle: String
     var attention: PanelAttention?
+    /// Why the Mac slept while an agent worked or waited, until the user
+    /// dismisses it.
+    var sleepNote: PanelAttention?
     /// Nil on wall power, on a Mac without a battery, and while agent
     /// caffeine is off, paused or without a license.
     var battery: PanelBattery?
@@ -281,6 +297,8 @@ struct PanelState: Equatable {
     var moreIdle: [PanelGroup] = []
     /// In place of the list when no agent is open.
     var emptyText: String?
+    /// A link below `emptyText`.
+    var emptyAction: PanelAction?
     /// License items of the gear menu.
     var licenseActions: [PanelAction] = []
     /// "Paused until 15:30" for the bar at the bottom. Nil when not paused.
@@ -413,4 +431,7 @@ struct PanelInput: Equatable {
     var onBattery = false
     /// Nil on a Mac without a battery.
     var batteryPercent: Int?
+    /// Nil when the Mac did not sleep under an agent, or the user
+    /// dismissed the line.
+    var sleepNote: SleepNote?
 }

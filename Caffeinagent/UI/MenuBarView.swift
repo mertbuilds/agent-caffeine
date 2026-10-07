@@ -58,6 +58,19 @@ struct MenuBarView: View {
             aggregator.startReachable(choice)
         case .stopReachable:
             aggregator.stopReachable()
+        case .agentNotListed:
+            aggregator.showsOtherTools = true
+            aggregator.preferencesTab = .agents
+            openPreferences()
+        case .setAgentRule(let agentID, let rule):
+            aggregator.setRule(rule, for: agentID)
+        case .openAgentSettings:
+            aggregator.preferencesTab = .agents
+            openPreferences()
+        case .dismissSleepNote:
+            aggregator.dismissSleepNote()
+        case .openHelp:
+            NSWorkspace.shared.open(AppLinks.help)
         }
     }
 }

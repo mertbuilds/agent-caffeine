@@ -24,15 +24,19 @@ enum MenuModel {
             )
         let (groups, moreIdle) = groups(input, now: now)
         let bar = bar(input)
+        // Only then a new agent is all that is missing.
+        let invites = input.decision.headline == .noAgents && pose != .helperOff
         return PanelState(
             pose: pose,
             title: title,
             subtitle: subtitle,
             attention: attention(input),
+            sleepNote: sleepNote(input),
             battery: battery(input),
             groups: groups,
             moreIdle: moreIdle,
-            emptyText: input.decision.perAgent.isEmpty ? PanelText.empty(mode: input.mode) : nil,
+            emptyText: input.decision.perAgent.isEmpty ? PanelText.empty(invites: invites) : nil,
+            emptyAction: input.decision.perAgent.isEmpty && invites ? .agentNotListed : nil,
             licenseActions: bar.licenseActions,
             pausedLabel: bar.pausedLabel,
             reachableLabel: bar.reachableLabel,
@@ -110,8 +114,26 @@ enum MenuModel {
 
     /// Nil when the pose says it all. See `MenuBarLook`.
     static func menuBarAccessibilityLabel(_ input: PanelInput) -> String? {
-        guard pose(input) == .reachable, case .reachable(let until) = input.decision.headline else { return nil }
-        return PanelText.menuBarReachable(until, calendar: input.calendar, locale: input.locale)
+        let pose = pose(input)
+        if pose == .reachable, case .reachable(let until) = input.decision.headline {
+            return PanelText.menuBarReachable(until, calendar: input.calendar, locale: input.locale)
+        }
+        // Drawn like "off", and the app is on.
+        if pose == .off, case .notEntitled = input.decision.headline {
+            return PanelText.menuBar(PanelText.headline(input.decision.headline).subtitle)
+        }
+        return nil
+    }
+
+    // MARK: Sleep note
+
+    static func sleepNote(_ input: PanelInput) -> PanelAttention? {
+        input.sleepNote.map {
+            PanelAttention(
+                kind: .sleptAnyway, text: PanelText.slept($0, calendar: input.calendar, locale: input.locale),
+                actions: [.dismissSleepNote]
+            )
+        }
     }
 
     // MARK: Attention
@@ -310,7 +332,9 @@ enum MenuModel {
         } else if let longest = working.first {
             (header.state, rank, since) = (.working, .working, input.clock.since(longest.identity))
         }
-        var group = PanelGroup(header: header, working: working.count, waiting: waiting.count, idle: idle.count)
+        var group = PanelGroup(
+            header: header, working: working.count, waiting: waiting.count, idle: idle.count, rule: input.settings.rule(for: first.agentID)
+        )
         if active.isEmpty, isIgnored(first) {
             group.header.detail = PanelText.ignored
             group.header.hint = first.verdict.reason.text
@@ -388,7 +412,7 @@ enum MenuModel {
     static func childLabels(_ readings: [AgentReading], input: PanelInput) -> [String] {
         let hints = readings.map { input.hints[$0.identity] }
         let terminals = hints.map { $0?.terminal }
-        let starts = readings.map { started($0.identity, calendar: input.calendar) }
+        let starts = readings.map { started($0.identity, input: input) }
         let plain = readings.indices.map { hints[$0]?.name ?? input.labels[readings[$0].identity] ?? terminals[$0] ?? starts[$0] }
         var labels = plain
         for indices in Dictionary(grouping: plain.indices, by: { plain[$0] }).values where indices.count > 1 {
@@ -416,7 +440,7 @@ enum MenuModel {
             let terminals = hints.map { $0?.terminal }
             for (place, index) in indices.enumerated() {
                 guard let identity = built[index].identity else { continue }
-                result[index].header.distinction = unique(names, at: place) ?? unique(terminals, at: place) ?? started(identity, calendar: input.calendar)
+                result[index].header.distinction = unique(names, at: place) ?? unique(terminals, at: place) ?? started(identity, input: input)
             }
         }
         return result
@@ -428,9 +452,8 @@ enum MenuModel {
         return value
     }
 
-    private static func started(_ identity: ProcessIdentity, calendar: Calendar) -> String {
-        let parts = calendar.dateComponents([.hour, .minute], from: Date(timeIntervalSince1970: identity.startTime))
-        return PanelText.started(hour: parts.hour ?? 0, minute: parts.minute ?? 0)
+    private static func started(_ identity: ProcessIdentity, input: PanelInput) -> String {
+        PanelText.started(Date(timeIntervalSince1970: identity.startTime), calendar: input.calendar, locale: input.locale)
     }
 
     private static func isIgnored(_ reading: AgentReading) -> Bool {

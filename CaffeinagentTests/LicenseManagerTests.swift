@@ -55,6 +55,21 @@ final class LicenseManagerTests: XCTestCase {
         XCTAssertEqual(store.record?.lastValidated, t0)
     }
 
+    /// The plan of the key and the end of the trial, for Settings.
+    func testTheActivationSaysOnHowManyMacsTheKeyRuns() async {
+        let manager = makeManager()
+        XCTAssertEqual(manager.trialEnd, t0 + LicenseRules.trialLength)
+        api.activation = .activated(id: "act-1", macs: 3)
+        await manager.activate(key: key)
+        XCTAssertEqual(store.record?.macLimit, 3)
+        XCTAssertEqual(PanelText.keyRunsOn(macs: 3), "This key runs on 3 Macs.")
+        XCTAssertEqual(PanelText.keyRunsOn(macs: 1), "This key runs on 1 Mac.")
+        XCTAssertEqual(
+            LicenseMessage.limitReached.text,
+            "This key is in use on as many Macs as it allows. Choose Deactivate this Mac on one of them, then try again."
+        )
+    }
+
     func testActivateLimitReached() async {
         let manager = makeManager()
         api.activation = .limitReached

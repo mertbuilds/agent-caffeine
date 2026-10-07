@@ -26,7 +26,7 @@ enum AwakeMode: String, CaseIterable, Identifiable {
 
     var explanation: String {
         switch self {
-        case .always: return "Always: your Mac stays awake until you switch agent caffeine off, even when no agent is open."
+        case .always: return "Always: your Mac stays awake until you turn agent caffeine off, even when no agent is open."
         case .agentOpen: return "While an agent is open: your Mac stays awake as long as an agent is open, even when it is idle."
         case .agentWorking: return "While an agent is working: your Mac stays awake only while an agent is working, and can sleep when every agent is idle."
         }
