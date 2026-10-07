@@ -171,6 +171,10 @@ download_name() {
   echo "agent-caffeine-$1.dmg"
 }
 
+# The last build that was sold before the feed existed. The feed does not
+# list it, so a new release is above it whatever the feed says.
+LAST_BUILD_BEFORE_FEED=13
+
 # Sparkle compares CFBundleVersion, so an item whose build number is not above
 # every published one is never offered. A dmg name the site has served once is
 # never uploaded again.
@@ -179,6 +183,12 @@ check_new_release() {
   build="$2"
   if ! printf '%s' "$build" | grep -qE '^[0-9]+$'; then
     echo "error: build number '$build' is not a whole number" >&2
+    exit 1
+  fi
+  if [ "$build" -le "$LAST_BUILD_BEFORE_FEED" ]; then
+    echo "error: build $build is not above build $LAST_BUILD_BEFORE_FEED, which buyers" >&2
+    echo "       already run, so Sparkle would never offer it. raise" >&2
+    echo "       CURRENT_PROJECT_VERSION in project.yml." >&2
     exit 1
   fi
   if [ "$build" -le "$PUBLISHED_BUILD" ]; then
