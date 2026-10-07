@@ -4,12 +4,12 @@ export type Plan = {
   macs: number;
   /** US dollars, paid once. */
   price: number;
-  /** The Polar checkout link. A plan without one is not offered. */
+  /** The Polar checkout link. */
   checkoutUrl: string;
 };
 
-/** Every price on the site comes from here. */
-const ALL_PLANS: readonly Plan[] = [
+/** Every price on the site comes from here. The plan for a single Mac is first. */
+export const PLANS: readonly Plan[] = [
   {
     id: "one",
     macs: 1,
@@ -26,13 +26,6 @@ const ALL_PLANS: readonly Plan[] = [
       "https://buy.polar.sh/polar_cl_8L5mWP6HGDRU1OtZE9aUCiRGYLILln6kWyAKW0qHkIb",
   },
 ];
-
-/** The plans a reader can buy now, the one for a single Mac first. */
-export const PLANS: readonly Plan[] = ALL_PLANS.filter((plan) => plan.checkoutUrl !== "");
-
-if (PLANS.length === 0) {
-  throw new Error("lib/pricing.ts: no plan has a checkout link, so the site has nothing to sell. Give at least one plan a checkoutUrl.");
-}
 
 /** The plan every button outside the pricing card sells. */
 export const BASE_PLAN: Plan = PLANS[0];
