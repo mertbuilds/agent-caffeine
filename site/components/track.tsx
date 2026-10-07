@@ -1,18 +1,23 @@
 "use client";
 
 import Link from "next/link";
-import type { ReactNode } from "react";
+import { useSyncExternalStore, type ReactNode } from "react";
+import { checkoutUrlWith } from "@/lib/attribution";
 import type { Plan } from "@/lib/pricing";
+import { rememberedUtm, track, type Placement } from "@/lib/track";
 
-export type Placement = "header" | "hero" | "pricing" | "blog" | "footer";
+export type { Placement };
 
-function fire(event: string, props?: Record<string, unknown>) {
-  if (typeof window === "undefined") return;
-  if (typeof window.op !== "function") return;
-  window.op("track", event, props);
+const subscribe = () => () => {};
+
+function onServer(): null {
+  return null;
 }
 
-/** A link to a plan's checkout. The click is counted with the plan and its price. */
+/**
+ * A link to a plan's checkout. The click is counted with the plan and its price.
+ * The server's link is the plain checkout link. On the live site the browser then adds the visitor's source to it.
+ */
 export function BuyCta({
   plan,
   placement,
@@ -24,10 +29,11 @@ export function BuyCta({
   className?: string;
   children: ReactNode;
 }) {
+  const utm = useSyncExternalStore(subscribe, rememberedUtm, onServer);
   return (
     <Link
-      href={plan.checkoutUrl}
-      onClick={() => fire("buy_clicked", { placement, plan: plan.id, price: plan.price })}
+      href={utm === null ? plan.checkoutUrl : checkoutUrlWith(plan.checkoutUrl, utm)}
+      onClick={() => track("buy_click", { plan: plan.id, price: plan.price, placement })}
       className={className}
     >
       {children}
@@ -53,7 +59,7 @@ export function DownloadCta({
     <a
       href={href}
       download={href.startsWith("#") ? undefined : filename}
-      onClick={() => fire("download_clicked", { placement })}
+      onClick={() => track("download_click", { placement })}
       className={className}
     >
       {children}
