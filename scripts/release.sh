@@ -2,9 +2,10 @@
 # Release build → sign → notarize → staple → zip → dmg → appcast → R2 → Polar.
 #
 # This script is the only way to publish a release. The dmg, the appcast
-# Sparkle reads and the latest.json the download page reads go to the private
-# R2 bucket named by R2_BUCKET in ~/.config/agent-caffeine/release.env, under
-# mac/, and the site serves them at https://caffeinagent.com/mac/<file>. The
+# Sparkle reads and the latest.json the download page reads go to the R2
+# bucket named by R2_BUCKET in ~/.config/agent-caffeine/release.env, under
+# mac/. The bucket is public to read at https://files.caffeinagent.com, and
+# the site serves the files at https://caffeinagent.com/mac/<file>. The
 # dmg goes up first, so a feed never points at a file that is not there yet. An
 # upload is live at once: there is no site deploy in between.
 #
