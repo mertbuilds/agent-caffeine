@@ -402,6 +402,146 @@ final class VerdictTests: XCTestCase {
         }
     }
 
+    // MARK: Hook idle of an agent with no state of its own
+
+    /// Measured on 2026-10-07 with opencode 1.18.16 and its plugin: one
+    /// turn, `session.busy` at 1 s, `session.idle` and the last database
+    /// write at 54 s, no command, and the idle TUI at a steady 2 percent.
+    /// The hook idle was dropped at 114 s, the CPU rule took over, and at
+    /// 720 s the panel said "Working for 11 minutes".
+    func testIdleOpencodeTUIThatUsesTheCPUStaysIdle() {
+        for id in ["opencode", "droid"] {
+            let story = samples(to: 900, every: 2) { t in
+                self.hooked(id, at: t, events: [(1, .working), (54, .idle), (800, .working)], fileAt: t < 1 ? nil : min(t, 54), cpu: 2.0)
+            }
+            for got in runHeld(story) {
+                if (2..<54).contains(got.seconds) || got.seconds >= 800 {
+                    XCTAssertEqual(got.verdict, verdict(.working, .reported, .reportsBusy), "\(id) at \(got.seconds) s")
+                } else if got.seconds >= 54 {
+                    XCTAssertEqual(got.verdict, verdict(.idle, .reported, .atPrompt), "\(id) at \(got.seconds) s")
+                }
+                XCTAssertEqual(got.hold, (2..<54).contains(got.seconds) || got.seconds >= 800, "\(id) at \(got.seconds) s")
+            }
+            let told = told(story.filter { $0.seconds < 800 })
+            XCTAssertEqual(told.count, 1, "\(told)")
+        }
+    }
+
+    /// The same story with the hooks off: the CPU rule decides as before.
+    /// The write holds until 354 s, then the CPU alone for the cap.
+    func testWithoutHooksTheCPUOfTheIdleTUIDecidesAsBefore() {
+        let story = samples(to: 2700, every: 2) { t in self.hooked("opencode", at: t, events: [], fileAt: t < 1 ? nil : min(t, 54), cpu: 2.0) }
+        for got in runHeld(story) where got.seconds >= 2 {
+            XCTAssertEqual(got.hold, got.seconds < 2154, "at \(got.seconds) s")
+            if got.seconds >= 354 {
+                let want = got.seconds < 2154 ? verdict(.working, .inferredWeak, .cpuActivity) : verdict(.idle, .inferredWeak, .onlyWeakSigns(minutes: 30))
+                XCTAssertEqual(got.verdict, want, "at \(got.seconds) s")
+            }
+        }
+    }
+
+    /// A command the agent started runs on after the turn: it holds while
+    /// it is busy and for the release time after, as it did. The CPU of
+    /// the TUI holds nothing after that.
+    func testACommandThatOutlivesTheTurnHoldsAfterAHookIdle() {
+        let story = samples(to: 900, every: 2) { t in
+            self.hooked("opencode", at: t, events: [(0, .working), (30, .idle)], fileAt: min(t, 30), busy: (20..<150).contains(t) ? 1 : 0, cpu: 2.0)
+        }
+        for got in runHeld(story) {
+            switch got.seconds {
+            case ..<30: XCTAssertEqual(got.verdict, verdict(.working, .reported, .reportsBusy), "at \(got.seconds) s")
+            case ..<150: XCTAssertEqual(got.verdict, verdict(.working, .inferredStrong, .runningCommand(1)), "at \(got.seconds) s")
+            case ..<448: XCTAssertEqual(got.verdict, verdict(.working, .inferredStrong, .workedRecently(secondsAgo: Int(got.seconds - 148))), "at \(got.seconds) s")
+            default: XCTAssertEqual(got.verdict, verdict(.idle, .reported, .atPrompt), "at \(got.seconds) s")
+            }
+            XCTAssertEqual(got.hold, got.seconds < 448, "at \(got.seconds) s")
+        }
+        XCTAssertEqual(told(story).count, 1)
+        // A command that ends with the turn leaves no hold behind.
+        let ended = samples(to: 400, every: 2) { t in
+            self.hooked("droid", at: t, events: [(0, .working), (30, .idle)], busy: t < 36 ? 1 : 0, cpu: 2.0)
+        }
+        for got in runHeld(ended) {
+            XCTAssertEqual(got.hold, got.seconds < 36, "at \(got.seconds) s")
+        }
+    }
+
+    /// opencode writes its database when it stops. A write that close to
+    /// the idle is the turn that ended. A later one is work with no event,
+    /// and holds for the release time, as for opencode with no hooks.
+    func testADatabaseWriteAfterAHookIdle() {
+        XCTAssertEqual(VerdictRules.hookIdleMargin, 10)
+        let atTheStop = samples(to: 720, every: 2) { t in
+            self.hooked("opencode", at: t, events: [(1, .working), (54, .idle)], fileAt: t < 1 ? nil : min(t, 64), cpu: 2.0)
+        }
+        XCTAssertTrue(runHeld(atTheStop).allSatisfy { $0.hold == (2..<54).contains($0.seconds) })
+        let later = samples(to: 900, every: 2) { t in
+            self.hooked("opencode", at: t, events: [(1, .working), (54, .idle)], fileAt: t < 200 ? min(t, 54) : 200, cpu: 2.0)
+        }
+        for got in runHeld(later) where got.seconds >= 54 {
+            if (200..<500).contains(got.seconds) {
+                XCTAssertEqual(got.verdict, verdict(.working, .inferredStrong, .writingSessionFile(secondsAgo: Int(got.seconds - 200))), "at \(got.seconds) s")
+            } else {
+                XCTAssertEqual(got.verdict, verdict(.idle, .reported, .atPrompt), "at \(got.seconds) s")
+            }
+            XCTAssertEqual(got.hold, (200..<500).contains(got.seconds), "at \(got.seconds) s")
+        }
+    }
+
+    /// One process, two sessions: the idle of one does not hide the other
+    /// that works, within `hookWorkingLimit`.
+    func testAHookIdleDoesNotHideAWorkingSessionOfTheSameProcess() throws {
+        var file = HookStateFile(agent: "opencode", pid: 100, start: Self.processStart)
+        file.apply(.set(.working), session: "a", event: "session.busy", at: at(1))
+        file.apply(.set(.working), session: "b", event: "session.busy", at: at(2))
+        file.apply(.set(.idle), session: "b", event: "session.idle", at: at(54))
+        func sample(_ t: TimeInterval) throws -> AgentEvidence {
+            let summary = try XCTUnwrap(file.summary(now: at(t), freshness: VerdictRules.hookFreshness, workingLimit: VerdictRules.hookWorkingLimit))
+            return evidence("opencode", "opencode", .activity, cpu: 2.0, interval: 2, hook: summary.state, hookAt: summary.at)
+        }
+        let story = try stride(from: 54.0, through: 720, by: 2).map { (seconds: $0, evidence: try sample($0)) }
+        for got in runHeld(story) {
+            XCTAssertEqual(got.verdict, verdict(.working, .reported, .reportsBusy), "at \(got.seconds) s")
+            XCTAssertTrue(got.hold, "at \(got.seconds) s")
+        }
+        file.apply(.set(.idle), session: "a", event: "session.idle", at: at(730))
+        let ended = try stride(from: 730.0, through: 1500, by: 2).map { (seconds: $0, evidence: try sample($0)) }
+        XCTAssertTrue(runHeld(ended).allSatisfy { $0.verdict == self.verdict(.idle, .reported, .atPrompt) && !$0.hold })
+    }
+
+    /// The Mac slept for two hours after the turn. The idle stands, and
+    /// the write of the stop is no new work because the memory moved.
+    func testAHookIdleFromBeforeASleepStands() {
+        var memory = AgentMemory()
+        for (seconds, hole) in [(52.0, 0.0), (54, 0), (56, 0), (7256, 7200), (7258, 0), (7400, 0)] {
+            if hole > 0 { memory = memory.shifted(by: hole) }
+            let sample = hooked("opencode", at: seconds, events: [(1, .working), (54, .idle)], fileAt: min(seconds, 54), cpu: 2.0)
+            let (got, next) = VerdictRules.verdict(for: sample, memory: memory, settings: DetectionSettings(), now: at(seconds))
+            memory = next
+            XCTAssertEqual(got, seconds < 54 ? verdict(.working, .reported, .reportsBusy) : verdict(.idle, .reported, .atPrompt), "at \(seconds) s")
+        }
+    }
+
+    /// The wait of a hook, and an agent with a state of its own, are as
+    /// they were: an old hook idle of Claude Code or Codex decides nothing.
+    func testAnOldHookIdleOfAnAgentWithItsOwnStateDecidesNothing() {
+        for (id, source) in [("claude", StateReport.Source.claudeSessionFile), ("codex", .codexRollout)] {
+            let working = samples(to: 600) { t in
+                self.evidence(id, id, .state, cpu: 2.0, reported: self.report(.working, at: t, source: source), hook: .idle, hookAt: self.at(0))
+            }
+            XCTAssertTrue(run(working).allSatisfy { $0.verdict == self.verdict(.working, .reported, .reportsBusy) }, id)
+            let silent = samples(to: 600) { t in self.evidence(id, id, .state, cpu: 2.0, hook: .idle, hookAt: self.at(0)) }
+            for (seconds, got) in run(silent) where seconds > 60 {
+                XCTAssertEqual(got, verdict(.working, .inferredWeak, .cpuActivity), "\(id) at \(seconds) s")
+            }
+        }
+        let waits = samples(to: 600, every: 2) { t in self.hooked("opencode", at: t, events: [(0, .waitingForUser)], cpu: 2.0) }
+        for got in runHeld(waits) {
+            XCTAssertEqual(got.verdict, verdict(.waitingForUser, .reported, .asksPermission), "at \(got.seconds) s")
+            XCTAssertEqual(got.hold, got.seconds < 300, "at \(got.seconds) s")
+        }
+    }
+
     /// An agent with a state of its own keeps the ladder: its hook working
     /// counts for a minute, and then its session file, rollout or
     /// transcript decides.

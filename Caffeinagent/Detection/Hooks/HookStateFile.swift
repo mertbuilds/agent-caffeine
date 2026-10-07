@@ -100,7 +100,8 @@ struct HookStateFile: Codable, Equatable {
     /// session that never sent its last event cannot hide a live one. A
     /// session that waits for the user counts at any age: the wait ends
     /// with its next event, not with time. With no such session it is the
-    /// newest one, which the verdict then finds too old to use.
+    /// newest one. The verdict finds it too old to use, but for the idle
+    /// of an agent with no state of its own: `VerdictRules.noteHookIdle`.
     ///
     /// A working that is no longer fresh stands before a wait or an idle
     /// of another session for `workingLimit`: a long tool call sends no

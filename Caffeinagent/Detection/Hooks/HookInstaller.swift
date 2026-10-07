@@ -435,6 +435,24 @@ struct HookInstaller {
         home.appendingPathComponent("Library/Application Support/\(HookEvents.bundleID)/hook-installs", isDirectory: true)
     }
 
+    /// Where the hook command writes: `HookStateFile.directory`, below
+    /// this installer's home.
+    var statesDirectory: URL {
+        home.appendingPathComponent("Library/Application Support/\(HookEvents.bundleID)/hooks", isDirectory: true)
+    }
+
+    /// The idle a hook left stands until the next event of its process
+    /// (`VerdictRules.noteHookIdle`), and with the hooks off no event may
+    /// come. So "off" takes the states of the agent away, and the signs of
+    /// activity decide again. An agent that still sends events writes its
+    /// file anew.
+    private func forgetStates(of entry: HookCatalogEntry) {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: statesDirectory.path)) ?? []
+        for name in names where name.hasPrefix("\(entry.id)-") && name.hasSuffix(".json") {
+            try? FileManager.default.removeItem(at: statesDirectory.appendingPathComponent(name))
+        }
+    }
+
     private func recordURL(for entry: HookCatalogEntry) -> URL {
         recordsDirectory.appendingPathComponent("\(entry.id).json")
     }
@@ -527,6 +545,7 @@ struct HookInstaller {
     }
 
     func uninstall(_ entry: HookCatalogEntry) throws {
+        forgetStates(of: entry)
         let url = configURL(for: entry)
         guard let old = try read(url) else { return }
         switch entry.format {
