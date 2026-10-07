@@ -10,6 +10,7 @@ final class SleepReasonTests: XCTestCase {
     func testAStopIsTheReasonWhileAnAgentWorkedOrWaited() {
         let cases: [(HoldHeadline, SleepReason?)] = [
             (.safetyStop(.batteryLow(percent: 20)), .battery(percent: 20)),
+            (.safetyStop(.weakCharger(percent: 20)), .battery(percent: 20)),
             (.safetyStop(.tooHot), .tooHot),
             (.paused(until: at.addingTimeInterval(600)), .paused),
             (.notEntitled(.trialOver), .notEntitled(.trialOver)),

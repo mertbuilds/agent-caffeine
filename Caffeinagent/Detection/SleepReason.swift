@@ -33,7 +33,7 @@ enum SleepReason: Equatable {
     static func reason(_ snapshot: SleepSnapshot) -> SleepReason? {
         guard snapshot.agentActive else { return nil }
         switch snapshot.headline {
-        case .safetyStop(.batteryLow(let percent)): return .battery(percent: percent)
+        case .safetyStop(.batteryLow(let percent)), .safetyStop(.weakCharger(let percent)): return .battery(percent: percent)
         case .safetyStop(.tooHot): return .tooHot
         case .paused: return .paused
         case .notEntitled(let reason): return .notEntitled(reason)

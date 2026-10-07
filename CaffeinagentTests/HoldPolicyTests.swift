@@ -503,6 +503,7 @@ final class HoldPolicyTests: XCTestCase {
             (.waitingReleased(.many(2)), "Mac can sleep: 2 agents are waiting for you"),
             (.noAgents, "Mac can sleep: no agent is open"),
             (.safetyStop(.batteryLow(percent: 20)), "Sleeping allowed: battery at 20%"),
+            (.safetyStop(.weakCharger(percent: 20)), "Sleeping allowed: weak charger, battery at 20%"),
             (.safetyStop(.tooHot), "Sleeping allowed: the Mac is too hot"),
             (.switchedOff, "Mac can sleep: agent caffeine is off"),
             (.paused(until: Self.start), "Mac can sleep: agent caffeine is paused"),

@@ -237,14 +237,17 @@ struct FrameContext: Codable, Equatable {
     var thermalState = ProcessInfo.ThermalState.nominal.rawValue
     /// Someone is connected over SSH or screen sharing.
     var remoteAccessDetected = false
+    /// macOS says the battery charges. See `SafetyInputs.charging`.
+    var charging = false
 
     init(onBattery: Bool = false, batteryPercent: Int? = nil, lidClosed: Bool = false,
-         thermalState: Int = ProcessInfo.ThermalState.nominal.rawValue, remoteAccessDetected: Bool = false) {
+         thermalState: Int = ProcessInfo.ThermalState.nominal.rawValue, remoteAccessDetected: Bool = false, charging: Bool = false) {
         self.onBattery = onBattery
         self.batteryPercent = batteryPercent
         self.lidClosed = lidClosed
         self.thermalState = thermalState
         self.remoteAccessDetected = remoteAccessDetected
+        self.charging = charging
     }
 
     /// An unknown thermal value reads as nominal.
@@ -252,12 +255,13 @@ struct FrameContext: Codable, Equatable {
         SafetyInputs(
             batteryPercent: batteryPercent,
             onBattery: onBattery,
-            thermalState: ProcessInfo.ThermalState(rawValue: thermalState) ?? .nominal
+            thermalState: ProcessInfo.ThermalState(rawValue: thermalState) ?? .nominal,
+            charging: charging
         )
     }
 
     private enum CodingKeys: String, CodingKey {
-        case onBattery = "bat", batteryPercent = "pct", lidClosed = "lid", thermalState = "heat", remoteAccessDetected = "remote"
+        case onBattery = "bat", batteryPercent = "pct", lidClosed = "lid", thermalState = "heat", remoteAccessDetected = "remote", charging = "chg"
     }
 
     init(from decoder: Decoder) throws {
@@ -267,6 +271,7 @@ struct FrameContext: Codable, Equatable {
         lidClosed = try container.decodeIfPresent(Bool.self, forKey: .lidClosed) ?? false
         thermalState = try container.decodeIfPresent(Int.self, forKey: .thermalState) ?? ProcessInfo.ThermalState.nominal.rawValue
         remoteAccessDetected = try container.decodeIfPresent(Bool.self, forKey: .remoteAccessDetected) ?? false
+        charging = try container.decodeIfPresent(Bool.self, forKey: .charging) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -276,6 +281,7 @@ struct FrameContext: Codable, Equatable {
         if lidClosed { try container.encode(true, forKey: .lidClosed) }
         if thermalState != ProcessInfo.ThermalState.nominal.rawValue { try container.encode(thermalState, forKey: .thermalState) }
         if remoteAccessDetected { try container.encode(true, forKey: .remoteAccessDetected) }
+        if charging { try container.encode(true, forKey: .charging) }
     }
 }
 

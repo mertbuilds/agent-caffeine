@@ -631,7 +631,10 @@ final class StateAggregator: ObservableObject {
         if let begun = SafetyStop.toAnnounce(previous: engine.safety, current: stop, wasHolding: power.held) {
             notify(begun.notificationText)
         }
-        if let percent = noLimitWarning.update(context.safetyInputs, floorEnabled: settings.batteryFloorEnabled, holding: power.held) {
+        let warned = noLimitWarning.update(
+            context.safetyInputs, drainingOnPower: safetyMonitor.drainingOnPower, floorEnabled: settings.batteryFloorEnabled, holding: power.held
+        )
+        if let percent = warned {
             notify(NoLimitBatteryWarning.notificationText(percent: percent))
         }
         engine.safety = stop

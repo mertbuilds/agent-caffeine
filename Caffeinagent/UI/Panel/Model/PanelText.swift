@@ -77,6 +77,8 @@ enum PanelText {
             return (canSleepTitle, noAgentOpen)
         case .safetyStop(.batteryLow(let percent)):
             return (stoppedTitle, "The battery is at \(Self.percent(percent))")
+        case .safetyStop(.weakCharger(let percent)):
+            return (stoppedTitle, "Your charger is too weak and the battery is at \(Self.percent(percent))")
         case .safetyStop(.tooHot):
             return (stoppedTitle, "Your Mac got too hot")
         case .switchedOff:

@@ -79,6 +79,7 @@ enum HoldHeadline: Equatable {
         case .waitingReleased(let subject): return "Mac can sleep: \(Self.phrase(subject, one: "is waiting for you", many: "are waiting for you"))"
         case .noAgents: return "Mac can sleep: no agent is open"
         case .safetyStop(.batteryLow(let percent)): return "Sleeping allowed: battery at \(PanelText.percent(percent))"
+        case .safetyStop(.weakCharger(let percent)): return "Sleeping allowed: weak charger, battery at \(PanelText.percent(percent))"
         case .safetyStop(.tooHot): return "Sleeping allowed: the Mac is too hot"
         case .switchedOff: return "Mac can sleep: agent caffeine is off"
         case .paused: return "Mac can sleep: agent caffeine is paused"

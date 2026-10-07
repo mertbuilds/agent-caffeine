@@ -60,7 +60,8 @@ final class SystemPowerContext: PowerContextReading {
             onBattery: battery.onBattery,
             batteryPercent: battery.percent,
             lidClosed: lidClosed(),
-            thermalState: ProcessInfo.processInfo.thermalState.rawValue
+            thermalState: ProcessInfo.processInfo.thermalState.rawValue,
+            charging: battery.charging
         )
     }
 
@@ -72,10 +73,10 @@ final class SystemPowerContext: PowerContextReading {
         return value as? Bool ?? false
     }
 
-    private static func battery() -> (onBattery: Bool, percent: Int?) {
+    private static func battery() -> (onBattery: Bool, percent: Int?, charging: Bool) {
         guard let snapshot = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
               let sources = IOPSCopyPowerSourcesList(snapshot)?.takeRetainedValue() as? [CFTypeRef]
-        else { return (false, nil) }
+        else { return (false, nil, false) }
         for source in sources {
             guard let info = IOPSGetPowerSourceDescription(snapshot, source)?.takeUnretainedValue() as? [String: Any],
                   info[kIOPSTransportTypeKey] as? String == kIOPSInternalType else { continue }
@@ -84,9 +85,9 @@ final class SystemPowerContext: PowerContextReading {
             if let current = info[kIOPSCurrentCapacityKey] as? Int, let max = info[kIOPSMaxCapacityKey] as? Int, max > 0 {
                 percent = current * 100 / max
             }
-            return (onBattery, percent)
+            return (onBattery, percent, info[kIOPSIsChargingKey] as? Bool ?? false)
         }
-        return (false, nil)
+        return (false, nil, false)
     }
 }
 

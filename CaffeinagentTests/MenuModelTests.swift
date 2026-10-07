@@ -61,6 +61,7 @@ final class MenuModelTests: XCTestCase {
             (.waitingReleased(.many(2)), canSleep, "2 agents are waiting for you"),
             (.noAgents, canSleep, "No agent is open"),
             (.safetyStop(.batteryLow(percent: 20)), stopped, "The battery is at 20%"),
+            (.safetyStop(.weakCharger(percent: 20)), stopped, "Your charger is too weak and the battery is at 20%"),
             (.safetyStop(.tooHot), stopped, "Your Mac got too hot"),
             (.switchedOff, "agent caffeine is off", "Your Mac sleeps as usual"),
             (.notEntitled(.trialOver), stopped, "Your trial has ended"),
@@ -128,6 +129,7 @@ final class MenuModelTests: XCTestCase {
             (.paused(until: now), .paused),
             (.notEntitled(.trialOver), .off),
             (.safetyStop(.batteryLow(percent: 12)), .safetyStop(.battery)),
+            (.safetyStop(.weakCharger(percent: 12)), .safetyStop(.battery)),
             (.safetyStop(.tooHot), .safetyStop(.heat)),
         ]
         for (headline, pose) in cases {

@@ -98,6 +98,112 @@ final class SafetyMonitorTests: XCTestCase {
         XCTAssertEqual(monitor.update(low), .batteryLow(percent: 18))
     }
 
+    // MARK: A charger that is too weak
+
+    /// One sample on power. `charging` is what macOS says, and it decides nothing.
+    private func onPower(_ monitor: inout SafetyMonitor, _ percent: Int?, charging: Bool = false) -> SafetyStop? {
+        monitor.update(SafetyInputs(batteryPercent: percent, onBattery: false, thermalState: .nominal, charging: charging))
+    }
+
+    func testAWeakChargerThatLetsTheLevelFallStopsAtTheFloor() {
+        var monitor = SafetyMonitor()
+        XCTAssertNil(onPower(&monitor, 23))
+        XCTAssertNil(onPower(&monitor, 22))
+        XCTAssertFalse(monitor.drainingOnPower, "One point is no fall")
+        XCTAssertNil(onPower(&monitor, 21))
+        XCTAssertTrue(monitor.drainingOnPower)
+        XCTAssertEqual(onPower(&monitor, 20), .weakCharger(percent: 20))
+        XCTAssertEqual(onPower(&monitor, 19), .weakCharger(percent: 19))
+        // What macOS says about charging changes nothing.
+        var charging = SafetyMonitor()
+        XCTAssertNil(onPower(&charging, 21, charging: true))
+        XCTAssertNil(onPower(&charging, 20, charging: true))
+        XCTAssertEqual(onPower(&charging, 19, charging: true), .weakCharger(percent: 19))
+    }
+
+    func testAGoodChargerAtAChargeLimitNeverStops() {
+        // "On power, not charging" at a steady level, for a long time.
+        var monitor = SafetyMonitor()
+        monitor.batteryFloorPercent = 50
+        for _ in 0..<500 { XCTAssertNil(onPower(&monitor, 50)) }
+        XCTAssertFalse(monitor.drainingOnPower)
+        // One point down and up again, as a battery at its limit does.
+        for percent in [49, 50, 49, 50, 49] { XCTAssertNil(onPower(&monitor, percent), "\(percent)") }
+        XCTAssertFalse(monitor.drainingOnPower)
+    }
+
+    func testAGoodChargerBelowTheFloorNeverStops() {
+        var monitor = SafetyMonitor()
+        for percent in [5, 5, 6, 8, 12, 19, 20, 21] { XCTAssertNil(onPower(&monitor, percent, charging: true), "\(percent)") }
+    }
+
+    func testAFullBatteryAndAMacWithoutOneNeverStop() {
+        var full = SafetyMonitor()
+        for _ in 0..<100 { XCTAssertNil(onPower(&full, 100)) }
+        XCTAssertFalse(full.drainingOnPower)
+        var none = SafetyMonitor()
+        for _ in 0..<100 { XCTAssertNil(onPower(&none, nil)) }
+        XCTAssertFalse(none.drainingOnPower)
+    }
+
+    func testTheFallIsCountedFromWhereTheLevelLastRose() {
+        var monitor = SafetyMonitor()
+        for percent in [30, 29, 28] { XCTAssertNil(onPower(&monitor, percent)) }
+        XCTAssertTrue(monitor.drainingOnPower)
+        // The charger holds the level again.
+        XCTAssertNil(onPower(&monitor, 29))
+        XCTAssertFalse(monitor.drainingOnPower)
+        XCTAssertNil(onPower(&monitor, 28))
+        XCTAssertFalse(monitor.drainingOnPower, "One point below 29")
+        XCTAssertNil(onPower(&monitor, 27))
+        XCTAssertTrue(monitor.drainingOnPower)
+    }
+
+    func testAChangeOfThePowerSourceStartsTheCountAgain() {
+        var monitor = SafetyMonitor()
+        for percent in [24, 23, 22] { XCTAssertNil(onPower(&monitor, percent)) }
+        XCTAssertTrue(monitor.drainingOnPower)
+        XCTAssertNil(monitor.update(SafetyInputs(batteryPercent: 22, onBattery: true, thermalState: .nominal)))
+        XCTAssertFalse(monitor.drainingOnPower)
+        // Another charger: the level at 20 is no stop until it falls again.
+        XCTAssertNil(onPower(&monitor, 20))
+        XCTAssertNil(onPower(&monitor, 19))
+        XCTAssertEqual(onPower(&monitor, 18), .weakCharger(percent: 18))
+    }
+
+    func testAWeakChargerStopDoesNotFlap() {
+        var monitor = SafetyMonitor()
+        for percent in [22, 21] { XCTAssertNil(onPower(&monitor, percent)) }
+        XCTAssertEqual(onPower(&monitor, 20), .weakCharger(percent: 20))
+        // The Mac sleeps and uses less, so the weak charger gains.
+        XCTAssertEqual(onPower(&monitor, 21), .weakCharger(percent: 21))
+        XCTAssertEqual(onPower(&monitor, 24), .weakCharger(percent: 24))
+        XCTAssertNil(onPower(&monitor, 25))
+        XCTAssertFalse(monitor.drainingOnPower)
+        XCTAssertNil(onPower(&monitor, 24))
+        XCTAssertNil(onPower(&monitor, 23))
+        XCTAssertNil(onPower(&monitor, 21))
+        XCTAssertEqual(onPower(&monitor, 20), .weakCharger(percent: 20))
+        // Unplugged in the stop: it goes on as a battery stop.
+        XCTAssertEqual(monitor.update(SafetyInputs(batteryPercent: 20, onBattery: true, thermalState: .nominal)), .batteryLow(percent: 20))
+    }
+
+    func testWithTheFloorOffAWeakChargerNeverStopsAndIsWarnedAbout() {
+        var monitor = SafetyMonitor()
+        monitor.batteryFloorEnabled = false
+        var warning = NoLimitBatteryWarning()
+        var told: [Int?] = []
+        for percent in [13, 12, 11, 10, 9, 5] {
+            let inputs = SafetyInputs(batteryPercent: percent, onBattery: false, thermalState: .nominal)
+            XCTAssertNil(monitor.update(inputs))
+            told.append(warning.update(inputs, drainingOnPower: monitor.drainingOnPower, floorEnabled: false, holding: true))
+        }
+        XCTAssertEqual(told, [nil, nil, nil, 10, nil, 5])
+        // A good charger at a low level is told nothing.
+        var steady = NoLimitBatteryWarning()
+        XCTAssertNil(steady.update(SafetyInputs(batteryPercent: 5, onBattery: false, thermalState: .nominal), drainingOnPower: false, floorEnabled: false, holding: true))
+    }
+
     // MARK: No battery limit
 
     private func warn(_ warning: inout NoLimitBatteryWarning, _ percent: Int?, onBattery: Bool = true, floorEnabled: Bool = false, holding: Bool = true) -> Int? {
@@ -171,5 +277,9 @@ final class SafetyMonitorTests: XCTestCase {
     func testNotificationText() {
         XCTAssertEqual(SafetyStop.batteryLow(percent: 20).notificationText, "agent caffeine let your Mac sleep because the battery is at 20%")
         XCTAssertEqual(SafetyStop.tooHot.notificationText, "agent caffeine let your Mac sleep because it got too hot")
+        XCTAssertEqual(
+            SafetyStop.weakCharger(percent: 20).notificationText,
+            "agent caffeine let your Mac sleep because your charger is too weak and the battery is at 20%"
+        )
     }
 }
