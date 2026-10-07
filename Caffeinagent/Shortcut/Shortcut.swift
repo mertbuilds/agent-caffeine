@@ -151,13 +151,57 @@ enum ShortcutRules {
 }
 
 extension ShortcutAction {
-    /// The shortcut of an action that the user never changed. Three
-    /// modifiers, so it takes no key that another app or macOS uses.
+    /// The shortcut of an action that the user never changed, on a
+    /// keyboard layout like the American one. Three modifiers, so it takes
+    /// no key that another app or macOS uses. `ShortcutDefaults` moves it
+    /// to the key that types the same letter in the user's layout.
     var defaultShortcut: Shortcut {
         switch self {
         case .toggle: return Shortcut(keyCode: 8, modifiers: [.control, .option, .command], key: "C")
         case .pauseOneHour: return Shortcut(keyCode: 35, modifiers: [.control, .option, .command], key: "P")
         }
+    }
+}
+
+/// What the keys type in one keyboard layout.
+protocol KeyLayout {
+    /// What the key types with no modifier held. Nil for a key that types
+    /// nothing.
+    func characters(keyCode: UInt16) -> String?
+}
+
+/// The default shortcuts mean the letters C and P, not two places on the
+/// keyboard: on Dvorak the place of the American C types J. So each
+/// default goes to the key that types its letter.
+enum ShortcutDefaults {
+    /// The defaults on a keyboard layout like the American one.
+    static let american = Dictionary(uniqueKeysWithValues: ShortcutAction.allCases.map { ($0, $0.defaultShortcut) })
+
+    /// The key codes of a keyboard.
+    static let keyCodes: ClosedRange<UInt16> = 0...127
+
+    /// The defaults in the first layout that has a key for every letter.
+    /// A layout that lacks one letter gives none: its other letter could
+    /// stand on the key the American default of the first one takes.
+    /// - Parameter layouts: the layout in use first, then the ones to fall
+    ///   back on. With none of them, the American defaults.
+    static func resolve(in layouts: [KeyLayout]) -> [ShortcutAction: Shortcut] {
+        for layout in layouts {
+            var found: [ShortcutAction: Shortcut] = [:]
+            for (action, shortcut) in american {
+                guard let keyCode = keyCode(typing: shortcut.key, in: layout, preferred: shortcut.keyCode) else { break }
+                found[action] = Shortcut(keyCode: keyCode, modifiers: shortcut.modifiers, key: shortcut.key)
+            }
+            if found.count == american.count { return found }
+        }
+        return american
+    }
+
+    /// The key that types the letter. The preferred key when it does, else
+    /// the first one.
+    static func keyCode(typing letter: String, in layout: KeyLayout, preferred: UInt16) -> UInt16? {
+        let letter = letter.lowercased()
+        return ([preferred] + Array(keyCodes)).first { layout.characters(keyCode: $0)?.lowercased() == letter }
     }
 }
 
@@ -168,6 +212,9 @@ struct ShortcutChoices: Equatable {
     var recorded: [ShortcutAction: Shortcut] = [:]
     /// The actions whose shortcut the user cleared.
     var cleared: Set<ShortcutAction> = []
+    /// The default of each action in the user's keyboard layout. Never
+    /// stored: see `ShortcutStore`.
+    var defaults = ShortcutDefaults.american
 
     /// Nil clears the shortcut.
     mutating func set(_ shortcut: Shortcut?, for action: ShortcutAction) {
@@ -191,7 +238,7 @@ struct ShortcutChoices: Equatable {
     var shortcuts: [ShortcutAction: Shortcut] {
         var shortcuts = recorded
         for action in ShortcutAction.allCases where !isChanged(action) {
-            let fallback = action.defaultShortcut
+            guard let fallback = defaults[action] else { continue }
             if !recorded.values.contains(where: { $0.keys == fallback.keys }) { shortcuts[action] = fallback }
         }
         return shortcuts

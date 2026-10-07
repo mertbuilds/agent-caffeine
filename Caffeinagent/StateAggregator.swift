@@ -18,6 +18,10 @@ struct AggregatorParts {
     /// Nil sends no agent notification and asks macOS nothing.
     var notifier: AgentNotifying?
     var loginItem: LoginItemManaging
+    /// The keyboard layouts the default shortcuts are looked up in, asked
+    /// again when the user selects another layout. With none, the defaults
+    /// stay on the keys of the American layout.
+    var keyLayouts: () -> [KeyLayout] = { [] }
 
     static func system() -> AggregatorParts {
         AggregatorParts(
@@ -33,7 +37,8 @@ struct AggregatorParts {
             ),
             notify: Notifier.post,
             notifier: Notifier.shared,
-            loginItem: SystemLoginItem()
+            loginItem: SystemLoginItem(),
+            keyLayouts: SystemKeyLayout.inUse
         )
     }
 }
@@ -187,6 +192,8 @@ final class StateAggregator: ObservableObject {
     private let defaults: UserDefaults
     private let power: PowerHolding
     private let hotKeys: HotKeyRegistering
+    private let keyLayouts: () -> [KeyLayout]
+    private var recordingShortcut = false
     private let display: DisplayController?
     private let notify: (String) -> Void
     private let notifier: AgentNotifying?
@@ -240,6 +247,7 @@ final class StateAggregator: ObservableObject {
         self.defaults = defaults
         self.power = parts.power
         self.hotKeys = parts.hotKeys
+        self.keyLayouts = parts.keyLayouts
         self.display = parts.display
         self.notify = parts.notify
         self.notifier = parts.notifier
@@ -250,7 +258,9 @@ final class StateAggregator: ObservableObject {
         self.enabled = enabled
         self.pause = pause
         self.reachable = reachable
-        self.shortcutChoices = ShortcutStore.load(from: defaults)
+        var shortcutChoices = ShortcutStore.load(from: defaults)
+        shortcutChoices.defaults = ShortcutDefaults.resolve(in: parts.keyLayouts())
+        self.shortcutChoices = shortcutChoices
         self.mode = mode
         self.settings = settings
         self.notices = AgentNoticeSettings.load(from: defaults)
@@ -335,6 +345,10 @@ final class StateAggregator: ObservableObject {
         refreshLoginItem()
         syncSleepFlag()
         registerShortcuts()
+        DistributedNotificationCenter.default().publisher(for: SystemKeyLayout.changed)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.keyLayoutChanged() }
+            .store(in: &cancellables)
         // The display controller acts on a lid that closes by itself and at
         // once. The sample is for the rest of the app.
         display?.start { [weak self] in self?.engine.requestSample() }
@@ -541,12 +555,23 @@ final class StateAggregator: ObservableObject {
 
     /// While Preferences records a shortcut, none of them is registered.
     func setShortcutRecording(_ recording: Bool) {
+        recordingShortcut = recording
         if recording {
             hotKeys.unregisterAll()
             shortcutProblems = [:]
         } else {
             registerShortcuts()
         }
+    }
+
+    /// The letter of a default shortcut stands on another key now, so the
+    /// default moves there. A shortcut the user recorded stays on its key.
+    private func keyLayoutChanged() {
+        let resolved = ShortcutDefaults.resolve(in: keyLayouts())
+        guard resolved != shortcutChoices.defaults else { return }
+        shortcutChoices.defaults = resolved
+        // The end of the recording registers them.
+        if !recordingShortcut { registerShortcuts() }
     }
 
     private func registerShortcuts() {

@@ -119,6 +119,76 @@ final class ShortcutTests: XCTestCase {
         }
     }
 
+    // MARK: Defaults in the user's keyboard layout
+
+    private struct Layout: KeyLayout {
+        var keys: [UInt16: String]
+        func characters(keyCode: UInt16) -> String? { keys[keyCode] }
+    }
+
+    /// The letter keys of the American layout, and of Dvorak on the same keys.
+    private let qwerty = Layout(keys: [
+        0: "a", 1: "s", 2: "d", 3: "f", 4: "h", 5: "g", 6: "z", 7: "x", 8: "c", 9: "v", 11: "b", 12: "q", 13: "w", 14: "e",
+        15: "r", 16: "y", 17: "t", 31: "o", 32: "u", 34: "i", 35: "p", 37: "l", 38: "j", 40: "k", 41: ";", 45: "n", 46: "m",
+    ])
+    private let dvorak = Layout(keys: [
+        0: "a", 1: "o", 2: "e", 3: "u", 4: "d", 5: "i", 6: ";", 7: "q", 8: "j", 9: "k", 11: "x", 12: "'", 13: ",", 14: ".",
+        15: "p", 16: "f", 17: "y", 31: "r", 32: "g", 34: "c", 35: "l", 37: "n", 38: "h", 40: "t", 41: "s", 45: "b", 46: "m",
+    ])
+
+    func testTheDefaultsOfTheAmericanLayout() {
+        XCTAssertEqual(ShortcutDefaults.resolve(in: [qwerty]), [.toggle: toggleDefault, .pauseOneHour: pauseDefault])
+        XCTAssertEqual(ShortcutDefaults.resolve(in: []), [.toggle: toggleDefault, .pauseOneHour: pauseDefault])
+        XCTAssertEqual(ShortcutDefaults.american, [.toggle: toggleDefault, .pauseOneHour: pauseDefault])
+    }
+
+    /// The label and the key agree: C is where Dvorak has its C.
+    func testTheDefaultsGoToTheKeysThatTypeTheirLetters() {
+        let defaults = ShortcutDefaults.resolve(in: [dvorak, qwerty])
+        XCTAssertEqual(defaults[.toggle], Shortcut(keyCode: 34, modifiers: [.control, .option, .command], key: "C"))
+        XCTAssertEqual(defaults[.pauseOneHour], Shortcut(keyCode: 15, modifiers: [.control, .option, .command], key: "P"))
+        XCTAssertEqual(defaults[.toggle]?.display, "⌃⌥⌘C")
+        for (action, shortcut) in defaults {
+            XCTAssertEqual(dvorak.characters(keyCode: shortcut.keyCode)?.uppercased(), shortcut.key, action.rawValue)
+            XCTAssertNil(ShortcutRules.problem(shortcut), action.rawValue)
+        }
+    }
+
+    func testALayoutThatTypesCapitalsCounts() {
+        let capitals = Layout(keys: [20: "C", 21: "P"])
+        XCTAssertEqual(ShortcutDefaults.resolve(in: [capitals]).mapValues(\.keyCode), [.toggle: 20, .pauseOneHour: 21])
+    }
+
+    func testALayoutWithoutTheLettersGivesWayToTheNextOne() {
+        let cyrillic = Layout(keys: [8: "с", 35: "з"])
+        XCTAssertEqual(ShortcutDefaults.resolve(in: [cyrillic, dvorak]).mapValues(\.keyCode), [.toggle: 34, .pauseOneHour: 15])
+        XCTAssertEqual(ShortcutDefaults.resolve(in: [cyrillic]), ShortcutDefaults.american)
+    }
+
+    /// One letter alone is not taken: here C types on the key the American
+    /// P takes, and both defaults would have the same key.
+    func testALayoutWithOneLetterOnlyGivesNone() {
+        let half = Layout(keys: [35: "c"])
+        XCTAssertEqual(ShortcutDefaults.keyCode(typing: "C", in: half, preferred: 8), 35)
+        XCTAssertNil(ShortcutDefaults.keyCode(typing: "P", in: half, preferred: 35))
+        XCTAssertEqual(ShortcutDefaults.resolve(in: [half]), ShortcutDefaults.american)
+    }
+
+    func testAResolvedDefaultIsUsedAndNeverStored() {
+        var choices = ShortcutStore.load(from: defaults)
+        choices.defaults = ShortcutDefaults.resolve(in: [dvorak])
+        XCTAssertEqual(choices.shortcuts.mapValues(\.keyCode), [.toggle: 34, .pauseOneHour: 15])
+        XCTAssertFalse(choices.isChanged(.toggle))
+        ShortcutStore.save(choices, to: defaults)
+        XCTAssertNil(defaults.object(forKey: ShortcutStore.key))
+        XCTAssertNil(defaults.object(forKey: ShortcutStore.clearedKey))
+        XCTAssertEqual(ShortcutStore.load(from: defaults).shortcuts, [.toggle: toggleDefault, .pauseOneHour: pauseDefault])
+
+        // A shortcut the user recorded on the key of a default takes it.
+        choices.set(Shortcut(keyCode: 34, modifiers: [.control, .option, .command], key: "C"), for: .pauseOneHour)
+        XCTAssertEqual(choices.shortcuts.mapValues(\.keyCode), [.pauseOneHour: 34])
+    }
+
     func testAnActionTheUserNeverChangedHasItsDefault() {
         let choices = ShortcutStore.load(from: defaults)
         XCTAssertEqual(choices, ShortcutChoices())
