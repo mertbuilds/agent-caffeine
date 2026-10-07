@@ -2,10 +2,26 @@ import NumberFlow, { NumberFlowGroup } from "@number-flow/react";
 import { MenuIcon } from "@/components/menu-icon";
 import { Working } from "./screen";
 
-const TWO_DIGITS = { minimumIntegerDigits: 2 };
 // A little longer than the timer's 100 ms step, so the rolls run into each other like fast counting.
 const ROLL = { duration: 160, easing: "ease-out" };
 const FADE = { duration: 80, easing: "ease-out" };
+
+const TIMING = { transformTiming: ROLL, spinTiming: ROLL, opacityTiming: FADE };
+
+/** A number of up to two digits and its unit in full, in the room of two digits and the plural, so the pill keeps its width while the number races. */
+function Count({ amount, unit }: { amount: number; unit: string }) {
+  return (
+    <>
+      <span className="inline-block w-[2ch] text-right">
+        <NumberFlow value={amount} locales="en-US" {...TIMING} />
+      </span>{" "}
+      <span className="inline-grid">
+        <span className="invisible [grid-area:1/1]">{unit}s</span>
+        <span className="[grid-area:1/1]">{amount === 1 ? unit : `${unit}s`}</span>
+      </span>
+    </>
+  );
+}
 
 type PillProps = {
   /** How far the pill has come in, from 0 to 1. */
@@ -34,23 +50,7 @@ export function Pill({ shown, at, seconds }: PillProps) {
       <span>Still working</span>
       <span aria-hidden="true" className="tabular-nums text-muted">
         <NumberFlowGroup>
-          <span className="inline-block w-[2ch] text-right">
-            <NumberFlow
-              value={Math.floor(seconds / 60)}
-              transformTiming={ROLL}
-              spinTiming={ROLL}
-              opacityTiming={FADE}
-            />
-          </span>
-          m{" "}
-          <NumberFlow
-            value={seconds % 60}
-            format={TWO_DIGITS}
-            transformTiming={ROLL}
-            spinTiming={ROLL}
-            opacityTiming={FADE}
-          />
-          s
+          <Count amount={Math.floor(seconds / 60)} unit="minute" /> <Count amount={seconds % 60} unit="second" />
         </NumberFlowGroup>
       </span>
       <MenuIcon className="h-[1.1em] w-[1.1em] shrink-0 text-[var(--accent)]" held />
