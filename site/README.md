@@ -15,6 +15,15 @@ Without it the page shows only the buy button. The same happens while `latest.js
 
 To see the page with a download while none is published, put `NEXT_PUBLIC_FAKE_RELEASE=1` in `.env.development.local`. The dev server then shows a sample release whose link goes nowhere. A production build ignores it.
 
+## Download count
+
+Every download button links to `/download?from=<placement>`. The route (`app/download/route.ts`) counts the download on the server and answers with a redirect to the dmg under `/mac/`. It needs no script in the browser, so a content blocker does not hide it.
+
+- What is counted: one event named `download`, with the version, the build, the placement (`header`, `menu`, `hero`, `pricing`, `blog`, `footer`, else `other`) and `utm_source`, `utm_medium` and `utm_campaign` when the link carries them. OpenPanel takes the country and the device from the visitor's IP address and user agent, which the route sends on. The site stores nothing and sets no cookie.
+- What is not counted: requests off `caffeinagent.com` and `www.caffeinagent.com`, bots, prefetches and `HEAD` requests. They still get the redirect. `robots.txt` keeps crawlers away from `/download`.
+- Where to see it: the OpenPanel project `caffeinagent`, event `download`.
+- `OPENPANEL_CLIENT_SECRET` must be set on Vercel, for production only, next to `NEXT_PUBLIC_OPENPANEL_CLIENT_ID`. Without it the route only redirects.
+
 ## Link preview picture
 
 `public/og.png` (1200 by 630) is a picture of the page at `/og-image`, which only the dev server draws; a production build answers "not found" there. The page takes the price from `lib/pricing.ts`. After a change to the price, the headline or the icon, run `scripts/og-image.sh` with the dev server up and commit the new `public/og.png`. The script needs the `ego-browser` CLI.

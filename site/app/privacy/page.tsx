@@ -75,6 +75,12 @@ export default function Privacy() {
         are no cookies. The app itself sends none of this.
       </p>
       <p>
+        When you download the app, the site also counts the download on the server, with no
+        cookie: the version, where on the page the button was, the source of the link that brought
+        you here, and the country and the kind of browser, taken from your IP address and user
+        agent.
+      </p>
+      <p>
         If the link that brought you here names its source (for example{" "}
         <code>utm_source</code>), your browser keeps that source until you close the tab. The page
         view carries it, and the checkout link passes it to Polar, so I can see which link led to
