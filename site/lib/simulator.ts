@@ -837,23 +837,23 @@ export function pose(line: Headline): Pose {
 }
 
 /** `MenuBarLook`: what the robot in the menu bar is drawn from. */
-export type IconLook = { eyes: "happy" | "open" | "closed" | "dead"; solid: boolean; opacity: number; paused?: boolean };
+export type IconLook = { eyes: "happy" | "open" | "closed" | "dead"; opacity: number; paused?: boolean };
 
 export function iconLook(of: Pose): IconLook {
   switch (of) {
     case "awake":
     case "reachable":
-      return { eyes: "happy", solid: true, opacity: 1 };
+      return { eyes: "happy", opacity: 1 };
     case "attentive":
-      return { eyes: "open", solid: true, opacity: 1 };
+      return { eyes: "open", opacity: 1 };
     case "asleep":
-      return { eyes: "closed", solid: false, opacity: 1 };
+      return { eyes: "closed", opacity: 1 };
     case "paused":
-      return { eyes: "closed", solid: false, opacity: 0.45, paused: true };
+      return { eyes: "closed", opacity: 0.45, paused: true };
     case "off":
-      return { eyes: "closed", solid: false, opacity: 0.45 };
+      return { eyes: "closed", opacity: 0.45 };
     case "trouble":
-      return { eyes: "dead", solid: false, opacity: 1 };
+      return { eyes: "dead", opacity: 1 };
   }
 }
 
