@@ -533,12 +533,33 @@ export function keepsAwake(line: Headline): boolean {
   }
 }
 
-/** Simulated seconds until the last waiting hold runs out, or null when no agent holds by waiting. */
-export function waitingLeft(state: SimState): number | null {
-  const left = state.sessions
-    .filter((run) => cause(run, state.mode, state.now) === "waitingForUser" && run.waitingSince !== null)
-    .map((run) => (run.waitingSince ?? 0) + WAITING_HOLD - state.now);
-  return left.length === 0 ? null : Math.max(...left);
+/**
+ * `SleepOutlook`: what happens when the hold for the agents that wait ends.
+ * Silent when something else keeps the Mac awake, or nothing does.
+ */
+export type SleepOutlook = { kind: "silent" } | { kind: "sleeps" | "letsGo"; after: number };
+
+/** `HoldPolicy.waitingEnds`: null when an agent holds for another cause, or none waits. */
+function waitingEnds(state: SimState): number | null {
+  const held = state.sessions.map((run) => ({ run, cause: cause(run, state.mode, state.now) }));
+  if (held.some((entry) => entry.cause !== null && entry.cause !== "waitingForUser")) return null;
+  const ends = held.flatMap(({ run, cause: why }) => {
+    if (why !== "waitingForUser" || run.waitingSince === null) return [];
+    const waited = run.waitingSince + WAITING_HOLD;
+    // An agent that reports its own state holds on as "finished a moment ago" after a short wait.
+    return [run.lastWorkingAt === null ? waited : Math.max(waited, run.lastWorkingAt + RELEASE_AFTER)];
+  });
+  return ends.length === 0 ? null : Math.max(...ends);
+}
+
+/** `SleepOutlook.init`, with `HoldPolicy.decide` for the cases where the Mac stays awake anyway. */
+export function sleepOutlook(state: SimState): SleepOutlook {
+  if (!keepsAwake(headline(state)) || state.mode !== "agentWorking" || reachableUntil(state) !== null) return { kind: "silent" };
+  const ends = waitingEnds(state);
+  if (ends === null || ends - state.now <= 0) return { kind: "silent" };
+  const after = ends - state.now;
+  // With the lid closed on battery only the helper keeps the Mac awake, so it sleeps when agent caffeine lets go.
+  return state.lid === "closed" && state.power === "battery" && state.helper ? { kind: "sleeps", after } : { kind: "letsGo", after };
 }
 
 /** How often, in real milliseconds, the clock must tick for the view to stay true, or null when nothing changes. */
@@ -596,12 +617,51 @@ function phrase(who: Subject, one: string, many: string): string {
 }
 
 /** The minutes the menu names for a waiting hold: whole, and never less than one. */
-export function minutesLeft(seconds: number): number {
+function minutesLeft(seconds: number): number {
   return Math.max(1, Math.ceil(seconds / 60));
 }
 
+/** `PanelText.timeLeft`: "5 minutes". A hold for an agent that waits never lasts an hour here. */
+function timeLeft(seconds: number): string {
+  return counted(minutesLeft(seconds), "minute");
+}
+
+/** `PanelText.moreTime`: "5 more minutes". */
+function moreTime(seconds: number): string {
+  const minutes = minutesLeft(seconds);
+  return `${minutes} more ${minutes === 1 ? "minute" : "minutes"}`;
+}
+
+/**
+ * `PanelText.sleepOutlook`: the body of a notification about an agent that
+ * waits. Null when something else keeps the Mac awake. With the lid open it
+ * says what agent caffeine does, never when the Mac sleeps.
+ */
+export function sleepOutlookText(outlook: SleepOutlook): string | null {
+  switch (outlook.kind) {
+    case "silent":
+      return null;
+    case "sleeps":
+      return `Your Mac sleeps in ${timeLeft(outlook.after)}`;
+    case "letsGo":
+      return `agent caffeine keeps your Mac awake for ${moreTime(outlook.after)}`;
+  }
+}
+
+/** `PanelText.waitingEnd`: the same below the headline, after the name of the agent. */
+function waitingEnd(outlook: SleepOutlook): string | null {
+  switch (outlook.kind) {
+    case "silent":
+      return null;
+    case "sleeps":
+      return `your Mac sleeps in ${timeLeft(outlook.after)}`;
+    case "letsGo":
+      return `for at least ${moreTime(outlook.after)}`;
+  }
+}
+
 /** `PanelText.headline`: the outcome, then the reason. */
-export function headlineText(line: Headline, waitingFor: number | null, now = 0): { title: string; subtitle: string } {
+export function headlineText(line: Headline, outlook: SleepOutlook = { kind: "silent" }, now = 0): { title: string; subtitle: string } {
   const awake = "Your Mac stays awake";
   const canSleep = "Your Mac can sleep";
   switch (line.kind) {
@@ -609,10 +669,8 @@ export function headlineText(line: Headline, waitingFor: number | null, now = 0)
       return { title: awake, subtitle: phrase(line.subject, "is working", "are working") };
     case "waitingHeld": {
       const waiting = phrase(line.subject, "is waiting for you", "are waiting for you");
-      return {
-        title: awake,
-        subtitle: waitingFor === null ? waiting : `${waiting}, can sleep in ${counted(minutesLeft(waitingFor), "minute")}`,
-      };
+      const end = waitingEnd(outlook);
+      return { title: awake, subtitle: end === null ? waiting : `${waiting}, ${end}` };
     }
     case "finishedRecently":
       return { title: awake, subtitle: phrase(line.subject, "finished a moment ago", "finished a moment ago") };
@@ -917,7 +975,6 @@ function bar(state: SimState, line: Headline): Bar {
 
 export function view(state: SimState): View {
   const line = headline(state);
-  const waitingFor = line.kind === "waitingHeld" ? waitingLeft(state) : null;
   const stance = pose(line);
   const empty = state.sessions.length === 0 && AGENTS.every((agent) => state.idleExtra[agent.id] === 0);
   return {
@@ -925,7 +982,7 @@ export function view(state: SimState): View {
     pose: stance,
     look: iconLook(stance),
     iconLabel: iconLabel(iconLook(stance), line.kind === "reachable" ? line.until : null),
-    ...headlineText(line, waitingFor, state.now),
+    ...headlineText(line, sleepOutlook(state), state.now),
     attention: attention(state, line),
     battery: battery(state, line),
     bar: bar(state, line),

@@ -166,7 +166,7 @@ export function SmallThings() {
             <span className="flex min-w-0 flex-col gap-px text-[12px] leading-4">
               <span className="font-medium">Claude Code is waiting for you</span>
               <span className="font-medium">wiki</span>
-              <span>Your Mac can sleep in 5 minutes</span>
+              <span>agent caffeine keeps your Mac awake for 5 more minutes</span>
             </span>
           </PanelSurface>
         </Thing>

@@ -140,7 +140,7 @@ export function SleepScenes() {
               <Robot pose="attentive" size={56} still />
               <p className="flex min-w-0 flex-col gap-0.5">
                 <span className="text-[15px] leading-5">Your Mac stays awake</span>
-                <span className="text-pretty text-[12px] text-[var(--panel-muted)]">Claude Code is waiting for you, can sleep in 1 minute</span>
+                <span className="text-pretty text-[12px] text-[var(--panel-muted)]">Claude Code is waiting for you, for at least 1 more minute</span>
               </p>
             </div>
             <div className="h-px bg-[var(--panel-line)]" />

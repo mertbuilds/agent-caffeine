@@ -8,6 +8,7 @@ import {
   SPEED,
   WAITING_HOLD,
   advance,
+  allowHelper,
   batteryStop,
   clockTime,
   lasting,
@@ -19,6 +20,8 @@ import {
   setLid,
   setMode,
   setPower,
+  sleepOutlook,
+  sleepOutlookText,
   startPause,
   startReachable,
   stopReachable,
@@ -53,7 +56,7 @@ test("a wait begins when it is set, whatever the clock did before", () => {
   const quit = setChoice(setChoice(preset(INITIAL, "working"), "claude", "closed"), "codex", "closed");
   const asked = setChoice(later(quit, 3600), "claude", "waiting");
   assert.equal(view(asked).held, true);
-  assert.equal(view(asked).subtitle, "Claude Code is waiting for you, can sleep in 5 minutes");
+  assert.equal(view(asked).subtitle, "Claude Code is waiting for you, for at least 5 more minutes");
   assert.equal(view(asked).groups[0].detail, "Waiting for your answer");
   // A wait that ran out begins again when it is set again.
   const released = later(asked, WAITING_HOLD + 300);
@@ -61,7 +64,7 @@ test("a wait begins when it is set, whatever the clock did before", () => {
   assert.equal(view(released).groups[0].detail, "Waiting for your answer for 10 minutes");
   const again = setChoice(released, "claude", "waiting");
   assert.equal(view(again).held, true);
-  assert.equal(view(again).subtitle, "Claude Code is waiting for you, can sleep in 5 minutes");
+  assert.equal(view(again).subtitle, "Claude Code is waiting for you, for at least 5 more minutes");
   // A wait that still holds is left alone.
   assert.equal(setChoice(asked, "claude", "waiting"), asked);
 });
@@ -71,14 +74,32 @@ test("an agent that waits holds for 5 minutes, then the Mac can sleep", () => {
   const first = view(asked);
   assert.equal(first.held, true);
   assert.equal(first.pose, "attentive");
-  assert.equal(first.subtitle, "Claude Code is waiting for you, can sleep in 5 minutes");
+  assert.equal(first.subtitle, "Claude Code is waiting for you, for at least 5 more minutes");
   assert.equal(first.groups[0].detail, "Asked you a moment ago");
-  assert.equal(view(later(asked, WAITING_HOLD - 30)).subtitle, "Claude Code is waiting for you, can sleep in 1 minute");
+  assert.equal(view(later(asked, WAITING_HOLD - 30)).subtitle, "Claude Code is waiting for you, for at least 1 more minute");
   const released = view(later(asked, WAITING_HOLD));
   assert.equal(released.held, false);
   assert.equal(released.pose, "asleep");
   assert.equal(released.subtitle, "Claude Code is waiting for you");
   assert.equal(released.groups[0].detail, "Waiting for your answer for 5 minutes");
+});
+
+test("the menu says what agent caffeine does, and when the Mac sleeps only with the lid closed on battery", () => {
+  const asked = preset(INITIAL, "waiting");
+  assert.deepEqual(sleepOutlook(asked), { kind: "letsGo", after: WAITING_HOLD });
+  assert.equal(sleepOutlookText(sleepOutlook(asked)), "agent caffeine keeps your Mac awake for 5 more minutes");
+  // Only the helper keeps the Mac awake with the lid closed on battery.
+  const closed = setLid(allowHelper(setPower(asked, "battery")), "closed");
+  assert.equal(view(closed).subtitle, "Claude Code is waiting for you, your Mac sleeps in 5 minutes");
+  assert.equal(sleepOutlookText(sleepOutlook(closed)), "Your Mac sleeps in 5 minutes");
+  assert.equal(view(setPower(closed, "adapter")).subtitle, "Claude Code is waiting for you, for at least 5 more minutes");
+  // Another agent works, so nothing is said about sleep.
+  const busy = setChoice(asked, "codex", "working");
+  assert.equal(view(busy).subtitle, "Codex is working");
+  assert.equal(sleepOutlookText(sleepOutlook(busy)), null);
+  // The Mac stays awake anyway in the mode "while an agent is open".
+  assert.equal(view(setMode(asked, "agentOpen")).subtitle, "Claude Code is waiting for you");
+  assert.equal(sleepOutlookText(sleepOutlook(later(asked, WAITING_HOLD))), null);
 });
 
 test("a busy command holds after the agent is done", () => {
