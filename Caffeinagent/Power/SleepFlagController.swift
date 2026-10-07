@@ -137,10 +137,15 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
     private var lastRepairEnd = -TimeInterval.infinity
     private var lastSendAfterLoss = -TimeInterval.infinity
     private var lastOffWithTheHelperOff = -TimeInterval.infinity
+    private var lastSampleAt: TimeInterval
+    private var heartbeatsHeldBack = false
     private var heartbeatTask: Task<Void, Never>?
     private let log = Logger(subsystem: "com.caffeinagent.app", category: "SleepFlagController")
 
     static let wasSetUpKey = "SleepFlagController.helperWasSetUp"
+    /// The samples are 2 or 5 seconds apart. After this long without one
+    /// the sampling hangs, and nobody watches the battery and the heat.
+    static let samplePatience: TimeInterval = 30
 
     init(
         service: HelperServiceManaging,
@@ -148,7 +153,8 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         sudoers: SudoersCleaning,
         heartbeatInterval: TimeInterval = SleepFlagHelper.heartbeatInterval,
         defaults: UserDefaults = .standard,
-        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        // The clock of the helper's watchdog: it stands still while the Mac sleeps.
+        now: @escaping () -> TimeInterval = SampleGap.awakeSeconds,
         sleep: @escaping (TimeInterval) async -> Void = { try? await Task.sleep(nanoseconds: UInt64($0 * 1_000_000_000)) }
     ) {
         self.service = service
@@ -158,6 +164,7 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         self.defaults = defaults
         self.now = now
         self.sleep = sleep
+        self.lastSampleAt = now()
         self.helperStatus = service.status
         refreshStatus()
         helper.onConnectionLost { [weak self] in
@@ -591,6 +598,25 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         await send(.heartbeat)
     }
 
+    /// A sample of the engine ended and its battery and heat check ran.
+    func sampleCompleted() {
+        lastSampleAt = now()
+    }
+
+    /// The heartbeat of the timer. The flag blocks the kernel's own sleep
+    /// for low battery and heat, and only a sample checks them. So while
+    /// the sampling hangs no heartbeat goes out, and the helper's watchdog
+    /// clears the flag. The first sample after that sends it again.
+    func sendHeartbeatWhileSampling() async {
+        let stale = now() - lastSampleAt > Self.samplePatience
+        if stale != heartbeatsHeldBack {
+            heartbeatsHeldBack = stale
+            if stale, wanted { log.error("no sample for \(Int(Self.samplePatience)) seconds: the heartbeats stop until the next one") }
+        }
+        guard !stale else { return }
+        await sendHeartbeat()
+    }
+
     private func startHeartbeat() {
         guard heartbeatTask == nil else { return }
         let interval = UInt64(heartbeatInterval * 1_000_000_000)
@@ -598,7 +624,7 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: interval)
                 if Task.isCancelled { return }
-                await self?.sendHeartbeat()
+                await self?.sendHeartbeatWhileSampling()
             }
         }
     }

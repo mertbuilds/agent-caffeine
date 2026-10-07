@@ -291,6 +291,43 @@ final class SleepFlagControllerTests: XCTestCase {
         XCTAssertEqual(helper.calls, ["set true", "heartbeat", "set false"])
     }
 
+    /// The flag blocks the kernel's sleep for low battery and heat, and
+    /// only a sample checks them. Without samples the helper's watchdog
+    /// has to clear the flag, so the heartbeats stop.
+    func testNoHeartbeatWhileTheSamplingHangs() async {
+        let helper = FakeHelper()
+        let controller = makeController(FakeService(status: .enabled), helper)
+        _ = await controller.setSleepDisabled(true)
+        now += 30
+        await controller.sendHeartbeatWhileSampling()
+        XCTAssertEqual(helper.calls, ["set true", "heartbeat"], "30 seconds is not too long")
+        now += 1
+        await controller.sendHeartbeatWhileSampling()
+        now += 600
+        await controller.sendHeartbeatWhileSampling()
+        XCTAssertEqual(helper.calls.count, 2, "No heartbeat: the watchdog of the helper clears the flag")
+        // The watchdog cleared it, and the sampling runs again.
+        helper.flag = false
+        helper.setByHelper = false
+        controller.sampleCompleted()
+        await controller.sendHeartbeatWhileSampling()
+        XCTAssertEqual(helper.calls, ["set true", "heartbeat", "heartbeat", "set true"])
+        XCTAssertTrue(helper.flag)
+    }
+
+    func testEverySampleKeepsTheHeartbeatsGoing() async {
+        let helper = FakeHelper()
+        let controller = makeController(FakeService(status: .enabled), helper)
+        _ = await controller.setSleepDisabled(true)
+        for _ in 0..<20 {
+            now += 15
+            controller.sampleCompleted()
+            now += 15
+            await controller.sendHeartbeatWhileSampling()
+        }
+        XCTAssertEqual(helper.calls.filter { $0 == "heartbeat" }.count, 20)
+    }
+
     func testHeartbeatSetsFlagAgainAfterHelperRestart() async {
         let helper = FakeHelper()
         let controller = makeController(FakeService(status: .enabled), helper)

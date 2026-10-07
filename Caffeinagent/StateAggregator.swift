@@ -638,6 +638,7 @@ final class StateAggregator: ObservableObject {
             notify(NoLimitBatteryWarning.notificationText(percent: percent))
         }
         engine.safety = stop
+        sleepFlag.sampleCompleted()
         // The notification above says why. The time does not come back
         // with the power.
         if stop != nil, reachable.until != nil {
