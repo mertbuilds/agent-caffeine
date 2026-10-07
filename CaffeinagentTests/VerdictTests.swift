@@ -298,6 +298,124 @@ final class VerdictTests: XCTestCase {
         }
     }
 
+    // MARK: Hook working of an agent with no state of its own
+
+    /// An agent that speaks through its hooks only. `events` are the hook
+    /// events of its one session, as (second, state).
+    private func hooked(_ id: String, at seconds: TimeInterval, events: [(TimeInterval, ReportedState)], fileAt: TimeInterval? = nil, busy: Int = 0, cpu: Double = 0.4) -> AgentEvidence {
+        let last = events.last { $0.0 <= seconds }
+        return evidence(id, id, .activity, cpu: cpu, interval: 2, commands: busy, busy: busy, fileAt: fileAt.map(at), hook: last?.1, hookAt: last.map { at($0.0) })
+    }
+
+    /// What the notifications tell over a timeline of one agent.
+    private func told(_ samples: [Sample]) -> [String] {
+        let recording = LabRecording(samples: samples.map { LabSample(frame: EvidenceFrame(at: at($0.seconds), agents: [$0.evidence])) })
+        return LabNotices.lines(recording).filter { $0.contains(" fired pid ") }
+    }
+
+    /// Droid: PreToolUse at 10 s, a tool that is silent until 300 s, Stop
+    /// at 310 s. The Mac was released at 72 s, and "finished" was told at
+    /// 74 s and again at 312 s.
+    func testDroidQuietToolCallIsHeldUntilItsStop() {
+        let story = samples(to: 400, every: 2) { t in self.hooked("droid", at: t, events: [(10, .working), (310, .idle)]) }
+        for got in runHeld(story) {
+            if got.seconds < 10 {
+                XCTAssertEqual(got.verdict.state, .idle, "at \(got.seconds) s")
+            } else if got.seconds < 310 {
+                XCTAssertEqual(got.verdict, verdict(.working, .reported, .reportsBusy), "at \(got.seconds) s")
+            } else if got.seconds <= 370 {
+                XCTAssertEqual(got.verdict, verdict(.idle, .reported, .atPrompt), "at \(got.seconds) s")
+            } else {
+                XCTAssertEqual(got.verdict.state, .idle, "at \(got.seconds) s")
+            }
+            XCTAssertEqual(got.hold, (10..<310).contains(got.seconds), "at \(got.seconds) s")
+        }
+        let told = told(story)
+        XCTAssertEqual(told.count, 1, "\(told)")
+        XCTAssertTrue(told.first?.contains("312.0 s    finished fired pid 100 after 300 s") ?? false, "\(told)")
+    }
+
+    /// opencode with its plugin: `session.busy` at 10 s, database writes
+    /// until 20 s, then a tool that is silent until `session.idle` at 710
+    /// s. The writes alone held it until 320 s.
+    func testOpencodeQuietToolCallIsHeldUntilItsIdleEvent() {
+        let story = samples(to: 800, every: 2) { t in
+            self.hooked("opencode", at: t, events: [(10, .working), (710, .idle)], fileAt: t < 10 ? nil : min(t, 20))
+        }
+        for got in runHeld(story) {
+            XCTAssertEqual(got.verdict.state, (10..<710).contains(got.seconds) ? .working : .idle, "at \(got.seconds) s")
+            XCTAssertEqual(got.hold, (10..<710).contains(got.seconds), "at \(got.seconds) s")
+        }
+        let told = told(story)
+        XCTAssertEqual(told.count, 1, "\(told)")
+        XCTAssertTrue(told.first?.contains("712.0 s    finished fired pid 100 after 700 s") ?? false, "\(told)")
+    }
+
+    /// The Stop never arrives. The hook's working holds for
+    /// `hookWorkingLimit`, and then the signs of activity decide. The turn
+    /// stays open, so nothing is told early.
+    func testALostStopHoldsForTheLimitAndNoLonger() {
+        XCTAssertEqual(VerdictRules.hookWorkingLimit, 1800)
+        for id in ["droid", "opencode"] {
+            let story = samples(to: 3 * 3600, every: 10) { t in self.hooked(id, at: t, events: [(10, .working)]) }
+            for got in runHeld(story) {
+                XCTAssertEqual(got.hold, (10..<1810).contains(got.seconds), "\(id) at \(got.seconds) s")
+                if got.seconds >= 1810 { XCTAssertEqual(got.verdict.confidence, .inferredWeak, "\(id) at \(got.seconds) s") }
+            }
+            XCTAssertEqual(told(story), [], id)
+            var memory = AgentMemory()
+            for sample in story {
+                let frame = EvidenceFrame(at: at(sample.seconds), agents: [sample.evidence])
+                let (readings, next) = VerdictRules.readings(for: frame, memory: [sample.evidence.identity: memory], settings: DetectionSettings())
+                memory = next[sample.evidence.identity] ?? AgentMemory()
+                if sample.seconds >= 10 { XCTAssertEqual(readings[0].turn, AgentTurn(state: .working), "\(id) at \(sample.seconds) s") }
+            }
+        }
+    }
+
+    /// After the limit a command that is busy still holds, as for an
+    /// agent with no hooks, and each new event starts the limit again.
+    func testAfterTheLimitTheSignsOfActivityDecide() {
+        let build = samples(to: 4000, every: 10) { t in self.hooked("droid", at: t, events: [(10, .working)], busy: t < 3000 ? 1 : 0) }
+        for got in runHeld(build) where got.seconds >= 10 {
+            XCTAssertEqual(got.hold, got.seconds < 3290, "at \(got.seconds) s")
+        }
+        let events = stride(from: 10.0, through: 6000, by: 600).map { ($0, ReportedState.working) }
+        let steady = samples(to: 6000, every: 10) { t in self.hooked("droid", at: t, events: events) }
+        for got in runHeld(steady) where got.seconds >= 10 {
+            XCTAssertEqual(got.verdict, verdict(.working, .reported, .reportsBusy), "at \(got.seconds) s")
+        }
+    }
+
+    /// The Mac slept for two hours in the middle of the tool call. The
+    /// time of the sleep counts for no limit.
+    func testTheLimitDoesNotRunWhileTheMacSleeps() {
+        var memory = AgentMemory()
+        var state = WorkState.idle
+        for (seconds, hole) in [(10.0, 0.0), (20, 0), (7220, 7200), (7230, 0), (9030, 0)] {
+            if hole > 0 { memory = memory.shifted(by: hole) }
+            let sample = hooked("droid", at: seconds, events: [(10, .working)])
+            let (verdict, next) = VerdictRules.verdict(for: sample, memory: memory, settings: DetectionSettings(), now: at(seconds))
+            memory = next
+            state = verdict.state
+            XCTAssertEqual(state, seconds < 9010 ? .working : .idle, "at \(seconds) s")
+        }
+    }
+
+    /// An agent with a state of its own keeps the ladder: its hook working
+    /// counts for a minute, and then its session file, rollout or
+    /// transcript decides.
+    func testAnAgentWithItsOwnStateIsNotHeldByAnOldHookWorking() {
+        for (id, source) in [("claude", StateReport.Source.claudeSessionFile), ("codex", .codexRollout), ("cursor-desktop", .cursorTranscript)] {
+            let story = samples(to: 600) { t in
+                self.evidence(id, id, .state, reported: self.report(.idle, at: t, source: source), hook: .working, hookAt: self.at(0))
+            }
+            for (seconds, got) in run(story) {
+                XCTAssertEqual(got.state, seconds <= 60 ? .working : .idle, "\(id) at \(seconds) s")
+            }
+        }
+    }
+
     // MARK: Inferred state
 
     /// False negative 4: opencode writes its database around a tool call and

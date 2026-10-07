@@ -29,7 +29,10 @@ struct HookStateReader {
 
     /// By pid, for the processes in `snapshot` only. A file whose process is
     /// gone, or whose pid now belongs to another process, is deleted.
-    mutating func states(snapshot: [ProcessInfoRow], now: Date, freshness: TimeInterval = VerdictRules.hookFreshness) -> [Int32: State] {
+    mutating func states(
+        snapshot: [ProcessInfoRow], now: Date,
+        freshness: TimeInterval = VerdictRules.hookFreshness, workingLimit: TimeInterval = VerdictRules.hookWorkingLimit
+    ) -> [Int32: State] {
         defer { files.endSample() }
         let names = ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? []).filter { $0.hasSuffix(".json") }
         guard !names.isEmpty else { return [:] }
@@ -48,7 +51,7 @@ struct HookStateReader {
                 if old { unlink(path) }
                 continue
             }
-            guard let summary = file.summary(now: now, freshness: freshness) else { continue }
+            guard let summary = file.summary(now: now, freshness: freshness, workingLimit: workingLimit) else { continue }
             states[file.pid] = State(agent: file.agent, state: summary.state, at: summary.at, path: path)
         }
         return states

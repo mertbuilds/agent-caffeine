@@ -119,12 +119,12 @@ final class HookCommandTests: XCTestCase {
     func testRecordFollowsATurn() throws {
         XCTAssertTrue(record("UserPromptSubmit", #"{"session_id":"s-1"}"#))
         XCTAssertTrue(record("Notification", #"{"session_id":"s-1","notification_type":"permission_prompt"}"#, after: 1))
-        XCTAssertEqual(try file("claude-100.json").summary(now: now.addingTimeInterval(2), freshness: 60)?.state, .waitingForUser)
+        XCTAssertEqual(try file("claude-100.json").summary(now: now.addingTimeInterval(2), freshness: 60, workingLimit: 1800)?.state, .waitingForUser)
         XCTAssertTrue(record("PostToolUse", #"{"session_id":"s-1"}"#, after: 3))
         XCTAssertFalse(record("Stop", #"{"session_id":"s-1","agent_id":"sub"}"#, after: 4), "A subagent that stops is not the turn")
-        XCTAssertEqual(try file("claude-100.json").summary(now: now.addingTimeInterval(5), freshness: 60)?.state, .working)
+        XCTAssertEqual(try file("claude-100.json").summary(now: now.addingTimeInterval(5), freshness: 60, workingLimit: 1800)?.state, .working)
         XCTAssertTrue(record("Stop", #"{"session_id":"s-1"}"#, after: 6))
-        XCTAssertEqual(try file("claude-100.json").summary(now: now.addingTimeInterval(7), freshness: 60)?.state, .idle)
+        XCTAssertEqual(try file("claude-100.json").summary(now: now.addingTimeInterval(7), freshness: 60, workingLimit: 1800)?.state, .idle)
         XCTAssertTrue(record("SessionEnd", #"{"session_id":"s-1"}"#, after: 8))
         XCTAssertFalse(FileManager.default.fileExists(atPath: directory.appendingPathComponent("claude-100.json").path))
     }
@@ -153,25 +153,35 @@ final class HookCommandTests: XCTestCase {
         var file = HookStateFile(agent: "codex", pid: 1, start: 0)
         file.apply(.set(.working), session: "a", event: "UserPromptSubmit", at: now)
         file.apply(.set(.idle), session: "b", event: "Stop", at: now.addingTimeInterval(5))
-        XCTAssertEqual(file.summary(now: now.addingTimeInterval(6), freshness: 60)?.state, .working)
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(6), freshness: 60, workingLimit: 1800)?.state, .working)
         file.apply(.set(.waitingForUser), session: "c", event: "PermissionRequest", at: now.addingTimeInterval(7))
-        XCTAssertEqual(file.summary(now: now.addingTimeInterval(8), freshness: 60)?.state, .working)
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(8), freshness: 60, workingLimit: 1800)?.state, .working)
         // The working session sent no event for a minute. It may be in a long
         // tool call, so the idle and the wait of the others do not stand for
-        // the process, and the agent's own state decides.
-        XCTAssertNil(file.summary(now: now.addingTimeInterval(65), freshness: 60))
-        XCTAssertNil(file.summary(now: now.addingTimeInterval(500), freshness: 60))
+        // the process. Its working does, with its real time, and the verdict
+        // decides what that is worth.
+        for seconds in [65.0, 500, 1800] {
+            let standing = file.summary(now: now.addingTimeInterval(seconds), freshness: 60, workingLimit: 1800)
+            XCTAssertEqual(standing?.state, .working, "\(seconds)")
+            XCTAssertEqual(standing?.at, now, "\(seconds)")
+        }
+        // After the limit its last event is taken for lost.
+        let lost = file.summary(now: now.addingTimeInterval(1801), freshness: 60, workingLimit: 1800)
+        XCTAssertEqual(lost?.state, .waitingForUser)
+        XCTAssertEqual(lost?.at, now.addingTimeInterval(7))
         // Its Stop ends that.
         file.apply(.set(.idle), session: "a", event: "Stop", at: now.addingTimeInterval(501))
-        let later = file.summary(now: now.addingTimeInterval(502), freshness: 60)
+        let later = file.summary(now: now.addingTimeInterval(502), freshness: 60, workingLimit: 1800)
         XCTAssertEqual(later?.state, .waitingForUser)
         XCTAssertEqual(later?.at, now.addingTimeInterval(7))
-        // With nothing fresh it is the newest, with its real time.
+        // With nothing fresh it is the working that stands, and after the
+        // limit the newest, with its real time.
         var old = HookStateFile(agent: "codex", pid: 1, start: 0)
         old.apply(.set(.working), session: "a", event: "UserPromptSubmit", at: now)
         old.apply(.set(.idle), session: "b", event: "Stop", at: now.addingTimeInterval(7))
-        XCTAssertEqual(old.summary(now: now.addingTimeInterval(500), freshness: 60)?.at, now.addingTimeInterval(7))
-        XCTAssertNil(HookStateFile(agent: "codex", pid: 1, start: 0).summary(now: now, freshness: 60))
+        XCTAssertEqual(old.summary(now: now.addingTimeInterval(500), freshness: 60, workingLimit: 1800)?.at, now)
+        XCTAssertEqual(old.summary(now: now.addingTimeInterval(1801), freshness: 60, workingLimit: 1800)?.at, now.addingTimeInterval(7))
+        XCTAssertNil(HookStateFile(agent: "codex", pid: 1, start: 0).summary(now: now, freshness: 60, workingLimit: 1800))
     }
 
     /// Threads A and B of one Codex engine. A's Stop is fresh, B's last
@@ -181,22 +191,22 @@ final class HookCommandTests: XCTestCase {
         file.apply(.set(.working), session: "b", event: "UserPromptSubmit", at: now)
         file.apply(.set(.working), session: "a", event: "UserPromptSubmit", at: now.addingTimeInterval(100))
         file.apply(.set(.idle), session: "a", event: "Stop", at: now.addingTimeInterval(200))
-        XCTAssertNil(file.summary(now: now.addingTimeInterval(201), freshness: 60))
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(201), freshness: 60, workingLimit: 1800)?.at, now, "The working of B, too old to beat Codex's own state")
         file.apply(.set(.waitingForUser), session: "a", event: "PermissionRequest", at: now.addingTimeInterval(210))
-        XCTAssertNil(file.summary(now: now.addingTimeInterval(211), freshness: 60))
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(211), freshness: 60, workingLimit: 1800)?.at, now)
         file.apply(.end, session: "b", event: "SessionEnd", at: now.addingTimeInterval(220))
-        XCTAssertEqual(file.summary(now: now.addingTimeInterval(221), freshness: 60)?.state, .waitingForUser)
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(221), freshness: 60, workingLimit: 1800)?.state, .waitingForUser)
     }
 
     func testAWaitDoesNotAgeOut() {
         var file = HookStateFile(agent: "codex", pid: 1, start: 0)
         file.apply(.set(.waitingForUser), session: "a", event: "PermissionRequest", at: now)
         file.apply(.set(.idle), session: "b", event: "Stop", at: now.addingTimeInterval(3000))
-        let later = file.summary(now: now.addingTimeInterval(3010), freshness: 60)
+        let later = file.summary(now: now.addingTimeInterval(3010), freshness: 60, workingLimit: 1800)
         XCTAssertEqual(later?.state, .waitingForUser, "An old wait counts before a fresh idle of another session")
         XCTAssertEqual(later?.at, now)
         file.apply(.set(.working), session: "a", event: "PostToolUse", at: now.addingTimeInterval(3020))
-        XCTAssertEqual(file.summary(now: now.addingTimeInterval(3021), freshness: 60)?.state, .working, "The next event of the session ends the wait")
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(3021), freshness: 60, workingLimit: 1800)?.state, .working, "The next event of the session ends the wait")
     }
 
     func testAnOlderEventDoesNotReplaceANewerOne() {
@@ -212,13 +222,13 @@ final class HookCommandTests: XCTestCase {
         var file = HookStateFile(agent: "claude", pid: 1, start: 0)
         file.apply(.set(.idle), session: "a", event: "Stop", at: now.addingTimeInterval(3600))
         file.apply(.set(.waitingForUser), session: "b", event: "Notification", at: now.addingTimeInterval(3600))
-        let stale = file.summary(now: now, freshness: 60)
+        let stale = file.summary(now: now, freshness: 60, workingLimit: 1800)
         XCTAssertEqual(stale?.at, now.addingTimeInterval(3600), "The newest, with its real time, for the verdict to refuse")
-        XCTAssertEqual(file.summary(now: now.addingTimeInterval(3597), freshness: 60)?.state, .waitingForUser, "A few seconds ahead is no step")
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(3597), freshness: 60, workingLimit: 1800)?.state, .waitingForUser, "A few seconds ahead is no step")
 
         file.apply(.set(.working), session: "a", event: "UserPromptSubmit", at: now.addingTimeInterval(10))
         XCTAssertEqual(file.sessions["a"], .init(state: "working", event: "UserPromptSubmit", at: now.timeIntervalSince1970 + 10))
-        let fresh = file.summary(now: now.addingTimeInterval(11), freshness: 60)
+        let fresh = file.summary(now: now.addingTimeInterval(11), freshness: 60, workingLimit: 1800)
         XCTAssertEqual(fresh?.state, .working)
         XCTAssertEqual(fresh?.at, now.addingTimeInterval(10))
         XCTAssertNotNil(file.sessions["b"], "A session from ahead of the clock is not dropped as old")
@@ -229,7 +239,7 @@ final class HookCommandTests: XCTestCase {
         var file = HookStateFile(agent: "claude", pid: 1, start: 0)
         file.apply(.set(.working), session: "a", event: "UserPromptSubmit", at: now)
         file.apply(.set(.idle), session: "a", event: "Stop", at: now.addingTimeInterval(3600))
-        XCTAssertEqual(file.summary(now: now.addingTimeInterval(3601), freshness: 60)?.state, .idle)
+        XCTAssertEqual(file.summary(now: now.addingTimeInterval(3601), freshness: 60, workingLimit: 1800)?.state, .idle)
     }
 
     func testOldAndSurplusSessionsAreDropped() {

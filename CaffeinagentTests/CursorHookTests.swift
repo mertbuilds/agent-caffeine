@@ -266,7 +266,7 @@ final class CursorHookTests: XCTestCase {
         XCTAssertTrue(record("beforeSubmitPrompt", #"{"conversation_id":"c-2"}"#, after: 1))
         XCTAssertTrue(record("stop", #"{"conversation_id":"c-1","status":"aborted"}"#, after: 2))
         XCTAssertEqual(try file().sessions[HookStateFile.sessionKey("c-1")]?.state, "idle")
-        XCTAssertEqual(try file().summary(now: now.addingTimeInterval(3), freshness: 60)?.state, .working, "The other conversation still works")
+        XCTAssertEqual(try file().summary(now: now.addingTimeInterval(3), freshness: 60, workingLimit: 1800)?.state, .working, "The other conversation still works")
         XCTAssertTrue(record("sessionEnd", #"{"conversation_id":"c-2","session_id":"c-2"}"#, after: 4))
         XCTAssertEqual(try file().sessions.count, 1)
 

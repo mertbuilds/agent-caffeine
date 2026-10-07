@@ -102,25 +102,30 @@ struct HookStateFile: Codable, Equatable {
     /// with its next event, not with time. With no such session it is the
     /// newest one, which the verdict then finds too old to use.
     ///
-    /// Nil when an idle or a wait would stand for the process while the
-    /// last event of another session said working: a long tool call sends
-    /// no event, so that session may still work, and the agent's own state
-    /// has to decide.
+    /// A working that is no longer fresh stands before a wait or an idle
+    /// of another session for `workingLimit`: a long tool call sends no
+    /// event, so that session may still work. It is given with its real
+    /// time, and the verdict decides what a working of that age is worth:
+    /// the agent's own state, where it has one. After `workingLimit` its
+    /// last event is taken for lost, and the other sessions count again.
     ///
     /// A state from ahead of the clock is from before the clock was set
     /// back. It is as good as too old.
-    func summary(now: Date, freshness: TimeInterval) -> (state: ReportedState, at: Date)? {
+    func summary(now: Date, freshness: TimeInterval, workingLimit: TimeInterval) -> (state: ReportedState, at: Date)? {
         let known = sessions.values.compactMap { session in
             Self.state(named: session.state).map { (state: $0, at: Date(timeIntervalSince1970: session.at)) }
         }
-        let fresh = known.filter { state in
+        let live = known.filter { state in
             let age = now.timeIntervalSince(state.at)
-            return age >= -Self.clockTolerance && (state.state == .waitingForUser || age <= freshness)
+            guard age >= -Self.clockTolerance else { return false }
+            switch state.state {
+            case .waitingForUser: return true
+            case .working: return age <= max(freshness, workingLimit)
+            case .idle: return age <= freshness
+            }
         }
         for state in [ReportedState.working, .waitingForUser, .idle] {
-            guard let newest = fresh.filter({ $0.state == state }).max(by: { $0.at < $1.at }) else { continue }
-            if state != .working, known.contains(where: { $0.state == .working }) { return nil }
-            return newest
+            if let newest = live.filter({ $0.state == state }).max(by: { $0.at < $1.at }) { return newest }
         }
         return known.max { $0.at < $1.at }
     }

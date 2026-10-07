@@ -97,6 +97,11 @@ struct AgentMemory: Equatable {
     /// The time of the hook wait that ended on a sign of new work. That
     /// wait is not read again.
     var endedHookWaitAt: Date?
+    /// The time of the hook working that stands now, as the hook wrote it.
+    var hookWorkAt: Date?
+    /// The same time, moved over the holes between samples (`SampleGap`),
+    /// so `hookWorkingLimit` does not run out while the Mac sleeps.
+    var hookWorkSince: Date?
     /// Since when every sign of `CursorApprovalRule` holds without a break.
     var approvalSignsSince: Date?
     /// The samples of the last `cpuWindow * cpuWindowCount` seconds.
@@ -192,7 +197,8 @@ enum CursorApprovalRule {
 /// passes the time.
 ///
 /// The sources, most trusted first:
-/// 1. a fresh hook state, or a hook wait of any age that has not ended,
+/// 1. a fresh hook state, a hook wait of any age that has not ended, or
+///    the hook working of an agent with no state of its own,
 /// 2. the reported state (state file or session log),
 /// 3. strong signs: a busy command, a working background job, a sleep
 ///    assertion of the agent's own, a session-file write,
@@ -236,6 +242,16 @@ enum VerdictRules {
     /// A hook working or idle older than this no longer beats the reported
     /// state. A hook wait has no such age: see `noteHookWait`.
     static let hookFreshness: TimeInterval = 60
+
+    /// An agent with no state of its own (Droid, opencode) says through
+    /// its hooks alone that it works, and a tool call sends no event while
+    /// it runs. So its hook working stands until the next event of the
+    /// session or the end of the process. A Stop that never arrives must
+    /// not hold the Mac for ever: after this long without an event the
+    /// signs of activity decide again, as for an agent with no hooks. As
+    /// long as `DetectionSettings.weakEvidenceCap`, the other limit on a
+    /// working that nothing ends.
+    static let hookWorkingLimit: TimeInterval = 1800
 
     /// A write or a new working this much after the hook's wait is work
     /// that started again. The hook and the write of the tool call that
@@ -289,8 +305,12 @@ enum VerdictRules {
         guard let stated = statedState(of: evidence, memory: memory, settings: settings, now: now) else {
             // An agent that speaks through its hooks only: the idle of a
             // hook stands for the turn until the next event, at any age,
-            // so a command that runs on is no new work.
-            if evidence.hookState == .idle, let at = evidence.hookStateAt, !isAhead(at, of: now) { return AgentTurn(state: .idle) }
+            // so a command that runs on is no new work. Its working
+            // stands too, also after `hookWorkingLimit`: the turn ends
+            // with its Stop, and is told once.
+            guard let hook = evidence.hookState, let at = evidence.hookStateAt, !isAhead(at, of: now) else { return nil }
+            if hook == .idle { return AgentTurn(state: .idle) }
+            if hook == .working, standsOnHooks(evidence) { return AgentTurn(state: .working) }
             return nil
         }
         var state = stated
@@ -326,6 +346,7 @@ enum VerdictRules {
             memory.lastReportSeenAt = now
         }
         noteHookWait(evidence, in: &memory, settings: settings, now: now)
+        noteHookWork(evidence, in: &memory, now: now)
         let signsSince = memory.approvalSignsSince.flatMap { $0 <= now ? $0 : nil }
         memory.approvalSignsSince = CursorApprovalRule.signs(of: evidence) ? signsSince ?? now : nil
         noteCPU(evidence, in: &memory, now: now)
@@ -368,6 +389,26 @@ enum VerdictRules {
             resumed = signs.contains { $0 > after }
         }
         memory.endedHookWaitAt = resumed ? at : nil
+    }
+
+    /// Keeps the time of the hook working that stands. A new event has a
+    /// new time and starts the count again.
+    private static func noteHookWork(_ evidence: AgentEvidence, in memory: inout AgentMemory, now: Date) {
+        guard evidence.hookState == .working, let at = evidence.hookStateAt, !isAhead(at, of: now) else {
+            memory.hookWorkAt = nil
+            memory.hookWorkSince = nil
+            return
+        }
+        guard memory.hookWorkAt != at else { return }
+        memory.hookWorkAt = at
+        memory.hookWorkSince = min(at, now)
+    }
+
+    /// Whether the hooks are all this agent says about itself. An agent
+    /// with a session file, a rollout or a transcript is judged by that
+    /// once its hook state is no longer fresh.
+    private static func standsOnHooks(_ evidence: AgentEvidence) -> Bool {
+        evidence.level != .state
     }
 
     private static func noteCPU(_ evidence: AgentEvidence, in memory: inout AgentMemory, now: Date) {
@@ -433,6 +474,8 @@ enum VerdictRules {
                 // One process can run many sessions, and the idle of one is
                 // not the idle of all: the agent's own working stands.
                 if hook == .idle, reportedState(memory: memory, settings: settings, now: now) == .working { return .working }
+                return hook
+            } else if hook == .working, standsOnHooks(evidence), let since = memory.hookWorkSince, now.timeIntervalSince(since) < hookWorkingLimit {
                 return hook
             }
         }
