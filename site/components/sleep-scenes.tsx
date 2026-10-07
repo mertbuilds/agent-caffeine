@@ -68,15 +68,18 @@ function BatteryStop() {
       <div className="flex items-center gap-3">
         <span aria-hidden="true" className="relative flex h-7 w-[58px] items-center">
           <span className="relative h-full w-[52px] rounded-lg border-[1.5px] border-[var(--panel-muted)] p-0.5">
-            <span
-              className="block h-full origin-left rounded-[5px] transition-[transform,background-color] ease-linear"
-              style={{
-                background: low ? "light-dark(#ff3b30, #ff453a)" : "var(--fg)",
-                transform: `scaleX(${level / 100})`,
-                transitionDuration: still ?? `${DRAIN}ms, 300ms`,
-                transitionDelay: still ?? `0ms, ${DRAIN - 300}ms`,
-              }}
-            />
+            {/* Inner radius = outer 8px - border 1.5px - padding 2px. The charge slides, so its corners keep their shape. */}
+            <span className="block h-full overflow-hidden rounded-[4.5px]">
+              <span
+                className="block h-full transition-[transform,background-color] ease-linear"
+                style={{
+                  background: low ? "light-dark(#ff3b30, #ff453a)" : "var(--fg)",
+                  transform: `translateX(${level - 100}%)`,
+                  transitionDuration: still ?? `${DRAIN}ms, 300ms`,
+                  transitionDelay: still ?? `0ms, ${DRAIN - 300}ms`,
+                }}
+              />
+            </span>
             {/* The level where the app stops. */}
             <span className="absolute inset-y-0.5 w-px bg-[var(--panel-muted)]" style={{ left: `calc(2px + ${BATTERY_FLOOR}% - ${(BATTERY_FLOOR / 100) * 4}px)` }} />
           </span>
