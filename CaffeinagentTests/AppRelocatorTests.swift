@@ -3,20 +3,29 @@ import XCTest
 final class AppRelocatorTests: XCTestCase {
     func testWhereTheAppRunsFrom() {
         let home = "/Users/me"
-        let cases: [(path: String, want: AppRelocator.Location)] = [
-            ("/Applications/agent caffeine.app", .installed),
-            ("/Users/me/Applications/agent caffeine.app", .installed),
+        let cases: [(path: String, readOnly: Bool, want: AppRelocator.Location)] = [
+            ("/Applications/agent caffeine.app", false, .installed),
+            ("/Users/me/Applications/agent caffeine.app", false, .installed),
             // The mounted disk image.
-            ("/Volumes/agent caffeine/agent caffeine.app", .cannotMove),
+            ("/Volumes/agent caffeine/agent caffeine.app", true, .cannotMove),
+            // A copy that is kept on an external drive: the alert of the
+            // disk image came at every launch.
+            ("/Volumes/Work/Apps/agent caffeine.app", false, .elsewhere),
             // A quarantined download that was opened where it is.
-            ("/private/var/folders/ab/T/AppTranslocation/1234-ABCD/d/agent caffeine.app", .cannotMove),
-            ("/Users/me/Downloads/agent caffeine.app", .elsewhere),
-            ("/Users/other/Applications/agent caffeine.app", .elsewhere),
-            ("/Applications", .elsewhere),
+            ("/private/var/folders/ab/T/AppTranslocation/1234-ABCD/d/agent caffeine.app", true, .cannotMove),
+            ("/private/var/folders/ab/T/AppTranslocation/1234-ABCD/d/agent caffeine.app", false, .cannotMove),
+            ("/Users/me/Downloads/agent caffeine.app", false, .elsewhere),
+            ("/Users/other/Applications/agent caffeine.app", false, .elsewhere),
+            ("/Applications", false, .elsewhere),
         ]
         for c in cases {
-            XCTAssertEqual(AppRelocator.location(of: c.path, home: home), c.want, c.path)
+            XCTAssertEqual(AppRelocator.location(of: c.path, home: home, volumeIsReadOnly: c.readOnly), c.want, c.path)
         }
+    }
+
+    func testAVolumeThatCanBeWrittenIsNoDiskImage() {
+        XCTAssertFalse(AppRelocator.volumeIsReadOnly(of: FileManager.default.temporaryDirectory))
+        XCTAssertTrue(AppRelocator.volumeIsReadOnly(of: URL(fileURLWithPath: "/no/such/folder/agent caffeine.app")), "Not known: as on a disk image")
     }
 
     func testTheWordsOfTheAlertOnADiskImage() {

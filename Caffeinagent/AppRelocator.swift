@@ -24,10 +24,20 @@ enum AppRelocator {
         case elsewhere
     }
 
-    static func location(of path: String, home: String = NSHomeDirectory()) -> Location {
+    /// - Parameter volumeIsReadOnly: the volume the app lies on cannot be
+    ///   written. That tells the disk image of a release from an external
+    ///   drive, both below `/Volumes`: a copy that is kept on a drive can
+    ///   be moved like one in Downloads, and the offer for it is made
+    ///   once, not at every launch.
+    static func location(of path: String, home: String = NSHomeDirectory(), volumeIsReadOnly: Bool) -> Location {
         if path.hasPrefix("/Applications/") || path.hasPrefix(home + "/Applications/") { return .installed }
-        if path.hasPrefix("/Volumes/") || path.contains("/AppTranslocation/") { return .cannotMove }
+        if path.contains("/AppTranslocation/") || (path.hasPrefix("/Volumes/") && volumeIsReadOnly) { return .cannotMove }
         return .elsewhere
+    }
+
+    /// A volume that does not say counts as read-only.
+    static func volumeIsReadOnly(of url: URL) -> Bool {
+        (try? url.resourceValues(forKeys: [.volumeIsReadOnlyKey]))?.volumeIsReadOnly ?? true
     }
 
     static let dragTitle = "Move agent caffeine to the Applications folder"
@@ -38,7 +48,7 @@ enum AppRelocator {
     static func offerToMoveIfNeeded() {
         let bundleURL = Bundle.main.bundleURL.standardizedFileURL
 
-        switch location(of: bundleURL.path) {
+        switch location(of: bundleURL.path, volumeIsReadOnly: volumeIsReadOnly(of: bundleURL)) {
         case .installed:
             return
         case .cannotMove:
