@@ -44,6 +44,61 @@ function Rows({ children, label }: { children: ReactNode; label: string }) {
   );
 }
 
+/** The lid from the side at three angles, with the share of your brightness `LidDimming.curve` gives at each. */
+const LIDS = [
+  { angle: 105, level: 1, label: "105°" },
+  { angle: 24, level: 0.5, label: "24°" },
+  { angle: 0, level: 0, label: "0°" },
+];
+const LID_STEP = 94;
+const DISPLAY_OFF = "color-mix(in srgb, var(--hairline) 15%, black)";
+
+/** A still side view: the hero is the one place where the lid moves. */
+function LidCut() {
+  return (
+    <svg
+      aria-label="A laptop from the side at three lid angles. At 105 degrees the display is bright, at 24 degrees it is at half brightness, and with the lid shut it is off"
+      className="w-full max-w-[22rem]"
+      role="img"
+      viewBox="0 0 300 98"
+    >
+      <defs>
+        <linearGradient id="lid-cut-light" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0" style={{ stopColor: "var(--accent)", stopOpacity: 0.5 }} />
+          <stop offset="1" style={{ stopColor: "var(--accent)", stopOpacity: 0 }} />
+        </linearGradient>
+        <filter height="300%" id="lid-cut-soft" width="200%" x="-50%" y="-100%">
+          <feGaussianBlur stdDeviation="3" />
+        </filter>
+        <clipPath id="lid-cut-above">
+          <rect height="70" width="300" x="-40" />
+        </clipPath>
+        <clipPath id="lid-cut-front">
+          <rect height="60" width="110" x="-24" y="70" />
+        </clipPath>
+      </defs>
+      {LIDS.map((lid, index) => (
+        <g key={lid.label} transform={`translate(${32 + index * LID_STEP} 0)`}>
+          <g clipPath="url(#lid-cut-above)">
+            <g clipPath="url(#lid-cut-front)" transform={`rotate(${-lid.angle} 0 70)`}>
+              <rect fill="url(#lid-cut-light)" filter="url(#lid-cut-soft)" height="36" opacity={lid.level} width="54" x="4" y="70" />
+            </g>
+          </g>
+          <rect height="5" rx="2" style={{ fill: "var(--bg)", stroke: "var(--hairline)" }} width="62" x="0" y="70" />
+          <g transform={`rotate(${-lid.angle} 0 70)`}>
+            <rect height="4" rx="1.5" style={{ fill: "var(--bg)", stroke: "var(--hairline)" }} width="62" x="0" y="66" />
+            <rect height="2" style={{ fill: DISPLAY_OFF }} width="54" x="4" y="68" />
+            <rect height="2" opacity={lid.level} style={{ fill: "var(--accent)" }} width="54" x="4" y="68" />
+          </g>
+          <text className="tabular-nums" fontSize="11" style={{ fill: "var(--muted)" }} textAnchor="middle" x="31" y="94">
+            {lid.label}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
 function Thing({ children, text, title }: { children: ReactNode; text: string; title: string }) {
   return (
     <li className="flex flex-col rounded-[20px] border border-border p-2">
@@ -61,6 +116,12 @@ export function SmallThings() {
     <section id="small-things" className="mx-auto flex w-full max-w-[1120px] scroll-mt-20 flex-col gap-10">
       <SectionHeading lead="Each one is in the menu or in Preferences" title="It does the small things too" />
       <ul className="mx-auto grid w-full max-w-[36rem] gap-4 sm:grid-cols-2 lg:max-w-none lg:grid-cols-3">
+        <Thing
+          text="It dims from 45 degrees and is off with the lid shut, so it does not use battery or warm your Mac"
+          title="The display dims as the lid closes"
+        >
+          <LidCut />
+        </Thing>
         <Thing
           text="Your Mac stays awake for 1, 2 or 4 hours, so a message from your phone reaches your agent"
           title="Stay reachable from your phone"
@@ -124,14 +185,6 @@ export function SmallThings() {
                 </div>
               </div>
             ))}
-          </Rows>
-        </Thing>
-        <Thing text="agent caffeine works the same without it. To change a setting, open it from Applications or Spotlight" title="Hide the menu bar icon">
-          <Rows label="The menu bar setting in Preferences, switched off">
-            <div className="flex h-9 items-center justify-between gap-3">
-              <span className="truncate">Show agent caffeine in the menu bar</span>
-              <SwitchCut on={false} />
-            </div>
           </Rows>
         </Thing>
       </ul>

@@ -52,12 +52,3 @@ export async function getLatestRelease(): Promise<Release | null> {
     return null;
   }
 }
-
-function formatSize(bytes: number): string {
-  if (bytes < 1_000_000) return `${Math.round(bytes / 1000)} kilobytes`;
-  return `${(bytes / 1_000_000).toFixed(1)} megabytes`;
-}
-
-export function releaseDetails(release: Release): string {
-  return `Version ${release.version} · ${formatSize(release.size)} · macOS 13 or later, Apple silicon and Intel`;
-}

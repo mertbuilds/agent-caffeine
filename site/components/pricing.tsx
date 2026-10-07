@@ -1,7 +1,7 @@
 import Image from "next/image";
 import { DownloadButton } from "@/components/download-button";
 import { PlanCard } from "@/components/plan-card";
-import { getLatestRelease, releaseDetails } from "@/lib/release";
+import { getLatestRelease } from "@/lib/release";
 
 const GRID_LINE = "rgba(255, 255, 255, 0.07)";
 
@@ -41,12 +41,7 @@ export async function Pricing() {
             }
           >
             {release === null ? null : (
-              <>
-                <p className="text-balance">
-                  After 7 days, agent caffeine stops keeping your Mac awake until you enter a key
-                </p>
-                <p className="text-balance pt-2 text-sm">{releaseDetails(release)}</p>
-              </>
+              <p className="text-balance">After 7 days, agent caffeine stops keeping your Mac awake until you enter a key</p>
             )}
           </PlanCard>
         </div>
