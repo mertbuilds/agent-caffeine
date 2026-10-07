@@ -1,3 +1,4 @@
+import Carbon
 import XCTest
 
 final class ShortcutTests: XCTestCase {
@@ -123,7 +124,9 @@ final class ShortcutTests: XCTestCase {
 
     private struct Layout: KeyLayout {
         var keys: [UInt16: String]
-        func characters(keyCode: UInt16) -> String? { keys[keyCode] }
+        /// The keys with Command held, when they are not the same.
+        var commandKeys: [UInt16: String]?
+        func characters(keyCode: UInt16, command: Bool) -> String? { (command ? commandKeys ?? keys : keys)[keyCode] }
     }
 
     /// The letter keys of the American layout, and of Dvorak on the same keys.
@@ -149,9 +152,31 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(defaults[.pauseOneHour], Shortcut(keyCode: 15, modifiers: [.control, .option, .command], key: "P"))
         XCTAssertEqual(defaults[.toggle]?.display, "⌃⌥⌘C")
         for (action, shortcut) in defaults {
-            XCTAssertEqual(dvorak.characters(keyCode: shortcut.keyCode)?.uppercased(), shortcut.key, action.rawValue)
+            XCTAssertEqual(dvorak.characters(keyCode: shortcut.keyCode, command: true)?.uppercased(), shortcut.key, action.rawValue)
             XCTAssertNil(ShortcutRules.problem(shortcut), action.rawValue)
         }
+    }
+
+    /// "Dvorak - QWERTY ⌘" types Dvorak, and the American letters while
+    /// Command is held. The defaults hold Command, so macOS sends the
+    /// American keys for them.
+    func testALayoutWithOtherLettersUnderCommandGivesTheKeysOfTheShortcut() {
+        let dvorakQwertyCommand = Layout(keys: dvorak.keys, commandKeys: qwerty.keys)
+        XCTAssertEqual(ShortcutDefaults.resolve(in: [dvorakQwertyCommand]), [.toggle: toggleDefault, .pauseOneHour: pauseDefault])
+        XCTAssertEqual(ShortcutDefaults.keyCode(typing: "C", in: dvorakQwertyCommand, preferred: 8, command: false), 34)
+    }
+
+    /// The layouts of macOS itself, read and not selected.
+    func testTheLayoutsOfMacOS() throws {
+        func keys(_ id: String) throws -> [ShortcutAction: UInt16] {
+            let filter = [kTISPropertyInputSourceID as String: id] as CFDictionary
+            guard let source = (TISCreateInputSourceList(filter, true)?.takeRetainedValue() as? [TISInputSource])?.first,
+                  let layout = SystemKeyLayout(source) else { throw XCTSkip("\(id) is not on this Mac") }
+            return ShortcutDefaults.resolve(in: [layout]).mapValues(\.keyCode)
+        }
+        XCTAssertEqual(try keys("com.apple.keylayout.US"), [.toggle: 8, .pauseOneHour: 35])
+        XCTAssertEqual(try keys("com.apple.keylayout.Dvorak"), [.toggle: 34, .pauseOneHour: 15])
+        XCTAssertEqual(try keys("com.apple.keylayout.DVORAK-QWERTYCMD"), [.toggle: 8, .pauseOneHour: 35])
     }
 
     func testALayoutThatTypesCapitalsCounts() {
@@ -169,8 +194,8 @@ final class ShortcutTests: XCTestCase {
     /// P takes, and both defaults would have the same key.
     func testALayoutWithOneLetterOnlyGivesNone() {
         let half = Layout(keys: [35: "c"])
-        XCTAssertEqual(ShortcutDefaults.keyCode(typing: "C", in: half, preferred: 8), 35)
-        XCTAssertNil(ShortcutDefaults.keyCode(typing: "P", in: half, preferred: 35))
+        XCTAssertEqual(ShortcutDefaults.keyCode(typing: "C", in: half, preferred: 8, command: true), 35)
+        XCTAssertNil(ShortcutDefaults.keyCode(typing: "P", in: half, preferred: 35, command: true))
         XCTAssertEqual(ShortcutDefaults.resolve(in: [half]), ShortcutDefaults.american)
     }
 

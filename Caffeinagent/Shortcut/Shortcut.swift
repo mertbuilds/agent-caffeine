@@ -165,9 +165,10 @@ extension ShortcutAction {
 
 /// What the keys type in one keyboard layout.
 protocol KeyLayout {
-    /// What the key types with no modifier held. Nil for a key that types
-    /// nothing.
-    func characters(keyCode: UInt16) -> String?
+    /// What the key types, with Command held or with no modifier. Nil for
+    /// a key that types nothing. A layout like "Dvorak - QWERTY ⌘" has
+    /// other letters with Command held.
+    func characters(keyCode: UInt16, command: Bool) -> String?
 }
 
 /// The default shortcuts mean the letters C and P, not two places on the
@@ -189,7 +190,8 @@ enum ShortcutDefaults {
         for layout in layouts {
             var found: [ShortcutAction: Shortcut] = [:]
             for (action, shortcut) in american {
-                guard let keyCode = keyCode(typing: shortcut.key, in: layout, preferred: shortcut.keyCode) else { break }
+                let command = shortcut.modifiers.contains(.command)
+                guard let keyCode = keyCode(typing: shortcut.key, in: layout, preferred: shortcut.keyCode, command: command) else { break }
                 found[action] = Shortcut(keyCode: keyCode, modifiers: shortcut.modifiers, key: shortcut.key)
             }
             if found.count == american.count { return found }
@@ -199,9 +201,10 @@ enum ShortcutDefaults {
 
     /// The key that types the letter. The preferred key when it does, else
     /// the first one.
-    static func keyCode(typing letter: String, in layout: KeyLayout, preferred: UInt16) -> UInt16? {
+    /// - Parameter command: the shortcut holds Command.
+    static func keyCode(typing letter: String, in layout: KeyLayout, preferred: UInt16, command: Bool) -> UInt16? {
         let letter = letter.lowercased()
-        return ([preferred] + Array(keyCodes)).first { layout.characters(keyCode: $0)?.lowercased() == letter }
+        return ([preferred] + Array(keyCodes)).first { layout.characters(keyCode: $0, command: command)?.lowercased() == letter }
     }
 }
 

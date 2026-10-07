@@ -27,14 +27,15 @@ struct SystemKeyLayout: KeyLayout {
         keyboardType = UInt32(LMGetKbdType())
     }
 
-    func characters(keyCode: UInt16) -> String? {
+    func characters(keyCode: UInt16, command: Bool) -> String? {
+        let modifiers = command ? UInt32(cmdKey >> 8) & 0xFF : 0
         var deadKeys: UInt32 = 0
         var length = 0
         var characters = [UniChar](repeating: 0, count: 4)
         let status = data.withUnsafeBytes { bytes -> OSStatus in
             guard let layout = bytes.bindMemory(to: UCKeyboardLayout.self).baseAddress else { return OSStatus(paramErr) }
             return UCKeyTranslate(
-                layout, keyCode, UInt16(kUCKeyActionDisplay), 0, keyboardType, OptionBits(kUCKeyTranslateNoDeadKeysMask),
+                layout, keyCode, UInt16(kUCKeyActionDisplay), modifiers, keyboardType, OptionBits(kUCKeyTranslateNoDeadKeysMask),
                 &deadKeys, characters.count, &length, &characters
             )
         }
