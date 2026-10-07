@@ -91,8 +91,9 @@ struct RobotLook: Equatable {
 }
 
 /// How the robot floats over its tile: up and down again, slow at both
-/// ends. The menu runs it as an animation, so it moves at the rate of the
-/// display. The same curve gives a still picture of any moment.
+/// ends. Core Animation runs it, so it moves at the rate of the display
+/// and costs the app nothing. The same curve gives a still picture of any
+/// moment.
 enum RobotFloat {
     /// From the tile to the top, in hundredths of the tile's side.
     static let travel: CGFloat = 2.25
@@ -102,6 +103,8 @@ enum RobotFloat {
     static let period: TimeInterval = 3.2
     /// The curve of each way, close to half a sine wave.
     static let ease: (x1: Double, y1: Double, x2: Double, y2: Double) = (0.37, 0, 0.63, 1)
+    /// Back to the tile when the float ends in an open menu, in seconds.
+    static let settle: TimeInterval = 0.3
 
     /// A robot that does not float, a closed menu, Reduce Motion and a
     /// still picture all leave the robot without the loop.
@@ -136,6 +139,22 @@ enum RobotBlink {
     /// From one blink to the next, in turn.
     static let gaps: [TimeInterval] = [4.6, 6.3, 5.1, 6.8, 4.2, 5.7]
     static let duration: TimeInterval = 0.12
+    /// A blink the user asked for: the eyes shut, stay shut and open, in
+    /// seconds.
+    static let tap: (shut: TimeInterval, hold: TimeInterval, open: TimeInterval) = (0.08, 0.05, 0.14)
+
+    /// The blinks as a loop over all the gaps.
+    static let track: MotionTrack = {
+        let round = gaps.reduce(0, +)
+        var keyTimes = [0.0], values = [0.0]
+        var end = 0.0
+        for gap in gaps {
+            end += gap
+            keyTimes += [(end - duration) / round, (end - duration / 2) / round, end / round]
+            values += [0, 1, 0]
+        }
+        return MotionTrack(period: round, keyTimes: keyTimes, values: values)
+    }()
 
     /// 0 while the eyes are open, 1 when they are shut.
     static func closure(at time: TimeInterval) -> CGFloat {

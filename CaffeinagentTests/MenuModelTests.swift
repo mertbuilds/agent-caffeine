@@ -412,6 +412,76 @@ final class MenuModelTests: XCTestCase {
         XCTAssertTrue(RobotBlink.gaps.allSatisfy { (4...7).contains($0) })
     }
 
+    // MARK: Motion that Core Animation runs
+
+    func testATrackGivesTheValuesBetweenItsPoints() {
+        let track = MotionTrack(period: 4, keyTimes: [0, 0.5, 1], values: [0, 10, 0])
+        XCTAssertEqual(track.value(at: 0), 0)
+        XCTAssertEqual(track.value(at: 1), 5, accuracy: 0.0001)
+        XCTAssertEqual(track.value(at: 2), 10, accuracy: 0.0001)
+        XCTAssertEqual(track.value(at: 7), 5, accuracy: 0.0001, "It repeats")
+        var ahead = track
+        ahead.lead = 0.25
+        XCTAssertEqual(ahead.value(at: 0), 5, accuracy: 0.0001)
+    }
+
+    func testALoopIsInStepWithTheClockAndNotWithItsStart() {
+        for lead in [0, 0.37, 0.71, 1.21] {
+            let track = MotionTrack(period: 3.6, lead: lead, keyTimes: [0, 1], values: [0, 1])
+            XCTAssertGreaterThan(track.start, 0, "Core Animation reads 0 as now")
+            XCTAssertLessThanOrEqual(track.start, track.period)
+            let phase = track.phase(at: track.start)
+            XCTAssertEqual(min(phase, 1 - phase), 0, accuracy: 0.0001, "The loop starts where its phase is 0")
+        }
+    }
+
+    func testTheBlinkLoopIsTheBlinks() {
+        let round = RobotBlink.gaps.reduce(0, +)
+        XCTAssertEqual(RobotBlink.track.period, round)
+        for step in 0..<Int(round * 240) {
+            let time = Double(step) / 240
+            XCTAssertEqual(RobotBlink.track.value(at: time), Double(RobotBlink.closure(at: time)), accuracy: 0.001, "At \(time) s")
+        }
+    }
+
+    func testTheSteamNeverStopsAndRestsAsTheIconHasIt() {
+        for wisp in RobotSteamMotion.lags.indices {
+            for step in 0..<360 {
+                let time = Double(step) / 100
+                let strength = (0..<RobotSteamMotion.copies).reduce(0) { $0 + RobotSteamMotion.strengthTrack(wisp: wisp, copy: $1).value(at: time) }
+                XCTAssertEqual(strength, 1, accuracy: 0.01, "One copy fades in while the other fades out")
+                let stretch = RobotSteamMotion.stretchTrack(wisp: wisp, copy: 0)
+                XCTAssertEqual(stretch.value(at: time), RobotSteamMotion.stretch(stretch.phase(at: time)), accuracy: 0.0001)
+                let lift = RobotSteamMotion.liftTrack(wisp: wisp, copy: 0)
+                XCTAssertEqual(lift.value(at: time), RobotSteamMotion.lift(lift.phase(at: time)), accuracy: 0.0001)
+            }
+        }
+        let rest = RobotSteamMotion.restPhase(copy: 0)
+        XCTAssertEqual(RobotSteamMotion.stretch(rest), 1, accuracy: 0.0001)
+        XCTAssertEqual(RobotSteamMotion.lift(rest), 0)
+        XCTAssertEqual(RobotSteamMotion.strength(rest), 1, accuracy: 0.0001)
+        XCTAssertEqual(RobotSteamMotion.strength(RobotSteamMotion.restPhase(copy: 1)), 0, accuracy: 0.0001)
+        XCTAssertTrue((3...4).contains(RobotSteamMotion.period))
+    }
+
+    func testTheLightsBreatheAndTheRingSweeps() {
+        let pulse = (0..<310).map { RobotAntennaPulse.track.value(at: Double($0) / 100) }
+        XCTAssertEqual(pulse.min() ?? 0, 0.3, accuracy: 0.01)
+        XCTAssertEqual(pulse.max() ?? 0, 1, accuracy: 0.01)
+        XCTAssertEqual(RingMotion.turn.value(at: RingMotion.sweepPeriod / 4), 0.25, accuracy: 0.0001)
+        let ring = (0..<200).map { RingMotion.pulse.value(at: Double($0) / 100) }
+        XCTAssertEqual(ring.min() ?? 0, 0.4, accuracy: 0.01)
+        XCTAssertEqual(ring.max() ?? 0, 1, accuracy: 0.01)
+    }
+
+    func testTheLettersOfSleepRiseAndFade() {
+        for letter in 0..<RobotSnoozeMotion.letters {
+            XCTAssertEqual(RobotSnoozeMotion.strengthTrack(letter: letter).value(atPhase: 0), 0, accuracy: 0.0001)
+            XCTAssertEqual(RobotSnoozeMotion.strengthTrack(letter: letter).value(atPhase: 0.5), 1, accuracy: 0.0001)
+            XCTAssertLessThan(RobotSnoozeMotion.place(letter: letter, phase: 1).y, RobotSnoozeMotion.place(letter: letter, phase: 0).y)
+        }
+    }
+
     // MARK: Attention
 
     func testNothingAsksForAttentionWhenAllIsWell() {

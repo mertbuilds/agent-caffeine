@@ -2,48 +2,34 @@ import SwiftUI
 
 /// The eyes the icon does not have: round, shut, and crossed out. They
 /// are drawn the way the icon draws its own: a light core with a glow.
-struct RobotEyes: View {
-    let eyes: RobotLook.Eyes
-    /// 1 while the eyes are shut for a blink. Only the eyes change: the
-    /// glass of the visor stays as it is.
-    var shut: CGFloat = 0
-
+/// Each is drawn once into a picture, see `RobotArt`.
+enum RobotEyes {
     /// The round eyes shut towards this height.
     static let anchor = UnitPoint(x: 0.5, y: RobotGeometry.leftEye.top + 0.6 * RobotGeometry.leftEye.sagitta)
+    /// How flat the round eyes are when they are shut for a blink.
+    static let shutScale: CGFloat = 0.1
 
     private static let light = Color(red: RobotGeometry.eyeColor.red, green: RobotGeometry.eyeColor.green, blue: RobotGeometry.eyeColor.blue)
     private static let glow = Color(red: 0.24, green: 0.50, blue: 1.0)
     private static let red = Color(red: 1.0, green: 0.36, blue: 0.32)
     private static let redGlow = Color(red: 1.0, green: 0.12, blue: 0.10)
 
-    var body: some View {
-        GeometryReader { proxy in
-            let side = proxy.size.width
-            ZStack {
-                RobotOpenEyes()
-                    .fill(Self.light)
-                    .scaleEffect(x: 1, y: 1 - 0.9 * shut, anchor: Self.anchor)
-                    .modifier(Glow(color: Self.glow, side: side))
-                    .opacity(eyes == .open ? 1 : 0)
-                RobotShutEyes()
-                    .stroke(Self.light.opacity(0.85), style: StrokeStyle(lineWidth: side * 0.022, lineCap: .round))
-                    .modifier(Glow(color: Self.glow.opacity(0.7), side: side))
-                    .opacity(shutEyes)
-                RobotDeadEyes()
-                    .stroke(Self.red, style: StrokeStyle(lineWidth: side * 0.024, lineCap: .round))
-                    .modifier(Glow(color: Self.redGlow, side: side))
-                    .opacity(eyes == .dead ? 1 : 0)
-            }
-        }
+    static func open(side: CGFloat) -> some View {
+        RobotOpenEyes()
+            .fill(light)
+            .modifier(Glow(color: glow, side: side))
     }
 
-    /// The arcs of the icon fade to the shut eyes for a blink.
-    private var shutEyes: Double {
-        switch eyes {
-        case .closed: return 1
-        case .happy: return Double(shut)
-        case .open, .dim, .dead: return 0
-        }
+    static func shut(side: CGFloat) -> some View {
+        RobotShutEyes()
+            .stroke(light.opacity(0.85), style: StrokeStyle(lineWidth: side * 0.022, lineCap: .round))
+            .modifier(Glow(color: glow.opacity(0.7), side: side))
+    }
+
+    static func dead(side: CGFloat) -> some View {
+        RobotDeadEyes()
+            .stroke(red, style: StrokeStyle(lineWidth: side * 0.024, lineCap: .round))
+            .modifier(Glow(color: redGlow, side: side))
     }
 
     /// The glow of the icon's eyes: strong at the edge, and gone a little

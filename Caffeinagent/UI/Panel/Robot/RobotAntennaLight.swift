@@ -1,66 +1,62 @@
 import SwiftUI
 
 /// The light of the antenna. The ball of the icon glows on its own. This
-/// adds the breath of that glow, and the amber and the red ball.
-struct RobotAntennaLight: View {
-    static let pulsePeriod: TimeInterval = 3.1
-
-    let antenna: RobotLook.Antenna
-    let time: TimeInterval?
-
-    private static let blue = Color(red: 0.72, green: 0.90, blue: 1.0)
-    private static let amber = Color(red: 1.0, green: 0.72, blue: 0.20)
-    private static let red = Color(red: 1.0, green: 0.27, blue: 0.23)
-
-    var body: some View {
-        GeometryReader { proxy in
-            let side = proxy.size.width
-            let center = CGPoint(x: RobotGeometry.antennaCenter.x * side, y: RobotGeometry.antennaCenter.y * side)
-            let radius = RobotGeometry.antennaRadius * side
-            ZStack {
-                halo(Self.blue, strength: 0.75 * pulse, radius: radius)
-                    .opacity(antenna == .glowing ? 1 : 0)
-                halo(Self.blue, strength: 0.75 * Self.rest, radius: radius)
-                    .opacity(antenna == .steady ? 1 : 0)
-                Group {
-                    halo(Self.amber, strength: 0.5 + 0.5 * pulse, radius: radius)
-                    ball([Color(red: 1.0, green: 0.93, blue: 0.68), Self.amber, Color(red: 0.92, green: 0.56, blue: 0.08)], radius: radius)
-                }
-                .opacity(antenna == .amber ? 1 : 0)
-                Group {
-                    halo(Self.red, strength: 0.55, radius: radius)
-                    ball([Color(red: 1.0, green: 0.66, blue: 0.60), Self.red, Color(red: 0.74, green: 0.10, blue: 0.09)], radius: radius)
-                }
-                .opacity(antenna == .red ? 1 : 0)
-                // Without its light the ball is a shade darker.
-                Circle()
-                    .fill(Color(red: 0.10, green: 0.20, blue: 0.42).opacity(0.22))
-                    .frame(width: 2 * radius, height: 2 * radius)
-                    .opacity(antenna == .dark ? 1 : 0)
-            }
-            .position(center)
-        }
+/// adds the breath of that glow, and the amber and the red ball. Each
+/// part is drawn once into a picture, see `RobotArt`.
+enum RobotAntennaLight {
+    enum Tint {
+        case blue
+        case amber
+        case red
     }
 
-    private func halo(_ color: Color, strength: Double, radius: CGFloat) -> some View {
-        Circle()
+    /// How strong the halo of a light is that does not breathe.
+    static let redStrength = 0.55
+
+    /// The blue halo at a moment of the breath.
+    static func blueStrength(pulse: Double) -> Double {
+        0.75 * pulse
+    }
+
+    static func amberStrength(pulse: Double) -> Double {
+        0.5 + 0.5 * pulse
+    }
+
+    /// The side of the square a halo fills, in radii of the ball.
+    static let haloReach: CGFloat = 5.2
+    static let ballReach: CGFloat = 2.04
+
+    static func halo(_ tint: Tint, radius: CGFloat) -> some View {
+        let color = color(tint)
+        return Circle()
             .fill(RadialGradient(colors: [color.opacity(0.9), color.opacity(0.35), color.opacity(0)], center: .center, startRadius: radius * 0.6, endRadius: radius * 2.6))
-            .frame(width: radius * 5.2, height: radius * 5.2)
-            .opacity(strength)
+            .frame(width: radius * haloReach, height: radius * haloReach)
     }
 
-    private func ball(_ colors: [Color], radius: CGFloat) -> some View {
-        Circle()
+    static func ball(_ tint: Tint, radius: CGFloat) -> some View {
+        let colors: [Color]
+        switch tint {
+        // The blue ball is in the picture of the robot.
+        case .blue, .amber: colors = [Color(red: 1.0, green: 0.93, blue: 0.68), color(.amber), Color(red: 0.92, green: 0.56, blue: 0.08)]
+        case .red: colors = [Color(red: 1.0, green: 0.66, blue: 0.60), color(.red), Color(red: 0.74, green: 0.10, blue: 0.09)]
+        }
+        return Circle()
             .fill(RadialGradient(colors: colors, center: UnitPoint(x: 0.4, y: 0.34), startRadius: 0, endRadius: radius * 1.25))
-            .frame(width: 2.04 * radius, height: 2.04 * radius)
+            .frame(width: ballReach * radius, height: ballReach * radius)
     }
 
-    /// The middle of the breath, where a light that does not breathe stays.
-    private static let rest = 0.65
+    /// Without its light the ball is a shade darker.
+    static func shade(radius: CGFloat) -> some View {
+        Circle()
+            .fill(Color(red: 0.10, green: 0.20, blue: 0.42).opacity(0.22))
+            .frame(width: 2 * radius, height: 2 * radius)
+    }
 
-    /// Between 0.3 and 1, once in about three seconds.
-    private var pulse: Double {
-        guard let time else { return Self.rest }
-        return Self.rest + 0.35 * sin(time * 2 * .pi / Self.pulsePeriod)
+    private static func color(_ tint: Tint) -> Color {
+        switch tint {
+        case .blue: return Color(red: 0.72, green: 0.90, blue: 1.0)
+        case .amber: return Color(red: 1.0, green: 0.72, blue: 0.20)
+        case .red: return Color(red: 1.0, green: 0.27, blue: 0.23)
+        }
     }
 }

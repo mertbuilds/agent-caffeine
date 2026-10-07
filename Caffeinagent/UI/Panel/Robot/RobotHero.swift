@@ -5,11 +5,11 @@ import SwiftUI
 struct RobotHero: View {
     let pose: HeroPose
     var size = PanelMetrics.robotSize
-    @State private var blink: CGFloat = 0
+    @State private var taps = 0
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
-        RobotFigure(look: RobotLook(pose: pose), blink: blink)
+        RobotFigure(look: RobotLook(pose: pose), taps: taps)
             .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: pose)
             .environment(\.robotUnit, size / 100)
             .frame(width: size, height: size)
@@ -19,11 +19,6 @@ struct RobotHero: View {
     }
 
     private func blinkOnce() {
-        guard !reduceMotion, blink == 0 else { return }
-        Task {
-            withAnimation(.easeIn(duration: 0.08)) { blink = 1 }
-            try? await Task.sleep(nanoseconds: 130_000_000)
-            withAnimation(.easeOut(duration: 0.14)) { blink = 0 }
-        }
+        if !reduceMotion { taps += 1 }
     }
 }
