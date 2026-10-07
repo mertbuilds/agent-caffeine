@@ -112,7 +112,7 @@ function pointAt(root: HTMLElement, name: string, middle = false): Point | null 
 
 type Fill = { key: string; ms: number } | "full" | null;
 
-/** The demo's status: a tag with a live dot that fills up to the next step, and the pause and play button. */
+/** The demo's status: a tag with a live dot that fills up to the next step, and the stop and play button. */
 function Playing({
   fill,
   live,
@@ -142,23 +142,20 @@ function Playing({
             />
           )}
           <span aria-hidden="true" className={`relative size-1.5 rounded-full bg-accent ${live ? "demo-live" : ""}`} />
-          <span className="relative">Demo</span>
+          <span className="relative">Demo playing</span>
         </span>
       ) : (
-        <span className="text-muted">Paused</span>
+        <span className="text-muted">Demo stopped</span>
       )}
       <button
-        aria-label={on ? "Pause the examples" : "Play the examples"}
+        aria-label={on ? "Stop the demo" : "Play the demo"}
         className="flex size-6 items-center justify-center rounded-full border border-border text-fg transition-colors duration-fast ease-smooth-out hover:border-fg motion-reduce:transition-none"
         onClick={onToggle}
         type="button"
       >
         <svg aria-hidden="true" className="size-2.5" fill="currentColor" viewBox="0 0 10 10">
           {on ? (
-            <>
-              <rect height="8" rx="0.75" width="3" x="1.5" y="1" />
-              <rect height="8" rx="0.75" width="3" x="5.5" y="1" />
-            </>
+            <rect height="7" rx="1" width="7" x="1.5" y="1.5" />
           ) : (
             <path d="M2.5 1.2v7.6a.5.5 0 0 0 .76.43l6.1-3.8a.5.5 0 0 0 0-.86l-6.1-3.8a.5.5 0 0 0-.76.43z" />
           )}
@@ -208,7 +205,8 @@ const CHOICES: readonly { choice: Choice; title: string; spoken: string }[] = [
   { choice: "working", title: "Working", spoken: "working" },
   { choice: "waiting", title: "Waiting", spoken: "waiting for you" },
   { choice: "idle", title: "Idle", spoken: "idle" },
-  { choice: "closed", title: "Closed", spoken: "closed" },
+  // Not "Closed": that is the word of the lid.
+  { choice: "closed", title: "Quit", spoken: "quit" },
 ];
 
 function Setting({ children, label }: { children: ReactNode; label: string }) {
@@ -236,6 +234,7 @@ export function MenuBarSimulator() {
   const demoing = autoplay && !lessMotion;
   const playing = demoing && seen && !hidden;
   const marked = demoing ? DEMO[cue.step].preset : chosen;
+  const caption = PRESETS.find((entry) => entry.id === marked)?.point ?? null;
   const shown = view(sim);
   const every = tickEvery(sim);
   const target = cueTarget(cue) ?? "tag";
@@ -376,6 +375,8 @@ export function MenuBarSimulator() {
             </button>
           ))}
         </div>
+        {/* The point of the chosen situation. The room stays when the reader sets things by hand, so nothing below moves. */}
+        <p className="min-h-[3lh] max-w-[36rem] text-pretty text-sm leading-normal text-muted sm:min-h-[2lh] lg:text-center">{caption}</p>
       </div>
       <div className="grid gap-8 lg:grid-cols-[minmax(0,24rem)_minmax(0,36rem)] lg:justify-center lg:gap-16">
         <div className="flex min-w-0 flex-col gap-6">

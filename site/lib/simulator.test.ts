@@ -42,9 +42,28 @@ test("working sessions keep the Mac awake, idle ones are only counted", () => {
   assert.equal(shown.held, true);
   assert.equal(shown.pose, "awake");
   assert.equal(shown.subtitle, "2 agents are working");
-  assert.equal(shown.groups[0].detail, "2 working");
-  assert.deepEqual(shown.groups[0].children.map((child) => child.label), ["wiki-6e", "site", "8 idle sessions"]);
-  assert.equal(shown.groups[1].detail, "Idle for 6 minutes");
+  // Two different agents work, so the count of the headline is the count the reader sees.
+  assert.deepEqual(shown.groups.map((group) => group.title), ["Claude Code", "Codex · website"]);
+  assert.equal(shown.groups[0].detail, "1 working");
+  assert.deepEqual(shown.groups[0].children.map((child) => child.label), ["wiki-6e", "8 idle sessions"]);
+  assert.equal(shown.groups[1].detail, "Working for 3 minutes");
+});
+
+test("a wait begins when it is set, whatever the clock did before", () => {
+  const quit = setChoice(setChoice(preset(INITIAL, "working"), "claude", "closed"), "codex", "closed");
+  const asked = setChoice(later(quit, 3600), "claude", "waiting");
+  assert.equal(view(asked).held, true);
+  assert.equal(view(asked).subtitle, "Claude Code is waiting for you, can sleep in 5 minutes");
+  assert.equal(view(asked).groups[0].detail, "Waiting for your answer");
+  // A wait that ran out begins again when it is set again.
+  const released = later(asked, WAITING_HOLD + 300);
+  assert.equal(view(released).held, false);
+  assert.equal(view(released).groups[0].detail, "Waiting for your answer for 10 minutes");
+  const again = setChoice(released, "claude", "waiting");
+  assert.equal(view(again).held, true);
+  assert.equal(view(again).subtitle, "Claude Code is waiting for you, can sleep in 5 minutes");
+  // A wait that still holds is left alone.
+  assert.equal(setChoice(asked, "claude", "waiting"), asked);
 });
 
 test("an agent that waits holds for 5 minutes, then the Mac can sleep", () => {
@@ -142,7 +161,7 @@ test("a pause holds nothing, names its end and starts again by itself", () => {
   assert.equal(shown.bar.timer, false);
   assert.equal(shown.iconLabel, "agent caffeine, paused");
   // The rows keep their states.
-  assert.equal(shown.groups[0].detail, "2 working");
+  assert.equal(shown.groups[0].detail, "1 working");
   assert.equal(view(startPause(working, "thirtyMinutes")).subtitle, "Starts again at 10:11");
   assert.equal(view(startPause(working, "untilTomorrow")).subtitle, "Starts again tomorrow at 06:00");
   assert.equal(view(startPause(working, "untilTomorrow")).bar.pausedLabel, "Paused until 06:00");
@@ -209,7 +228,7 @@ test("the battery line shows on battery, amber near the floor and red when stopp
   assert.equal(view(preset(INITIAL, "working")).battery, null);
   assert.deepEqual(
     [view(onBattery).battery?.level, view(onBattery).battery?.charge, view(onBattery).battery?.consequence],
-    ["normal", "58%", "sleeps below 20%"],
+    ["normal", "58%", "sleeps at 20%"],
   );
   assert.equal(view(setBattery(onBattery, 31)).battery?.level, "normal");
   assert.equal(view(setBattery(onBattery, 30)).battery?.level, "nearFloor");

@@ -108,14 +108,35 @@ const NO_EXTRA: Record<AgentId, number> = { claude: 0, codex: 0 };
 
 export type PresetId = "working" | "waiting" | "build" | "idle" | "reachable" | "lid" | "low";
 
-export const PRESETS: readonly { id: PresetId; title: string }[] = [
-  { id: "working", title: "Agent working" },
-  { id: "waiting", title: "Waiting for you" },
-  { id: "build", title: "Build still running" },
-  { id: "idle", title: "All idle" },
-  { id: "reachable", title: "Stay reachable" },
-  { id: "lid", title: "On battery, lid closed" },
-  { id: "low", title: "Battery low" },
+/** `point` is what the situation shows, in the words of the page and not of the menu. */
+export const PRESETS: readonly { id: PresetId; title: string; point: string }[] = [
+  { id: "working", title: "Agent working", point: "Claude Code and Codex are in the middle of their work. Your Mac does not sleep, also when you leave it alone" },
+  {
+    id: "waiting",
+    title: "Waiting for you",
+    point: "Claude Code asked you a question. Your Mac stays awake for 5 minutes, so you can answer. After that it can sleep",
+  },
+  {
+    id: "build",
+    title: "Build still running",
+    point: "Claude Code is done, but a build it started still runs. Your Mac stays awake until the build ends",
+  },
+  { id: "idle", title: "All idle", point: "Many sessions are open, but no agent has work. Nothing keeps your Mac awake" },
+  {
+    id: "reachable",
+    title: "Stay reachable",
+    point: "No agent has work, but you want to send one a message from your phone. Your Mac stays awake for 2 hours",
+  },
+  {
+    id: "lid",
+    title: "On battery, lid closed",
+    point: "The lid is closed and your Mac is on battery. With the helper allowed, your agents keep working",
+  },
+  {
+    id: "low",
+    title: "Battery low",
+    point: "The battery went down to 20% while an agent worked. agent caffeine stops there, so your Mac can sleep before the battery is empty",
+  },
 ];
 
 function session(agent: AgentId, name: string, state: WorkState, since: number, more: Partial<Session> = {}): Session {
@@ -158,8 +179,7 @@ export function preset(state: SimState, id: PresetId): SimState {
         ...base,
         sessions: [
           session("claude", "wiki-6e", "working", ago(6.5), { before: "idle" }),
-          session("claude", "site", "working", ago(3.2), { before: "idle" }),
-          session("codex", "website", "idle", ago(6.4)),
+          session("codex", "website", "working", ago(3.2), { before: "idle" }),
         ],
         idleExtra: { claude: 8, codex: 0 },
       };
@@ -323,7 +343,7 @@ export function choiceOf(state: SimState, agent: AgentId): Choice {
   return state.idleExtra[agent] > 0 ? "idle" : "closed";
 }
 
-/** Puts an agent into a state: its named sessions become one session in that state. Closing it ends all its sessions. */
+/** Puts an agent into a state: its named sessions become one session in that state. Closing it ends all its sessions. A wait always begins now, also a second one after the first ran out. */
 export function setChoice(state: SimState, agent: AgentId, choice: Choice): SimState {
   const others = state.sessions.filter((run) => run.agent !== agent);
   if (choice === "closed") {
@@ -331,10 +351,11 @@ export function setChoice(state: SimState, agent: AgentId, choice: Choice): SimS
   }
   const mine = state.sessions.filter((run) => run.agent === agent);
   const old = mine[0];
-  if (old !== undefined && mine.length === 1 && verdict(old) === choice && !old.command) {
+  const { now } = state;
+  const waitRanOut = choice === "waiting" && old !== undefined && cause(old, "agentWorking", now) !== "waitingForUser";
+  if (old !== undefined && mine.length === 1 && verdict(old) === choice && !old.command && !waitRanOut) {
     return state;
   }
-  const { now } = state;
   const was = old === undefined ? null : verdict(old);
   const next: Session = {
     key: old?.key ?? `${agent}-main`,
@@ -870,11 +891,12 @@ function battery(state: SimState, line: Headline): Battery | null {
     floor: BATTERY_FLOOR,
     level,
     charge: level === "stopped" ? null : percent(shown),
-    consequence: level === "stopped" ? `starts again at ${percent(recovery)}` : `sleeps below ${percent(BATTERY_FLOOR)}`,
+    // The app stops at the floor, and its line is changing from "sleeps below" to "sleeps at".
+    consequence: level === "stopped" ? `starts again at ${percent(recovery)}` : `sleeps at ${percent(BATTERY_FLOOR)}`,
     spoken:
       level === "stopped"
         ? `Battery ${shown} percent, agent caffeine starts again at ${recovery} percent`
-        : `Battery ${shown} percent, agent caffeine lets your Mac sleep below ${BATTERY_FLOOR} percent`,
+        : `Battery ${shown} percent, agent caffeine lets your Mac sleep at ${BATTERY_FLOOR} percent`,
   };
 }
 
