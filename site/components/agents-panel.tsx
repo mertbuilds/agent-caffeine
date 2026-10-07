@@ -34,13 +34,21 @@ const FG = "text-[var(--panel-fg)]";
 const MUTED = "text-[var(--panel-muted)]";
 const ROLL = { duration: 350, easing: "cubic-bezier(0.22, 1, 0.36, 1)" };
 
-/** Text whose numbers roll when they change, as the app's do. */
+/** Text whose numbers roll when they change, as the app's do. A group of digits keeps its length, so "06:00" keeps its zeros. */
 function Flow({ children }: { children: string }) {
   return (
     <>
       {children.split(/(\d+)/).map((part, index) =>
         index % 2 === 1 ? (
-          <NumberFlow key={index} className="tabular-nums" opacityTiming={ROLL} spinTiming={ROLL} transformTiming={ROLL} value={Number(part)} />
+          <NumberFlow
+            key={index}
+            className="tabular-nums"
+            format={{ minimumIntegerDigits: part.length }}
+            opacityTiming={ROLL}
+            spinTiming={ROLL}
+            transformTiming={ROLL}
+            value={Number(part)}
+          />
         ) : (
           <Fragment key={index}>{part}</Fragment>
         ),
