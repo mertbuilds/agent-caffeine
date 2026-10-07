@@ -57,6 +57,26 @@ enum SampleGap {
     static func awakeSeconds() -> TimeInterval {
         TimeInterval(clock_gettime_nsec_np(CLOCK_UPTIME_RAW)) / 1_000_000_000
     }
+
+    /// The seconds the Mac slept since boot: `CLOCK_MONOTONIC_RAW` counts
+    /// the sleep and `CLOCK_UPTIME_RAW` does not. Neither follows the
+    /// date, so a clock that was set does not move it, and a sampling that
+    /// stalled does not either.
+    static func asleepSeconds() -> TimeInterval {
+        let all = clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW)
+        let awake = clock_gettime_nsec_np(CLOCK_UPTIME_RAW)
+        return all > awake ? TimeInterval(all - awake) / 1_000_000_000 : 0
+    }
+}
+
+/// The clocks of the Mac for `WakeGate`, so a test can move them.
+struct AwakeClock {
+    /// `SampleGap.awakeSeconds`.
+    var awake: () -> TimeInterval
+    /// `SampleGap.asleepSeconds`.
+    var asleep: () -> TimeInterval
+
+    static let system = AwakeClock(awake: SampleGap.awakeSeconds, asleep: SampleGap.asleepSeconds)
 }
 
 extension AgentMemory {

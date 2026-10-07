@@ -12,21 +12,36 @@ import Foundation
 /// tells an app of a wake only when the Mac wakes in full, and that word
 /// opens the gate.
 ///
+/// A Mac can also wake with the display off and stay awake: someone
+/// connects over SSH, starts an agent and leaves. No word of a wake comes
+/// then. So the gate also opens when the Mac was awake for longer than
+/// `steadyAwake` with no sleep in between. It assumes that a dark wake
+/// for maintenance is shorter than that: the longest one seen is 45
+/// seconds (docs/research/07-display-and-remote-wake.md). Assumed, not
+/// measured.
+///
 /// A hold that runs is not broken by the word of sleep alone. With a
 /// closed lid on wall power the word comes and the Mac stays awake under
-/// the power assertion. Only a hole between two samples shows that the
-/// Mac did sleep, and then the hold ends.
+/// the power assertion. Only a real sleep ends the hold: the caller reads
+/// it from the clock that counts the sleep (`SampleGap.asleepSeconds`),
+/// so a sampling that stalled or a clock that was set ends nothing.
 struct WakeGate: Equatable {
+    /// Awake for longer than this with no sleep is no dark wake.
+    static let steadyAwake: TimeInterval = 120
+
     /// macOS said the Mac goes to sleep, and no full wake came since.
     private var announced = false
-    /// A hole between two samples after that word: the Mac did sleep.
+    /// The Mac slept after that word.
     private var slept = false
     /// The Mac woke in full at this time, and no sample was taken since.
     private var wokeAt: TimeInterval?
+    /// The Mac is awake with no sleep since this time. Set while `announced`.
+    private var steadySince: TimeInterval?
 
-    mutating func willSleep() {
+    mutating func willSleep(awake now: TimeInterval) {
         announced = true
         wokeAt = nil
+        steadySince = now
     }
 
     /// The Mac woke in full: macOS said so, or the displays came on.
@@ -34,18 +49,26 @@ struct WakeGate: Equatable {
         guard announced else { return }
         announced = false
         slept = false
+        steadySince = nil
         wokeAt = now
     }
 
     /// - Parameters:
-    ///   - awake: when the sample was taken. Nil counts as now.
-    ///   - gap: there is a hole between this sample and the one before it.
-    /// - Returns: true when this is the first sample after a full wake.
+    ///   - awake: when the sample was taken.
+    ///   - slept: the Mac slept between this sample and the one before it.
+    /// - Returns: true when this sample opens the gate: it is the first
+    ///   one after a full wake, or the Mac was awake for `steadyAwake`.
     @discardableResult
-    mutating func sampled(awake: TimeInterval?, gap: Bool) -> Bool {
+    mutating func sampled(awake: TimeInterval, slept: Bool) -> Bool {
         if announced {
-            if gap { slept = true }
-        } else if let wokeAt, awake.map({ $0 >= wokeAt }) ?? true {
+            if slept {
+                self.slept = true
+                steadySince = awake
+            } else if let steadySince, awake - steadySince > Self.steadyAwake {
+                self = WakeGate()
+                return true
+            }
+        } else if let wokeAt, awake >= wokeAt {
             self.wokeAt = nil
             return true
         }

@@ -84,6 +84,10 @@ final class DetectionEngine: ObservableObject {
     private var agentMemory: [ProcessIdentity: AgentMemory] = [:]
     private var policyMemory = PolicyMemory()
     private var wakeGate = WakeGate()
+    private let clock: AwakeClock
+    /// `AwakeClock.asleep` at the last sample that saw a sleep, or at the
+    /// first sample.
+    private var asleepSeen: TimeInterval?
     private var tick: DetectionCancellable?
     /// A sample that an event asked for is on its way.
     private var resamplePending = false
@@ -93,11 +97,13 @@ final class DetectionEngine: ObservableObject {
     init(
         collector: EvidenceCollecting, scheduler: DetectionScheduling, watcher: DetectionWatching,
         mode: AwakeMode = .agentWorking, enabled: Bool = true, pausedUntil: Date? = nil, reachableUntil: Date? = nil,
-        entitlement: Entitlement? = nil, settings: DetectionSettings = DetectionSettings(), safety: SafetyStop? = nil
+        entitlement: Entitlement? = nil, settings: DetectionSettings = DetectionSettings(), safety: SafetyStop? = nil,
+        clock: AwakeClock = .system
     ) {
         self.collector = collector
         self.scheduler = scheduler
         self.watcher = watcher
+        self.clock = clock
         self.mode = mode
         self.enabled = enabled
         self.pausedUntil = pausedUntil
@@ -145,12 +151,13 @@ final class DetectionEngine: ObservableObject {
     /// closed lid on wall power the Mac stays awake under it. No hold
     /// starts from here on. See `WakeGate`.
     func willSleep() {
-        wakeGate.willSleep()
+        wakeGate.willSleep(awake: clock.awake())
     }
 
-    /// The Mac woke in full. The sample that follows decides.
+    /// The Mac woke in full. The sample that follows decides. A Mac that
+    /// wakes with the display off sends no word: see `WakeGate.steadyAwake`.
     func didWake() {
-        wakeGate.didWake(awake: SampleGap.awakeSeconds())
+        wakeGate.didWake(awake: clock.awake())
         requestSample()
     }
 
@@ -179,9 +186,14 @@ final class DetectionEngine: ObservableObject {
             agentMemory = agentMemory.mapValues { $0.shifted(by: gap) }
             policyMemory = policyMemory.shifted(by: gap)
         }
+        // A hole is not a sleep: the sampling can stall and the clock can
+        // be set while the Mac is awake under a hold.
+        let asleep = clock.asleep()
+        let slept = asleepSeen.map { asleep - $0 > SampleGap.clockTolerance } ?? false
+        if slept || asleepSeen == nil { asleepSeen = asleep }
         // With no hold over the sleep, what an agent did before it starts
         // none now: only what this sample reads counts.
-        if wakeGate.sampled(awake: sample.frame.awake, gap: gap != nil), !decision.hold { policyMemory = PolicyMemory() }
+        if wakeGate.sampled(awake: sample.frame.awake ?? clock.awake(), slept: slept), !decision.hold { policyMemory = PolicyMemory() }
         let (readings, nextAgents) = VerdictRules.readings(for: sample.frame, memory: agentMemory, settings: settings)
         agentMemory = nextAgents
         self.readings = readings
