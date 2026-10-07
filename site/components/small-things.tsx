@@ -51,6 +51,8 @@ const LIDS = [
   { angle: 0, level: 0, label: "0°" },
 ];
 const LID_STEP = 94;
+const LID_HINGE = "2 68";
+const LID_BODY = { fill: "var(--bg)", stroke: "var(--hairline)", strokeWidth: 1 };
 const DISPLAY_OFF = "color-mix(in srgb, var(--hairline) 15%, black)";
 
 /** A still side view: the hero is the one place where the lid moves. */
@@ -63,32 +65,33 @@ function LidCut() {
       viewBox="0 0 300 98"
     >
       <defs>
-        <linearGradient id="lid-cut-light" x1="0" x2="0" y1="0" y2="1">
+        {/* Brightest at the middle of the display, gone at both of its ends and at the end of the throw. */}
+        <radialGradient cx="0" cy="0" gradientTransform="translate(31 68) scale(28 34)" gradientUnits="userSpaceOnUse" id="lid-cut-light" r="1">
           <stop offset="0" style={{ stopColor: "var(--accent)", stopOpacity: 0.5 }} />
+          <stop offset="0.2" style={{ stopColor: "var(--accent)", stopOpacity: 0.36 }} />
+          <stop offset="0.4" style={{ stopColor: "var(--accent)", stopOpacity: 0.22 }} />
+          <stop offset="0.6" style={{ stopColor: "var(--accent)", stopOpacity: 0.11 }} />
+          <stop offset="0.8" style={{ stopColor: "var(--accent)", stopOpacity: 0.03 }} />
           <stop offset="1" style={{ stopColor: "var(--accent)", stopOpacity: 0 }} />
-        </linearGradient>
-        <filter height="300%" id="lid-cut-soft" width="200%" x="-50%" y="-100%">
-          <feGaussianBlur stdDeviation="3" />
-        </filter>
+        </radialGradient>
         <clipPath id="lid-cut-above">
-          <rect height="70" width="300" x="-40" />
-        </clipPath>
-        <clipPath id="lid-cut-front">
-          <rect height="60" width="110" x="-24" y="70" />
+          <rect height="112.5" width="300" x="-60" y="-40" />
         </clipPath>
       </defs>
       {LIDS.map((lid, index) => (
         <g key={lid.label} transform={`translate(${32 + index * LID_STEP} 0)`}>
-          <g clipPath="url(#lid-cut-above)">
-            <g clipPath="url(#lid-cut-front)" transform={`rotate(${-lid.angle} 0 70)`}>
-              <rect fill="url(#lid-cut-light)" filter="url(#lid-cut-soft)" height="36" opacity={lid.level} width="54" x="4" y="70" />
+          {/* The light starts under the lid and ends under the base: both are drawn over it. */}
+          {lid.level > 0 ? (
+            <g clipPath="url(#lid-cut-above)">
+              <rect fill="url(#lid-cut-light)" height="34" opacity={lid.level} transform={`rotate(${-lid.angle} ${LID_HINGE})`} width="56" x="3" y="68" />
             </g>
-          </g>
-          <rect height="5" rx="2" style={{ fill: "var(--bg)", stroke: "var(--hairline)" }} width="62" x="0" y="70" />
-          <g transform={`rotate(${-lid.angle} 0 70)`}>
-            <rect height="4" rx="1.5" style={{ fill: "var(--bg)", stroke: "var(--hairline)" }} width="62" x="0" y="66" />
-            <rect height="2" style={{ fill: DISPLAY_OFF }} width="54" x="4" y="68" />
-            <rect height="2" opacity={lid.level} style={{ fill: "var(--accent)" }} width="54" x="4" y="68" />
+          ) : null}
+          <rect height="5" rx="2" style={LID_BODY} vectorEffect="non-scaling-stroke" width="62" x="0" y="70" />
+          {/* The lid turns on the middle of its round end, so that end stays on the base at each angle. */}
+          <g transform={`rotate(${-lid.angle} ${LID_HINGE})`}>
+            <rect height="4" rx="2" style={LID_BODY} vectorEffect="non-scaling-stroke" width="62" x="0" y="66" />
+            <rect height="1.5" rx="0.75" style={{ fill: DISPLAY_OFF }} width="59.5" x="1.25" y="67.25" />
+            <rect height="1.5" opacity={lid.level} rx="0.75" style={{ fill: "var(--accent)" }} width="59.5" x="1.25" y="67.25" />
           </g>
           <text className="tabular-nums" fontSize="11" style={{ fill: "var(--muted)" }} textAnchor="middle" x="31" y="94">
             {lid.label}
