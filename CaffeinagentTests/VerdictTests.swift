@@ -552,7 +552,7 @@ final class VerdictTests: XCTestCase {
         )
         let frame = EvidenceFrame(
             at: at(0), agents: [full, opencode(cpu: 0)],
-            context: FrameContext(onBattery: true, batteryPercent: 64, lidClosed: true, thermalState: ProcessInfo.ThermalState.fair.rawValue, remoteAccessDetected: true)
+            context: FrameContext(onBattery: true, batteryPercent: 64, lidClosed: true, thermalState: ProcessInfo.ThermalState.fair.rawValue, remoteAccessDetected: true, charging: true)
         )
         let data = try JSONEncoder().encode(frame)
         XCTAssertEqual(try JSONDecoder().decode(EvidenceFrame.self, from: data), frame)

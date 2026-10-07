@@ -79,7 +79,7 @@ enum MenuModel {
         case .reachable: return .reachable
         case .waitingHeld: return .attentive
         case .idle, .waitingReleased, .noAgents: return .asleep
-        case .safetyStop(.batteryLow): return .safetyStop(.battery)
+        case .safetyStop(.batteryLow), .safetyStop(.weakCharger): return .safetyStop(.battery)
         case .safetyStop(.tooHot): return .safetyStop(.heat)
         case .switchedOff, .notEntitled: return .off
         case .paused: return .paused
@@ -142,7 +142,7 @@ enum MenuModel {
     static func attention(_ input: PanelInput) -> PanelAttention? {
         if case .safetyStop(let stop) = input.decision.headline {
             switch stop {
-            case .batteryLow:
+            case .batteryLow, .weakCharger:
                 // The line of the battery says when it starts again. Once is enough.
                 if battery(input) == nil {
                     let recovery = input.settings.batteryFloorPercent + SafetyMonitor.batteryRecoveryPoints

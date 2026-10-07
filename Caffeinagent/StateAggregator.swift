@@ -318,6 +318,10 @@ final class StateAggregator: ObservableObject {
             .sink { [weak self] _ in MainActor.assumeIsolated { self?.macDidWake() } }
             .store(in: &cancellables)
 
+        NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.screensDidWakeNotification)
+            .sink { [weak self] _ in MainActor.assumeIsolated { self?.wokeInFull() } }
+            .store(in: &cancellables)
+
         // A timer does not run while the Mac sleeps, and a clock that was
         // set moves the end of a pause.
         NSWorkspace.shared.notificationCenter.publisher(for: NSWorkspace.didWakeNotification)
@@ -416,11 +420,21 @@ final class StateAggregator: ObservableObject {
             lidClosedWanted: settings.stayAwakeLidClosedOnBattery,
             waitingHold: settings.waitingHold
         )
+        display?.willSleep()
+        engine.willSleep()
     }
 
     private func macDidWake() {
+        wokeInFull()
         sleepNote = sleepSnapshot.flatMap(SleepNote.init)
         sleepSnapshot = nil
+    }
+
+    /// macOS says so, or the displays came on: both only happen at a full
+    /// wake, never while a sleeping Mac wakes by itself with the display off.
+    private func wokeInFull() {
+        display?.didWake()
+        engine.didWake()
     }
 
     func dismissSleepNote() {
@@ -643,6 +657,8 @@ final class StateAggregator: ObservableObject {
         refreshRows()
         updatePower()
         syncSleepFlag()
+        // A stop gives the brightness back at once, not at the next sample.
+        display?.update(holding: decision.hold, now: Date())
     }
 
     private func sampled(_ sample: DetectionSample) {
@@ -656,10 +672,14 @@ final class StateAggregator: ObservableObject {
         if let begun = SafetyStop.toAnnounce(previous: engine.safety, current: stop, wasHolding: power.held) {
             notify(begun.notificationText)
         }
-        if let percent = noLimitWarning.update(context.safetyInputs, floorEnabled: settings.batteryFloorEnabled, holding: power.held) {
+        let warned = noLimitWarning.update(
+            context.safetyInputs, drainingOnPower: safetyMonitor.drainingOnPower, floorEnabled: settings.batteryFloorEnabled, holding: power.held
+        )
+        if let percent = warned {
             notify(NoLimitBatteryWarning.notificationText(percent: percent))
         }
         engine.safety = stop
+        sleepFlag.sampleCompleted()
         // The notification above says why. The time does not come back
         // with the power.
         if stop != nil, reachable.until != nil {
@@ -670,8 +690,10 @@ final class StateAggregator: ObservableObject {
         announceHiddenNotice()
         announceTrial(at: sample.frame.at)
         announceAgents(sample)
+        // The hold of the decision as it is now: a stop from this sample
+        // is in it.
         display?.update(
-            lidClosed: context.lidClosed, holding: sample.decision.hold, enabled: settings.displayOffLidClosed,
+            lidClosed: context.lidClosed, holding: decision.hold, enabled: settings.displayOffLidClosed,
             fade: settings.dimAsLidCloses, now: sample.frame.at
         )
         // In case a timer is late.
@@ -816,6 +838,9 @@ final class StateAggregator: ObservableObject {
     /// called only when the wanted value changes, and again after a call
     /// that did not get through.
     private func syncSleepFlag() {
+        // Whatever the helper's state is: a helper that is not enabled gets
+        // no request below, and its heartbeats must stop all the same.
+        if !decision.lidClosedFlag { sleepFlag.stopWanting() }
         guard let value = flagRequest.next(
             wanted: decision.lidClosedFlag, helperEnabled: sleepFlag.helperStatus == .enabled, now: Self.uptime
         ) else { return }

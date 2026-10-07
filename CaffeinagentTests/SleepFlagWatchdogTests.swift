@@ -391,6 +391,36 @@ final class HelperServiceTests: XCTestCase {
         XCTAssertEqual(flag.forced.last, true)
     }
 
+    /// After an update the app asks the helper to leave: it clears the flag
+    /// it owns, replies, then exits with 0, so launchd does not take the
+    /// exit for a crash.
+    func testRetireClearsTheFlagRepliesAndExits() {
+        let flag = FakeFlag(), marker = FakeMarker()
+        let core = HelperCore(flag: flag, marker: marker, timeout: 60, now: { 1_000 })
+        XCTAssertTrue(core.setSleepDisabled(true))
+        let exited = expectation(description: "exit")
+        var order: [String] = []
+        let service = HelperService(core: core) { code in
+            order.append("exit \(code), flag \(flag.value), marker \(marker.exists)")
+            exited.fulfill()
+        }
+        service.retire { order.append("reply, flag \(flag.value)") }
+        wait(for: [exited], timeout: 5)
+        XCTAssertEqual(order, ["reply, flag false", "exit 0, flag false, marker false"])
+    }
+
+    func testRetireLeavesAForeignFlagAndExits() {
+        let flag = FakeFlag(), marker = FakeMarker()
+        flag.value = true
+        let core = HelperCore(flag: flag, marker: marker, timeout: 60, now: { 1_000 })
+        let exited = expectation(description: "exit")
+        let service = HelperService(core: core) { _ in exited.fulfill() }
+        service.retire {}
+        wait(for: [exited], timeout: 5)
+        XCTAssertTrue(flag.value)
+        XCTAssertEqual(flag.writes, [])
+    }
+
     func testTerminationLeavesAForeignFlagAndExits() {
         let flag = FakeFlag(), marker = FakeMarker()
         flag.value = true

@@ -281,6 +281,130 @@ final class DisplayControllerTests: XCTestCase {
         XCTAssertNil(saved)
     }
 
+    // MARK: A stop and a sleep
+
+    /// A safety stop ends the hold between two samples. The brightness
+    /// comes back with the decision, before the Mac goes to sleep.
+    func testAHoldThatAStopEndsGivesTheBrightnessBackAtOnce() {
+        let controller = controller([Method("first", panel: panel)])
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(0))
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(6))
+        XCTAssertEqual(panel.level, 0, "Display sleep did not hold, so the display was dimmed")
+        controller.update(holding: false, now: at(7))
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+        XCTAssertNil(saved)
+        // The same hold again changes nothing.
+        let reads = reader.reads
+        controller.update(holding: false, now: at(8))
+        XCTAssertEqual(reader.reads, reads)
+    }
+
+    /// Lid closed on battery without the helper: the display fades to
+    /// black and the Mac sleeps all the same. The brightness is back
+    /// before it sleeps, with or without the app at the wake.
+    func testTheBrightnessIsBackBeforeTheMacSleepsInTheMiddleOfAFade() {
+        let controller = fading()
+        tick(60, after: 0.5)
+        move(from: 60, to: 0, over: 0.5)
+        XCTAssertEqual(panel.level, 0)
+        XCTAssertNotNil(saved)
+        controller.willSleep()
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+        XCTAssertNil(saved)
+        XCTAssertNil(lid.onPush, "The sensor is not asked any more")
+        XCTAssertNil(ticker.interval)
+        // A sample that still comes before the Mac sleeps dims nothing.
+        let requests = sleeper.requests
+        controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now)
+        lid.onPush?(0)
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+        XCTAssertNil(saved)
+        XCTAssertEqual(sleeper.requests, requests)
+    }
+
+    func testAfterTheWakeTheFadeStartsFromNewReadings() {
+        let controller = fading()
+        tick(60, after: 0.5)
+        move(from: 60, to: 0, over: 0.5)
+        controller.willSleep()
+        // The user set another brightness, and the lid is open at the wake.
+        panel.level = 0.8
+        lid.degrees = 100
+        controller.didWake()
+        clock.now += 3600
+        controller.update(lidClosed: false, holding: true, enabled: true, fade: true, now: clock.now)
+        XCTAssertEqual(panel.level, 0.8, accuracy: 0.001)
+        XCTAssertNil(saved)
+        tick(60, after: 0.5)
+        move(from: 60, to: 0, over: 0.5)
+        XCTAssertEqual(panel.level, 0)
+        XCTAssertEqual(saved ?? -1, 0.8, accuracy: 0.001, "The value from after the wake, not the one from before the sleep")
+        move(from: 0, to: 50, over: 0.5)
+        XCTAssertEqual(panel.level, 0.8, accuracy: 0.001)
+    }
+
+    /// The Mac did not sleep after all, and the lid is still shut.
+    func testAfterTheWakeAShutLidIsDarkAgainFromTheBrightnessThatWasPutBack() {
+        let controller = fading()
+        tick(60, after: 0.5)
+        move(from: 60, to: 0, over: 0.5)
+        controller.willSleep()
+        controller.didWake()
+        lid.degrees = 0
+        controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now)
+        XCTAssertEqual(panel.level, 0)
+        XCTAssertEqual(saved ?? -1, 0.6, accuracy: 0.001)
+    }
+
+    func testTheBrightnessIsBackBeforeTheMacSleepsNextToAnExternalDisplay() {
+        reader.inputs.externalDisplay = true
+        let watcher = Watcher()
+        let controller = controller([Method("first", panel: panel)], watcher: watcher)
+        controller.start(onChange: {})
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(0))
+        XCTAssertEqual(panel.level, 0)
+        controller.willSleep()
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+        XCTAssertNil(saved)
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(10))
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001, "Not dark again before the wake")
+        // The lid opens with no word of a wake, and closes again.
+        watcher.onChange?(false)
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(20))
+        XCTAssertEqual(panel.level, 0)
+    }
+
+    func testARestoreThatFailedBeforeTheSleepIsTriedAgain() {
+        reader.inputs.externalDisplay = true
+        defaults.set(0.45, forKey: BuiltinDimmer.previousKey)
+        panel.level = 0
+        let refuses = DisplayController(
+            reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: [Method("refuses", .refuses, panel: panel)], defaults: defaults)
+        )
+        refuses.willSleep()
+        XCTAssertNotNil(saved, "The value stays saved until it is back")
+        let works = controller([Method("first", panel: panel)])
+        works.willSleep()
+        XCTAssertEqual(panel.level, 0.45, accuracy: 0.001)
+        XCTAssertNil(saved)
+    }
+
+    func testPuttingTheBrightnessBackNeverMakesTheDisplayDarker() {
+        let method = Method("first", panel: panel)
+        let dimmer = BuiltinDimmer(methods: [method], defaults: defaults)
+        dimmer.save(0.3)
+        panel.level = 0.9
+        XCTAssertTrue(dimmer.restore())
+        XCTAssertEqual(panel.level, 0.9)
+        XCTAssertEqual(method.sets, [], "Nothing is written")
+        XCTAssertNil(saved)
+        // Below the saved value it is written.
+        dimmer.save(0.3)
+        panel.level = 0.1
+        XCTAssertTrue(dimmer.restore())
+        XCTAssertEqual(panel.level, 0.3, accuracy: 0.001)
+    }
+
     /// The app crashed while the display was dark: the next start puts the
     /// brightness back before anything else.
     func testAStartAfterACrashPutsTheBrightnessBackFirst() {

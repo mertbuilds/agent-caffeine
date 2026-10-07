@@ -136,10 +136,16 @@ final class BuiltinDimmer {
         return false
     }
 
-    /// True when nothing is left to put back.
+    /// True when nothing is left to put back. Nothing is written when the
+    /// display is at the saved value or above it already: putting the
+    /// brightness back never makes the display darker.
     func restore() -> Bool {
         guard let previous = defaults.object(forKey: Self.previousKey) as? Double else { return true }
         let wanted = Float(previous)
+        if let now = level(), now >= wanted {
+            defaults.removeObject(forKey: Self.previousKey)
+            return true
+        }
         for method in ordered where method.set(wanted) {
             if let now = method.level(), abs(now - wanted) > 0.05, now <= DisplayRules.darkLevel { continue }
             defaults.removeObject(forKey: Self.previousKey)
@@ -178,6 +184,8 @@ final class DisplayController {
     private var poll: LidPoll?
     /// agent caffeine put the displays to sleep and did not wake them yet.
     private var slept = false
+    /// macOS said the Mac goes to sleep, and it did not wake yet.
+    private var asleep = false
     private var external: (value: Bool, at: Date)?
     private let log = Logger(subsystem: "com.caffeinagent.app", category: "Display")
 
@@ -221,6 +229,12 @@ final class DisplayController {
     func update(lidClosed: Bool, holding: Bool, enabled: Bool, fade wantsFade: Bool = false, now: Date) {
         wanted = Wanted(lidClosed: lidClosed, holding: holding, enabled: enabled, fade: wantsFade)
         external = nil
+        // Nothing gets dark between the word that the Mac goes to sleep
+        // and its wake. A restore that failed is tried again.
+        if asleep {
+            if dimmer.isDimmed { memory.dimmed = !dimmer.restore() }
+            return
+        }
         arm()
         // With a fade, the angle says when the displays wake.
         if !lidClosed, slept, !armed {
@@ -252,6 +266,34 @@ final class DisplayController {
         }
     }
 
+    /// The decision changed between two samples: a hold that a stop ends
+    /// gives the brightness back now, before the Mac goes to sleep.
+    func update(holding: Bool, now: Date) {
+        guard holding != wanted.holding else { return }
+        update(lidClosed: wanted.lidClosed, holding: holding, enabled: wanted.enabled, fade: wanted.fade, now: now)
+    }
+
+    /// macOS says the Mac goes to sleep. The user's brightness comes back
+    /// here and now, because the app may not run when the Mac wakes. What
+    /// the fade knew is dropped: after the wake it starts from new
+    /// readings of the lid and of the brightness.
+    func willSleep() {
+        asleep = true
+        disarm()
+        fade = LidDimMemory()
+        memory = DisplayMemory()
+        slept = false
+        if dimmer.isDimmed {
+            log.info("the Mac goes to sleep: the brightness is put back")
+            memory.dimmed = !dimmer.restore()
+        }
+    }
+
+    /// The Mac woke. The next sample decides from what it reads then.
+    func didWake() {
+        asleep = false
+    }
+
     /// At quit: the user's brightness comes back.
     func stop() {
         watcher?.stop()
@@ -263,6 +305,8 @@ final class DisplayController {
     // MARK: The lid angle
 
     private func changed(lidClosed: Bool?) {
+        // An open lid is a Mac that someone uses, whatever was said about sleep.
+        if lidClosed == false { asleep = false }
         update(lidClosed: lidClosed ?? wanted.lidClosed, holding: wanted.holding, enabled: wanted.enabled, fade: wanted.fade, now: clock())
     }
 

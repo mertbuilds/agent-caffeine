@@ -26,8 +26,37 @@ enum FlagReason: String {
     case quit
 }
 
+/// What to do with the helper that runs when the app starts.
+enum HelperReplacement: Equatable {
+    case keep
+    /// It is asked to leave, and launchd starts the binary that is in the
+    /// bundle now. Nothing about the registration changes.
+    case retire
+    /// Removed and registered again. macOS has refused to register right
+    /// after a removal, so this is the last way.
+    case registerAgain
+}
+
 /// How long the repair of the helper waits at each step.
 enum HelperRepair {
+    /// After an update the helper that runs is the binary of the version
+    /// before it: launchd keeps the process it started.
+    /// - Parameters:
+    ///   - running: the version the helper gave, nil when it gave none.
+    ///   - retired: it was asked to leave before, in this replacement.
+    static func replacement(running: String?, app: String, retired: Bool) -> HelperReplacement {
+        guard let running else { return .registerAgain }
+        if running == app { return .keep }
+        // A helper of a build that does not know how to leave, or one that
+        // did not start again as the new binary.
+        return retired ? .registerAgain : .retire
+    }
+
+    /// The helper that launchd starts after a retire is asked this often,
+    /// this far apart.
+    static let retireTries = 3
+    static let retireInterval: TimeInterval = 0.5
+
     /// A new connection is tried this often before the helper is registered again.
     static let reconnectTries = 2
     static let pollInterval: TimeInterval = 0.25

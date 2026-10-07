@@ -83,6 +83,7 @@ final class DetectionEngine: ObservableObject {
     private let watcher: DetectionWatching
     private var agentMemory: [ProcessIdentity: AgentMemory] = [:]
     private var policyMemory = PolicyMemory()
+    private var wakeGate = WakeGate()
     private var tick: DetectionCancellable?
     /// A sample that an event asked for is on its way.
     private var resamplePending = false
@@ -140,6 +141,19 @@ final class DetectionEngine: ObservableObject {
         watcher.stop()
     }
 
+    /// macOS says the Mac goes to sleep. A hold that runs goes on: with a
+    /// closed lid on wall power the Mac stays awake under it. No hold
+    /// starts from here on. See `WakeGate`.
+    func willSleep() {
+        wakeGate.willSleep()
+    }
+
+    /// The Mac woke in full. The sample that follows decides.
+    func didWake() {
+        wakeGate.didWake(awake: SampleGap.awakeSeconds())
+        requestSample()
+    }
+
     /// Asks for a sample soon. Many calls within the delay give one sample.
     func requestSample() {
         guard isRunning, !resamplePending else { return }
@@ -160,10 +174,14 @@ final class DetectionEngine: ObservableObject {
     private func apply(_ sample: EvidenceSample, generation: Int, resample: Bool) {
         guard isRunning, generation == self.generation else { return }
         let started = DispatchTime.now().uptimeNanoseconds
-        if let gap = SampleGap.length(from: frame?.time, to: sample.frame.time) {
+        let gap = SampleGap.length(from: frame?.time, to: sample.frame.time)
+        if let gap {
             agentMemory = agentMemory.mapValues { $0.shifted(by: gap) }
             policyMemory = policyMemory.shifted(by: gap)
         }
+        // With no hold over the sleep, what an agent did before it starts
+        // none now: only what this sample reads counts.
+        if wakeGate.sampled(awake: sample.frame.awake, gap: gap != nil), !decision.hold { policyMemory = PolicyMemory() }
         let (readings, nextAgents) = VerdictRules.readings(for: sample.frame, memory: agentMemory, settings: settings)
         agentMemory = nextAgents
         self.readings = readings
@@ -198,7 +216,8 @@ final class DetectionEngine: ObservableObject {
     private func decide(at now: Date, context: FrameContext) {
         let (next, memory) = HoldPolicy.decide(
             readings: readings, memory: policyMemory, mode: mode, enabled: enabled, pausedUntil: pausedUntil, reachableUntil: reachableUntil,
-            entitlement: entitlement, safety: safety, settings: settings, context: context, now: now
+            entitlement: entitlement, safety: safety, settings: settings, context: context,
+            mayHold: wakeGate.allowsHold(holding: decision.hold), now: now
         )
         policyMemory = memory
         if decision != next { decision = next }

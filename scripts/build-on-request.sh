@@ -6,8 +6,9 @@
 #   scripts/build-on-request.sh
 #
 # Request:  touch build/.request
-# Result:   build/.result holds the exit code of scripts/release.sh --dry-run,
-#           build/.log holds its output.
+# Result:   build/.result holds the exit code of scripts/release.sh --dry-run
+#           --allow-dirty (the working tree as it is), build/.log holds its
+#           output.
 # Stop with Control-C.
 set -u
 cd "$(dirname "$0")/.."
@@ -18,7 +19,7 @@ while true; do
   if [ -f build/.request ]; then
     rm -f build/.request build/.result
     echo "==> $(date '+%H:%M:%S') build requested"
-    scripts/release.sh --dry-run > build/.log 2>&1
+    scripts/release.sh --dry-run --allow-dirty > build/.log 2>&1
     code=$?
     echo "$code" > build/.result
     if [ "$code" = 0 ]; then echo "    done, signed build is ready"; else echo "    FAILED with $code, see build/.log"; tail -5 build/.log; fi

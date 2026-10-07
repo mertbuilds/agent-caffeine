@@ -21,6 +21,9 @@
 #   --dry-run  do everything local (build, sign, smoke test, dmg, appcast,
 #              latest.json) but notarize nothing, upload nothing and publish
 #              nothing to Polar, and print each upload command instead.
+#   --allow-dirty  only with --dry-run: build from a working tree with changes
+#              that are not committed. A release is always built from a clean
+#              tree, so what ships is what a commit holds.
 #
 # One-time setup before first run:
 #   1. In Xcode → Settings → Accounts → your account → Manage Certificates,
@@ -60,12 +63,29 @@ BUILD_DIR="build/release"
 SITE_DIR="$BUILD_DIR/site"
 
 DRY_RUN=0
+ALLOW_DIRTY=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
+    --allow-dirty) ALLOW_DIRTY=1 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
+if [ "$ALLOW_DIRTY" = 1 ] && [ "$DRY_RUN" = 0 ]; then
+  echo "error: --allow-dirty is only for --dry-run. a release is built from a" >&2
+  echo "       clean working tree." >&2
+  exit 2
+fi
+
+# What ships has to be what a commit holds. Untracked files count: the build
+# takes every source file in the folders, tracked or not.
+DIRTY=$(git status --porcelain)
+if [ -n "$DIRTY" ] && [ "$ALLOW_DIRTY" = 0 ]; then
+  echo "error: the working tree has changes that are not committed:" >&2
+  printf '%s\n' "$DIRTY" | head -20 >&2
+  echo "       commit or stash them, or run with --dry-run --allow-dirty." >&2
+  exit 1
+fi
 
 read_key() {
   { grep -E "^ *$1: " project.yml || true; } | head -1 | sed -E "s/^ *$1: *[\"']?([^\"']*)[\"']?.*$/\1/"
@@ -208,6 +228,23 @@ check_new_release() {
 echo "==> check the build number"
 check_new_release "$(read_key MARKETING_VERSION)" "$(read_key CURRENT_PROJECT_VERSION)"
 
+# Not in a dry run: the build loop asks for one after every change, and the
+# tests run there by themselves.
+if [ "$DRY_RUN" = 1 ]; then
+  echo "==> skip the unit tests (--dry-run)"
+else
+  echo "==> unit tests"
+  TESTS_DIR="$BUILD_DIR-tests"
+  rm -rf "$TESTS_DIR"
+  xcodebuild test \
+    -project "${PROJECT}.xcodeproj" \
+    -scheme "${PROJECT}" \
+    -destination "platform=macOS" \
+    -derivedDataPath "$TESTS_DIR" \
+    -quiet
+  rm -rf "$TESTS_DIR"
+fi
+
 echo "==> xcodebuild ($CONFIG)"
 xcodebuild \
   -project "${PROJECT}.xcodeproj" \
@@ -348,6 +385,11 @@ else
   echo "==> staple notarization ticket"
   xcrun stapler staple "$APP"
   xcrun stapler validate "$APP"
+
+  # What a Mac asks before it opens the app. A refusal here stops the release
+  # before anything is uploaded.
+  echo "==> gatekeeper check of the app"
+  spctl -a -t exec -vv "$APP"
 fi
 
 RELEASE_ZIP="$BUILD_DIR/agent-caffeine-$VERSION-$BUILD.zip"
@@ -390,6 +432,9 @@ if [ "$DRY_RUN" = 0 ]; then
   echo "==> staple dmg"
   xcrun stapler staple "$RELEASE_DMG"
   xcrun stapler validate "$RELEASE_DMG"
+
+  echo "==> gatekeeper check of the dmg"
+  spctl -a -t open --context context:primary-signature -vv "$RELEASE_DMG"
 fi
 
 # Everything the site serves is staged here: the dmg, its notes, the appcast

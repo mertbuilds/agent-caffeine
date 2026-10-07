@@ -54,6 +54,9 @@ protocol SleepFlagHelperConnecting {
     func setSleepDisabled(_ on: Bool) async throws -> Bool
     func status() async throws -> (sleepDisabled: Bool, setByHelper: Bool, version: String)
     func heartbeat() async throws -> Bool
+    // The helper clears a flag it owns and exits. launchd starts it again
+    // on the next call.
+    func retire() async throws
 }
 
 // The sudoers entry of the method this helper replaced.
@@ -136,10 +139,16 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
     private var slowRetriesLeft = HelperRepair.slowRetries
     private var lastRepairEnd = -TimeInterval.infinity
     private var lastSendAfterLoss = -TimeInterval.infinity
+    private var lastOffWithTheHelperOff = -TimeInterval.infinity
+    private var lastSampleAt: TimeInterval
+    private var heartbeatsHeldBack = false
     private var heartbeatTask: Task<Void, Never>?
     private let log = Logger(subsystem: "com.caffeinagent.app", category: "SleepFlagController")
 
     static let wasSetUpKey = "SleepFlagController.helperWasSetUp"
+    /// The samples are 2 or 5 seconds apart. After this long without one
+    /// the sampling hangs, and nobody watches the battery and the heat.
+    static let samplePatience: TimeInterval = 30
 
     init(
         service: HelperServiceManaging,
@@ -147,7 +156,8 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         sudoers: SudoersCleaning,
         heartbeatInterval: TimeInterval = SleepFlagHelper.heartbeatInterval,
         defaults: UserDefaults = .standard,
-        now: @escaping () -> TimeInterval = { ProcessInfo.processInfo.systemUptime },
+        // The clock of the helper's watchdog: it stands still while the Mac sleeps.
+        now: @escaping () -> TimeInterval = SampleGap.awakeSeconds,
         sleep: @escaping (TimeInterval) async -> Void = { try? await Task.sleep(nanoseconds: UInt64($0 * 1_000_000_000)) }
     ) {
         self.service = service
@@ -157,6 +167,7 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         self.defaults = defaults
         self.now = now
         self.sleep = sleep
+        self.lastSampleAt = now()
         self.helperStatus = service.status
         refreshStatus()
         helper.onConnectionLost { [weak self] in
@@ -252,10 +263,11 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
     var flagLeftOn: Bool { helperStatus != .enabled && sleepDisabled }
 
     /// After an update the helper that runs can still be the old binary:
-    /// launchd keeps the process it started. Registering again makes it
-    /// start the new one. A helper that gives no version gets a new
-    /// connection first, and is registered again when that does not help,
-    /// once in a launch.
+    /// launchd keeps the process it started. The helper is asked to leave,
+    /// and launchd starts the new one with no change of the registration.
+    /// A helper that does not know how to leave is registered again. A
+    /// helper that gives no version gets a new connection first, and is
+    /// registered again when that does not help, once in a launch.
     func replaceHelper(ifNot appVersion: String) async {
         refreshStatus()
         guard helperStatus == .enabled, !repairing else { return }
@@ -271,14 +283,27 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         _ = await duringRepair {
             var running = running
             if running == nil { running = await self.versionOnANewConnection() }
-            if running == appVersion { return true }
-            if let running {
-                self.log.info("helper is \(running, privacy: .public), app is \(appVersion, privacy: .public): registering again")
-                // So the helper that is stopped has no flag to clear on its way out.
-                self.logSend(false, .replace)
-                _ = try? await self.helper.setSleepDisabled(false)
+            var retired = false
+            while true {
+                switch HelperRepair.replacement(running: running, app: appVersion, retired: retired) {
+                case .keep:
+                    // The flag went with the old helper, whatever a call under way says.
+                    if retired { self.sendAgain = self.sending }
+                    return true
+                case .retire:
+                    self.log.info("helper is \(running ?? "", privacy: .public), app is \(appVersion, privacy: .public): asking it to leave")
+                    running = await self.versionAfterRetire()
+                    retired = true
+                case .registerAgain:
+                    if let running {
+                        self.log.info("helper is \(running, privacy: .public), app is \(appVersion, privacy: .public): registering again")
+                        // So the helper that is stopped has no flag to clear on its way out.
+                        self.logSend(false, .replace)
+                        _ = try? await self.helper.setSleepDisabled(false)
+                    }
+                    return await self.registerAgain()
+                }
             }
-            return await self.registerAgain()
         }
         await send(.repair)
     }
@@ -360,6 +385,26 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
                 log.error("no answer on a new connection: \(String(describing: error), privacy: .public)")
                 if HelperCall.isSigningFailure(error) { return nil }
             }
+        }
+        return nil
+    }
+
+    /// Asks the helper to leave and gives the version of the one that
+    /// launchd starts after it. The version of the helper as it was when
+    /// it does not know the call or gives no answer to it, nil when no
+    /// helper answers afterwards.
+    private func versionAfterRetire() async -> String? {
+        do {
+            try await helper.retire()
+        } catch where !HelperCall.isConnectionLoss(error) {
+            log.error("the helper did not leave: \(String(describing: error), privacy: .public)")
+        } catch {
+            // It left before its reply came through.
+        }
+        for _ in 1...HelperRepair.retireTries {
+            await sleep(HelperRepair.retireInterval)
+            helper.reconnect()
+            if let version = try? await helper.status().version { return version }
         }
         return nil
     }
@@ -468,6 +513,40 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         return sleepDisabled
     }
 
+    /// The decision no longer wants the flag, whatever the state of the
+    /// helper is. A helper that System Settings no longer calls enabled
+    /// can still run and answer, and `setSleepDisabled(false)` never
+    /// reaches it: without this the heartbeats would keep its flag on.
+    /// - Returns: the try to send "off" to such a helper, nil for none.
+    @discardableResult
+    func stopWanting() -> Task<Void, Never>? {
+        wanted = false
+        stopHeartbeat()
+        guard offIsOwedWithTheHelperOff else { return nil }
+        return Task { await self.sendOffWithTheHelperOff() }
+    }
+
+    /// With the helper enabled the caller's request sends "off".
+    private var offIsOwedWithTheHelperOff: Bool {
+        !wanted && helperStatus != .enabled && (sleepDisabled || flagUnconfirmed) && !sending && !repairing
+            && now() - lastOffWithTheHelperOff >= heartbeatInterval
+    }
+
+    /// A helper that is gone gives no answer, and the next try comes no
+    /// sooner than a heartbeat would.
+    private func sendOffWithTheHelperOff() async {
+        guard offIsOwedWithTheHelperOff else { return }
+        lastOffWithTheHelperOff = now()
+        logSend(false, .decision)
+        do {
+            sleepDisabled = try await helper.setSleepDisabled(false)
+            flagUnconfirmed = false
+        } catch {
+            log.error("no answer from a helper that is not enabled: \(String(describing: error), privacy: .public)")
+        }
+        refreshHealth()
+    }
+
     /// Every value the app sends is in the log with its reason.
     private func logSend(_ value: Bool, _ reason: FlagReason) {
         log.info("sending SleepDisabled \(value) to the helper: \(reason.rawValue, privacy: .public)")
@@ -556,6 +635,25 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         await send(.heartbeat)
     }
 
+    /// A sample of the engine ended and its battery and heat check ran.
+    func sampleCompleted() {
+        lastSampleAt = now()
+    }
+
+    /// The heartbeat of the timer. The flag blocks the kernel's own sleep
+    /// for low battery and heat, and only a sample checks them. So while
+    /// the sampling hangs no heartbeat goes out, and the helper's watchdog
+    /// clears the flag. The first sample after that sends it again.
+    func sendHeartbeatWhileSampling() async {
+        let stale = now() - lastSampleAt > Self.samplePatience
+        if stale != heartbeatsHeldBack {
+            heartbeatsHeldBack = stale
+            if stale, wanted { log.error("no sample for \(Int(Self.samplePatience)) seconds: the heartbeats stop until the next one") }
+        }
+        guard !stale else { return }
+        await sendHeartbeat()
+    }
+
     private func startHeartbeat() {
         guard heartbeatTask == nil else { return }
         let interval = UInt64(heartbeatInterval * 1_000_000_000)
@@ -563,7 +661,7 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
             while !Task.isCancelled {
                 try? await Task.sleep(nanoseconds: interval)
                 if Task.isCancelled { return }
-                await self?.sendHeartbeat()
+                await self?.sendHeartbeatWhileSampling()
             }
         }
     }

@@ -2,6 +2,9 @@ import Foundation
 
 enum SafetyStop: Equatable {
     case batteryLow(percent: Int)
+    /// On power, and the battery still fell to the floor: the charger gives
+    /// less than the Mac uses.
+    case weakCharger(percent: Int)
     case tooHot
 }
 
@@ -10,6 +13,8 @@ extension SafetyStop {
     var notificationText: String {
         switch self {
         case .batteryLow(let percent): return "agent caffeine let your Mac sleep because the battery is at \(PanelText.percent(percent))"
+        case .weakCharger(let percent):
+            return "agent caffeine let your Mac sleep because your charger is too weak and the battery is at \(PanelText.percent(percent))"
         case .tooHot: return "agent caffeine let your Mac sleep because it got too hot"
         }
     }
@@ -27,6 +32,55 @@ struct SafetyInputs: Equatable {
     var batteryPercent: Int?
     var onBattery: Bool
     var thermalState: ProcessInfo.ThermalState
+    /// What macOS says about the battery on power. It is kept for the
+    /// record and decides nothing: a Mac at a charge limit and a full Mac
+    /// both say "not charging" on a good charger. See `PowerDrain`.
+    var charging = false
+}
+
+/// Says when the battery falls while the Mac is on power: a phone charger,
+/// a power bank or a display port that gives less than the Mac uses. macOS
+/// then still reports wall power.
+///
+/// Only a level that falls counts. It fell when it is 2 points or more
+/// below the level at the moment the power came, or below the level it
+/// last rose to. A Mac that rests at a charge limit or at full stays at
+/// its level, so it never counts.
+struct PowerDrain: Equatable {
+    static let fallPoints = 2
+
+    private(set) var draining = false
+    /// The level the fall is counted from. Nil on battery.
+    private var reference: Int?
+    private var last: Int?
+
+    /// - Parameter latched: a battery stop is on. A level that rises then
+    ///   ends nothing: the Mac sleeps and uses less, so the weak charger
+    ///   gains a point, and the stop would go off and on.
+    mutating func update(percent: Int?, onBattery: Bool, latched: Bool) {
+        guard let percent, !onBattery else {
+            self = PowerDrain()
+            return
+        }
+        defer { last = percent }
+        guard let reference, let last else {
+            self.reference = percent
+            return
+        }
+        if percent > last, !(latched && draining) {
+            self.reference = percent
+            draining = false
+        } else if reference - percent >= Self.fallPoints {
+            draining = true
+        }
+    }
+
+    /// The stop ended: the fall is counted from this level.
+    mutating func restart(at percent: Int?) {
+        self = PowerDrain()
+        reference = percent
+        last = percent
+    }
 }
 
 // Says when keeping the Mac awake has to stop. SleepDisabled blocks the
@@ -42,19 +96,31 @@ struct SafetyMonitor {
     /// hardware cuts the power. Heat still stops.
     var batteryFloorEnabled = true
     private var batteryStopped = false
+    private var drain = PowerDrain()
+
+    /// The battery falls while the Mac is on power.
+    var drainingOnPower: Bool { drain.draining }
 
     // Heat comes first: it is the one that can hurt the Mac.
     mutating func update(_ inputs: SafetyInputs) -> SafetyStop? {
-        let (stop, stopped) = Self.evaluate(inputs, floor: batteryFloorEnabled ? batteryFloorPercent : nil, batteryStopped: batteryStopped)
+        drain.update(percent: inputs.batteryPercent, onBattery: inputs.onBattery, latched: batteryStopped)
+        let (stop, stopped) = Self.evaluate(
+            inputs, floor: batteryFloorEnabled ? batteryFloorPercent : nil, batteryStopped: batteryStopped, drainingOnPower: drain.draining
+        )
+        if batteryStopped, !stopped { drain.restart(at: inputs.onBattery ? nil : inputs.batteryPercent) }
         batteryStopped = stopped
         return stop
     }
 
     // The thermal state needs no latch of its own: macOS already moves it in
     // coarse, slow steps. A nil floor is the battery floor switched off.
-    static func evaluate(_ inputs: SafetyInputs, floor: Int?, batteryStopped: Bool) -> (stop: SafetyStop?, batteryStopped: Bool) {
+    // The floor counts on battery, and on a charger that does not hold the
+    // level: SleepDisabled would let that Mac run empty too.
+    static func evaluate(
+        _ inputs: SafetyInputs, floor: Int?, batteryStopped: Bool, drainingOnPower: Bool = false
+    ) -> (stop: SafetyStop?, batteryStopped: Bool) {
         var stopped = false
-        if let floor, inputs.onBattery, let percent = inputs.batteryPercent {
+        if let floor, inputs.onBattery || drainingOnPower, let percent = inputs.batteryPercent {
             stopped = batteryStopped ? percent < floor + batteryRecoveryPoints : percent <= floor
         }
         switch inputs.thermalState {
@@ -64,7 +130,7 @@ struct SafetyMonitor {
             break
         }
         if stopped, let percent = inputs.batteryPercent {
-            return (.batteryLow(percent: percent), stopped)
+            return (inputs.onBattery ? .batteryLow(percent: percent) : .weakCharger(percent: percent), stopped)
         }
         return (nil, stopped)
     }
@@ -95,7 +161,8 @@ enum SafetyText {
 
 /// With the battery floor off nothing stops the hold, so the user is told
 /// when the battery gets low: once at 10 percent and once at 5 percent,
-/// while agent caffeine keeps the Mac awake on battery.
+/// while agent caffeine keeps the Mac awake on battery, or on a charger
+/// that does not hold the level.
 struct NoLimitBatteryWarning: Equatable {
     static let levels = [10, 5]
     /// A level is told again after the battery was above this, or charged.
@@ -108,8 +175,8 @@ struct NoLimitBatteryWarning: Equatable {
     }
 
     /// The battery level to tell the user about, nil for none.
-    mutating func update(_ inputs: SafetyInputs, floorEnabled: Bool, holding: Bool) -> Int? {
-        guard !floorEnabled, inputs.onBattery, let percent = inputs.batteryPercent, percent <= Self.resetAbovePercent else {
+    mutating func update(_ inputs: SafetyInputs, drainingOnPower: Bool = false, floorEnabled: Bool, holding: Bool) -> Int? {
+        guard !floorEnabled, inputs.onBattery || drainingOnPower, let percent = inputs.batteryPercent, percent <= Self.resetAbovePercent else {
             told = []
             return nil
         }

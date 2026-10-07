@@ -3,8 +3,8 @@ import Foundation
 // Root daemon, registered by the app through SMAppService. launchd starts it
 // at boot and when the app connects, and it stays resident: it sleeps on its
 // queue and costs nothing while idle, and exiting would only add a race with
-// an incoming connection. It leaves only when launchd stops it, and clears a
-// flag it owns on the way out.
+// an incoming connection. It leaves only when launchd stops it, or when the
+// app retires it after an update, and clears a flag it owns on the way out.
 let service = HelperService(core: HelperCore(flag: SystemSleepFlag(), marker: MarkerFile(), timeout: SleepFlagHelper.heartbeatTimeout))
 service.start()
 service.exitOnTermination()
