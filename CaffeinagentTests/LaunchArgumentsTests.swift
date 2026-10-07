@@ -134,4 +134,49 @@ final class LaunchArgumentsTests: XCTestCase {
             XCTAssertEqual(Reopen.action(kind: c.kind, anotherCopyRuns: c.anotherCopyRuns), c.want, "\(c)")
         }
     }
+
+    // MARK: Reopen and the click of a notification
+
+    func testAReopenAloneShowsPreferencesAfterTheWait() {
+        var gate = ReopenGate()
+        let reopen = gate.reopened(at: 100)
+        XCTAssertNotNil(reopen)
+        XCTAssertTrue(gate.waitEnded(reopen ?? 0))
+        // Once.
+        XCTAssertFalse(gate.waitEnded(reopen ?? 0))
+    }
+
+    func testAClickInTheWaitDropsTheReopen() {
+        var gate = ReopenGate()
+        let reopen = gate.reopened(at: 100)
+        gate.notificationClicked(at: 100 + ReopenGate.wait / 2)
+        XCTAssertFalse(gate.waitEnded(reopen ?? 0))
+    }
+
+    func testAReopenJustAfterAClickShowsNothing() {
+        var gate = ReopenGate()
+        gate.notificationClicked(at: 100)
+        XCTAssertNil(gate.reopened(at: 100.05))
+        XCTAssertNil(gate.reopened(at: 100 + ReopenGate.afterClick))
+        // Later it is the user who opens the app again.
+        let reopen = gate.reopened(at: 100 + ReopenGate.afterClick + 0.1)
+        XCTAssertNotNil(reopen)
+        XCTAssertTrue(gate.waitEnded(reopen ?? 0))
+    }
+
+    func testOfTwoReopensInTheWaitTheLastOneShowsPreferences() {
+        var gate = ReopenGate()
+        let first = gate.reopened(at: 100)
+        let second = gate.reopened(at: 100.1)
+        XCTAssertFalse(gate.waitEnded(first ?? 0))
+        XCTAssertTrue(gate.waitEnded(second ?? 0))
+    }
+
+    /// The hand-over of a second copy is no reopen: it does not wait, and
+    /// a click of a notification just before does not stop it.
+    func testASecondLaunchAsksForPreferencesAtOnce() {
+        XCTAssertEqual(Reopen.action(kind: .app, anotherCopyRuns: true), .askRunningCopy)
+        XCTAssertEqual(ReopenGate.wait, 0.4)
+        XCTAssertEqual(ReopenGate.afterClick, 1)
+    }
 }

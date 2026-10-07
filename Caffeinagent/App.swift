@@ -5,6 +5,7 @@ import Combine
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var reopenObserver: NSObjectProtocol?
     private var toolTipObserver: AnyCancellable?
+    private var reopenGate = ReopenGate()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // No offer to move, no setup window and no word from other copies.
@@ -18,8 +19,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
             if Onboarding.isPending { OnboardingWindow.show(aggregator: .shared) }
         }
+        Notifier.shared.onResponse = { [weak self] time in self?.reopenGate.notificationClicked(at: time) }
         // A second copy that leaves asks for Preferences this way. What it
-        // sends is not read.
+        // sends is not read. No click of a notification sends it, so
+        // Preferences opens at once.
         reopenObserver = DistributedNotificationCenter.default().addObserver(
             forName: Notification.Name(Reopen.notificationName), object: nil, queue: .main
         ) { [weak self] _ in
@@ -27,9 +30,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// The user opened the app again, from the Finder or Spotlight.
+    /// The user opened the app again, from the Finder or Spotlight, or
+    /// clicked a notification: see `ReopenGate`.
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows: Bool) -> Bool {
-        showPreferences()
+        guard let reopen = reopenGate.reopened(at: ProcessInfo.processInfo.systemUptime) else { return false }
+        DispatchQueue.main.asyncAfter(deadline: .now() + ReopenGate.wait) { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.reopenGate.waitEnded(reopen) else { return }
+                self.showPreferences()
+            }
+        }
         return false
     }
 

@@ -131,3 +131,42 @@ enum Reopen {
         }
     }
 }
+
+/// Whether a reopen shows Preferences. macOS can send a reopen when the
+/// user clicks a notification of the app, and that click goes to the agent
+/// and must never open Preferences. The two come in either order, so a
+/// reopen waits a moment for the click. A second launch of the app does
+/// not come through here: it shows Preferences at once.
+struct ReopenGate {
+    /// How long a reopen waits for the click of a notification.
+    static let wait: TimeInterval = 0.4
+    /// A reopen this soon after the click belongs to the click.
+    static let afterClick: TimeInterval = 1
+
+    private var lastClick: TimeInterval?
+    private var pending: Int?
+    private var reopens = 0
+
+    /// The user clicked a notification. A reopen that waits is dropped.
+    mutating func notificationClicked(at now: TimeInterval) {
+        lastClick = now
+        pending = nil
+    }
+
+    /// Nil when the reopen belongs to a click. Else what to hand to
+    /// `waitEnded` after `wait`.
+    mutating func reopened(at now: TimeInterval) -> Int? {
+        if let lastClick, now - lastClick <= Self.afterClick { return nil }
+        reopens += 1
+        pending = reopens
+        return reopens
+    }
+
+    /// True when Preferences opens now: no click came, and no later
+    /// reopen waits in place of this one.
+    mutating func waitEnded(_ reopen: Int) -> Bool {
+        guard pending == reopen else { return false }
+        pending = nil
+        return true
+    }
+}

@@ -109,6 +109,9 @@ final class Notifier: NSObject, AgentNotifying, UNUserNotificationCenterDelegate
     @MainActor var onPermission: ((NotificationPermission) -> Void)?
     @MainActor var onDelivery: ((String, AgentNoticeDelivery) -> Void)?
     @MainActor var onOpen: ((AgentNoticeTarget) -> Void)?
+    /// Called on the main actor for every answer to a notification, with
+    /// the uptime at which it came.
+    @MainActor var onResponse: ((TimeInterval) -> Void)?
     private let center: NotificationCentering
     /// The last request of each `AgentNoticeContent.key`.
     @MainActor private var lastIdentifiers: [String: String] = [:]
@@ -239,6 +242,8 @@ final class Notifier: NSObject, AgentNotifying, UNUserNotificationCenterDelegate
         _ center: UNUserNotificationCenter, didReceive response: UNNotificationResponse,
         withCompletionHandler completionHandler: @escaping () -> Void
     ) {
+        let time = ProcessInfo.processInfo.systemUptime
+        onMain { $0.onResponse?(time) }
         if response.actionIdentifier == UNNotificationDefaultActionIdentifier,
            let target = AgentNoticeTarget(userInfo: response.notification.request.content.userInfo) {
             onMain { $0.onOpen?(target) }
