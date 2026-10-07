@@ -15,7 +15,8 @@ if arguments.count >= 3, HookEvents.rules[arguments[1]] != nil {
     let input = HookCommand.readInput()
     HookCommand.record(
         agent: arguments[1], event: arguments[2], input: input,
-        chain: HookCommand.ancestors(of: getpid()), directory: HookStateFile.directory()
+        chain: HookCommand.ancestors(of: getpid()), directory: HookStateFile.directory(),
+        now: HookCommand.startTime() ?? Date()
     )
 }
 exit(0)

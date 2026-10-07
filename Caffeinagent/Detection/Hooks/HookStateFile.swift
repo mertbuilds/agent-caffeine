@@ -23,6 +23,14 @@ struct HookStateFile: Codable, Equatable {
         var event: String
         /// Seconds since the epoch.
         var at: TimeInterval
+        /// The stamp of the event, for an agent that sends one.
+        var ts: Double?
+        var seq: Int?
+
+        var stamp: HookStamp? {
+            guard let ts, let seq else { return nil }
+            return HookStamp(ts: ts, seq: seq)
+        }
     }
 
     var v = HookStateFile.currentVersion
@@ -77,7 +85,12 @@ struct HookStateFile: Codable, Equatable {
     /// dropped, because two hook commands can finish out of order. What
     /// the session holds from further ahead is from before the clock was
     /// set back, and the new event replaces it.
-    mutating func apply(_ action: HookAction, session: String, event: String, at: Date) {
+    ///
+    /// An event with a stamp is put in order by the stamp when the session
+    /// holds one too: the agent gave it, and the time of the hook command
+    /// says less. An event with no stamp, and a session with none, are
+    /// treated as before.
+    mutating func apply(_ action: HookAction, session: String, event: String, at: Date, stamp: HookStamp? = nil) {
         let time = at.timeIntervalSince1970
         switch action {
         case .ignore:
@@ -85,8 +98,14 @@ struct HookStateFile: Codable, Equatable {
         case .end:
             sessions[session] = nil
         case .set(let state):
-            if let known = sessions[session], known.at > time, known.at - time <= Self.clockTolerance { return }
-            sessions[session] = Session(state: Self.name(of: state), event: event, at: time)
+            if let known = sessions[session] {
+                if let stamp, let held = known.stamp {
+                    if stamp < held, held.ts - stamp.ts <= Self.clockTolerance * 1000 { return }
+                } else if known.at > time, known.at - time <= Self.clockTolerance {
+                    return
+                }
+            }
+            sessions[session] = Session(state: Self.name(of: state), event: event, at: time, ts: stamp?.ts, seq: stamp?.seq)
         }
         sessions = sessions.filter { abs(time - $0.value.at) < Self.sessionLifetime }
         if sessions.count > Self.maxSessions {
@@ -132,17 +151,47 @@ struct HookStateFile: Codable, Equatable {
     }
 }
 
+/// The order an agent gives its events: the time of the event in
+/// milliseconds since the epoch, and a number that counts up in the sender.
+/// The opencode plugin sends both. The time decides, and the number decides
+/// between two events of one millisecond.
+struct HookStamp: Equatable, Comparable {
+    var ts: Double
+    var seq: Int
+
+    init(ts: Double, seq: Int) {
+        self.ts = ts
+        self.seq = seq
+    }
+
+    /// From the fields of the hook input. Nil when one of the two is not there.
+    init?(fields: [String: String]) {
+        guard let ts = fields[HookInput.timeKey].flatMap({ Double($0) }), let seq = fields[HookInput.sequenceKey].flatMap({ Int($0) }) else { return nil }
+        self.init(ts: ts, seq: seq)
+    }
+
+    static func < (left: HookStamp, right: HookStamp) -> Bool {
+        (left.ts, left.seq) < (right.ts, right.seq)
+    }
+}
+
 /// Reads the few fields the hook command needs from the JSON an agent sends
 /// on stdin, without building the document: the input can hold a whole
 /// prompt or a tool result, and it can be cut off at the read limit.
 enum HookInput {
     /// Cursor names its session `conversation_id`.
     static let sessionKeys: [String] = ["session_id", "sessionID", "sessionId", "conversation_id"]
-    static let wantedKeys: Set<String> = Set(sessionKeys + ["notification_type", "agent_id"])
+    static let timeKey = "ts"
+    static let sequenceKey = "seq"
+    /// The keys whose value is a whole number: the stamp of `HookStamp`.
+    static let numberKeys: Set<String> = [timeKey, sequenceKey]
+    static let wantedKeys: Set<String> = Set(sessionKeys + ["notification_type", "agent_id"]).union(numberKeys)
     static let maxValueBytes = 256
+    static let maxNumberDigits = 18
 
     /// The string values of the wanted keys of the top-level object. A value
-    /// that is no string, is too long or is cut off is left out.
+    /// that is no string, is too long or is cut off is left out. The value
+    /// of a number key is read as its digits.
     static func topLevelStrings(in bytes: [UInt8], keys: Set<String> = wantedKeys) -> [String: String] {
         var found: [String: String] = [:]
         var index = 0
@@ -150,6 +199,7 @@ enum HookInput {
         var expectsKey = false
         let quote = UInt8(ascii: "\""), backslash = UInt8(ascii: "\\")
 
+        func isDigit(_ byte: UInt8) -> Bool { byte >= UInt8(ascii: "0") && byte <= UInt8(ascii: "9") }
         func skipSpace() {
             while index < bytes.count, [0x20, 0x09, 0x0a, 0x0d].contains(bytes[index]) { index += 1 }
         }
@@ -185,6 +235,14 @@ enum HookInput {
                 guard index < bytes.count, bytes[index] == UInt8(ascii: ":") else { continue }
                 index += 1
                 skipSpace()
+                if let key, numberKeys.contains(key), keys.contains(key), index < bytes.count, isDigit(bytes[index]) {
+                    let start = index
+                    while index < bytes.count, isDigit(bytes[index]) { index += 1 }
+                    // Cut off at the end of the input, or a number that is no whole one.
+                    let whole = index < bytes.count && [0x20, 0x09, 0x0a, 0x0d, UInt8(ascii: ","), UInt8(ascii: "}")].contains(bytes[index])
+                    if whole, index - start <= maxNumberDigits { found[key] = String(decoding: bytes[start..<index], as: UTF8.self) }
+                    continue
+                }
                 guard index < bytes.count, bytes[index] == quote else { continue }
                 let wanted = key.map(keys.contains) ?? false
                 let value = readString(limit: wanted ? maxValueBytes : 0)

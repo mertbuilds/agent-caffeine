@@ -89,6 +89,10 @@ enum HookEvents {
         ],
     ]
 
+    /// The agents whose hook input holds a `HookStamp`. The `ts` or `seq`
+    /// of another agent's input means something else and is not read.
+    static let stampedAgents: Set<String> = ["opencode"]
+
     /// The `AgentDefinition.id`s a hook agent id covers. The Codex app runs
     /// the same hooks file as the Codex CLI.
     static let definitionIDs: [String: Set<String>] = [

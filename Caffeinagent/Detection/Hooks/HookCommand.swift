@@ -76,6 +76,15 @@ enum HookCommand {
         return chain
     }
 
+    /// When this hook command started. The agent starts its hook commands
+    /// in the order of its events, and a command can take longer than the
+    /// next one to read its input. So this time, and not the time of the
+    /// write, is the time of the event. Nil when the process table does
+    /// not give it.
+    static func startTime(of pid: Int32 = getpid()) -> Date? {
+        SystemProcessCensus.row(of: pid).map { Date(timeIntervalSince1970: $0.startTime) }
+    }
+
     /// False when nothing was recorded.
     @discardableResult
     static func record(agent: String, event: String, input: [UInt8], chain: [ProcessInfoRow], directory: URL, now: Date = Date()) -> Bool {
@@ -104,7 +113,8 @@ enum HookCommand {
            known.v == HookStateFile.currentVersion, abs(known.start - process.startTime) <= startTolerance {
             file = known
         }
-        file.apply(action, session: HookStateFile.sessionKey(sessionID), event: event, at: now)
+        let stamp = HookEvents.stampedAgents.contains(agent) ? HookStamp(fields: fields) : nil
+        file.apply(action, session: HookStateFile.sessionKey(sessionID), event: event, at: now, stamp: stamp)
         if file.sessions.isEmpty {
             unlink(url.path)
             return true
