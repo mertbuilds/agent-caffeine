@@ -25,9 +25,9 @@ struct BottomBar: View, Equatable {
     var body: some View {
         HStack(spacing: 8) {
             if let pausedLabel = bar.pausedLabel {
-                timed(pausedLabel, end: PanelText.resume, action: .resume)
+                timed(pausedLabel, action: .resume)
             } else if let reachableLabel = bar.reachableLabel {
-                timed(reachableLabel, end: PanelText.stop, action: .stopReachable)
+                timed(reachableLabel, action: .stopReachable)
             } else {
                 Menu {
                     Picker(PanelText.modePicker, selection: $mode) {
@@ -49,14 +49,6 @@ struct BottomBar: View, Equatable {
 
             Menu {
                 Button(PanelText.preferences, action: openPreferences)
-                if bar.pausedLabel != nil {
-                    Button(PanelAction.resume.title) { perform(.resume) }
-                } else if enabled {
-                    Menu(PanelText.pauseMenu) { pauseChoices }
-                }
-                if enabled, !bar.reachableActions.isEmpty {
-                    Menu(PanelText.reachableMenu) { reachableChoices }
-                }
                 ForEach(bar.licenseActions, id: \.title) { action in
                     Button(action == .buy ? PanelText.buyInMenu : action.title) { perform(action) }
                 }
@@ -105,14 +97,14 @@ struct BottomBar: View, Equatable {
 
     /// Until when, and the way out.
     @ViewBuilder
-    private func timed(_ label: String, end: String, action: PanelAction) -> some View {
+    private func timed(_ label: String, action: PanelAction) -> some View {
         Text(label)
             .monospacedDigit()
             .foregroundStyle(.secondary)
             .lineLimit(1)
             .minimumScaleFactor(0.9)
             .layoutPriority(1)
-        Button(end) { perform(action) }
+        Button(action.title) { perform(action) }
             .buttonStyle(.link)
             .frame(minHeight: PanelMetrics.controlHeight)
     }
@@ -126,9 +118,6 @@ struct BottomBar: View, Equatable {
     /// With what it costs on battery, as a line that is no choice.
     @ViewBuilder
     private var reachableChoices: some View {
-        if bar.reachableLabel != nil {
-            Button(PanelAction.stopReachable.title) { perform(.stopReachable) }
-        }
         ForEach(bar.reachableActions, id: \.title) { action in
             Button(action.title) { perform(action) }
         }
