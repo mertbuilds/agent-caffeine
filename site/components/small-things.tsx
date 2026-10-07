@@ -17,10 +17,10 @@ const NEAR_FLOOR: Battery = {
   spoken: `Battery 27 percent, agent caffeine lets your Mac sleep at ${BATTERY_FLOOR} percent`,
 };
 
-/** The two shortcuts of Preferences > Shortcuts (`ShortcutAction.title`), each with keys a reader could record. */
+/** The two shortcuts of Settings > Shortcuts (`ShortcutAction.title`) with their default keys. */
 const SHORTCUTS = [
-  { title: "Turn agent caffeine on or off", keys: "⌥⌘L" },
-  { title: "Pause for 1 hour", keys: "⌥⌘P" },
+  { title: "Turn agent caffeine on or off", keys: "⌃⌥⌘C" },
+  { title: "Pause for 1 hour", keys: "⌃⌥⌘P" },
 ];
 
 /** The switch of the app, drawn in one state. */
@@ -175,7 +175,7 @@ export function SmallThings() {
             <BatteryLine battery={NEAR_FLOOR} />
           </PanelSurface>
         </Thing>
-        <Thing text="Switch agent caffeine on or off, or pause it for 1 hour, with keys you choose. They work in every app" title="Keyboard shortcuts">
+        <Thing text="Turn agent caffeine on or off, or pause it for 1 hour, from any app. You can change the keys" title="Keyboard shortcuts">
           <Rows label="The keyboard shortcuts in Preferences">
             {SHORTCUTS.map((shortcut, index) => (
               <div key={shortcut.title}>
