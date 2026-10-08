@@ -11,10 +11,13 @@ this Mac. [UNKNOWN] must be measured live.
 
 ## 0. Result
 
-No exact state of a turn is read, and no hook is installed. OpenClaw is matched better and is still judged by activity.
+No hook is installed. Since 2026-10-09 the gateway is judged by the state of its sessions, and its own CPU use is no
+sign of work: section 7. The text of sections 1 to 6 is from 2026-10-08, before that.
 
-- A state database exists and has tables for background tasks and cron runs with a status and a pid. No turn ran on
-  this Mac, so no row of a turn in progress was seen, and which table says "a turn of the main session runs" is not known.
+- The database of each agent has the table `session_windows` with a `status` of each session: `running` while a run of
+  the session is in progress. One run that ended was measured. A run in progress was not, so the definition stays
+  `verified: false`.
+- A state database exists and has tables for background tasks and cron runs with a status and a pid.
 - Its plugin hooks have exact events. A plugin has to be installed and enabled through `~/.openclaw/openclaw.json`.
 
 ## 1. The product and the processes
@@ -120,3 +123,112 @@ To measure, with the gateway running and the owner sending the messages:
 4. The argv of the gateway under launchd after `openclaw gateway install`.
 
 With (1) a reader like `HermesStateReader` is small: the rows carry `execution_owner_pid` and times.
+
+## 7. The gateway at rest read as working: the record, the reader and the rule (2026-10-09)
+
+### What was measured [MAC]
+
+`--lab-record openclaw-long`, 2026-10-08, 419 seconds, 192 samples, gateway pid 6256 (title `openclaw-gateway`), one
+sample each 2.2 seconds. The owner reported that the OpenClaw row said "working" with no work.
+
+- The record is not a gateway at rest from start to end. The database of the agent says that one run of a session
+  started 20.6 seconds into the record and ended 3.5 seconds later (`session_windows`: `started_at`, `ended_at`,
+  `status` `done`, `chat_type` `direct`; the session was made by a `human` actor 0.5 seconds before). No run came
+  after it.
+- Around the run: 17.6 percent of a core in a sample 4 seconds before it, 197 percent in the sample of the run (4.4 CPU
+  seconds), then 23 and 15 percent. 0.78 MB and 0.67 MB were written. A second child process came with the run
+  (`cmds` 1 to 2: `node .../openclaw/dist/infra/sqlite-readonly-location.worker.js`) and stayed. No child command read
+  as busy in any sample.
+- At rest, from 30 seconds to the end (177 samples): 1.6 percent of a core in the mean, 1.3 percent in the median,
+  2.1 percent at the 90th percentile, 16 percent in the highest sample. In fixed windows of 5 seconds: 10 of 78
+  windows at 2 percent or more, 3 at 3 percent or more, the highest 8.8 percent. Every 30 seconds 16 KB are written:
+  the lease `gateway-owner` in `state_leases` of the state database has a `heartbeat_at`.
+- The verdict of the app: `idle noActivity` until 28 seconds, then `working cpuActivity` in all 178 samples to the end.
+  The CPU rule (3 of the last 6 windows of 5 seconds at 2 percent, `VerdictRules.weakCPUFraction`) held for the first
+  time 4 seconds after the run had ended, and then again and again until 265 seconds, because the rest use of the
+  gateway is at the threshold. Each time starts the release time of 300 seconds again. So a gateway at rest holds the
+  Mac until `weakEvidenceCap` (30 minutes) says that CPU use was the only sign.
+- No threshold repairs this. Replayed over the record, the rule holds at 2, 3, 4, 5, 6 and 8 percent (after the run,
+  until 45 to 54 seconds) and not at 10 percent, and a run of 3.5 seconds is not seen at any threshold: it fills one
+  window. The CPU of the gateway also rises when a client connects, which is no turn.
+
+### The signal [PKG] [MAC]
+
+- File: `~/.openclaw/agents/<agent id>/agent/openclaw-agent.sqlite` (WAL mode), one per agent. Table
+  `session_windows`, one row per session.
+- [PKG] the schema in `dist/state/openclaw-state-read.worker.js`: `status TEXT CHECK (status IS NULL OR status IN
+  ('running', 'done', 'failed', 'killed', 'timeout'))`, `started_at INTEGER`, `ended_at INTEGER`, `updated_at INTEGER`,
+  `transcript_updated_at INTEGER`. Epoch milliseconds.
+- [PKG] `src/gateway/session-lifecycle-state.ts` (in `dist/session-event-payload-*.mjs`): the lifecycle event `start`
+  of a run sets `status: "running"`, `startedAt` and no `endedAt`. The event `end` or `error` sets `done` (success),
+  `timeout`, `killed` (cancelled) or `failed`, with `endedAt`. Two ends keep `running` on purpose: a run that the
+  restart of the gateway interrupted (it is recovered after the start), and a run that yielded to wait for its child
+  runs.
+- [MAC] the one run of the record: `status` `done`, `started_at` and `ended_at` 3.5 seconds apart,
+  `transcript_updated_at` 17 milliseconds before `ended_at`. `session_nodes.status` said `done` too.
+- [PKG] OpenClaw has a watchdog of its own for a run with no progress (`diagnostic-stuck-session-recovery`,
+  `STUCK_SESSION_PROGRESS_STALE_MS` 300 000), and the default time limit of a run is 48 hours (`docs/concepts/agent-loop.md`).
+- The rows carry no pid. `task_runs` of the state database held 5 rows, all `runtime` `cron`, `status` `failed`, with
+  no `execution_owner_pid`: not used.
+- The docs in the package (`docs/concepts/session.md`, `session-state.md`) do not describe the column. docs.openclaw.ai
+  was not fetched: the package holds the same docs for this version.
+
+### The reader and the rule
+
+- `OpenClawStateReader` reads, for each agent database of `~/.openclaw`, the rows with `status = 'running'` (their
+  three times) and the newest `ended_at`. It opens the database as the reader of Hermes Agent does and writes nothing.
+  No text and no key of a session is read.
+- Only the gateway (role engine) gets the state: it runs the turns, and the rows carry no pid. Working while one row
+  says `running`, idle when every database was read and none does. With no database, or with one that cannot be read,
+  nothing is said.
+- A run that was killed with its process leaves `running` for ever. A row counts only while the newest of
+  `started_at`, `updated_at` and `transcript_updated_at` is less than 30 minutes old
+  (`OpenClawSummary.runLimit` = `VerdictRules.hookWorkingLimit`). After that the signs of activity decide.
+- The gateway's own CPU use is no sign of work (`VerdictRules.countsCPU`), with or without a state. Without a state
+  the gateway works only while a command below it is busy or it holds a sleep assertion. The rule is for the gateway of
+  OpenClaw alone. The other engines that live all day have a state (Hermes Agent, Codex), and the Codex engine was
+  measured at 0.2 percent at rest, far from the threshold. A desktop app is an engine too and has rules of its own.
+  A chat in a terminal (`openclaw tui`, `openclaw agent`) is judged as before, CPU use included.
+- Replayed (`CaffeinagentTests/Recordings/synthetic-openclaw-gateway.jsonl`, the OpenClaw series of the record alone):
+  before, working in 178 of 192 samples and held from 28 seconds to the end. After, idle in all 192 and never held.
+  The cut has no state in it, so the replay tests the rule for a gateway with no state, and the 3.5 seconds of the run
+  read as idle there. With the reader they read as working.
+
+### What can be missed
+
+- Not measured: a row that says `running`. The values are from the source of 2026.9.9. If another version does not
+  write the column, the gateway reads as idle through a turn with no busy command.
+- A run that writes nothing for 30 minutes (one tool call or one model wait that long) with no busy command and no
+  sleep assertion lets go after 30 minutes.
+- A row that stays `running` after a kill holds for up to 30 minutes after its last write, while a gateway lives.
+- `openclaw agent --local` runs its turn in its own process. Its row counts for the gateway when one is up. With no
+  gateway the process is judged by activity.
+- Another state folder (`--profile`, `OPENCLAW_STATE_DIR`, `OPENCLAW_HOME`) is not read: that gateway has no state,
+  and only a busy command holds for it.
+- With no state that can be read: a model wait, an answer that streams and a tool that runs inside the gateway are
+  not seen.
+- A worker of the gateway (`*.worker.js`) is a child command. It was never busy in the record. One that is busy for
+  10 seconds reads as a running command.
+
+### The test with a real turn (the owner runs it)
+
+The gateway runs. Use the executable `caffeinagent` of a Debug build of this branch (in the app of the build folder,
+`Contents/MacOS/caffeinagent`), not the app in the Applications folder: that one does not have the reader yet. In one
+terminal:
+
+    <path>/Contents/MacOS/caffeinagent --lab-record openclaw-turn
+
+In a second terminal, with the same executable:
+
+1. Wait 60 seconds. `--lab-mark openclaw idle "gateway at rest"`.
+2. Send one message to OpenClaw that takes a minute or more, with a tool call (for example: "run `sleep 90` in the
+   shell, then tell me the date"). At the moment of sending: `--lab-mark openclaw working "message sent"`.
+3. When the answer is there: `--lab-mark openclaw idle "answer complete"`.
+4. Wait 6 minutes. Stop the recording with Control-C.
+5. `--lab-score <the file the recorder printed>`.
+
+Expected: the OpenClaw line says `working (reportsBusy)` from the message to the answer, `idle (atPrompt)` before and
+after, "wrongly released 0.0 s" and "wrongly held 0.0 s". While the run is in progress, this shows the row (read
+only): `sqlite3 "file:$HOME/.openclaw/agents/<agent id>/agent/openclaw-agent.sqlite?mode=ro&readonly_shm=1" "select
+status, started_at, ended_at from session_windows"`. If it says `running` then and `done` after, set
+`verified: true` and the level `state` in `AgentCatalog`, and copy the recording to `CaffeinagentTests/Recordings/`.
