@@ -13,8 +13,9 @@ const questions: FaqItem[] = [
     open: true,
     answer: (
       <>
-        They keep your Mac awake for a set time. Agent Caffeine knows when your agents work, also
-        with the lid closed on battery, and lets your Mac sleep after.
+        They keep your Mac awake until a set time or until you stop them. They do not know when an
+        agent works. Agent Caffeine does, also with the lid closed on battery, and lets your Mac
+        sleep after.
       </>
     ),
   },
