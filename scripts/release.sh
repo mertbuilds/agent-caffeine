@@ -381,7 +381,8 @@ for ARCH in arm64 x86_64; do
     *) echo "error: the command line tool has no $ARCH slice: $CLI_ARCHS" >&2; exit 1 ;;
   esac
 done
-CLI_OUTPUT=$(AGENT_CAFFEINE_HOME="$(mktemp -d)" "$CLI" status 2>&1) || {
+CLI_HOME=$(mktemp -d)
+CLI_OUTPUT=$(AGENT_CAFFEINE_HOME="$CLI_HOME" "$CLI" status 2>&1) || {
   echo "error: the command line tool did not exit 0: $CLI_OUTPUT" >&2
   exit 1
 }
@@ -389,7 +390,24 @@ if ! grep -q '^No holds\.$' <<< "$CLI_OUTPUT"; then
   echo "error: the command line tool gave an answer that was not expected: $CLI_OUTPUT" >&2
   exit 1
 fi
-echo "    $CLI_ID: $CLI_ARCHS, hardened runtime, answers"
+# A command below the tool ends as it does alone: with its own exit code, and
+# by SIGPIPE (128 + 13) when its reader is gone. The tool ignores that signal
+# for itself and has to give it back to the command.
+CLI_CODE=0
+AGENT_CAFFEINE_HOME="$CLI_HOME" "$CLI" hold -- /bin/sh -c 'exit 7' 2> /dev/null || CLI_CODE=$?
+if [ "$CLI_CODE" != 7 ]; then
+  echo "error: the command line tool ended with $CLI_CODE for a command that ended with 7." >&2
+  exit 1
+fi
+set +e
+AGENT_CAFFEINE_HOME="$CLI_HOME" "$CLI" hold -- /usr/bin/yes 2> /dev/null | head -1 > /dev/null
+CLI_CODE=${PIPESTATUS[0]}
+set -e
+if [ "$CLI_CODE" != 141 ]; then
+  echo "error: the command line tool ended with $CLI_CODE for a command whose reader was gone, and not with 141." >&2
+  exit 1
+fi
+echo "    $CLI_ID: $CLI_ARCHS, hardened runtime, answers, runs a command"
 
 # The unit tests never start the app. This starts the signed app for a few
 # seconds, next to a copy that is installed, and stops the release when its

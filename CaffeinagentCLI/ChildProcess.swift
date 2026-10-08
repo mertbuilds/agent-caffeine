@@ -14,6 +14,11 @@ enum ChildProcess {
     static let forwarded = [SIGINT, SIGTERM, SIGHUP, SIGQUIT, SIGUSR1, SIGUSR2]
     static let notFound: Int32 = 127
     static let notExecutable: Int32 = 126
+    /// What the tool ignores for itself. An ignored signal stays ignored
+    /// in a child, and a command whose reader is gone would then get an
+    /// error from its write and not the signal that ends it, as in
+    /// `hold -- yes | head -1`. So the child gets it back.
+    static let ignored = [SIGPIPE]
 
     /// - Returns: the exit code of the command, 128 plus the signal for a
     ///   command that a signal ended, 127 for a command that is not
@@ -22,10 +27,18 @@ enum ChildProcess {
         var arguments: [UnsafeMutablePointer<CChar>?] = command.map { strdup($0) } + [nil]
         defer { arguments.forEach { free($0) } }
         var child: pid_t = 0
-        let failure = posix_spawnp(&child, command[0], nil, nil, &arguments, environ)
+        var attributes: posix_spawnattr_t?
+        posix_spawnattr_init(&attributes)
+        defer { posix_spawnattr_destroy(&attributes) }
+        var defaults = sigset_t()
+        sigemptyset(&defaults)
+        for signal in ignored { sigaddset(&defaults, signal) }
+        posix_spawnattr_setsigdefault(&attributes, &defaults)
+        posix_spawnattr_setflags(&attributes, Int16(POSIX_SPAWN_SETSIGDEF))
+        let failure = posix_spawnp(&child, command[0], nil, &attributes, &arguments, environ)
         guard failure == 0 else {
             let message = failure == ENOENT ? "command not found" : String(cString: strerror(failure))
-            FileHandle.standardError.write(Data("agent-caffeine: \(command[0]): \(message)\n".utf8))
+            FileHandle.standardError.put("agent-caffeine: \(command[0]): \(message)\n")
             return failure == ENOENT ? notFound : notExecutable
         }
         runningChild = child

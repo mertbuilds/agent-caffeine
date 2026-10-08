@@ -24,7 +24,8 @@ final class MCPServer {
 
     // MARK: Lines
 
-    /// Answers until the input ends.
+    /// Answers until the input ends, or until an answer cannot be
+    /// written: the client is gone then.
     func run(input: FileHandle, output: FileHandle) {
         var pending = Data()
         while true {
@@ -34,16 +35,18 @@ final class MCPServer {
             while let newline = pending.firstIndex(of: UInt8(ascii: "\n")) {
                 let line = pending.subdata(in: pending.startIndex..<newline)
                 pending.removeSubrange(pending.startIndex...newline)
-                answer(line, to: output)
+                guard answer(line, to: output) else { return }
             }
         }
         if !pending.isEmpty { answer(pending, to: output) }
     }
 
-    private func answer(_ line: Data, to output: FileHandle) {
-        guard line.contains(where: { !UInt8($0).isWhitespace }), var reply = handle(line) else { return }
+    /// False when the answer could not be written.
+    @discardableResult
+    private func answer(_ line: Data, to output: FileHandle) -> Bool {
+        guard line.contains(where: { !UInt8($0).isWhitespace }), var reply = handle(line) else { return true }
         reply.append(UInt8(ascii: "\n"))
-        output.write(reply)
+        return output.put(reply)
     }
 
     /// The answer to one message. Nil for a notification and for an

@@ -12,11 +12,14 @@ import Foundation
 // It writes one small file per hold for the app to read, as the hook
 // command does for an agent's state. It holds nothing awake itself.
 
+// A reader that closed its end of a pipe, as in `agent-caffeine status |
+// head -1`, ends no hold half way: a write fails and the tool goes on.
+// The command of `hold --` gets the signal back, see `ChildProcess`.
 signal(SIGPIPE, SIG_IGN)
 
 func finish(_ outcome: HoldOutcome) -> Never {
-    if !outcome.out.isEmpty { FileHandle.standardOutput.write(Data((outcome.out.joined(separator: "\n") + "\n").utf8)) }
-    if !outcome.err.isEmpty { FileHandle.standardError.write(Data((outcome.err.joined(separator: "\n") + "\n").utf8)) }
+    if !outcome.out.isEmpty { FileHandle.standardOutput.put(outcome.out.joined(separator: "\n") + "\n") }
+    if !outcome.err.isEmpty { FileHandle.standardError.put(outcome.err.joined(separator: "\n") + "\n") }
     exit(outcome.code)
 }
 
@@ -41,7 +44,7 @@ case .success(.run(let command, let reason)):
     let holder = SystemProcessCensus.row(of: getpid())?.identity
     let begun = HoldCommands.beginRun(command: command, reason: reason, holder: holder, tools: tools)
     if !begun.warnings.isEmpty {
-        FileHandle.standardError.write(Data((begun.warnings.map { "agent-caffeine: \($0)" }.joined(separator: "\n") + "\n").utf8))
+        FileHandle.standardError.put(begun.warnings.map { "agent-caffeine: \($0)" }.joined(separator: "\n") + "\n")
     }
     let code = ChildProcess.run(command)
     if let hold = begun.hold { tools.store.remove(id: hold.id) }

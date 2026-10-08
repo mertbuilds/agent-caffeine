@@ -248,6 +248,20 @@ enum HoldCommands {
     }
 }
 
+extension FileHandle {
+    /// False when the text could not be written, as to a pipe whose
+    /// reader is gone. `write(_:)` ends the tool with an exception then.
+    @discardableResult
+    func put(_ data: Data) -> Bool {
+        (try? write(contentsOf: data)) != nil
+    }
+
+    @discardableResult
+    func put(_ text: String) -> Bool {
+        put(Data(text.utf8))
+    }
+}
+
 /// The words of the command line tool.
 enum HoldText {
     /// "14:30", or "3:30 PM" for a user who set the 12-hour clock. With

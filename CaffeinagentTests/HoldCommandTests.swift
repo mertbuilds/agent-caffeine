@@ -215,6 +215,45 @@ final class HoldCommandTests: XCTestCase {
         XCTAssertNil(object["awake"], "Only the app knows")
     }
 
+    // MARK: A closed pipe
+
+    /// As the tool does at its start, so a write to a closed pipe fails
+    /// and ends no process.
+    private func ignoringSIGPIPE(_ body: () throws -> Void) rethrows {
+        let before = signal(SIGPIPE, SIG_IGN)
+        defer { signal(SIGPIPE, before) }
+        try body()
+    }
+
+    /// `agent-caffeine help | true`.
+    func testAWriteToAClosedPipeFailsAndRaisesNothing() throws {
+        try ignoringSIGPIPE {
+            let closed = Pipe()
+            try closed.fileHandleForReading.close()
+            XCTAssertFalse(closed.fileHandleForWriting.put("Agent Caffeine\n"))
+            let open = Pipe()
+            XCTAssertTrue(open.fileHandleForWriting.put("Agent Caffeine\n"))
+            try open.fileHandleForWriting.close()
+            XCTAssertEqual(open.fileHandleForReading.readDataToEndOfFile(), Data("Agent Caffeine\n".utf8))
+        }
+    }
+
+    func testTheServerStopsWhenItsAnswerCannotBeWritten() throws {
+        startApp()
+        _ = HoldCommands.hold(length: 600, reason: "from a script", json: false, tools: tools)
+        let id = try XCTUnwrap(tools.liveHolds.first?.id)
+        try ignoringSIGPIPE {
+            let input = Pipe()
+            let output = Pipe()
+            let lines = try [request(1, "ping"), call(2, "release", ["id": id])].map { String(decoding: try JSONSerialization.data(withJSONObject: $0), as: UTF8.self) }
+            input.fileHandleForWriting.write(Data((lines.joined(separator: "\n") + "\n").utf8))
+            try input.fileHandleForWriting.close()
+            try output.fileHandleForReading.close()
+            MCPServer(tools: tools, version: "1").run(input: input.fileHandleForReading, output: output.fileHandleForWriting)
+        }
+        XCTAssertEqual(tools.liveHolds.map(\.id), [id], "The client is gone, and nothing more is done for it")
+    }
+
     // MARK: MCP
 
     /// Sends the lines through pipes, as an agent does, and reads the answers.
