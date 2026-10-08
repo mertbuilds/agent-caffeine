@@ -123,7 +123,8 @@ struct AgentEvidence: Codable, Equatable {
     var fileActivityAt: Date?
     /// The agent, or a `caffeinate` child of it, holds a power assertion.
     /// For Cursor: its main process holds one, as it does from the prompt
-    /// to the end of the answer.
+    /// to the end of the answer. For the Claude app: its main process holds
+    /// one, which is recorded and is no sign of work.
     var ownsSleepAssertion: Bool
     /// Desktop apps only: a session file was written in the last hour, or a
     /// task is not finished.

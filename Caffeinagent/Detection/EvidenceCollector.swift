@@ -135,15 +135,6 @@ final class EvidenceCollector: EvidenceCollecting {
     /// while the process table cannot be read. A time and not a count of
     /// samples: an event brings a sample 0.2 seconds after the one before.
     static let heldSeconds: TimeInterval = 30
-    /// The Claude app holds one sleep assertion for all it does, and a
-    /// turn of a Code session is one of the claims on it: held from the
-    /// prompt, given up 30 seconds after the turn (`Zcr` in its bundle,
-    /// docs/research/09-claude-desktop.md). The session file tells that
-    /// turn exactly. So the assertion counts for the app itself (Cowork,
-    /// a tool call for a remote session, a scheduled wake) only when it
-    /// was held for this long in a row with no Code session in a turn.
-    static let claudeAppHoldSettle: TimeInterval = 45
-
     /// One more way to say that phone access is on, next to what
     /// `RemoteAccessDetector` finds. Nothing detects SSH or screen sharing yet.
     var remoteAccessProbe: () -> Bool = { false }
@@ -210,9 +201,6 @@ final class EvidenceCollector: EvidenceCollecting {
     /// entry point. Kept, so a file that is read in the middle of a write
     /// does not move the session to Claude Code for one sample.
     private var claudeAppSessions: Set<ProcessIdentity> = []
-    /// Since when each Claude app holds its assertion with no Code
-    /// session in a turn: see `claudeAppHoldSettle`.
-    private var claudeAppHoldSince: [ProcessIdentity: Date] = [:]
     /// The last sign of work of each Claude app itself.
     private var claudeAppSignAt: [ProcessIdentity: Date] = [:]
 
@@ -238,10 +226,7 @@ final class EvidenceCollector: EvidenceCollecting {
         // A clock that was set is a hole too: no interval can be trusted.
         let gap = SampleGap.length(from: previous, to: time) != nil
         let interval = gap ? 0 : previous.map { SampleGap.interval(from: $0, to: time) } ?? 0
-        if gap {
-            childWindows.removeAll()
-            claudeAppHoldSince.removeAll()
-        }
+        if gap { childWindows.removeAll() }
 
         var sample = EvidenceSample(frame: EvidenceFrame(at: now, agents: [], context: context(snapshot: snapshot, matches: matches)))
         sample.frame.awake = time.awake
@@ -254,11 +239,10 @@ final class EvidenceCollector: EvidenceCollecting {
         var activities: [String: FileActivity] = [:]
         var rows: [ProcessIdentity: ProcessInfoRow] = [:]
         var liveUnits: Set<ProcessIdentity> = []
-        // The Claude app comes after its Code sessions: what its assertion
-        // says depends on their state.
+        // The Claude app comes after its Code sessions: whether it has a
+        // line of its own depends on them.
         let claudeApps = instances.filter(Self.isClaudeApp)
         var codeSessions = 0
-        var codeTurns = 0
         for instance in instances.filter({ !Self.isClaudeApp($0) }) + claudeApps {
             for row in instance.rows { rows[row.identity] = row }
             guard var evidence = agentEvidence(for: instance, matches: matches, now: now, activities: &activities, watched: &sample.watchedFiles) else { continue }
@@ -268,11 +252,10 @@ final class EvidenceCollector: EvidenceCollecting {
                 // `caffeinate` in a terminal of the editor is not the agent's.
                 evidence.ownsSleepAssertion = asserting.contains(instance.rootPID)
             } else if Self.isClaudeApp(instance) {
-                let held = asserting.contains(instance.rootPID) && codeTurns == 0
-                let since = held ? claudeAppHoldSince[instance.identity].flatMap { $0 <= now ? $0 : nil } ?? now : nil
-                claudeAppHoldSince[instance.identity] = since
-                evidence.ownsSleepAssertion = since.map { now.timeIntervalSince($0) >= Self.claudeAppHoldSettle } ?? false
-                if evidence.ownsSleepAssertion || evidence.busyChildCommands > 0 { claudeAppSignAt[instance.identity] = now }
+                // Recorded as it is, and no sign of work: see
+                // `VerdictRules.countsAssertion`.
+                evidence.ownsSleepAssertion = asserting.contains(instance.rootPID)
+                if evidence.busyChildCommands > 0 { claudeAppSignAt[instance.identity] = now }
                 // With Code sessions open, the app has a line of its own
                 // only when it did something itself in the last hour.
                 if codeSessions > 0, !isRecent(claudeAppSignAt[instance.identity], now: now) { continue }
@@ -281,7 +264,6 @@ final class EvidenceCollector: EvidenceCollecting {
             }
             if evidence.agentID == AgentCatalog.claudeDesktopID, evidence.role == .session {
                 codeSessions += 1
-                if let state = evidence.reported?.state, state != .idle { codeTurns += 1 }
             }
             noteHooks(of: instance, matches: matches, states: hookStates, now: now, in: &evidence, watched: &sample.watchedFiles)
             sample.frame.agents.append(evidence)
@@ -307,7 +289,6 @@ final class EvidenceCollector: EvidenceCollecting {
         hermesTurns = hermesTurns.filter { sample.roots.contains($0.key) }
         claudeAppSessions.formIntersection(sample.roots)
         let apps = Set(claudeApps.map(\.identity))
-        claudeAppHoldSince = claudeAppHoldSince.filter { apps.contains($0.key) }
         claudeAppSignAt = claudeAppSignAt.filter { apps.contains($0.key) }
         sessionFiles.endSample()
         jobFiles.endSample()

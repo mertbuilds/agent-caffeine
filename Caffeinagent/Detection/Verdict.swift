@@ -390,7 +390,7 @@ enum VerdictRules {
         memory.firstSeenAt = memory.firstSeenAt ?? now
         if evidence.busyChildCommands > 0 { memory.lastCommandAt = now }
         if evidence.backgroundJobsWorking > 0 { memory.lastBackgroundJobAt = now }
-        if evidence.ownsSleepAssertion { memory.lastAssertionAt = now }
+        if countsAssertion(evidence) { memory.lastAssertionAt = now }
         if let write = fileWrite(of: evidence, now: now) {
             memory.lastFileWriteAt = max(memory.lastFileWriteAt ?? write, write)
         }
@@ -484,12 +484,22 @@ enum VerdictRules {
             memory.workAfterHookIdleAt = nil
         }
         let after = at.addingTimeInterval(hookIdleMargin)
-        if now > after, evidence.busyChildCommands > 0 || evidence.backgroundJobsWorking > 0 || evidence.ownsSleepAssertion {
+        if now > after, evidence.busyChildCommands > 0 || evidence.backgroundJobsWorking > 0 || countsAssertion(evidence) {
             memory.workAfterHookIdleAt = now
         }
         if let write = fileWrite(of: evidence, now: now), write > after {
             memory.workAfterHookIdleAt = max(memory.workAfterHookIdleAt ?? write, write)
         }
+    }
+
+    /// Whether the agent's own sleep assertion is a sign of work. Not for
+    /// the main process of the Claude app: it was measured to take its
+    /// assertion for 5 minutes at a time, again and again, with no turn
+    /// and no task (docs/research/09-claude-desktop.md, section 8). The
+    /// state of its Code sessions and a busy command decide for it.
+    static func countsAssertion(_ evidence: AgentEvidence) -> Bool {
+        guard evidence.ownsSleepAssertion else { return false }
+        return !(evidence.agentID == AgentCatalog.claudeDesktopID && evidence.role == .engine)
     }
 
     /// Whether the hooks are all this agent says about itself. An agent
@@ -666,7 +676,7 @@ enum VerdictRules {
     private static func strongReason(evidence: AgentEvidence, memory: AgentMemory, lastAt: Date, now: Date) -> VerdictReason {
         if evidence.busyChildCommands > 0 { return .runningCommand(evidence.busyChildCommands) }
         if evidence.backgroundJobsWorking > 0 { return .backgroundJob(evidence.backgroundJobsWorking) }
-        if evidence.ownsSleepAssertion { return .holdsSleepAssertion }
+        if countsAssertion(evidence) { return .holdsSleepAssertion }
         let secondsAgo = Int(now.timeIntervalSince(lastAt))
         return memory.lastFileWriteAt == lastAt ? .writingSessionFile(secondsAgo: secondsAgo) : .workedRecently(secondsAgo: secondsAgo)
     }

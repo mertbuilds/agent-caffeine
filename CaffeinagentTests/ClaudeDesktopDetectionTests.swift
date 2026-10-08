@@ -383,34 +383,121 @@ final class ClaudeDesktopTimelineTests: XCTestCase {
         XCTAssertEqual(step(4).pids, [620])
     }
 
-    /// Cowork, a tool call for a remote session and a scheduled wake have
-    /// no state file. The app holds its assertion for them.
-    func testTheAssertionOfTheAppCountsWhenNoCodeTurnExplainsIt() {
+    /// Measured on 2026-10-08: the app took its assertion for 5 minutes at
+    /// a time with no turn and no task, and read as working for hours.
+    func testTheAssertionOfTheAppAloneIsNoWork() {
         census.rows = app()
         run(0...5)
         assertions.pids = [500]
-        run(6...50) { step, second in
+        let held = run(6...306) { step, second in
+            XCTAssertEqual(step.pids, [500], "\(second)")
+            XCTAssertTrue(step.evidence(500)?.ownsSleepAssertion ?? false, "It is recorded: \(second)")
             XCTAssertEqual(step.reading(500)?.verdict.state, .idle, "\(second)")
-            XCTAssertFalse(step.evidence(500)?.ownsSleepAssertion ?? true, "\(second)")
+            XCTAssertNil(step.reading(500)?.turn, "\(second)")
+            XCTAssertFalse(step.decision.hold, "\(second)")
         }
-        let held = run(51...120) { step, second in XCTAssertEqual(step.reading(500)?.verdict.state, .working, "\(second)") }
-        XCTAssertEqual(held.reading(500)?.verdict, AgentVerdict(state: .working, confidence: .inferredStrong, reason: .holdsSleepAssertion))
-        XCTAssertTrue(held.decision.hold)
+        XCTAssertEqual(held.reading(500)?.verdict, AgentVerdict(state: .idle, confidence: .inferredWeak, reason: .noActivity(minutes: 5)))
         assertions.pids = []
-        let after = step(121)
-        XCTAssertEqual(after.reading(500)?.verdict.state, .working, "The release time after a strong sign")
-        XCTAssertEqual(step(121 + settings.releaseAfterActivity + 1).reading(500)?.verdict.state, .idle)
+        XCTAssertEqual(step(307).reading(500)?.verdict.state, .idle)
+        XCTAssertTrue(told.isEmpty)
+    }
+
+    func testTheAssertionOfTheAppWithAnIdleCodeSessionIsIdle() throws {
+        census.rows = app() + code()
+        try writeSession(620, "idle", since: -300)
+        run(0...5)
+        assertions.pids = [500]
+        run(6...306) { step, second in
+            XCTAssertEqual(step.pids, [620], "The app has no line of its own: \(second)")
+            XCTAssertEqual(step.reading(620)?.verdict, AgentVerdict(state: .idle, confidence: .reported, reason: .atPrompt), "\(second)")
+            XCTAssertEqual(step.reading(620)?.turn, AgentTurn(state: .idle), "\(second)")
+            XCTAssertFalse(step.decision.hold, "\(second)")
+        }
+        XCTAssertTrue(told.isEmpty)
+    }
+
+    /// The session file decides, with the assertion and without it.
+    func testTheAssertionOfTheAppWithACodeSessionInATurnIsWork() throws {
+        census.rows = app() + code()
+        try writeSession(620, "idle", since: -300)
+        assertions.pids = [500]
+        XCTAssertEqual(run(0...5).reading(620)?.verdict.state, .idle)
+        try writeSession(620, "busy", since: 6)
+        run(6...120) { step, second in
+            if second == 60 { self.assertions.pids = [] }
+            XCTAssertEqual(step.pids, [620], "\(second)")
+            XCTAssertEqual(step.reading(620)?.verdict, AgentVerdict(state: .working, confidence: .reported, reason: .reportsBusy), "\(second)")
+            XCTAssertEqual(step.reading(620)?.turn, AgentTurn(state: .working, since: self.at(6)), "\(second)")
+            XCTAssertTrue(step.decision.hold, "\(second)")
+        }
+    }
+
+    /// 5 minutes held, 3 minutes not, for an hour and a half. The time
+    /// between two holds is shorter than the release time after a sign of
+    /// work, so one hold that counted would never end.
+    func testAnAssertionThatComesAndGoesLeavesTheIdleAppIdle() throws {
+        try writeSession(620, "idle", since: -300)
+        var clock = StateClock()
+        for rows in [app(), app() + code()] {
+            census.rows = rows
+            let pid: Int32 = rows.count > 3 ? 620 : 500
+            let from = pid == 500 ? 0 : 5405
+            run(from...(from + 5400), by: 5) { step, second in
+                self.assertions.pids = (second - from) % 480 < 300 ? [500] : []
+                XCTAssertEqual(step.pids, [pid], "\(second)")
+                XCTAssertEqual(step.reading(pid)?.verdict.state, .idle, "\(second)")
+                XCTAssertNotEqual(step.reading(pid)?.turn?.state, .working, "\(second)")
+                XCTAssertFalse(step.decision.hold, "\(second)")
+                clock = clock.updated(with: step.readings, now: step.sample.frame.at)
+                XCTAssertEqual(clock.entries[step.readings[0].identity]?.state, .idle, "\(second)")
+                XCTAssertNil(clock.before(step.readings[0].identity), "It never left idle: \(second)")
+            }
+        }
+        XCTAssertTrue(told.isEmpty)
+    }
+
+    /// The state clock of the menu starts again at each change of state,
+    /// so the time of a turn does not reach over an idle stretch.
+    func testWorkingSinceStartsAgainAfterAnIdleStretch() throws {
+        census.rows = app() + code()
+        var clock = StateClock()
+        func tick(_ second: TimeInterval) -> Step {
+            let step = step(second)
+            clock = clock.updated(with: step.readings, now: step.sample.frame.at)
+            return step
+        }
+        try writeSession(620, "busy", since: 0)
+        (0...60).forEach { _ = tick(TimeInterval($0)) }
+        let identity = try XCTUnwrap(tick(61).reading(620)?.identity)
+        XCTAssertEqual(clock.since(identity), at(0))
+        try writeSession(620, "idle", since: 62)
+        assertions.pids = [500]
+        (62...600).forEach { _ = tick(TimeInterval($0)) }
+        XCTAssertEqual(clock.entries[identity]?.state, .idle)
+        XCTAssertEqual(clock.since(identity), at(62))
+        try writeSession(620, "busy", since: 601)
+        let again = tick(601)
+        XCTAssertEqual(again.reading(620)?.turn, AgentTurn(state: .working, since: at(601)))
+        XCTAssertEqual(clock.since(identity), at(601))
+        XCTAssertEqual(clock.before(identity), .idle)
     }
 
     func testTheAppHasItsOwnLineNextToACodeSessionOnceItWorksItself() throws {
-        census.rows = app() + code()
+        func rows(cpu: TimeInterval) -> [Row] {
+            app() + code() + [.fixture(520, ppid: 500, start: processStart, path: "/opt/homebrew/bin/node", args: ["node", "/Users/me/servers/files.js"], cpu: cpu)]
+        }
+        census.rows = rows(cpu: 0)
         try writeSession(620, "idle", since: -60)
-        XCTAssertEqual(run(0...5).pids, [620])
         assertions.pids = [500]
-        run(6...50) { step, second in XCTAssertEqual(step.pids, [620], "\(second)") }
-        let both = step(51)
+        XCTAssertEqual(run(0...20).pids, [620], "The assertion gives the app no line")
+        var cpu: TimeInterval = 0
+        let both = run(21...40) { _, _ in
+            cpu += 0.5
+            self.census.rows = rows(cpu: cpu)
+        }
         XCTAssertEqual(both.pids, [620, 500])
         XCTAssertEqual(both.readings.map(\.verdict.state), [.idle, .working])
+        XCTAssertEqual(both.reading(500)?.verdict.reason, .runningCommand(1))
         XCTAssertEqual(Set(both.sample.frame.agents.map(\.agentID)), ["claude-desktop"], "One group in the panel")
     }
 

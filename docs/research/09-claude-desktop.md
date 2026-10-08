@@ -89,8 +89,9 @@ the main process while the set is not empty and the workspace setting `keepAwake
 | wake scheduler approval | while macOS asks to approve its login item |
 | `keepAwakeEnabled` | a preference of the user: held for as long as the app is open |
 
-[MAC] No assertion of the app at idle (`pmset -g assertions`, three reads). [UNKNOWN] the name and type as macOS lists it
-(Cursor, also Electron: `NoIdleSleepAssertion` named "Electron").
+[MAC] No assertion of the app at idle (`pmset -g assertions`, three reads). Later the same day this proved wrong: the app
+takes the assertion at idle too, for minutes at a time (section 8). macOS lists it as `NoIdleSleepAssertion` named
+"Electron", owned by the main process, the same as Cursor.
 
 `swift_addon.node` (the VM of Cowork) imports `IOPMAssertionCreateWithName` and `IOPMAssertionRelease`. [UNKNOWN] when it
 takes an assertion and which process owns it. No claim on the Electron blocker names Cowork.
@@ -126,11 +127,11 @@ takes an assertion and which process owns it. No claim on the Electron blocker n
    waiting for you, `idle` idle. It is never a "Claude Code" line. An embedded process with no session file is no session
    (it starts up, or runs one command). A Claude Code at another path whose session file says `entrypoint: claude-desktop`
    is moved to "Claude" too.
-3. The app itself (chat, Cowork) is one more instance, judged by activity, with its CPU set aside as for Cursor. Its signs:
-   a child command that is busy (an MCP server of the chat), and the app's own assertion. The assertion counts only after
-   45 s in a row with no Code session in a turn (`EvidenceCollector.claudeAppHoldSettle`): the `code_turn` claim is held
-   for 30 s after a turn, and the session file tells that turn already. With Code sessions open, the app has its own line
-   only when it showed one of these signs in the last hour, so the panel shows the sessions and no extra idle line.
+3. The app itself (chat, Cowork) is one more instance, judged by activity, with its CPU set aside as for Cursor. Its one
+   sign: a child command that is busy (an MCP server of the chat). The app's own assertion is recorded (`pwr`) and is no
+   sign of work: see section 8. Until then it counted after 45 s in a row with no Code session in a turn. With Code
+   sessions open, the app has its own line only when it showed its sign in the last hour, so the panel shows the sessions
+   and no extra idle line.
 4. Hooks: the hook agent `claude` covers `claude-desktop`. The hook command lands on the embedded process, the same instance
    as the session file. "Own state newer than the hook wins" applies as for the CLI.
 5. Notifications and "go to the agent" follow each session's turn and go to Claude.app.
@@ -146,8 +147,37 @@ The app has no extra line. The 8 terminal sessions stay "Claude Code".
 | `busy` in the session file during a desktop turn, and its timing | Send a prompt in the Code tab while `--lab-record` runs. Mark `working` at send, `idle` at the end. |
 | `waiting` during an approval | Ask for a command that needs approval. Leave the prompt open for 1 minute. Mark `waiting`. |
 | Hook events in stream-json mode | Same runs, with the new build installed. Check `~/Library/Application Support/com.caffeinagent.app/hooks/claude-<pid>.json`. |
-| The assertion after a turn stays under 45 s | Same run: `pwr` must not appear on the app line after a Code turn. |
+| Which claim holds the assertion at idle (section 8) | With the app idle, note each `[keep-awake]` line of the app's log next to `pmset -g assertions`. |
 | Cowork: any exact sign | Start a Cowork task of 3 minutes. Record `ps`, `pmset -g assertions`, and the write times in `local-agent-mode-sessions` and `vm_bundles`. |
 | Chat: no local sign | Ask a long chat answer. The line must stay idle. |
-| `keepAwakeEnabled` on | With the app's "keep awake" preference on, the app line says working for as long as the app is open. Decide if that is wanted. |
+| `keepAwakeEnabled` on | Decided by section 8: the app line stays idle. The preference is the user's own wish for the app, and no work. |
 | Idle time-out of a Code session process | Leave a Code session idle. Note when its process ends. |
+
+## 8. The assertion of the app is no sign of work (2026-10-08, evening)
+
+[MAC] The owner saw the line "Claude" as working for hours while the app was idle and its sign-in had expired. Measured:
+the session file and the hook of the one Code session both said idle, for 299 minutes. The main process took
+`NoIdleSleepAssertion` named "Electron" at about 23:25:20 and gave it up at about 23:30:17, with no turn running, and it
+does that again and again. [UNKNOWN] which claim of section 3 takes it: no Code turn ran, Cowork was never started here, and
+`keepAwakeEnabled` would hold it for as long as the app is open. The wake scheduler is the first guess [INFERRED].
+
+Why the old rule failed: after 45 s the assertion was a strong sign, and a strong sign holds for the release time after
+it (`releaseAfterActivity`, 300 s). The time between two holds was shorter than that, so the line never went back to idle
+and the time of its state never started again. The "since 17:42" next to the line is the start of the app's process, which
+tells two lines apart, and not the start of the work.
+
+A second sign next to the assertion was looked for and not found:
+- CPU of the app. [MAC] 60 s at idle with no assertion held: the main process used 1.67 s and its helpers 0.09 s, 2.9
+  percent of one core. That is above `VerdictRules.weakCPUFraction` (2 percent), so "assertion and CPU" would be true for
+  the whole of each idle hold. No number exists for a Cowork task to set a higher line.
+- Files. Section 4: the files of the app are rewritten at idle, and none has a state.
+- A busy child command is a sign by itself already, with the assertion or without it.
+
+So the rule now: the assertion of the app's main process never counts (`VerdictRules.countsAssertion`). The collector
+still records it on the app line, so a recording shows it. A turn of a Code session, its background task and an approval
+are told by the session file and the hooks. A busy child command of the app is work.
+
+What this can miss: work of the app that has the assertion as its only sign. That is a Cowork task in its VM, a tool call
+for a remote session that starts no busy child process, and a Code session the user asked to keep the Mac awake while it
+is idle. None of the three was seen live. For Cowork the first live test of section 7 has to find a sign of its own (the
+VM process, or a file of the task) before the line can say working.
