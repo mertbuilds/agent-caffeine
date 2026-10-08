@@ -1,4 +1,5 @@
 import { AgentsSection } from "@/components/agents-section";
+import { Compare } from "@/components/compare";
 import { Faq } from "@/components/faq";
 import { Footer } from "@/components/footer";
 import { Guides } from "@/components/guides";
@@ -71,6 +72,7 @@ export default async function Home() {
       <SleepScenes />
       <SmallThings />
       <AgentsSection />
+      <Compare />
       <Pricing />
       <Faq />
       <Guides />
