@@ -5,6 +5,7 @@ import { useMotionValueEvent } from "motion/react";
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AgentIcon, type AgentIconName } from "@/components/agent-icons";
 import { Flow, PanelSurface } from "@/components/agents-panel";
+import { DESK, PHONE, fixed } from "@/components/laptop/geometry";
 import { Laptop } from "@/components/laptop/laptop";
 import { MenuIcon } from "@/components/menu-icon";
 import { Robot } from "@/components/robot";
@@ -23,12 +24,24 @@ const CLOCK_START = 14 * 60 + 2;
 /**
  * The glass of the open display in the scene, in hundredths of the scene's
  * width (`lidArt(0)` less the bezel and the chin). The open lid faces the eye,
- * so the glass is a plain rectangle, and the flat menu lies on it.
+ * so the glass is a plain rectangle, and the flat menu lies on it. Both views
+ * have the open lid in the same place, so this is the glass of both.
  */
 const GLASS = { left: 23.07, top: 6.21, width: 53.86, height: 35, round: 0.87 };
-/** The scene's width at which the menu is drawn at its own size, and the glass at that width, in pixels. */
-const FULL = 705;
-const BOX = { width: (GLASS.width * FULL) / 100, height: (GLASS.height * FULL) / 100 };
+/**
+ * The laptop as each size of the page sees it. On a phone the scene is wider than the page, as much as the
+ * laptop's widest part (59.34 hundredths of the scene) fits between the page's gutters, and less tall.
+ */
+const VIEWS = [
+  { view: PHONE, shown: "sm:hidden" },
+  { view: DESK, shown: "hidden sm:block" },
+] as const;
+/**
+ * The scene's width at which the menu is drawn at its own size (`--full`): 705 pixels for the menu with the
+ * app's measures, and 520 on a phone, where a tighter cut of the menu keeps its words large enough to read.
+ */
+const SCALE =
+  "scale-[calc(485/520)] [--full:520px] min-[375px]:scale-[calc(578/520)] min-[390px]:scale-[calc(603/520)] min-[430px]:scale-[calc(670/520)] sm:scale-[calc(810/705)] sm:[--full:705px] lg:scale-[calc(630/705)] xl:scale-[calc(810/705)]";
 /** The gap between the glass's edge and the menu bar, in pixels at full size. */
 const GAP = 3;
 
@@ -153,9 +166,11 @@ function cut4(value: number) {
 /** An agent's mark in the slot of its ring, as in the app's menu: the arc goes round while it works, and an idle agent's mark is pale and has no ring. The arc is the `ring-turn` of globals.css, which costs no frame. */
 function Mark({ icon, working }: { icon: AgentIconName; working: boolean }) {
   return (
-    <span className="relative flex size-[34px] shrink-0 items-center justify-center">
-      <span className={`flex size-7 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--panel-fg)_8%,transparent)] ${working ? "" : "opacity-55"}`}>
-        <AgentIcon className="size-[18px]" name={icon} />
+    <span className="relative flex size-[30px] shrink-0 items-center justify-center sm:size-[34px]">
+      <span
+        className={`flex size-6 items-center justify-center rounded-[7px] bg-[color-mix(in_srgb,var(--panel-fg)_8%,transparent)] sm:size-7 sm:rounded-lg ${working ? "" : "opacity-55"}`}
+      >
+        <AgentIcon className="size-4 sm:size-[18px]" name={icon} />
       </span>
       {working && <span aria-hidden="true" className="ring-turn" />}
     </span>
@@ -180,7 +195,7 @@ function Check({ place }: { place: number }) {
 const MenuBar = memo(function MenuBar({ minute, still }: { minute: number; still: boolean }) {
   const stance = pose(headlineAt(minute));
   return (
-    <div className="flex h-6 w-full items-center gap-3 rounded-[4px] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] pl-2.5 pr-2 text-[13px] text-fg backdrop-blur">
+    <div className="flex h-5 w-full items-center gap-3 rounded-[4px] sm:h-6 bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] pl-2.5 pr-2 text-[13px] text-fg backdrop-blur">
       <svg className="h-[0.95em] w-auto shrink-0 -translate-y-px" fill="currentColor" viewBox="0 0 814 1000">
         <path d="M788.1 340.9c-5.8 4.5-108.2 62.2-108.2 190.5 0 148.4 130.3 200.9 134.2 202.2-.6 3.2-20.7 71.9-68.7 141.9-42.8 61.6-87.5 123.1-155.5 123.1s-85.5-39.5-164-39.5c-76.5 0-103.7 40.8-165.9 40.8s-105.6-57-155.5-127C46.7 790.7 0 663 0 541.8c0-194.4 126.4-297.5 250.8-297.5 66.1 0 121.2 43.4 162.7 43.4 39.5 0 101.1-46 176.3-46 28.5 0 130.9 2.6 198.3 99.2zm-234-181.5c31.1-36.9 53.1-88.1 53.1-139.3 0-7.1-.6-14.3-1.9-20.1-50.6 1.9-110.8 33.7-147.1 75.8-28.5 32.4-55.1 83.6-55.1 135.5 0 7.8 1.3 15.6 1.9 18.1 3.2.6 8.4 1.3 13.6 1.3 45.4 0 102.5-30.4 135.5-71.3z" />
       </svg>
@@ -195,10 +210,10 @@ const MenuBar = memo(function MenuBar({ minute, still }: { minute: number; still
         </span>
         <span className="h-1 w-[1.5px] rounded-r-[1px] bg-current" />
       </span>
-      <span className="flex h-[22px] items-center rounded-[5px] bg-[color-mix(in_srgb,var(--fg)_14%,transparent)] px-2">
+      <span className="flex h-[18px] items-center rounded-[5px] bg-[color-mix(in_srgb,var(--fg)_14%,transparent)] px-1.5 sm:h-[22px] sm:px-2">
         {/* The playhead makes the icon pale, so the look itself keeps its full strength. */}
         <span className="flex" data-hero="icon">
-          <MenuIcon className="h-5 w-[21px]" look={{ ...iconLook(stance), opacity: 1 }} />
+          <MenuIcon className="h-4 w-[17px] sm:h-5 sm:w-[21px]" look={{ ...iconLook(stance), opacity: 1 }} />
         </span>
       </span>
       <span className="tabular-nums">
@@ -218,10 +233,13 @@ const Panel = memo(function Panel({ minute, paused, still }: { minute: number; p
   const { title, subtitle } = headlineText(line);
   return (
     <PanelSurface className={`w-full shadow-[0_12px_32px_var(--shadow)] ${paused ? "panel-paused" : ""}`} label="The Agent Caffeine menu">
-      <div className="flex items-center gap-3 px-4 py-3">
-        {/* A robot that sleeps stands still here: the one that breathes in its sleep is in the menu further down the page. */}
-        <span className="flex" data-hero="robot">
-          <Robot paused={paused} pose={stance} rest={stance === "asleep" ? "var(--rest)" : undefined} size={48} still={stance === "asleep"} />
+      {/* On a phone the head has a set height: its second line is taller with a number in it than without. */}
+      <div className="flex h-12 items-center gap-2 px-2.5 sm:h-auto sm:gap-3 sm:px-4 sm:py-3">
+        {/* A robot that sleeps stands still here: the one that breathes in its sleep is in the menu further down the page. On a phone it is three quarters of its size. */}
+        <span className="block size-9 shrink-0 sm:size-12" data-hero="robot">
+          <span className="flex w-12 origin-top-left scale-75 sm:scale-100">
+            <Robot paused={paused} pose={stance} rest={stance === "asleep" ? "var(--rest)" : undefined} size={48} still={stance === "asleep"} />
+          </span>
         </span>
         <p className="flex min-w-0 flex-col gap-0.5">
           <span className="text-[15px] leading-5">{title}</span>
@@ -231,11 +249,11 @@ const Panel = memo(function Panel({ minute, paused, still }: { minute: number; p
         </p>
       </div>
       <div className="h-px bg-[var(--panel-line)]" />
-      <ul className="flex flex-col px-[13px] py-1">
+      <ul className="flex flex-col px-[7px] py-0.5 sm:px-[13px] sm:py-1">
         {AGENTS.map((agent, place) => {
           const working = minute < agent.done;
           return (
-            <li key={agent.icon} className="flex h-10 items-center gap-2">
+            <li key={agent.icon} className="flex h-8 items-center gap-2 sm:h-10">
               <Mark icon={agent.icon} working={working} />
               {/* A finished agent keeps the two lines of one at work, each of a set height, so its name stays where it was. In the app an idle agent has one line. */}
               <span className="flex min-w-0 flex-1 flex-col gap-px leading-4">
@@ -338,12 +356,14 @@ export function HeroScene() {
   return (
     <div ref={ref} role="img" aria-label={label} className="flex justify-center">
       {/* The scene has a set width at each size of the page, so the menu on its display has one known scale. */}
-      <div aria-hidden="true" className="w-[660px] shrink-0 sm:w-[810px] lg:w-[630px] xl:w-[810px]">
-        <div className="relative aspect-[10/7] w-full [container-type:inline-size]">
-          <div className="absolute inset-0" style={{ perspective: "200cqw", perspectiveOrigin: "50% 22%" }}>
-            {/* The lid's own glass is dark: the one desktop of the scene lies flat over it, below. */}
-            <Laptop closed={beat.closed} />
-          </div>
+      <div aria-hidden="true" className="w-[485px] shrink-0 min-[375px]:w-[578px] min-[390px]:w-[603px] min-[430px]:w-[670px] sm:w-[810px] lg:w-[630px] xl:w-[810px]">
+        <div className="relative aspect-[100/59] w-full [container-type:inline-size] sm:aspect-[10/7]">
+          {VIEWS.map(({ view, shown }) => (
+            <div key={view.id} className={`absolute inset-0 ${shown}`} style={{ perspective: `${view.PERSPECTIVE}cqw`, perspectiveOrigin: `50% ${fixed(view.ORIGIN)}cqw` }}>
+              {/* The lid's own glass is dark: the one desktop of the scene lies flat over it, below. */}
+              <Laptop closed={beat.closed} view={view} />
+            </div>
+          ))}
           <div
             ref={layers}
             className="absolute"
@@ -368,12 +388,12 @@ export function HeroScene() {
               />
             </svg>
             <div
-              className="absolute left-1/2 top-0 flex origin-top -translate-x-1/2 scale-[calc(660/705)] flex-col items-center gap-1 sm:scale-[calc(810/705)] lg:scale-[calc(630/705)] xl:scale-[calc(810/705)]"
+              className={`absolute left-1/2 top-0 flex origin-top -translate-x-1/2 flex-col items-center gap-1 ${SCALE}`}
               data-hero="menu"
-              style={{ width: BOX.width, height: BOX.height, padding: GAP }}
+              style={{ width: `calc(${GLASS.width / 100} * var(--full))`, height: `calc(${GLASS.height / 100} * var(--full))`, padding: GAP }}
             >
               <MenuBar minute={beat.minute} still={beat.cutting} />
-              <div className="w-[320px]">
+              <div className="w-full sm:w-[320px]">
                 <Panel minute={beat.minute} paused={!play} still={beat.cutting} />
               </div>
             </div>

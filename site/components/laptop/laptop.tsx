@@ -1,19 +1,5 @@
 import { memo, useMemo, type CSSProperties } from "react";
-import {
-  BACK,
-  BEZEL,
-  CAMERA,
-  CHIN,
-  DECK,
-  DEPTH,
-  HOLE,
-  LIFT,
-  ROUND,
-  WIDTH,
-  fixed,
-  lidArt,
-  lidPose,
-} from "./geometry";
+import { BEZEL, CHIN, DEPTH, HOLE, LIFT, ROUND, WIDTH, fixed, type View } from "./geometry";
 
 const cq = (size: number) => `${fixed(size)}cqw`;
 
@@ -51,45 +37,48 @@ const HOLES_SHOWN = [
 ];
 
 /** The base, which never changes as the lid moves. */
-const BASE = (
-  <>
-    <path d={DECK.ground} filter="url(#laptop-far)" style={shade(1)} />
-    <path d={DECK.contact} filter="url(#laptop-near)" style={shade(1)} />
-    <path d={DECK.hull} style={SURFACE} />
-    <path d={DECK.hull} style={shade(SIDE)} />
-    <path d={DECK.hinge} style={{ fill: HINGE }} />
-    <path d={DECK.barrels} style={{ fill: BARREL }} />
-    <path d={DECK.top} style={SURFACE} />
-    {DECK.holes.map((holes, coarser) => (
-      <path
-        key={coarser}
-        d={holes}
-        className={HOLES_SHOWN[coarser]}
-        strokeWidth={HOLE * 2 ** coarser}
-        strokeLinecap="round"
-        style={{ stroke: WELL, fill: "none" }}
-      />
-    ))}
-    <path d={DECK.well} style={{ fill: WELL }} />
-    <path d={DECK.keys} style={{ fill: KEY }} />
-    <path d={DECK.touchId} style={{ fill: TOUCH_ID }} />
-    <path d={DECK.touchIdRing} {...stroke} style={hairline(KEY)} />
-    <path d={DECK.trackpad} style={shade(0.2)} />
-    <path d={DECK.trackpad} {...stroke} style={hairline("var(--border)")} />
-    <path d={DECK.scoop} style={shade(1)} />
-    <path d={DECK.lines} {...stroke} style={hairline("var(--hairline)")} />
-  </>
-);
+const Base = memo(function Base({ view: { id, DECK } }: { view: View }) {
+  return (
+    <>
+      <path d={DECK.ground} filter={`url(#laptop-${id}-far)`} style={shade(1)} />
+      <path d={DECK.contact} filter={`url(#laptop-${id}-near)`} style={shade(1)} />
+      <path d={DECK.hull} style={SURFACE} />
+      <path d={DECK.hull} style={shade(SIDE)} />
+      <path d={DECK.hinge} style={{ fill: HINGE }} />
+      <path d={DECK.barrels} style={{ fill: BARREL }} />
+      <path d={DECK.top} style={SURFACE} />
+      {DECK.holes.map((holes, coarser) => (
+        <path
+          key={coarser}
+          d={holes}
+          className={HOLES_SHOWN[coarser]}
+          strokeWidth={HOLE * 2 ** coarser}
+          strokeLinecap="round"
+          style={{ stroke: WELL, fill: "none" }}
+        />
+      ))}
+      <path d={DECK.well} style={{ fill: WELL }} />
+      <path d={DECK.keys} style={{ fill: KEY }} />
+      <path d={DECK.touchId} style={{ fill: TOUCH_ID }} />
+      <path d={DECK.touchIdRing} {...stroke} style={hairline(KEY)} />
+      <path d={DECK.trackpad} style={shade(0.2)} />
+      <path d={DECK.trackpad} {...stroke} style={hairline("var(--border)")} />
+      <path d={DECK.scoop} style={shade(1)} />
+      <path d={DECK.lines} {...stroke} style={hairline("var(--hairline)")} />
+    </>
+  );
+});
 
-const DEFS = (
+/** What the drawing of one view refers to. Each view has its own names, since both are in the page. */
+const defs = (id: string) => (
   <>
-    <filter id="laptop-near" filterUnits="userSpaceOnUse" x="0" y="0" width="100" height="70">
+    <filter id={`laptop-${id}-near`} filterUnits="userSpaceOnUse" x="0" y="0" width="100" height="70">
       <feGaussianBlur stdDeviation="0.4 0.2" />
     </filter>
-    <filter id="laptop-far" filterUnits="userSpaceOnUse" x="0" y="0" width="100" height="70">
+    <filter id={`laptop-${id}-far`} filterUnits="userSpaceOnUse" x="0" y="0" width="100" height="70">
       <feGaussianBlur stdDeviation="2 0.9" />
     </filter>
-    <linearGradient id="laptop-sheen" x1="0" y1="0" x2="0.35" y2="1">
+    <linearGradient id={`laptop-${id}-sheen`} x1="0" y1="0" x2="0.35" y2="1">
       <stop offset="0" style={{ stopColor: "color-mix(in srgb, var(--surface) 70%, var(--bg))" }} />
       <stop offset="1" style={{ stopColor: "var(--surface)" }} />
     </linearGradient>
@@ -99,6 +88,8 @@ const DEFS = (
 type LaptopProps = {
   /** How far the lid has closed, from 0 (open) to 1 (shut on the base). */
   closed: number;
+  /** The eye that sees it. */
+  view: View;
 };
 
 /**
@@ -106,17 +97,18 @@ type LaptopProps = {
  * drawn from the laptop's projected outline, and the glass on CSS 3D
  * transforms that put it in the same place.
  */
-export const Laptop = memo(function Laptop({ closed }: LaptopProps) {
-  const lid = useMemo(() => lidArt(closed), [closed]);
-  const pose = lidPose(closed);
+export const Laptop = memo(function Laptop({ closed, view }: LaptopProps) {
+  const { id, DECK } = view;
+  const lid = useMemo(() => view.lidArt(closed), [view, closed]);
+  const pose = view.lidPose(closed);
 
   return (
     <>
-      <svg viewBox="0 0 100 70" aria-hidden="true" className="absolute inset-0 size-full overflow-visible">
+      <svg viewBox={`0 0 100 ${view.height}`} aria-hidden="true" className="absolute inset-0 size-full overflow-visible">
         <defs>
-          {DEFS}
+          {defs(id)}
           {lid.shadow && (
-            <linearGradient id="laptop-lid-shadow" gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={lid.shadow.from} y2={lid.shadow.to}>
+            <linearGradient id={`laptop-${id}-lid-shadow`} gradientUnits="userSpaceOnUse" x1="0" x2="0" y1={lid.shadow.from} y2={lid.shadow.to}>
               <stop offset="0" style={{ stopColor: "var(--shadow)" }} />
               <stop offset="1" style={{ stopColor: "var(--shadow)", stopOpacity: 0 }} />
             </linearGradient>
@@ -127,16 +119,16 @@ export const Laptop = memo(function Laptop({ closed }: LaptopProps) {
             its swing, at the angles where the outline that clears it happened to run the other way.
           */}
           {lid.cut && (
-            <mask id="laptop-lid-cut" maskUnits="userSpaceOnUse" x="-50" y="-50" width="200" height="170">
+            <mask id={`laptop-${id}-lid-cut`} maskUnits="userSpaceOnUse" x="-50" y="-50" width="200" height="170">
               <rect x="-50" y="-50" width="200" height="170" fill="white" />
               <path d={lid.cut.hidden} fill="black" />
               <path d={lid.cut.clear} fill="white" />
             </mask>
           )}
         </defs>
-        {BASE}
-        {lid.shadow && <path d={DECK.top} fill="url(#laptop-lid-shadow)" opacity={fixed(closed)} />}
-        <g mask={lid.cut ? "url(#laptop-lid-cut)" : undefined}>
+        <Base view={view} />
+        {lid.shadow && <path d={DECK.top} fill={`url(#laptop-${id}-lid-shadow)`} opacity={fixed(closed)} />}
+        <g mask={lid.cut ? `url(#laptop-${id}-lid-cut)` : undefined}>
           <path d={lid.hull} style={SURFACE} />
           <path d={lid.hull} style={shade(SIDE)} />
           {lid.facing ? (
@@ -145,14 +137,14 @@ export const Laptop = memo(function Laptop({ closed }: LaptopProps) {
               {lid.bezel && <path d={lid.bezel} fill="black" />}
             </>
           ) : (
-            <path d={lid.face} fill="url(#laptop-sheen)" />
+            <path d={lid.face} fill={`url(#laptop-${id}-sheen)`} />
           )}
           <path d={lid.lines} {...stroke} style={hairline("var(--hairline)")} />
         </g>
       </svg>
       <div
-        className="absolute left-1/2 top-[78%] [transform-style:preserve-3d]"
-        style={{ transform: `translateZ(${cq(-BACK)}) rotateX(${CAMERA}deg)` }}
+        className="absolute left-1/2 [transform-style:preserve-3d]"
+        style={{ top: cq(view.ANCHOR), transform: `translateZ(${cq(-view.BACK)}) rotateX(${view.CAMERA}deg)` }}
       >
         <div
           className="absolute [transform-style:preserve-3d]"
