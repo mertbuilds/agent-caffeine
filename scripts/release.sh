@@ -358,6 +358,39 @@ if [ -n "$HOOK_OUTPUT" ]; then
 fi
 echo "    $HOOK_ID: $HOOK_ARCHS, hardened runtime, silent"
 
+# The command line tool, agent-caffeine. Settings shows this path, and people
+# link it into a folder on their PATH. It is asked for its status against an
+# empty folder, so it never reads the holds of a copy that is installed.
+echo "==> verify the command line tool"
+CLI_ID="com.caffeinagent.app.cli"
+CLI="$APP/Contents/MacOS/agent-caffeine"
+if [ ! -x "$CLI" ]; then
+  echo "error: the command line tool is missing from the app: $CLI" >&2
+  exit 1
+fi
+codesign --verify --strict -R="$(signed_by_team "$CLI_ID")" "$CLI"
+CLI_SIGNATURE=$(codesign -dv "$CLI" 2>&1)
+if ! grep -qE '^CodeDirectory .*flags=[^ ]*runtime' <<< "$CLI_SIGNATURE"; then
+  echo "error: the command line tool is not signed with the hardened runtime." >&2
+  exit 1
+fi
+CLI_ARCHS=$(/usr/bin/lipo -archs "$CLI")
+for ARCH in arm64 x86_64; do
+  case " $CLI_ARCHS " in
+    *" $ARCH "*) ;;
+    *) echo "error: the command line tool has no $ARCH slice: $CLI_ARCHS" >&2; exit 1 ;;
+  esac
+done
+CLI_OUTPUT=$(AGENT_CAFFEINE_HOME="$(mktemp -d)" "$CLI" status 2>&1) || {
+  echo "error: the command line tool did not exit 0: $CLI_OUTPUT" >&2
+  exit 1
+}
+if ! grep -q '^No holds\.$' <<< "$CLI_OUTPUT"; then
+  echo "error: the command line tool gave an answer that was not expected: $CLI_OUTPUT" >&2
+  exit 1
+fi
+echo "    $CLI_ID: $CLI_ARCHS, hardened runtime, answers"
+
 # The unit tests never start the app. This starts the signed app for a few
 # seconds, next to a copy that is installed, and stops the release when its
 # main thread hangs, it burns a core, it shows no icon, it takes no sample or

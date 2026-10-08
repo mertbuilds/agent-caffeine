@@ -107,9 +107,15 @@ enum LabFormat {
 
     /// A recording holds no user content by construction: evidence carries
     /// states, counts and times. The names are the only free text, and a
-    /// name the user gave as a path is cut to its last part.
+    /// name the user gave as a path is cut to its last part. What a hold
+    /// from the command line is for is the caller's own text, and is left
+    /// out.
     static func scrubbed(_ frame: EvidenceFrame) -> EvidenceFrame {
         var frame = frame
+        for index in frame.holds.indices {
+            frame.holds[index].reason = nil
+            frame.holds[index].command = frame.holds[index].command.map(withoutPath)
+        }
         for index in frame.agents.indices {
             frame.agents[index].agentID = withoutPath(frame.agents[index].agentID)
             frame.agents[index].displayName = withoutPath(frame.agents[index].displayName)
@@ -145,6 +151,7 @@ enum LabFormat {
         for name in decision.perAgent.map(\.reading.displayName) where name.contains("/") {
             headline = headline.replacingOccurrences(of: name, with: withoutPath(name))
         }
+        if case .manualHold = decision.headline { headline = "Awake: a hold from the command line" }
         return LabLine(
             frame: scrubbed(frame), verdicts: verdicts,
             hold: LabHold(on: decision.hold, lid: decision.lidClosedFlag, headline: headline),

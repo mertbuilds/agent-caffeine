@@ -26,6 +26,7 @@ enum MenuModel {
         let bar = bar(input)
         // Only then a new agent is all that is missing.
         let invites = input.decision.headline == .noAgents && pose != .helperOff
+        let isEmpty = input.decision.perAgent.isEmpty && input.decision.manualHolds.isEmpty
         return PanelState(
             pose: pose,
             title: title,
@@ -35,8 +36,8 @@ enum MenuModel {
             battery: battery(input),
             groups: groups,
             moreIdle: moreIdle,
-            emptyText: input.decision.perAgent.isEmpty ? PanelText.empty(invites: invites) : nil,
-            emptyAction: input.decision.perAgent.isEmpty && invites ? .agentNotListed : nil,
+            emptyText: isEmpty ? PanelText.empty(invites: invites) : nil,
+            emptyAction: isEmpty && invites ? .agentNotListed : nil,
             licenseActions: bar.licenseActions,
             pausedLabel: bar.pausedLabel,
             reachableLabel: bar.reachableLabel,
@@ -75,7 +76,7 @@ enum MenuModel {
     static func pose(for headline: HoldHeadline) -> HeroPose {
         switch headline {
         case .working(.many(let count)) where count >= 3: return .awake(wisps: 3)
-        case .working, .finishedRecently, .open, .alwaysOn, .remoteAccess: return .awake(wisps: 2)
+        case .working, .finishedRecently, .open, .alwaysOn, .remoteAccess, .manualHold: return .awake(wisps: 2)
         case .reachable: return .reachable
         case .waitingHeld: return .attentive
         case .idle, .waitingReleased, .noAgents: return .asleep
@@ -241,6 +242,8 @@ enum MenuModel {
     /// first, then the ones with a session that works, the longest at
     /// work on top, then the idle ones, the one that was active last on
     /// top. From the fifth idle agent on they go behind "more idle agents".
+    /// The holds from the command line stand below the agents that wait
+    /// or work, one line each.
     static func groups(_ input: PanelInput, now: Date) -> (inView: [PanelGroup], moreIdle: [PanelGroup]) {
         let readings = input.decision.perAgent.map(\.reading)
         var order: [String] = []
@@ -267,7 +270,24 @@ enum MenuModel {
         let idle = all.count - active
         // A line that only hides one agent is no shorter than the agent.
         let inView = idle <= idleGroupsInView + 1 ? idle : idleGroupsInView
-        return (Array(all.prefix(active + inView)), Array(all.dropFirst(active + inView)))
+        let shown = Array(all.prefix(active)) + holdGroups(input, now: now) + Array(all.dropFirst(active).prefix(inView))
+        return (shown, Array(all.dropFirst(active + inView)))
+    }
+
+    /// The id of the line of a hold, in place of an `AgentDefinition.id`.
+    /// No agent has a mark for it, so the line shows the terminal glyph.
+    static func holdRowID(_ id: String) -> String { "hold:\(id)" }
+
+    private static func holdGroups(_ input: PanelInput, now: Date) -> [PanelGroup] {
+        let holding = input.decision.hold
+        return input.decision.manualHolds.map { hold in
+            let row = PanelRow(
+                id: holdRowID(hold.id), agentID: holdRowID(hold.id), name: hold.title, label: nil, state: holding ? .working : .idle,
+                detail: PanelText.hold(hold, holding: holding, now: now, calendar: input.calendar, locale: input.locale),
+                hint: PanelText.holdHint
+            )
+            return PanelGroup(header: row, working: holding ? 1 : 0, stop: .stopHold(id: hold.id))
+        }
     }
 
     /// A group, where it stands in the list, and the one session it

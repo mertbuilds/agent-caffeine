@@ -129,6 +129,13 @@ targets:
         codeSign: true
         copy:
           destination: executables
+      # The command line tool, agent-caffeine. Settings shows its path in
+      # Contents/MacOS, and the user links it into a folder on the PATH.
+      - target: CaffeinagentCLI
+        embed: true
+        codeSign: true
+        copy:
+          destination: executables
     scheme:
       testTargets:
         - CaffeinagentTests
@@ -174,6 +181,28 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.app.hook
         PRODUCT_NAME: CaffeinagentHook
+        GENERATE_INFOPLIST_FILE: YES
+        CREATE_INFOPLIST_SECTION_IN_BINARY: YES
+        CODE_SIGN_ENTITLEMENTS: CaffeinagentHelper/CaffeinagentHelper.entitlements
+        SKIP_INSTALL: YES
+
+  # The command line tool: `agent-caffeine hold`, `release`, `status` and
+  # `mcp`. Like the hook command it is a tool of its own that writes small
+  # files for the app to read, and it shares the format of those files and
+  # the process table with the app.
+  CaffeinagentCLI:
+    type: tool
+    platform: macOS
+    sources:
+      - CaffeinagentCLI
+      - Caffeinagent/Detection/Holds/ManualHold.swift
+      - Caffeinagent/Detection/Holds/HoldStore.swift
+      - Caffeinagent/Detection/HumaneDuration.swift
+      - Caffeinagent/Detection/ProcessCensus.swift
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.app.cli
+        PRODUCT_NAME: agent-caffeine
         GENERATE_INFOPLIST_FILE: YES
         CREATE_INFOPLIST_SECTION_IN_BINARY: YES
         CODE_SIGN_ENTITLEMENTS: CaffeinagentHelper/CaffeinagentHelper.entitlements
@@ -227,6 +256,10 @@ targets:
       - CaffeinagentHelper/HelperCore.swift
       - CaffeinagentHelper/HelperService.swift
       - CaffeinagentHelper/SleepFlagWatchdog.swift
+      # The commands and the MCP server of the command line tool, without
+      # the part that starts a process.
+      - CaffeinagentCLI/HoldCommand.swift
+      - CaffeinagentCLI/MCPServer.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.tests

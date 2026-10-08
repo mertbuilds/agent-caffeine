@@ -311,15 +311,19 @@ struct EvidenceFrame: Codable, Equatable {
     var awake: TimeInterval?
     var agents: [AgentEvidence]
     var context: FrameContext
+    /// The holds from the command line whose holder lives. Left out of a
+    /// line with none.
+    var holds: [ManualHold] = []
 
-    init(at: Date, agents: [AgentEvidence], context: FrameContext = FrameContext()) {
+    init(at: Date, agents: [AgentEvidence], context: FrameContext = FrameContext(), holds: [ManualHold] = []) {
         self.at = at
         self.agents = agents
         self.context = context
+        self.holds = holds
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version = "v", at, awake = "up", agents, context = "ctx"
+        case version = "v", at, awake = "up", agents, context = "ctx", holds
     }
 
     init(from decoder: Decoder) throws {
@@ -329,5 +333,16 @@ struct EvidenceFrame: Codable, Equatable {
         awake = try container.decodeIfPresent(TimeInterval.self, forKey: .awake)
         agents = try container.decodeIfPresent([AgentEvidence].self, forKey: .agents) ?? []
         context = try container.decodeIfPresent(FrameContext.self, forKey: .context) ?? FrameContext()
+        holds = try container.decodeIfPresent([ManualHold].self, forKey: .holds) ?? []
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encode(at, forKey: .at)
+        try container.encodeIfPresent(awake, forKey: .awake)
+        try container.encode(agents, forKey: .agents)
+        try container.encode(context, forKey: .context)
+        if !holds.isEmpty { try container.encode(holds, forKey: .holds) }
     }
 }

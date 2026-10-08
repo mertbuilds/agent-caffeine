@@ -220,6 +220,36 @@ final class EvidenceCollectorTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: path.path), "A young file is kept")
     }
 
+    func testHoldsFromTheCommandLineAreInTheFrameWhileTheirHolderLives() throws {
+        let store = HoldStore(directory: root.appendingPathComponent("holds"))
+        sources.holdDirectory = store.directory
+        collector = EvidenceCollector(sources: sources)
+        let holder = Row.fixture(700, ppid: 1, start: processStart, path: "/Applications/agent caffeine.app/Contents/MacOS/agent-caffeine", args: ["agent-caffeine"])
+        census.rows = [holder]
+        let timed = ManualHold.timed(id: "aaaa0001", length: 60, reason: "Nightly backup", now: at(0))
+        let command = ManualHold.command(id: "bbbb0001", holder: holder.identity, command: "ffmpeg", now: at(0))
+        store.write(timed)
+        store.write(command)
+        let first = sample(at: 1)
+        XCTAssertEqual(first.frame.holds, [timed, command])
+        XCTAssertEqual(first.frame.agents, [], "A hold is no agent")
+        XCTAssertTrue(first.watchedFiles.contains(store.directory.path), "A new hold brings a sample")
+        XCTAssertEqual(first.roots, [holder.identity], "And so does a holder that exits")
+
+        // The pid of the holder belongs to another process now.
+        census.rows = [.fixture(700, ppid: 1, start: processStart + 50, path: "/bin/sleep", args: ["sleep"])]
+        let second = sample(at: 2)
+        XCTAssertEqual(second.frame.holds, [timed])
+        XCTAssertEqual(second.roots, [])
+        XCTAssertEqual(sample(at: 61).frame.holds, [], "The time of the other one is over")
+    }
+
+    func testNoHoldIsReadWithoutAFolder() {
+        census.rows = []
+        XCTAssertEqual(sample(at: 1).frame.holds, [])
+        XCTAssertFalse(sample(at: 2).watchedFiles.contains { $0.hasSuffix("/holds") })
+    }
+
     func testHookFileOfADeadProcessIsRemovedOnceItIsOld() throws {
         let hooks = collectWithHooks()
         var file = HookStateFile(agent: "claude", pid: 100, start: processStart)
