@@ -69,6 +69,26 @@ const questions: FaqItem[] = [
     ),
   },
   {
+    id: "script",
+    question: "Can it keep my Mac awake for a script or a render?",
+    answer: (
+      <>
+        Yes, from version 1.0.1. Put agent-caffeine hold -- in front of the command. Your Mac stays
+        awake while the command runs, and can sleep when it ends.
+      </>
+    ),
+  },
+  {
+    id: "mcp",
+    question: "Does it have an MCP server?",
+    answer: (
+      <>
+        Yes, from version 1.0.1. The command agent-caffeine mcp gives an agent three tools:
+        hold_awake, release and status. A hold ends when the session of the agent ends.
+      </>
+    ),
+  },
+  {
     id: "privacy",
     question: "Does it send my data anywhere?",
     answer: (
