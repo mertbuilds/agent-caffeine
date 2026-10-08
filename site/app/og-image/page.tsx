@@ -30,11 +30,13 @@ export default function OgImage() {
           agent caffeine
         </p>
         <h1 className="text-[76px] font-medium leading-[1.06] tracking-[-0.02em]">
-          Your agents
+          Close your Mac
           <br />
-          keep working
-          <br />
-          <span className="text-[#5aa2ff]">with the lid closed</span>
+          <span className="text-[#5aa2ff]">
+            Your agents
+            <br />
+            keep working
+          </span>
         </h1>
         <p className="text-[34px] leading-none text-[#a3a3a3]">Free for 7 days, then {PRICE} once</p>
       </div>

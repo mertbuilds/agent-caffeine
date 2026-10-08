@@ -40,7 +40,7 @@ export async function generateMetadata(): Promise<Metadata> {
           url: "/og.png",
           width: 1200,
           height: 630,
-          alt: "agent caffeine. Your agents keep working with the lid closed",
+          alt: "agent caffeine. Close your Mac, your agents keep working",
         },
       ],
     },
