@@ -6,16 +6,25 @@ import Foundation
 /// and `tools/call` are all an agent needs for three tools.
 ///
 /// The tools do what the commands do, through `HoldCommands`.
+///
+/// A hold lives with its session: when the session ends, the agent that
+/// asked is gone, and nothing would release the hold before its time.
 final class MCPServer {
     static let protocolVersions = ["2025-06-18", "2025-03-26", "2024-11-05"]
     static let name = "agent-caffeine"
     static let maxMinutes = Int(ManualHold.timedCap / 60)
     static let defaultMinutes = Int(ManualHold.defaultLength / 60)
+    /// The signals that end a session. The tool releases its holds first.
+    static let endSignals = [SIGTERM, SIGINT, SIGHUP]
 
     private let tools: HoldTools
     private let version: String
-    /// The holds this server made, for a `release` that names none.
+    /// The holds this server made, for a `release` that names none and
+    /// for the end of the session.
     private var made: [String] = []
+    private var ended = false
+    /// A signal ends the session from another thread.
+    private let lock = NSLock()
 
     init(tools: HoldTools, version: String) {
         self.tools = tools
@@ -25,8 +34,10 @@ final class MCPServer {
     // MARK: Lines
 
     /// Answers until the input ends, or until an answer cannot be
-    /// written: the client is gone then.
+    /// written: the client is gone then. The session is over after that,
+    /// and its holds are released.
     func run(input: FileHandle, output: FileHandle) {
+        defer { end() }
         var pending = Data()
         while true {
             let chunk = input.availableData
@@ -47,6 +58,37 @@ final class MCPServer {
         guard line.contains(where: { !UInt8($0).isWhitespace }), var reply = handle(line) else { return true }
         reply.append(UInt8(ascii: "\n"))
         return output.put(reply)
+    }
+
+    /// The end of the session: releases the holds it made. A hold that
+    /// is asked for after this is not kept.
+    func end() {
+        lock.lock()
+        defer { lock.unlock() }
+        ended = true
+        for id in made { tools.store.remove(id: id) }
+        made.removeAll()
+    }
+
+    /// False after the end of the session, when the hold is not kept.
+    private func keep(_ hold: ManualHold) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !ended else {
+            tools.store.remove(id: hold.id)
+            return false
+        }
+        made.append(hold.id)
+        return true
+    }
+
+    /// The holds of the session, which it then no longer has.
+    private func take(_ id: String? = nil) -> [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        let taken = made.filter { id == nil || $0 == id }
+        made.removeAll { id == nil || $0 == id }
+        return taken
     }
 
     /// The answer to one message. Nil for a notification and for an
@@ -74,7 +116,7 @@ final class MCPServer {
                 "protocolVersion": agreed,
                 "capabilities": ["tools": [String: Any]()],
                 "serverInfo": ["name": Self.name, "title": "Agent Caffeine", "version": version],
-                "instructions": "Keeps this Mac awake while long work runs. Call hold_awake before the work and release when it is done.",
+                "instructions": "Keeps this Mac awake while long work runs. Call hold_awake before the work and release when it is done. The hold ends when this session ends.",
             ])
         case "ping":
             return Self.success(id: id, result: [String: Any]())
@@ -97,7 +139,7 @@ final class MCPServer {
         [
             "name": "hold_awake",
             "title": "Keep the Mac awake",
-            "description": "Keeps this Mac awake for a number of minutes, also with the lid closed, so long work is not cut off by sleep. Use it before a build, a render, a download, a training run or any job that takes more than a few minutes. Call release when the work is done. The hold ends by itself after the minutes. The battery limit, a pause and the switch of Agent Caffeine still let the Mac sleep.",
+            "description": "Keeps this Mac awake for a number of minutes, also with the lid closed, so long work is not cut off by sleep. Use it before a build, a render, a download, a training run or any job that takes more than a few minutes. Call release when the work is done. The hold ends by itself after the minutes. The hold ends when this session ends. The battery limit, a pause and the switch of Agent Caffeine still let the Mac sleep.",
             "inputSchema": [
                 "type": "object",
                 "properties": [
@@ -141,7 +183,7 @@ final class MCPServer {
             case .failure(let error):
                 return (error.message, true)
             case .success(let hold):
-                made.append(hold.id)
+                guard keep(hold) else { return ("This session has ended.", true) }
                 let note = tools.store.status().flatMap { $0.stopped ? " \($0.line), so the Mac can sleep until that ends." : nil } ?? ""
                 return ("\(HoldText.held(hold, tools: tools)) Call release with the id \(hold.id) when the work is done.\(note)", false)
             }
@@ -149,11 +191,10 @@ final class MCPServer {
             if let id = arguments["id"] {
                 guard let id = id as? String, ManualHold.isValidID(id) else { return ("id is not the id of a hold. status lists the holds.", true) }
                 let outcome = HoldCommands.release(.id(id), tools: tools)
-                made.removeAll { $0 == id }
+                _ = take(id)
                 return ((outcome.out + outcome.err).joined(separator: "\n"), outcome.code != 0)
             }
-            let released = made.filter { tools.store.remove(id: $0) }
-            made.removeAll()
+            let released = take().filter { tools.store.remove(id: $0) }
             return (released.isEmpty ? "This session has no hold to release." : "Released \(released.joined(separator: ", ")).", false)
         default:
             return (HoldCommands.status(json: false, tools: tools).out.joined(separator: "\n"), false)

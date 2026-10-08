@@ -353,6 +353,54 @@ final class HoldCommandTests: XCTestCase {
         XCTAssertEqual(answers.compactMap(isError), [false, false, true, true])
     }
 
+    /// The agent is gone, and nothing would release its holds before
+    /// their time.
+    func testTheHoldsOfASessionEndWithIt() throws {
+        startApp()
+        _ = HoldCommands.hold(length: 600, reason: "from a script", json: false, tools: tools)
+        let other = try XCTUnwrap(tools.liveHolds.first?.id)
+        let answers = try session([call(1, "hold_awake", ["minutes": 720, "reason": "Long build"]), call(2, "hold_awake"), call(3, "status")])
+        XCTAssertEqual(answers.compactMap(isError), [false, false, false])
+        XCTAssertEqual(text(answers[2])?.contains("Long build"), true, "Held while the session ran")
+        XCTAssertEqual(tools.liveHolds.map(\.id), [other], "The input ended: its two holds are gone, and a hold of somebody else stays")
+    }
+
+    func testTheHoldsOfASessionEndWhenItsAnswerCannotBeWritten() throws {
+        startApp()
+        try ignoringSIGPIPE {
+            let input = Pipe()
+            let output = Pipe()
+            let line = String(decoding: try JSONSerialization.data(withJSONObject: call(1, "hold_awake", ["minutes": 30])), as: UTF8.self)
+            input.fileHandleForWriting.write(Data((line + "\n").utf8))
+            try output.fileHandleForReading.close()
+            // The input stays open: the write alone ends the session.
+            MCPServer(tools: tools, version: "1").run(input: input.fileHandleForReading, output: output.fileHandleForWriting)
+        }
+        XCTAssertEqual(tools.liveHolds, [])
+    }
+
+    /// As a signal does it, while the server still reads.
+    func testAHoldThatIsAskedForAfterTheEndIsNotKept() throws {
+        startApp()
+        let server = MCPServer(tools: tools, version: "1")
+        _ = server.handle(try JSONSerialization.data(withJSONObject: call(1, "hold_awake", ["minutes": 30])))
+        XCTAssertEqual(tools.liveHolds.count, 1)
+        server.end()
+        XCTAssertEqual(tools.liveHolds, [])
+        let late = try XCTUnwrap(server.handle(try JSONSerialization.data(withJSONObject: call(2, "hold_awake", ["minutes": 30]))))
+        let answer = try XCTUnwrap(JSONSerialization.jsonObject(with: late) as? [String: Any])
+        XCTAssertEqual(isError(answer), true)
+        XCTAssertEqual(tools.liveHolds, [])
+    }
+
+    func testTheToolsSayThatAHoldEndsWithTheSession() throws {
+        let answers = try session([request(1, "initialize"), request(2, "tools/list")])
+        let words = "The hold ends when this session ends."
+        XCTAssertEqual(((answers[0]["result"] as? [String: Any])?["instructions"] as? String)?.contains(words), true)
+        let listed = try XCTUnwrap((answers[1]["result"] as? [String: Any])?["tools"] as? [[String: Any]])
+        XCTAssertEqual((listed[0]["description"] as? String)?.contains(words), true)
+    }
+
     func testTheMinutesHaveToBeFromOneToTheCap() throws {
         startApp()
         let answers = try session([
@@ -365,7 +413,11 @@ final class HoldCommandTests: XCTestCase {
         ])
         XCTAssertEqual(answers.compactMap(isError), [true, true, true, true, true, true])
         XCTAssertEqual(tools.liveHolds, [])
-        let good = try session([call(1, "hold_awake", ["minutes": 720]), call(2, "hold_awake")])
+        // Asked of the server itself: a session that is over takes its holds with it.
+        let server = MCPServer(tools: tools, version: "1")
+        let good = try [call(1, "hold_awake", ["minutes": 720]), call(2, "hold_awake")].map {
+            try XCTUnwrap(JSONSerialization.jsonObject(with: try XCTUnwrap(server.handle(try JSONSerialization.data(withJSONObject: $0)))) as? [String: Any])
+        }
         XCTAssertEqual(good.compactMap(isError), [false, false])
         XCTAssertEqual(tools.liveHolds.map { $0.end - $0.start }.sorted(), [3600, 720 * 60], "One hour with no minutes")
     }

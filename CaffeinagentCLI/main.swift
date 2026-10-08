@@ -38,7 +38,21 @@ case .success(.status(let json)):
     finish(HoldCommands.status(json: json, tools: tools))
 case .success(.mcp):
     let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
-    MCPServer(tools: tools, version: version).run(input: .standardInput, output: .standardOutput)
+    let server = MCPServer(tools: tools, version: version)
+    // A signal that ends the tool ends the session: its holds are
+    // released first, on a queue, where a file may be removed.
+    let ends = MCPServer.endSignals.map { number -> DispatchSourceSignal in
+        signal(number, SIG_IGN)
+        let source = DispatchSource.makeSignalSource(signal: number, queue: .global())
+        source.setEventHandler {
+            server.end()
+            exit(128 + number)
+        }
+        source.resume()
+        return source
+    }
+    server.run(input: .standardInput, output: .standardOutput)
+    withExtendedLifetime(ends) {}
     exit(0)
 case .success(.run(let command, let reason)):
     let holder = SystemProcessCensus.row(of: getpid())?.identity
