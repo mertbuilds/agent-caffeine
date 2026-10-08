@@ -252,7 +252,7 @@ export const INITIAL: SimState = preset(
     idleExtra: NO_EXTRA,
     now: 0,
   },
-  "idle",
+  "waiting",
 );
 
 // MARK: Demo
@@ -263,14 +263,13 @@ export const INITIAL: SimState = preset(
  * with the situation of `INITIAL`.
  */
 export const DEMO: readonly { preset: PresetId; hold: number }[] = [
-  // The hero shows agents at work, so the demo starts on the opposite and comes to work last.
-  { preset: "idle", hold: 2800 },
-  // Long enough for the waiting hold to run out and the outcome to be read.
+  // The hero shows agents at work and then a Mac that can sleep, so the demo starts on what it does not show: an agent that waits. Long enough for the waiting hold to run out and the outcome to be read.
   { preset: "waiting", hold: 8500 },
   { preset: "build", hold: 3200 },
   { preset: "reachable", hold: 3400 },
   { preset: "lid", hold: 3200 },
   { preset: "low", hold: 3800 },
+  { preset: "idle", hold: 2800 },
   { preset: "working", hold: 3000 },
 ];
 
@@ -333,7 +332,7 @@ export function cueTarget(cue: Cue): string | null {
 // MARK: Controls
 
 /** A busy command counts as work, whatever the agent says: a turn that ended is not work that ended (`VerdictRules`). */
-export function verdict(run: Session): WorkState {
+export function verdict(run: Pick<Session, "state" | "command">): WorkState {
   return run.command ? "working" : run.state;
 }
 
@@ -700,7 +699,7 @@ export function headlineText(line: Headline, outlook: SleepOutlook = { kind: "si
 }
 
 /** `PanelText.working`, `waiting` and `idle`: the phrase of one session. */
-function detailOf(run: Session, now: number): string {
+export function detailOf(run: Pick<Session, "state" | "command" | "since" | "before">, now: number): string {
   const time = lasting(now - run.since);
   const startSeen = run.before !== null;
   switch (verdict(run)) {

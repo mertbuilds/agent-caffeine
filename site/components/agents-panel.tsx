@@ -34,14 +34,15 @@ const FG = "text-[var(--panel-fg)]";
 const MUTED = "text-[var(--panel-muted)]";
 const ROLL = { duration: 350, easing: "cubic-bezier(0.22, 1, 0.36, 1)" };
 
-/** Text whose numbers roll when they change, as the app's do. A group of digits keeps its length, so "06:00" keeps its zeros. */
-export function Flow({ children }: { children: string }) {
+/** Text whose numbers roll when they change, as the app's do. A group of digits keeps its length, so "06:00" keeps its zeros. With `still` a change shows at once. */
+export function Flow({ children, still = false }: { children: string; still?: boolean }) {
   return (
     <>
       {children.split(/(\d+)/).map((part, index) =>
         index % 2 === 1 ? (
           <NumberFlow
             key={index}
+            animated={!still}
             className="tabular-nums"
             format={{ minimumIntegerDigits: part.length }}
             locales="en-US"

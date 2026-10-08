@@ -63,18 +63,32 @@ export const laptop = {
 
 /**
  * The hero, in seconds into its loop: the app shows on the open display, the
- * lid closes, the agents work on while the clock runs, and one of them
- * finishes. `lift`, `walk` and `down` are for the cut where the closed laptop
- * is carried, `notice` for the cuts that end on the notification.
+ * lid closes, and the clock runs while the agents finish one by one. Two
+ * minutes after the last one the Mac can sleep, and the menu dims. `clock`
+ * pairs a time of the loop with the minutes that have passed by then: the
+ * clock stands for a moment after each agent finishes. `lift`, `walk` and
+ * `down` are for the cut where the closed laptop is carried, `notice` for the
+ * cuts with the notification.
  */
 export const heroScene = {
-  loop: 8.6,
-  rest: 3,
-  close: [1.3, 2.4],
-  lift: [2.6, 3.3],
-  walk: [2.9, 6.9],
-  clock: [2.3, 6.8],
-  down: [6.7, 7.4],
-  finish: 6.9,
-  notice: [7.4, 7.85],
+  loop: 10,
+  rest: 0.8,
+  close: [1.3, 2.3],
+  clock: [
+    [2.3, 0],
+    [3.4, 12],
+    [3.8, 12.9],
+    [4.5, 21],
+    [4.9, 21.9],
+    [5.6, 30],
+    [6, 30.9],
+    [6.7, 39],
+    [7.1, 39.9],
+    [7.7, 41],
+  ],
+  dim: [8.9, 9.6],
+  lift: [2.5, 3.2],
+  walk: [2.8, 6.9],
+  down: [6.9, 7.5],
+  notice: [3.6, 4],
 } as const;

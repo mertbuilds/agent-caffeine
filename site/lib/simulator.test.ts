@@ -11,6 +11,8 @@ import {
   allowHelper,
   batteryStop,
   clockTime,
+  detailOf,
+  headlineText,
   lasting,
   preset,
   resume,
@@ -275,4 +277,13 @@ test("the clock ticks while a pause or stay reachable runs with no agent open", 
   assert.equal(tickEvery(startReachable(empty, "oneHour")), 1000);
   assert.equal(tickEvery(startPause(empty, "oneHour")), 1000);
   assert.equal(view(empty).clock, "9:41");
+});
+
+test("a session that finished says so for a minute, then counts as idle, and the last agent at work is named", () => {
+  const done = { state: "idle", command: false, since: 600, before: "working" } as const;
+  assert.equal(detailOf(done, 630), "Finished a moment ago");
+  assert.equal(detailOf(done, 780), "Idle for 3 minutes");
+  assert.equal(headlineText({ kind: "working", subject: { many: 2 } }).subtitle, "2 agents are working");
+  assert.equal(headlineText({ kind: "working", subject: { one: "Claude Code" } }).subtitle, "Claude Code is working");
+  assert.deepEqual(headlineText({ kind: "idle", subject: { many: 4 } }), { title: "Your Mac can sleep", subtitle: "All agents are idle" });
 });

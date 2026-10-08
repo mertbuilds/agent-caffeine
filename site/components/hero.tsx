@@ -130,7 +130,7 @@ export async function Hero({ variant = "a" }: { variant?: HeroVariant }) {
         <HeroScene cut={variant} />
       </div>
       <p className="relative z-10 mx-auto max-w-[26rem] text-pretty text-lg leading-relaxed text-muted lg:col-start-1 lg:row-start-3 lg:mx-0 lg:-mt-2 lg:max-w-[31rem]">
-        agent caffeine keeps your Mac awake while Claude Code, Codex or Cursor works, also with the lid closed. It lets your Mac sleep when they are done
+        agent caffeine keeps your Mac awake while Claude Code, Codex or Cursor works, also with the lid closed. Then it lets your Mac sleep
       </p>
       <div className="relative z-10 flex flex-col items-center gap-7 lg:col-start-1 lg:row-start-4 lg:items-start">
         <WorksWith side={FROM_LG} />

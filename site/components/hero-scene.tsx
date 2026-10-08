@@ -1,7 +1,7 @@
 "use client";
 
 import { easeInOut } from "motion/react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AgentIcon, type AgentIconName } from "@/components/agent-icons";
 import { Flow, PanelSurface } from "@/components/agents-panel";
 import { lidBrightness, lidDegrees } from "@/components/laptop/geometry";
@@ -10,6 +10,8 @@ import { MenuIcon } from "@/components/menu-icon";
 import { Robot } from "@/components/robot";
 import { heroScene } from "@/lib/motion";
 import { stretch, useLoop } from "@/lib/playhead";
+import { RELEASE_AFTER, detailOf, headlineText, iconLook, pose, type Headline, type IconLook, type Pose } from "@/lib/simulator";
+import { useLessMotion } from "@/lib/use-less-motion";
 import { useSeen } from "@/lib/use-seen";
 import { useTabHidden } from "@/lib/use-tab-hidden";
 
@@ -21,9 +23,8 @@ type Span = readonly [from: number, to: number];
 const MUTED = "text-[var(--panel-muted)]";
 const GREEN = "light-dark(#28a745, #32d74b)";
 
-/** The time on the menu bar when the lid closes, in minutes of the day, and how many minutes then pass. */
+/** The time on the menu bar when the lid closes, in minutes of the day. */
 const CLOCK_START = 14 * 60 + 2;
-const MINUTES = 39;
 /**
  * The glass of the open display in the scene, in hundredths of the scene's
  * width (`lidArt(0)` less the bezel and the chin). The open lid faces the eye,
@@ -38,31 +39,69 @@ const GAP = 3;
 
 /** Seconds the check takes to come in. */
 const CHECK_IN = 0.35;
+/** How much of itself the menu keeps once the Mac sleeps. */
+const ASLEEP = 0.45;
+/** The moment of the loop that stands for all of it, for a reader who asked for less motion: the lid is closed, three agents work and one has just finished. */
+const STILL = 3.78;
 
-/** The agents at work, the longest first as the app lists them. `before` is the minutes each has worked when the lid closes. The last one finishes. */
-const AGENTS: readonly { icon: AgentIconName; name: string; folder: string; before: number }[] = [
-  { icon: "claudecode", name: "Claude Code", folder: "wiki", before: 11 },
-  { icon: "codex", name: "Codex", folder: "api", before: 8 },
-  { icon: "cursor", name: "Cursor", folder: "website", before: 5 },
-  { icon: "opencode", name: "opencode", folder: "docs", before: 3 },
+/** The agents at work, the longest first as the app lists them. `before` is the minutes each has worked when the lid closes, and `done` the minutes after that when it finishes. */
+const AGENTS: readonly { icon: AgentIconName; name: string; folder: string; before: number; done: number }[] = [
+  { icon: "claudecode", name: "Claude Code", folder: "wiki", before: 11, done: 39 },
+  { icon: "codex", name: "Codex", folder: "api", before: 8, done: 30 },
+  { icon: "cursor", name: "Cursor", folder: "website", before: 5, done: 21 },
+  { icon: "opencode", name: "opencode", folder: "docs", before: 3, done: 12 },
 ];
-const FINISHER = AGENTS[AGENTS.length - 1];
+const FIRST_DONE = AGENTS[AGENTS.length - 1];
+const LAST_DONE = AGENTS[0];
+
+/** The minutes that have passed since the lid closed, at `time` seconds into the loop. */
+function minutesAt(time: number): number {
+  const marks = heroScene.clock;
+  for (let next = 1; next < marks.length; next += 1) {
+    const [from, start] = marks[next - 1];
+    const [to, end] = marks[next];
+    if (time < to) {
+      return start + (end - start) * Math.max(0, (time - from) / (to - from));
+    }
+  }
+  return marks[marks.length - 1][1];
+}
+
+/** The second of the loop at which `minutes` have passed. */
+function secondAt(minutes: number): number {
+  return heroScene.clock.find((mark) => mark[1] >= minutes)?.[0] ?? heroScene.loop;
+}
+
+/**
+ * What the app decides `minutes` after the lid closed, in the default mode
+ * (`HoldPolicy.decide`): it keeps the Mac awake while an agent works and for
+ * `RELEASE_AFTER` after the last one finished, and then the Mac can sleep.
+ */
+function headlineAt(minutes: number): Headline {
+  const working = AGENTS.filter((agent) => minutes < agent.done);
+  if (working.length > 0) {
+    return { kind: "working", subject: working.length === 1 ? { one: working[0].name } : { many: working.length } };
+  }
+  return (minutes - LAST_DONE.done) * 60 < RELEASE_AFTER
+    ? { kind: "finishedRecently", subject: { one: LAST_DONE.name } }
+    : { kind: "idle", subject: { many: AGENTS.length } };
+}
+
+type Row = { icon: AgentIconName; title: string; detail: string; working: boolean; checked: number };
 
 function clock(minutes: number): string {
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
-/** An agent's mark in the slot of its ring, as in the app's menu: the arc goes round while it works, and a check stands there once it has finished. */
-function Mark({ icon, finished }: { icon: AgentIconName; finished: boolean }) {
+/** An agent's mark in the slot of its ring, as in the app's menu: the arc goes round while it works, and an idle agent's mark is pale and has no ring. */
+function Mark({ icon, working }: { icon: AgentIconName; working: boolean }) {
   return (
     <span className="relative flex size-[34px] shrink-0 items-center justify-center">
-      <span className="flex size-7 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--panel-fg)_8%,transparent)]">
+      <span className={`flex size-7 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--panel-fg)_8%,transparent)] ${working ? "" : "opacity-55"}`}>
         <AgentIcon className="size-[18px]" name={icon} />
       </span>
-      <svg aria-hidden="true" className="absolute inset-0 size-full" fill="none" viewBox="0 0 34 34">
-        {finished ? (
-          <rect height="32.5" rx="10.25" strokeWidth="1.5" style={{ stroke: GREEN }} width="32.5" x="0.75" y="0.75" />
-        ) : (
+      {working && (
+        <svg aria-hidden="true" className="absolute inset-0 size-full" fill="none" viewBox="0 0 34 34">
           <rect
             className="ring-sweep"
             height="32.5"
@@ -76,21 +115,21 @@ function Mark({ icon, finished }: { icon: AgentIconName; finished: boolean }) {
             x="0.75"
             y="0.75"
           />
-        )}
-      </svg>
+        </svg>
+      )}
     </span>
   );
 }
 
-/** The check of the agent that has finished. It comes in over `shown`, from 0 to 1. */
+/** The check of an agent that has finished. It comes in over `shown`, from 0 to 1. */
 function Check({ shown }: { shown: number }) {
   return (
     <span
       aria-hidden="true"
-      className="flex size-5 shrink-0 items-center justify-center rounded-full"
+      className="flex size-4 shrink-0 items-center justify-center rounded-full"
       style={{ background: GREEN, opacity: shown, transform: `scale(${0.6 + 0.4 * shown})` }}
     >
-      <svg className="size-2.5 text-white" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 10 8">
+      <svg className="size-2 text-white" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 10 8">
         <path d="M1 4.2 3.8 7 9 1" />
       </svg>
     </span>
@@ -98,7 +137,7 @@ function Check({ shown }: { shown: number }) {
 }
 
 /** The Mac's menu bar along the top of the display: the Apple mark, Wi-Fi, the battery, our icon with its menu open, and the clock. Its corners are the display's, less the gap round it. */
-function MenuBar({ time }: { time: string }) {
+function MenuBar({ time, look, still }: { time: string; look: IconLook; still: boolean }) {
   return (
     <div className="flex h-6 w-full items-center gap-3 rounded-[4px] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] pl-2.5 pr-2 text-[13px] text-fg backdrop-blur">
       <svg className="h-[0.95em] w-auto shrink-0 -translate-y-px" fill="currentColor" viewBox="0 0 814 1000">
@@ -116,47 +155,55 @@ function MenuBar({ time }: { time: string }) {
         <span className="h-1 w-[1.5px] rounded-r-[1px] bg-current" />
       </span>
       <span className="flex h-[22px] items-center rounded-[5px] bg-[color-mix(in_srgb,var(--fg)_14%,transparent)] px-2">
-        <MenuIcon className="h-5 w-[21px]" held />
+        <MenuIcon className="h-5 w-[21px]" look={look} />
       </span>
       <span className="tabular-nums">
-        <Flow>{time}</Flow>
+        <Flow still={still}>{time}</Flow>
       </span>
     </div>
   );
 }
 
-/** A cut of the app's menu that fits the display: the robot beside the headline, and the agents, without the bar of controls at the bottom. */
-/** `checked` is how far the check of the agent that finished has come in, from 0 to 1. */
-function Panel({ minutes, finished, checked, paused }: { minutes: number; finished: boolean; checked: number; paused: boolean }) {
-  const working = AGENTS.length - (finished ? 1 : 0);
+/**
+ * A cut of the app's menu that fits the display: the robot beside the headline, and the agents, without the bar of controls at the bottom.
+ * An agent at work has its folder and its time below its name, and one that is idle has its time at the far edge, as in the app. With `still` a number that changes does not roll.
+ */
+function Panel({ title, subtitle, stance, rows, paused, still }: { title: string; subtitle: string; stance: Pose; rows: readonly Row[]; paused: boolean; still: boolean }) {
   return (
     <PanelSurface className={`w-full shadow-[0_12px_32px_var(--shadow)] ${paused ? "panel-paused" : ""}`} label="The agent caffeine menu">
       <div className="flex items-center gap-3 px-4 py-3">
-        <Robot paused={paused} pose="awake" size={48} />
+        {/* A robot that sleeps stands still here: the one that breathes in its sleep is in the menu further down the page. */}
+        <Robot paused={paused} pose={stance} size={48} still={stance === "asleep"} />
         <p className="flex min-w-0 flex-col gap-0.5">
-          <span className="text-[15px] leading-5">Your Mac stays awake</span>
+          <span className="text-[15px] leading-5">{title}</span>
           <span className={`text-[12px] ${MUTED}`}>
-            <Flow>{`${working} agents are working`}</Flow>
+            <Flow still={still}>{subtitle}</Flow>
           </span>
         </p>
       </div>
       <div className="h-px bg-[var(--panel-line)]" />
       <ul className="flex flex-col px-[13px] py-1">
-        {AGENTS.map((agent) => {
-          const done = finished && agent === FINISHER;
-          return (
-            <li key={agent.name} className="flex h-10 items-center gap-2">
-              <Mark finished={done} icon={agent.icon} />
+        {rows.map((row) => (
+          <li key={row.icon} className="flex h-10 items-center gap-2">
+            <Mark icon={row.icon} working={row.working} />
+            {row.working ? (
               <span className="flex min-w-0 flex-1 flex-col gap-px leading-4">
-                <span className="truncate">{done ? agent.name : `${agent.name} · ${agent.folder}`}</span>
+                <span className="truncate">{row.title}</span>
                 <span className={`truncate text-[12px] ${MUTED}`}>
-                  {done ? "Finished a moment ago" : <Flow>{`Working for ${agent.before + minutes} minutes`}</Flow>}
+                  <Flow still={still}>{row.detail}</Flow>
                 </span>
               </span>
-              {done && <Check shown={checked} />}
-            </li>
-          );
-        })}
+            ) : (
+              <>
+                <span className={`min-w-0 flex-1 truncate ${MUTED}`}>{row.title}</span>
+                <span className={`shrink-0 text-[12px] ${MUTED}`}>
+                  <Flow still={still}>{row.detail}</Flow>
+                </span>
+                <Check shown={row.checked} />
+              </>
+            )}
+          </li>
+        ))}
       </ul>
     </PanelSurface>
   );
@@ -172,12 +219,12 @@ function Notice({ shown }: { shown: number }) {
       className="absolute inset-x-0 bottom-[6%] z-20 mx-auto w-[19rem]"
       style={{ opacity: shown, transform: `translateY(${(shown - 1) * 12}px)` }}
     >
-      <PanelSurface className="flex items-start gap-2.5 rounded-2xl p-2.5 shadow-[0_8px_24px_var(--shadow)]" label={`A notification from agent caffeine: ${FINISHER.name} finished`}>
+      <PanelSurface className="flex items-start gap-2.5 rounded-2xl p-2.5 shadow-[0_8px_24px_var(--shadow)]" label={`A notification from agent caffeine: ${FIRST_DONE.name} finished`}>
         <img alt="" className="size-8 shrink-0" decoding="async" height={32} src="/icon.png" width={32} />
         <span className="flex min-w-0 flex-col gap-px text-[12px] leading-4">
-          <span className="font-medium">{FINISHER.name} finished</span>
-          <span className="font-medium">{FINISHER.folder}</span>
-          <span>After {FINISHER.before + MINUTES} minutes</span>
+          <span className="font-medium">{FIRST_DONE.name} finished</span>
+          <span className="font-medium">{FIRST_DONE.folder}</span>
+          <span>After {FIRST_DONE.before + FIRST_DONE.done} minutes</span>
         </span>
       </PanelSurface>
     </div>
@@ -213,8 +260,18 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
   const play = seen && !hidden;
   const at = useLoop(play, heroScene.loop, heroScene.rest);
 
-  // The playhead winds back to the start before each replay. The lid opens
-  // over that time, and the rest of the story stays at its end until then.
+  const reduced = useLessMotion();
+  // Before the first play the scene stands at its start, which is also what the server draws.
+  const [begun, setBegun] = useState(false);
+  useEffect(() => {
+    if (play) {
+      setBegun(true);
+    }
+  }, [play]);
+
+  // The playhead winds back to the start before each replay. The story cuts
+  // to its start at once, and over that time the lid opens and the menu
+  // comes back from its sleep.
   const [last, setLast] = useState(at);
   const [winding, setWinding] = useState(false);
   if (at !== last) {
@@ -222,20 +279,35 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
     setWinding(at < last);
   }
 
-  const time = winding ? heroScene.loop : at * heroScene.loop;
+  const cutting = winding || !begun;
+  const time = reduced ? STILL : cutting ? 0 : at * heroScene.loop;
   const span = ([from, to]: Span, ease?: (share: number) => number) => stretch(time, from, to, ease);
 
-  const closed = winding ? at : span(heroScene.close, easeInOut);
-  const minutes = Math.round(MINUTES * span(heroScene.clock, easeInOut));
-  const finished = time >= heroScene.finish;
-  const checked = finished ? stretch(time, heroScene.finish, heroScene.finish + CHECK_IN) : 0;
+  const closed = !reduced && winding ? at : span(heroScene.close, easeInOut);
+  const dimmed = !reduced && winding ? at : span(heroScene.dim, easeInOut);
+  const minutes = minutesAt(time);
+  const line = headlineAt(minutes);
+  const stance = pose(line);
+  const rows: Row[] = AGENTS.map((agent) => {
+    const working = minutes < agent.done;
+    const finished = secondAt(agent.done);
+    return {
+      icon: agent.icon,
+      title: working ? `${agent.name} · ${agent.folder}` : agent.name,
+      detail: working
+        ? detailOf({ state: "working", command: false, since: -agent.before * 60, before: "idle" }, minutes * 60)
+        : detailOf({ state: "idle", command: false, since: agent.done * 60, before: "working" }, minutes * 60),
+      working,
+      checked: stretch(time, finished, finished + CHECK_IN),
+    };
+  });
   const carried = cut === "b" ? span(heroScene.lift, easeInOut) - span(heroScene.down, easeInOut) : 0;
   const walked = cut === "b" ? span(heroScene.walk, easeInOut) : 0;
   const bob = carried * Math.sin(walked * Math.PI * 16);
   const label =
     cut === "b"
-      ? "A closed laptop is carried away. The agent caffeine menu shows four AI coding agents that keep working, and a notification says when one of them has finished"
-      : "A laptop shows the agent caffeine menu on its display, open from the menu bar, with four AI coding agents at work. The lid closes, and the menu stays in a dashed outline of the display: the agents keep working, and one of them finishes";
+      ? "A laptop shows the agent caffeine menu with four AI coding agents at work. The lid closes and the laptop is carried away. The agents keep working and finish one by one, and then the Mac can sleep"
+      : "A laptop shows the agent caffeine menu on its display, with four AI coding agents at work. The lid closes, and the menu stays in a dashed outline of the display: the agents keep working and finish one by one. Two minutes after the last one the menu says that the Mac can sleep";
 
   // The dashed outline of the display comes in as the lid leaves it.
   const ghost = stretch(closed, 0.15, 0.85, easeInOut);
@@ -255,7 +327,7 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
           </div>
           <div
             className="absolute"
-            style={{ left: `${GLASS.left}%`, top: `${GLASS.top}cqw`, width: `${GLASS.width}%`, height: `${GLASS.height}cqw` }}
+            style={{ left: `${GLASS.left}%`, top: `${GLASS.top}cqw`, width: `${GLASS.width}%`, height: `${GLASS.height}cqw`, opacity: 1 - (1 - ASLEEP) * dimmed }}
           >
             <svg className="absolute inset-0 size-full overflow-visible" fill="none" style={{ opacity: ghost }} viewBox={`0 0 ${GLASS.width} ${GLASS.height}`}>
               <rect
@@ -272,9 +344,9 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
               className="absolute left-1/2 top-0 flex origin-top -translate-x-1/2 scale-[calc(660/810)] flex-col items-center gap-1 sm:scale-100 lg:scale-[calc(630/810)] xl:scale-100"
               style={{ width: BOX.width, height: BOX.height, padding: GAP }}
             >
-              <MenuBar time={clock(CLOCK_START + minutes)} />
+              <MenuBar look={iconLook(stance)} still={cutting} time={clock(CLOCK_START + Math.floor(minutes))} />
               <div className="w-[320px]">
-                <Panel checked={checked} finished={finished} minutes={minutes} paused={!play} />
+                <Panel {...headlineText(line)} paused={!play} rows={rows} stance={stance} still={cutting} />
               </div>
             </div>
           </div>
