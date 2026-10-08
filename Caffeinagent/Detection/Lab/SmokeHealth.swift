@@ -45,6 +45,9 @@ struct SmokeMeasurements: Codable, Equatable {
     /// The menu was shown, with a robot that floats and agents at work.
     /// Skipped in a run that is too short for it.
     var panel = Step.notRun
+    /// "Play" of the lid chime reached the player of the test, which
+    /// makes no sound, once.
+    var chime = Step.notRun
 }
 
 /// Whether a build that starts also runs. Pure, so the limits are tested.
@@ -164,6 +167,9 @@ enum SmokeHealth {
         }
         if m.settingsWindow == .failed || m.settingsWindow == .notRun {
             failures.append("opening Preferences: \(m.settingsWindow.rawValue)")
+        }
+        if m.chime == .failed || m.chime == .notRun {
+            failures.append("the lid chime with no sound: \(m.chime.rawValue)")
         }
         return failures
     }

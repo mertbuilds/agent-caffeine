@@ -14,7 +14,8 @@ import SwiftUI
 /// It runs next to a copy that is installed and touches nothing of it. It
 /// takes no power assertion, registers no keyboard shortcut, takes no click, leaves the displays alone, never reaches or registers the helper, reads
 /// no license from the Keychain and never calls Polar, starts no Sparkle,
-/// shows no setup window and no offer to move, sends no notification, and
+/// shows no setup window and no offer to move, sends no notification, plays
+/// no sound, and
 /// keeps its settings, and those AppKit writes for it, under a bundle
 /// identifier of its own that it removes at the end.
 enum SmokeTest {
@@ -35,6 +36,8 @@ enum SmokeTest {
     private static var settingsWindow = SmokeMeasurements.Step.notRun
     private static var panel = SmokeMeasurements.Step.notRun
     private static var panelWindow: NSWindow?
+    private static var chime = SmokeMeasurements.Step.notRun
+    @MainActor private static let chimePlayer = SilentChime()
 
     /// Called before the app starts.
     @MainActor
@@ -51,7 +54,8 @@ enum SmokeTest {
             display: nil,
             notify: { _ in },
             notifier: nil,
-            loginItem: NoLoginItem()
+            loginItem: NoLoginItem(),
+            chime: chimePlayer
         )
         meter.start()
         every(SmokeHealth.tickInterval) { meter.tick() }
@@ -98,6 +102,7 @@ enum SmokeTest {
         cancellable = StateAggregator.shared.objectWillChange.sink { meter.countPublish() }
         statusButton()?.toolTip = label
         ignoreClicks()
+        previewChime()
         after(SmokeHealth.iconToggleAt) { hideIcon() }
         after(SmokeHealth.settingsWindowAt) { openSettings() }
         if let opensAt = SmokeHealth.panelOpensAt(seconds: seconds) {
@@ -120,6 +125,15 @@ enum SmokeTest {
     }
 
     // MARK: Steps
+
+    /// "Play" in Preferences, through the aggregator. The sound goes to
+    /// the player of the test, which counts it and plays nothing.
+    @MainActor
+    private static func previewChime() {
+        let before = chimePlayer.played.count
+        StateAggregator.shared.playLidChime()
+        chime = chimePlayer.played.count == before + 1 ? .ok : .failed
+    }
 
     /// Through the binding the menu bar scene has, as the switch in
     /// Preferences does it. Skipped when this macOS does not give the
@@ -272,6 +286,7 @@ enum SmokeTest {
         m.iconToggle = iconToggle
         m.settingsWindow = settingsWindow
         m.panel = panel
+        m.chime = chime
         StateAggregator.shared.shutdown()
         UserDefaults.standard.removePersistentDomain(forName: domain)
         print(SmokeHealth.line(m))
@@ -492,6 +507,17 @@ private final class NoHotKeys: HotKeyRegistering {
     var systemShortcuts: Set<Shortcut.Keys> { [] }
     func register(_ shortcut: Shortcut?, for action: ShortcutAction, onPress: @escaping () -> Void) -> Bool { true }
     func unregisterAll() {}
+}
+
+/// Remembers the sounds that were asked for, and plays none.
+@MainActor
+private final class SilentChime: LidChimePlaying {
+    private(set) var played: [LidChimeSound] = []
+
+    func play(_ sound: LidChimeSound) -> Bool {
+        played.append(sound)
+        return true
+    }
 }
 
 /// Remembers what was asked, and holds nothing.

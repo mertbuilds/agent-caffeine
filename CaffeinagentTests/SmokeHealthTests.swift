@@ -7,7 +7,7 @@ final class SmokeHealthTests: XCTestCase {
         SmokeMeasurements(
             seconds: 8, ticks: 79, longestStallMs: 104, cpuPercent: 5.9, cpuBySecond: [13.3, 2.1, 19.2, 5.6, 1.8, 0.1, 2.7, 0.1],
             stepSeconds: [1, 2, 3], sceneEvaluations: 9, publishes: 6, samples: 3,
-            statusItem: true, statusItemImage: true, iconToggle: .ok, settingsWindow: .ok, panel: .skipped
+            statusItem: true, statusItemImage: true, iconToggle: .ok, settingsWindow: .ok, panel: .skipped, chime: .ok
         )
     }
 
@@ -110,6 +110,8 @@ final class SmokeHealthTests: XCTestCase {
         XCTAssertEqual(open([0.3, 0.2, 0.4, 0.2]) { $0.panelSeconds = [13] }, ["1 seconds with the menu open to judge the processor time by, expected 2 or more"])
         XCTAssertEqual(open([0.3, 0.2, 0.4, 0.2]) { $0.panel = .failed }, ["showing the menu: failed"])
         XCTAssertEqual(failures { $0.panel = .notRun }, ["showing the menu: notRun"])
+        XCTAssertEqual(failures { $0.chime = .failed }, ["the lid chime with no sound: failed"])
+        XCTAssertEqual(failures { $0.chime = .notRun }, ["the lid chime with no sound: notRun"])
     }
 
     /// The hang of the menu bar scene on macOS 26, as it was measured.

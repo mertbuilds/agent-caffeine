@@ -33,6 +33,10 @@ struct DetectionSettings: Codable, Equatable {
     /// from 45 degrees on, and brighter again the same way. See
     /// `LidDimming`.
     var dimAsLidCloses = true
+    /// A short sound when the lid closes and the Mac stays awake because
+    /// of Agent Caffeine. See `LidChime`.
+    var chimeOnLidClose = true
+    var lidChimeSound = LidChimeSound.tink
     /// On power, the Mac stays awake while a tool's phone access is on,
     /// also with no agent at work.
     var stayAwakeForRemoteAccess = true
@@ -56,6 +60,7 @@ struct DetectionSettings: Codable, Equatable {
     private enum CodingKeys: String, CodingKey {
         case releaseAfterState, releaseAfterActivity, waitingHold, weakEvidenceCap
         case batteryFloorPercent, batteryFloorEnabled, stayAwakeLidClosedOnBattery, displayOffLidClosed, dimAsLidCloses, stayAwakeForRemoteAccess, agentRules, userAgentNames
+        case chimeOnLidClose, lidChimeSound
     }
 
     /// No time is shorter than a second or longer than a day.
@@ -87,6 +92,9 @@ struct DetectionSettings: Codable, Equatable {
         displayOffLidClosed = try container.decodeIfPresent(Bool.self, forKey: .displayOffLidClosed) ?? defaults.displayOffLidClosed
         dimAsLidCloses = try container.decodeIfPresent(Bool.self, forKey: .dimAsLidCloses) ?? defaults.dimAsLidCloses
         stayAwakeForRemoteAccess = try container.decodeIfPresent(Bool.self, forKey: .stayAwakeForRemoteAccess) ?? defaults.stayAwakeForRemoteAccess
+        chimeOnLidClose = try container.decodeIfPresent(Bool.self, forKey: .chimeOnLidClose) ?? defaults.chimeOnLidClose
+        // A sound this build does not know is the default one.
+        lidChimeSound = (try? container.decodeIfPresent(LidChimeSound.self, forKey: .lidChimeSound)) ?? defaults.lidChimeSound
         agentRules = try container.decodeIfPresent([String: AgentRule].self, forKey: .agentRules) ?? defaults.agentRules
         userAgentNames = try container.decodeIfPresent([String].self, forKey: .userAgentNames) ?? defaults.userAgentNames
     }

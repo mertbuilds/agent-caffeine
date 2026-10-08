@@ -64,7 +64,8 @@ struct PreferencesView: View {
                 remove: aggregator.removeHelper,
                 tryAgain: aggregator.repairHelper,
                 openLoginItems: aggregator.sleepFlag.openLoginItemsSettings,
-                removeSudoersEntry: aggregator.removeSudoersEntry
+                removeSudoersEntry: aggregator.removeSudoersEntry,
+                playChime: aggregator.playLidChime
             )
             .tabItem { Label("Battery and lid", systemImage: "laptopcomputer") }
             .tag(PreferencesTab.lidClosed)
@@ -681,6 +682,7 @@ struct LidClosedPreferences: View {
     var tryAgain: () -> Void = {}
     let openLoginItems: () -> Void
     let removeSudoersEntry: () -> Void
+    var playChime: () -> Void = {}
     @State private var confirmingFloorOff = false
 
     /// Off waits for the answer to the question. On is set at once.
@@ -748,6 +750,21 @@ struct LidClosedPreferences: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
+                Toggle(PanelText.lidChimeSwitch, isOn: $settings.chimeOnLidClose)
+                LabeledContent("Sound") {
+                    HStack {
+                        Picker("Sound", selection: $settings.lidChimeSound) {
+                            ForEach(LidChimeSound.allCases) { Text($0.rawValue).tag($0) }
+                        }
+                        .labelsHidden()
+                        .fixedSize()
+                        Button("Play", action: playChime)
+                    }
+                }
+                .disabled(!settings.chimeOnLidClose)
+                Text(PanelText.lidChimeExplained)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
             if needsSudoersCleanup {
                 Section {

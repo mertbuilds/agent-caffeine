@@ -150,6 +150,7 @@ struct OnboardingView: View {
         paragraph(PanelText.lidClosedExplained)
         paragraph("\(PanelText.helperExplained) \(PanelText.helperRemoveInSettings)")
         paragraph("\(safetyNote) \(PanelText.closedBagWarning)")
+        paragraph(PanelText.lidChimeInSetup)
         if helper == .enabled {
             Label(PanelText.helperIsSetUp, systemImage: "checkmark.circle.fill")
                 .foregroundStyle(.green)

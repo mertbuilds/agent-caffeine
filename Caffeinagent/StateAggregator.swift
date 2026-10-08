@@ -24,6 +24,8 @@ struct AggregatorParts {
     var sleepTimer: SleepTimerReading?
     /// Nil sees no other app that keeps the Mac awake.
     var assertions: PowerAssertionListing?
+    /// Nil plays no sound when the lid closes.
+    var chime: LidChimePlaying?
     /// The keyboard layouts the default shortcuts are looked up in, asked
     /// again when the user selects another layout. With none, the defaults
     /// stay on the keys of the American layout.
@@ -47,6 +49,7 @@ struct AggregatorParts {
             loginItem: SystemLoginItem(),
             sleepTimer: SystemSleepTimer(),
             assertions: SystemPowerAssertions(),
+            chime: SystemLidChimePlayer(),
             keyLayouts: SystemKeyLayout.inUse
         )
     }
@@ -231,6 +234,8 @@ final class StateAggregator: ObservableObject {
     private var noLimitWarning = NoLimitBatteryWarning()
     private var flagRequest = SleepFlagRequest()
     private var hiddenNotice: HiddenNotice?
+    private let lidChimer: LidChimer
+    private var lidChimeTimer: Timer?
     private var lastHelperRefresh = Date.distantPast
     private var napActivity: NSObjectProtocol?
     private var pauseTimer: Timer?
@@ -247,6 +252,8 @@ final class StateAggregator: ObservableObject {
     private static let helperRefreshInterval: TimeInterval = 30
     /// The user can change the sleep timer in System Settings at any time.
     private static let sleepTimerRefreshInterval: TimeInterval = 30
+    /// While a closed lid waits for the helper's answer. See `LidChime`.
+    private static let lidChimeLookInterval: TimeInterval = 0.25
 
     init(parts: AggregatorParts) {
         let license = parts.license
@@ -278,6 +285,7 @@ final class StateAggregator: ObservableObject {
         self.loginItemService = parts.loginItem
         self.sleepTimer = parts.sleepTimer
         self.assertions = parts.assertions
+        self.lidChimer = LidChimer(player: parts.chime)
         self.trialNoticesTold = TrialNoticeStore.load(from: defaults)
         self.engine = engine
         self.entitlement = license.entitlement
@@ -387,7 +395,10 @@ final class StateAggregator: ObservableObject {
             .store(in: &cancellables)
         // The display controller acts on a lid that closes by itself and at
         // once. The sample is for the rest of the app.
-        display?.start { [weak self] in self?.engine.requestSample() }
+        display?.start { [weak self] in
+            self?.lookAtLidForChime()
+            self?.engine.requestSample()
+        }
         // On its own, so a helper that gives no answer holds nothing up.
         Task { await sleepFlag.replaceHelper(ifNot: AppVersion.helperForm) }
     }
@@ -449,6 +460,7 @@ final class StateAggregator: ObservableObject {
     }
 
     private func macDidWake() {
+        lidChimer.forget()
         wokeInFull()
         sleepNote = sleepSnapshot.flatMap(SleepNote.init)
         sleepSnapshot = nil
@@ -715,6 +727,9 @@ final class StateAggregator: ObservableObject {
         announceTrial(at: sample.frame.at)
         updateMacSleep(context, at: sample.frame.at)
         announceAgents(sample)
+        // After the hold of this sample is applied and its flag asked for.
+        if sample.afterGap { lidChimer.forget() }
+        observeLidForChime(lidClosed: context.lidClosed, onBattery: context.onBattery)
         // The hold of the decision as it is now: a stop from this sample
         // is in it.
         display?.update(
@@ -853,6 +868,40 @@ final class StateAggregator: ObservableObject {
         notifier?.openSystemSettings()
     }
 
+    // MARK: Lid chime
+
+    /// The lid or the displays changed: the lid is read here and now, so
+    /// the sound comes with the lid and not with the next sample.
+    private func lookAtLidForChime() {
+        let context = powerContext.context()
+        observeLidForChime(lidClosed: context.lidClosed, onBattery: context.onBattery)
+    }
+
+    /// The sound that says the Mac stays awake with the lid closed. While
+    /// the helper's answer is still to come, the state is looked at again
+    /// a few times, for no longer than `LidChime.confirmationWait`.
+    private func observeLidForChime(lidClosed: Bool, onBattery: Bool) {
+        let inputs = LidChimeInputs(
+            lidClosed: lidClosed, enabled: settings.chimeOnLidClose, holding: decision.hold && power.held, onBattery: onBattery,
+            flagWanted: decision.lidClosedFlag, helperEnabled: sleepFlag.helperStatus == .enabled, flagConfirmed: sleepFlag.sleepDisabled
+        )
+        lidChimer.observe(inputs, sound: settings.lidChimeSound, detail: decision.headline.text, now: Self.uptime)
+        guard lidChimer.isWaiting != (lidChimeTimer != nil) else { return }
+        lidChimeTimer?.invalidate()
+        lidChimeTimer = nil
+        guard lidChimer.isWaiting else { return }
+        let timer = Timer(timeInterval: Self.lidChimeLookInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.lookAtLidForChime() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        lidChimeTimer = timer
+    }
+
+    /// "Play" in Preferences.
+    func playLidChime() {
+        lidChimer.preview(settings.lidChimeSound)
+    }
+
     private func updatePower() {
         if decision.hold, let reason = decision.headline.awakeReason {
             power.hold(reason: "Agent Caffeine: \(reason)")
@@ -983,6 +1032,7 @@ final class StateAggregator: ObservableObject {
         engine.stop()
         pauseTimer?.invalidate()
         reachableTimer?.invalidate()
+        lidChimeTimer?.invalidate()
         hotKeys.unregisterAll()
         display?.stop()
         sleepFlag.clearForQuit(timeout: 2)

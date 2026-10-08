@@ -73,6 +73,8 @@ The app sets it through a small root helper (`CaffeinagentHelper/`), registered 
 - With an external display: display sleep would take the display you work on, so only the brightness of the built-in display goes to zero.
 - The brightness is set through the private `DisplayServices` framework, then IOKit's `IODisplaySetFloatParameter`, then `CoreDisplay`, whichever works first. Your value is saved before the display goes dark and put back when the lid opens, when the setting goes off, when a stop ends the hold, when macOS says the Mac goes to sleep, when Agent Caffeine quits, and at the next launch after a crash. Putting it back never makes the display darker than it is.
 
+"Play a sound when you close the lid and your Mac stays awake" (Settings > Battery and lid, on by default) plays a short system sound once when the lid closes while Agent Caffeine keeps the Mac awake: on wall power the hold is enough, on battery the helper must have confirmed the sleep flag, for which the sound waits up to 1.5 seconds. No sound means the Mac goes to sleep. The rules are `Caffeinagent/Power/LidChime.swift`.
+
 The lid and the list of displays are watched (`kIOPMMessageClamshellStateChange` of the power root domain and the display reconfiguration callback), and the rules run in that callback: the display goes off and comes back at once, not at the next sample of the engine.
 
 "Dim the display as the lid closes" (under it, on by default, shown only on a Mac with a lid angle sensor) makes the brightness follow the lid angle. The rules are `Caffeinagent/Power/LidDimming.swift`:
