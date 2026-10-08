@@ -30,8 +30,8 @@ struct AgentSetupModel: Equatable {
         return false
     }
 
-    /// Nothing is there, or a link to something that is gone.
-    private var linkIsMissing: Bool { [.none, .dead, .dangling].contains(snapshot.link) }
+    /// Nothing is there, or a link of ours to a copy that is gone.
+    private var linkIsMissing: Bool { [.none, .dead].contains(snapshot.link) }
 
     /// The link can be made, and this copy of the app may make it.
     var canLink: Bool { snapshot.linkAllowed && linkIsMissing }
@@ -103,7 +103,7 @@ struct AgentSetupModel: Equatable {
     var linkDetail: String {
         switch snapshot.link {
         case .ours: return PanelText.commandLinked
-        case .none, .dead, .dangling: return linkNote ?? PanelText.commandNotLinked
+        case .none, .dead: return linkNote ?? PanelText.commandNotLinked
         case .foreign: return PanelText.skillForeign("~/" + SkillInstaller.linkPath)
         }
     }

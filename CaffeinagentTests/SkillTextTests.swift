@@ -250,7 +250,6 @@ final class SkillTextTests: XCTestCase {
         XCTAssertTrue(model([], link: .ours(target: "/x")).isSetUp, "The link alone is something to remove")
         XCTAssertFalse(model([("droid", .foreign(place: ".factory/skills"))], link: .foreign).isSetUp)
         XCTAssertEqual(model([], link: .foreign).linkDetail, "~/.local/bin/agent-caffeine was not made by Agent Caffeine, so it is left as it is.")
-        XCTAssertTrue(model([], link: .dangling).canLink)
     }
 
     func testALinkToACopyThatIsGoneIsNotLinked() {

@@ -299,12 +299,17 @@ final class SkillInstallerTests: XCTestCase {
         XCTAssertTrue(exists(".local/bin"))
     }
 
-    func testADanglingLinkIsReplaced() throws {
+    /// The user's link to a tool of the same name, for example on a drive
+    /// that is not plugged in.
+    func testADanglingLinkThatIsNotOursIsLeft() throws {
         try make(".local/bin")
         try manager.createSymbolicLink(atPath: url(link).path, withDestinationPath: "/nowhere/gone")
-        XCTAssertEqual(installer.linkState(), .dangling)
-        XCTAssertEqual(installer.setUp(), [:])
-        XCTAssertEqual(destination(link), installer.toolPath)
+        XCTAssertEqual(installer.linkState(), .foreign)
+        XCTAssertEqual(installer.setUp()[SkillInstaller.linkKey], "~/.local/bin/agent-caffeine was not made by Agent Caffeine, so it did not change it.")
+        XCTAssertThrowsError(try installer.link()) { XCTAssertEqual($0 as? SkillInstallError, .linkNotOurs) }
+        XCTAssertEqual(installer.updateOwn(), [])
+        installer.removeAll()
+        XCTAssertEqual(destination(link), "/nowhere/gone")
     }
 
     func testNoLinkWithoutTheTool() throws {

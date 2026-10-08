@@ -24,9 +24,9 @@ enum SkillLinkState: Equatable {
     /// A link to the tool inside a copy of the app that is gone. It is
     /// replaced.
     case dead
-    /// A link to something that is gone. It is replaced.
-    case dangling
-    /// A file, a folder or a link to something else. It is never changed.
+    /// A file, a folder or a link to something else, also to something
+    /// that is gone, for example on a drive that is not plugged in. It is
+    /// never changed.
     case foreign
 }
 
@@ -218,9 +218,8 @@ struct SkillInstaller {
         case .file, .folder: return .foreign
         case .link:
             guard let target = try? FileManager.default.destinationOfSymbolicLink(atPath: linkURL.path) else { return .foreign }
-            let isThere = FileManager.default.fileExists(atPath: linkURL.path)
-            if target.hasSuffix(CommandLineSetup.pathInApp) { return isThere ? .ours(target: target) : .dead }
-            return isThere ? .foreign : .dangling
+            guard target.hasSuffix(CommandLineSetup.pathInApp) else { return .foreign }
+            return FileManager.default.fileExists(atPath: linkURL.path) ? .ours(target: target) : .dead
         }
     }
 
@@ -388,10 +387,10 @@ struct SkillInstaller {
         }
     }
 
-    /// Makes `~/.local/bin/agent-caffeine` a link to the tool. A link to
-    /// something that is gone is replaced. A link of ours to another copy
-    /// that is there is moved only by the copy in the Applications folder.
-    /// A file, a folder and a link to something else are refused.
+    /// Makes `~/.local/bin/agent-caffeine` a link to the tool. A link of
+    /// ours to a copy that is gone is replaced. A link of ours to another
+    /// copy that is there is moved only by the copy in the Applications
+    /// folder. A file, a folder and a link to something else are refused.
     func link() throws {
         guard FileManager.default.isExecutableFile(atPath: toolPath) else { throw SkillInstallError.noTool }
         var record = record()
@@ -407,7 +406,7 @@ struct SkillInstaller {
         case .ours:
             guard isInApplications else { throw SkillInstallError.notInApplications }
             guard unlink(linkURL.path) == 0 else { throw SkillInstallError.writeFailed }
-        case .dead, .dangling:
+        case .dead:
             guard unlink(linkURL.path) == 0 else { throw SkillInstallError.writeFailed }
         case .none:
             made = try makeFolders((Self.linkPath as NSString).deletingLastPathComponent)
@@ -493,7 +492,7 @@ struct SkillInstaller {
             } else {
                 errors[Self.linkKey] = "Agent Caffeine could not remove ~/\(Self.linkPath)."
             }
-        case .none, .dangling, .foreign: break
+        case .none, .foreign: break
         }
         record.link = nil
         save(record)
@@ -523,7 +522,7 @@ struct SkillInstaller {
         switch linkState() {
         case .ours(let target): moves = target != toolPath && record().link != nil
         case .dead: moves = true
-        case .none, .dangling, .foreign: moves = false
+        case .none, .foreign: moves = false
         }
         if moves, (try? link()) != nil {
             Self.log.notice("the link to the command line tool points at this copy of the app now")
