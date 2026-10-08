@@ -1,4 +1,5 @@
 import { agentsMoreThan } from "@/lib/agents";
+import { getPosts } from "@/lib/blog";
 import { PLANS, PRICE, dollars, macs } from "@/lib/pricing";
 import { CONTACT_EMAIL, SITE_URL } from "@/lib/site";
 
@@ -6,6 +7,11 @@ export const dynamic = "force-static";
 
 /** "A license key for 1 Mac costs $19." for each plan on offer. */
 const KEYS = PLANS.map((plan) => `A license key for ${macs(plan)} costs ${dollars(plan)}.`).join(" ");
+
+/** One line per guide: the title as a link, then what it covers. */
+const GUIDES = getPosts()
+  .map((post) => `- [${post.title}](${SITE_URL}/blog/${post.slug}): ${post.description}`)
+  .join("\n");
 
 const TEXT = `# Agent Caffeine
 
@@ -32,10 +38,12 @@ const TEXT = `# Agent Caffeine
 ## Links
 
 - [Home](${SITE_URL}/): product, how it works, price, questions
-- [The caffeinate command on Mac: every option, with examples](${SITE_URL}/blog/caffeinate-mac)
-- [How to stop a Mac from sleeping, also with the lid closed](${SITE_URL}/blog/stop-mac-from-sleeping)
 - [Privacy](${SITE_URL}/privacy): what the app, a purchase and the website collect
 - [Terms](${SITE_URL}/terms): license, trial, payment, refunds and liability
+
+## Guides
+
+${GUIDES}
 `;
 
 export function GET() {
