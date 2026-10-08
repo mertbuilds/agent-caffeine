@@ -61,6 +61,11 @@ export async function Footer() {
             </Link>
           </li>
           <li>
+            <Link href="/compare" className={LINK}>
+              Compare
+            </Link>
+          </li>
+          <li>
             <a
               href="https://polar.sh/mertbuilds/portal"
               target="_blank"
