@@ -373,7 +373,9 @@ struct AgentCatalog {
         // title is `openclaw` and whose arguments are gone. The gateway
         // sets the title `openclaw-gateway` (read in the package, not seen
         // running). It lives all day and works in turns, so it is an
-        // engine. No state of a turn is read yet: judged by activity.
+        // engine. The gateway is judged by the state of its sessions
+        // (`OpenClawStateReader`), and its CPU use is no sign of work
+        // (`VerdictRules.countsCPU`). No turn in progress was measured.
         AgentDefinition(
             id: openClawID, displayName: "OpenClaw", level: .activity, kind: .cli,
             matchers: [

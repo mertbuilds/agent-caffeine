@@ -380,7 +380,7 @@ enum VerdictRules {
         if report?.turnEnded == true { return AgentTurn(state: .idle) }
         // The time of a transcript is its last write, not the start of the turn.
         let startsTurn = report?.source == .claudeSessionFile || report?.source == .codexRollout || report?.source == .cursorTranscript
-            || report?.source == .grokEvents || report?.source == .hermesState
+            || report?.source == .grokEvents || report?.source == .hermesState || report?.source == .openClawState
         return AgentTurn(state: .working, since: startsTurn ? report?.since : nil)
     }
 
@@ -515,7 +515,19 @@ enum VerdictRules {
         }
         let span = cpuWindow * TimeInterval(cpuWindowCount)
         memory.cpuSamples.removeAll { now.timeIntervalSince($0.at) >= span || $0.at > now }
-        if hasSteadyCPU(memory.cpuSamples, now: now) { memory.lastCPUAt = now }
+        if countsCPU(evidence), hasSteadyCPU(memory.cpuSamples, now: now) { memory.lastCPUAt = now }
+    }
+
+    /// Whether CPU use is a sign of work. Not for the gateway of OpenClaw:
+    /// it lives all day, and at rest it was measured at 1.3 percent of a
+    /// core in the median and 2.1 percent at the 90th percentile, with
+    /// housekeeping windows up to 8.8 percent
+    /// (docs/research/12-openclaw.md). That is at `weakCPUFraction`, so
+    /// the rule held again and again and an idle gateway read as working
+    /// without an end. The state of its sessions decides for it, and a
+    /// busy command or a sleep assertion when that state cannot be read.
+    static func countsCPU(_ evidence: AgentEvidence) -> Bool {
+        !(evidence.agentID == AgentCatalog.openClawID && evidence.role == .engine)
     }
 
     /// The samples are sorted into windows by their age, and a window is hot

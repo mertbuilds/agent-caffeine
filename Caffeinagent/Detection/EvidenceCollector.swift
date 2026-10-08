@@ -88,6 +88,7 @@ final class EvidenceCollector: EvidenceCollecting {
         var cursorTranscripts = CursorTranscriptReader()
         var grokEvents = GrokEventsReader()
         var hermesState = HermesStateReader()
+        var openClawState = OpenClawStateReader()
         /// Bytes of a rollout that one sample searches for a turn marker.
         var rolloutSearchBudget = CodexRolloutTracker.defaultSearchBudget
         /// Session stores of the agents that are judged by activity, by
@@ -194,6 +195,8 @@ final class EvidenceCollector: EvidenceCollecting {
     /// Each Hermes Agent process that had a turn, and when its last one
     /// ended: the files hold the turn in progress and not its end.
     private var hermesTurns: [ProcessIdentity: (working: Bool, endedAt: Date?)] = [:]
+    private var openClawListing: (at: Date, databases: [URL])?
+    private var openClawDatabases: [String: (signatures: [FileSignature?], state: OpenClawAgentState?)] = [:]
     /// The hook states of the sample that is being collected, by pid.
     private var sampleHookStates: [Int32: HookStateReader.State] = [:]
     private var transcriptChoices: [ProcessIdentity: (at: Date, path: String?)] = [:]
@@ -463,6 +466,8 @@ final class EvidenceCollector: EvidenceCollecting {
             fillGrok(&evidence, instance: instance, now: now, watched: &watched)
         } else if definition.id == AgentCatalog.hermesID {
             fillHermes(&evidence, instance: instance, matches: matches, now: now, watched: &watched)
+        } else if definition.id == AgentCatalog.openClawID {
+            fillOpenClaw(&evidence, instance: instance, now: now, watched: &watched)
         } else if let target = sources.fileActivityTargets[definition.id] {
             let activity = activities[definition.id] ?? pollActivity(definition.id, target: target)
             activities[definition.id] = activity
@@ -854,6 +859,35 @@ final class EvidenceCollector: EvidenceCollecting {
         }
         hermesDatabases = hermesDatabases.filter { databases.contains($0.key) }
         return states
+    }
+
+    // MARK: OpenClaw
+
+    /// The gateway runs the turns of every session, and the rows of the
+    /// databases carry no pid: every run in progress counts for the
+    /// gateway. A session in a terminal is a client of it and is judged
+    /// by the signs of activity. A database is read again only when it
+    /// or its WAL was written: a run that starts or ends is a write.
+    private func fillOpenClaw(_ evidence: inout AgentEvidence, instance: AgentInstance, now: Date, watched: inout Set<String>) {
+        guard instance.role == .engine else { return }
+        if openClawListing.map({ now.timeIntervalSince($0.at) >= Self.listingAge || $0.at > now }) ?? true {
+            openClawListing = (now, sources.openClawState.databases())
+        }
+        var states: [OpenClawAgentState?] = []
+        var known: [String: (signatures: [FileSignature?], state: OpenClawAgentState?)] = [:]
+        for database in openClawListing?.databases ?? [] {
+            let signatures = [database.path, database.path + "-wal", database.path + "-shm"].map(FileSignature.init(path:))
+            guard signatures[0] != nil else { continue }
+            var entry = openClawDatabases[database.path]
+            if entry?.signatures != signatures { entry = (signatures, OpenClawStateReader.state(inDatabase: database)) }
+            known[database.path] = entry
+            states.append(entry?.state)
+            watched.insert(signatures[1] != nil ? database.path + "-wal" : database.path)
+        }
+        openClawDatabases = known
+        guard let report = OpenClawSummary.report(of: states, now: now) else { return }
+        evidence.level = .state
+        evidence.reported = report
     }
 
     // MARK: Process use
