@@ -7,7 +7,8 @@ struct EvidenceSample: Equatable {
     var frame: EvidenceFrame
     /// The state and session files of the instances in the frame.
     var watchedFiles: Set<String> = []
-    /// The root process of each instance in the frame.
+    /// The root process of each instance in the frame, and the holder of
+    /// each command hold.
     var roots: Set<ProcessIdentity> = []
     /// Seconds the sample took to collect.
     var cost: TimeInterval = 0
@@ -98,6 +99,9 @@ final class EvidenceCollector: EvidenceCollecting {
         ]
         /// The folder the hook command writes into. Nil reads no hook state.
         var hookDirectory: URL?
+        /// The folder the command line tool writes its holds into. Nil
+        /// reads no hold.
+        var holdDirectory: URL?
         /// `~/.claude/settings.json`, for the Remote Control switch. Nil reads none.
         var claudeSettings: URL?
         var now: () -> Date = Date.init
@@ -108,6 +112,7 @@ final class EvidenceCollector: EvidenceCollecting {
         static func system() -> Sources {
             var sources = Sources(census: SystemProcessCensus(), assertions: SystemPowerAssertions(), power: SystemPowerContext(), openFiles: SystemOpenFiles())
             sources.hookDirectory = HookStateFile.directory()
+            sources.holdDirectory = HoldStore.directory()
             sources.claudeSettings = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude/settings.json")
             sources.awakeSeconds = SampleGap.awakeSeconds
             return sources
@@ -203,6 +208,7 @@ final class EvidenceCollector: EvidenceCollecting {
     private var transcriptChoices: [ProcessIdentity: (at: Date, path: String?)] = [:]
     private var activityReaders: [String: FileActivityReader] = [:]
     private var hookReader: HookStateReader?
+    private let holdStore: HoldStore?
     /// The session names of the sample that is being collected.
     private var sessionNames: [ProcessIdentity: String] = [:]
     private var claudeSettingsFiles = FileCache<RemoteAccessDetector.ClaudeSettings>()
@@ -221,6 +227,8 @@ final class EvidenceCollector: EvidenceCollecting {
         rolloutTails = CodexRolloutTracker(searchBudget: sources.rolloutSearchBudget)
         hookReader = sources.hookDirectory.map(HookStateReader.init(directory:))
         hookReader?.prepare()
+        holdStore = sources.holdDirectory.map(HoldStore.init(directory:))
+        holdStore?.prepare()
     }
 
     func collect(userNames: [String] = []) -> EvidenceSample {
@@ -249,6 +257,16 @@ final class EvidenceCollector: EvidenceCollecting {
         sampleHookStates = hookStates
         // A new state file is a new entry in the folder.
         if let hookReader { sample.watchedFiles.insert(hookReader.directory.path) }
+        if let holdStore {
+            let alive = Dictionary(snapshot.map { ($0.pid, $0.startTime) }, uniquingKeysWith: { first, _ in first })
+            sample.frame.holds = holdStore.live(now: now, startTime: { alive[$0] })
+            // A new hold is a new entry in the folder, and a holder that
+            // is killed leaves its file behind.
+            sample.watchedFiles.insert(holdStore.directory.path)
+            for hold in sample.frame.holds {
+                if let pid = hold.pid, let start = alive[pid] { sample.roots.insert(ProcessIdentity(pid: pid, startTime: start)) }
+            }
+        }
         sessionRollouts = codexSessionRollouts(of: instances, matches: matches, now: now)
         grokDirectories = grokSessionDirectories(of: instances)
         var activities: [String: FileActivity] = [:]

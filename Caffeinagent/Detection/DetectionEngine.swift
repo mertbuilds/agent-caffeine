@@ -39,8 +39,8 @@ protocol DetectionWatching: AnyObject {
 /// collector and the memory of the pure rules, and nothing else: it takes no
 /// power assertion and draws no UI.
 ///
-/// The timer runs every 2 seconds while an agent instance exists and every
-/// 5 seconds while none does. A write to a watched state file and the exit
+/// The timer runs every 2 seconds while an agent instance or a hold from
+/// the command line exists and every 5 seconds while none does. A write to a watched state file and the exit
 /// of an agent bring the next sample forward, 200 ms after the event.
 @MainActor
 final class DetectionEngine: ObservableObject {
@@ -213,7 +213,8 @@ final class DetectionEngine: ObservableObject {
         // A sample that an event asked for is still to come, and it sets
         // the timer again.
         if !resamplePending {
-            scheduleTick(after: sample.frame.agents.isEmpty ? Self.idleInterval : Self.activeInterval, resample: false)
+            let quiet = sample.frame.agents.isEmpty && sample.frame.holds.isEmpty
+            scheduleTick(after: quiet ? Self.idleInterval : Self.activeInterval, resample: false)
         }
     }
 
@@ -230,7 +231,7 @@ final class DetectionEngine: ObservableObject {
     private func decide(at now: Date, context: FrameContext) {
         let (next, memory) = HoldPolicy.decide(
             readings: readings, memory: policyMemory, mode: mode, enabled: enabled, pausedUntil: pausedUntil, reachableUntil: reachableUntil,
-            entitlement: entitlement, safety: safety, settings: settings, context: context,
+            holds: frame?.holds ?? [], entitlement: entitlement, safety: safety, settings: settings, context: context,
             mayHold: wakeGate.allowsHold(holding: decision.hold), now: now
         )
         policyMemory = memory

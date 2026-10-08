@@ -40,6 +40,9 @@ enum HoldHeadline: Equatable {
     /// The user asked the Mac to stay reachable until this time, and no
     /// agent keeps it awake.
     case reachable(until: Date)
+    /// A hold from the command line keeps the Mac awake, and no agent
+    /// does. The subject is what the holds are for, see `ManualHold.subject`.
+    case manualHold(HoldSubject)
     case idle(HoldSubject)
     case waitingReleased(HoldSubject)
     case noAgents
@@ -51,8 +54,17 @@ enum HoldHeadline: Equatable {
 
     var keepsAwake: Bool {
         switch self {
-        case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess, .reachable: return true
+        case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess, .reachable, .manualHold: return true
         case .idle, .waitingReleased, .noAgents, .safetyStop, .switchedOff, .paused, .notEntitled: return false
+        }
+    }
+
+    /// A safety stop, the switch, a pause or the license: the Mac can
+    /// sleep whatever asks for a hold.
+    var isStop: Bool {
+        switch self {
+        case .safetyStop, .switchedOff, .paused, .notEntitled: return true
+        default: return false
         }
     }
 
@@ -67,13 +79,15 @@ enum HoldHeadline: Equatable {
         case .alwaysOn: return "always on"
         case .remoteAccess: return "reachable while plugged in"
         case .reachable: return "stays reachable"
+        case .manualHold(.one(let name)): return "\(name) asked for it"
+        case .manualHold(.many(let count)): return "\(count) commands asked for it"
         case .idle, .waitingReleased, .noAgents, .safetyStop, .switchedOff, .paused, .notEntitled: return nil
         }
     }
 
     var text: String {
         switch self {
-        case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess, .reachable: return "Awake: \(awakeReason ?? "")"
+        case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess, .reachable, .manualHold: return "Awake: \(awakeReason ?? "")"
         case .idle(.one(let name)): return "Mac can sleep: \(name) is idle"
         case .idle(.many): return "Mac can sleep: all agents are idle"
         case .waitingReleased(let subject): return "Mac can sleep: \(Self.phrase(subject, one: "is waiting for you", many: "are waiting for you"))"
@@ -108,6 +122,9 @@ struct HoldDecision: Equatable {
     /// agent that works, finished a moment ago or is open, the mode,
     /// "stay reachable", or phone access on power. See `SleepOutlook`.
     var waitingEnds: Date? = nil
+    /// The holds from the command line whose time is not over, the oldest
+    /// first. They are listed in a stop too, and keep nothing awake then.
+    var manualHolds: [ManualHold] = []
 }
 
 struct PolicyMemory: Equatable {
@@ -126,33 +143,42 @@ struct PolicyMemory: Equatable {
 enum HoldPolicy {
     static func decide(
         readings: [AgentReading], memory: PolicyMemory, mode: AwakeMode, enabled: Bool, pausedUntil: Date? = nil,
-        reachableUntil: Date? = nil,
+        reachableUntil: Date? = nil, holds: [ManualHold] = [],
         entitlement: Entitlement?, safety: SafetyStop?, settings: DetectionSettings, context: FrameContext, mayHold: Bool = true, now: Date
     ) -> (HoldDecision, PolicyMemory) {
         let memory = remember(readings, memory: memory, settings: settings, now: now)
+        // The collector looked at the holders. The time is checked here
+        // again, because a decision is also made between two samples.
+        let manual = holds.filter { $0.isTimely(now: now) }
         let perAgent = readings.map { reading in
             AgentHold(reading: reading, cause: cause(of: reading, memory: memory, mode: mode, settings: settings, now: now))
         }
         if let stop = stopHeadline(enabled: enabled, pausedUntil: pausedUntil, entitlement: entitlement, safety: safety, now: now) {
             let released = perAgent.map { AgentHold(reading: $0.reading, cause: nil) }
-            return (HoldDecision(hold: false, lidClosedFlag: false, headline: stop, perAgent: released), memory)
+            return (HoldDecision(hold: false, lidClosedFlag: false, headline: stop, perAgent: released, manualHolds: manual), memory)
         }
         let reachable = reachableUntil.flatMap { now < $0 ? $0 : nil }
-        let headline = headline(perAgent, mode: mode, reachableUntil: reachable, settings: settings, context: context)
+        let headline = headline(perAgent, mode: mode, reachableUntil: reachable, manual: manual, settings: settings, context: context)
         let hold = headline.keepsAwake
         // Between the word that the Mac goes to sleep and the first sample
         // after its full wake nothing starts a hold. See `WakeGate`.
         if hold, !mayHold {
             let released = perAgent.map { AgentHold(reading: $0.reading, cause: nil) }
-            return (HoldDecision(hold: false, lidClosedFlag: false, headline: restHeadline(released, settings: settings), perAgent: released), memory)
+            return (
+                HoldDecision(hold: false, lidClosedFlag: false, headline: restHeadline(released, settings: settings), perAgent: released, manualHolds: manual),
+                memory
+            )
         }
         // Set with the hold, also on wall power: unplugging with the lid
         // closed must not race the flag. With the setting off the power
         // assertions alone cover a closed lid on wall power.
         let lidClosedFlag = hold && settings.stayAwakeLidClosedOnBattery
-        let staysAwake = mode != .agentWorking || reachable != nil || remoteAccessHolds(settings: settings, context: context)
+        let staysAwake = mode != .agentWorking || reachable != nil || !manual.isEmpty || remoteAccessHolds(settings: settings, context: context)
         let waitingEnds = staysAwake ? nil : waitingEnds(perAgent, memory: memory, settings: settings)
-        return (HoldDecision(hold: hold, lidClosedFlag: lidClosedFlag, headline: headline, perAgent: perAgent, waitingEnds: waitingEnds), memory)
+        return (
+            HoldDecision(hold: hold, lidClosedFlag: lidClosedFlag, headline: headline, perAgent: perAgent, waitingEnds: waitingEnds, manualHolds: manual),
+            memory
+        )
     }
 
     private static func remoteAccessHolds(settings: DetectionSettings, context: FrameContext) -> Bool {
@@ -227,10 +253,11 @@ enum HoldPolicy {
         return nil
     }
 
-    /// An agent that keeps the Mac awake is named before "stay
-    /// reachable": its reason is the one that counts while it works.
+    /// An agent that keeps the Mac awake is named before a hold from the
+    /// command line and before "stay reachable": its reason is the one
+    /// that counts while it works.
     private static func headline(
-        _ perAgent: [AgentHold], mode: AwakeMode, reachableUntil: Date?, settings: DetectionSettings, context: FrameContext
+        _ perAgent: [AgentHold], mode: AwakeMode, reachableUntil: Date?, manual: [ManualHold], settings: DetectionSettings, context: FrameContext
     ) -> HoldHeadline {
         if mode == .always { return .alwaysOn }
         func subject(_ cause: HoldCause) -> HoldSubject? {
@@ -240,6 +267,7 @@ enum HoldPolicy {
         if let waiting = subject(.waitingForUser) { return .waitingHeld(waiting) }
         if let finished = subject(.finishedRecently) { return .finishedRecently(finished) }
         if let open = subject(.open) { return .open(open) }
+        if let asked = HoldSubject(names: manual.map(\.subject)) { return .manualHold(asked) }
         if let reachableUntil { return .reachable(until: reachableUntil) }
         if remoteAccessHolds(settings: settings, context: context) { return .remoteAccess }
         return restHeadline(perAgent, settings: settings)
