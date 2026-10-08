@@ -39,6 +39,9 @@ enum ProcessMatcher: Equatable {
     /// An interpreter runs source that was passed on the command line
     /// (`python -c <source>`), and the source contains this.
     case inlineSource(contains: String)
+    /// argv[0] is this: the title a process gave itself. Not one of the
+    /// names the user's old list knew, so not in `processNames`.
+    case title(String)
 }
 
 /// Matches the arguments that follow the command.
@@ -154,6 +157,7 @@ struct AgentCatalog {
     static let claudeDesktopID = "claude-desktop"
     static let grokID = "grok"
     static let hermesID = "hermes-agent"
+    static let openClawID = "openclaw"
     /// `entrypoint` in the session file of a Claude Code that the Claude
     /// app started.
     static let claudeDesktopEntrypoint = "claude-desktop"
@@ -360,7 +364,23 @@ struct AgentCatalog {
         cli("mistral-vibe", "Mistral Vibe"),
         cli("neovate", "Neovate"),
         cli("opencode", "opencode", verified: true),
-        cli("openclaw", "OpenClaw"),
+        // Seen 2026-10-08, OpenClaw 2026.9.9 (docs/research/12-openclaw.md):
+        // `node /opt/homebrew/bin/openclaw onboard` with a child whose
+        // title is `openclaw` and whose arguments are gone. The gateway
+        // sets the title `openclaw-gateway` (read in the package, not seen
+        // running). It lives all day and works in turns, so it is an
+        // engine. No state of a turn is read yet: judged by activity.
+        AgentDefinition(
+            id: openClawID, displayName: "OpenClaw", level: .activity, kind: .cli,
+            matchers: [
+                AgentMatcher(.name("openclaw"), unless: [.firstIsOne(of: openClawCommands)]),
+                AgentMatcher(.title("openclaw-gateway")),
+            ],
+            exclusions: [AgentExclusion(process: .title("openclaw-gateway"), role: .engine)]
+                + openClawGatewayCommands.map { AgentExclusion(arguments: .leading(["gateway", $0])) }
+                + [AgentExclusion(arguments: .firstIsOne(of: ["gateway"]), role: .engine)],
+            verified: false
+        ),
         cli("openhands", "OpenHands"),
         cli("pi", "Pi"),
         cli("pochi", "Pochi"),
@@ -391,6 +411,24 @@ struct AgentCatalog {
         "memory", "migrate", "model", "monitoring", "pairing", "pause", "peer", "pets", "plugins", "profile", "prompt-size",
         "secrets", "security", "sessions", "setup", "skills", "skin", "slack", "status", "tools", "uninstall", "update", "usage",
         "vault", "verify", "webhook", "whatsapp", "whatsapp-cloud", "worktree",
+    ]
+
+    /// The commands of OpenClaw that run no turn, from the command tree
+    /// of its `docs/cli/index.md`. `agent`, `tui`, `chat`, `acp`, `node`,
+    /// `worker`, `cron` and the others that can run a turn are left
+    /// sessions.
+    private static let openClawCommands: Set<String> = [
+        "setup", "onboard", "configure", "config", "database", "completion", "doctor", "triage", "backup", "migrate", "security",
+        "secrets", "reset", "uninstall", "update", "channels", "directory", "skills", "plugins", "memory", "transcripts", "path",
+        "wiki", "status", "health", "sessions", "audit", "tasks", "logs", "models", "devices", "users", "approvals", "hooks",
+        "webhooks", "pairing", "qr", "docs", "dns",
+    ]
+
+    /// `openclaw gateway <command>` for the service and for questions to
+    /// a gateway that runs. `openclaw gateway` and `gateway run` are the
+    /// gateway itself.
+    private static let openClawGatewayCommands = [
+        "status", "install", "uninstall", "start", "stop", "restart", "call", "health", "probe", "discover", "usage-cost",
     ]
 
     private static let textFileExtensions: Set<String> = [
@@ -725,6 +763,8 @@ struct AgentCatalog {
             return command.interpreterRunsScript && command.inlineSource == nil && command.names.contains(name.lowercased())
         case .inlineSource(let part):
             return command.inlineSource?.contains(part) ?? false
+        case .title(let title):
+            return baseName(row.arguments.first ?? "").lowercased() == title
         }
     }
 
