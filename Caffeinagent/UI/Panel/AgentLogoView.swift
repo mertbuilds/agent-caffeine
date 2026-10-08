@@ -33,6 +33,7 @@ struct AgentLogoView: View {
         let scale = min(size.width, size.height) / AgentLogo.canvas
         context.scaleBy(x: scale, y: scale)
         for (layer, path) in zip(mark.layers, paths) {
+            context.opacity = layer.opacity
             context.fill(path, with: shading(layer.fill), style: FillStyle(eoFill: layer.evenOdd))
         }
     }

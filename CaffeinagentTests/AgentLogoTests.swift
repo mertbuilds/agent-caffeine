@@ -25,11 +25,14 @@ final class AgentLogoTests: XCTestCase {
     }
 
     func testEveryMarkDrawsOnItsCanvas() {
-        XCTAssertEqual(AgentLogo.marks.count, 26)
+        XCTAssertEqual(AgentLogo.marks.count, 27)
         // Some marks of the site reach a hair past the canvas.
         let canvas = CGRect(x: 0, y: 0, width: AgentLogo.canvas, height: AgentLogo.canvas).insetBy(dx: -0.25, dy: -0.25)
         for (name, logo) in AgentLogo.marks {
             XCTAssertFalse(logo.layers.isEmpty, name)
+            for layer in logo.layers {
+                XCTAssertTrue(layer.opacity > 0 && layer.opacity <= 1, name)
+            }
             let boxes = logo.layers.map { SVGPath.cgPath($0.path).boundingBoxOfPath }
             for box in boxes {
                 XCTAssertFalse(box.isNull || box.isEmpty, "\(name) \(box)")
