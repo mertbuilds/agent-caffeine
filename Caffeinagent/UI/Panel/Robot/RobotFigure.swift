@@ -55,9 +55,13 @@ struct RobotFigure: View {
         floatBegan = on ? CACurrentMediaTime() : nil
     }
 
+    private static let smallestBadgeUnit: CGFloat = 0.72
+
     @ViewBuilder
     private var badge: some View {
         if let symbol = look.badge {
+            // On a small tile the badge keeps a size that reads.
+            let unit = max(unit, Self.smallestBadgeUnit)
             Image(systemName: symbol)
                 .font(.system(size: unit * 13, weight: .medium))
                 .foregroundStyle(symbol.hasPrefix("battery") ? Color.red : Color.orange)

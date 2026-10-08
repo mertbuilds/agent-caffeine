@@ -11,6 +11,7 @@ struct AttentionLine: View {
             HStack(spacing: 8) {
                 message
                     .fixedSize()
+                Spacer(minLength: 0)
                 actions
             }
             if attention.actions == [.dismissSleepNote] {
@@ -22,18 +23,23 @@ struct AttentionLine: View {
                     actions
                 }
             } else {
-                VStack(spacing: 4) {
-                    message
-                        .multilineTextAlignment(.center)
-                        .fixedSize(horizontal: false, vertical: true)
-                    actions
+                // The actions stand below the text, on its leading edge.
+                Label {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(attention.text)
+                            .fixedSize(horizontal: false, vertical: true)
+                        actions
+                    }
+                } icon: {
+                    Image(systemName: symbol)
                 }
+                .labelStyle(AttentionLabelStyle(tint: tint))
             }
         }
         .font(.callout)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background(tint.opacity(0.1), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 

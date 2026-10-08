@@ -5,7 +5,9 @@ enum PanelMetrics {
     static let width: CGFloat = 320
     static let gutter: CGFloat = 16
     /// The side of the tile the robot sits on.
-    static let robotSize: CGFloat = 96
+    static let robotSize: CGFloat = 56
+    /// Between the tile and the headline next to it.
+    static let robotGap: CGFloat = 12
     /// The rounded box behind an agent's mark.
     static let logoBox: CGFloat = 28
     static let logoBoxRadius: CGFloat = 8

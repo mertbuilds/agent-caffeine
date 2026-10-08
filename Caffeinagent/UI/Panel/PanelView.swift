@@ -48,13 +48,7 @@ private struct PanelStateView: View {
     var body: some View {
         VStack(spacing: 0) {
             VStack(spacing: 12) {
-                VStack(spacing: PanelMetrics.batteryLineTop) {
-                    HeroView(state: state)
-                    if let battery = state.battery {
-                        BatteryLine(battery: battery)
-                            .transition(.opacity)
-                    }
-                }
+                HeroView(state: state)
                 if let sleepNote = state.sleepNote {
                     AttentionLine(attention: sleepNote, perform: perform)
                         .transition(.opacity)
@@ -64,9 +58,7 @@ private struct PanelStateView: View {
                         .transition(.opacity)
                 }
             }
-            .padding(.horizontal, PanelMetrics.gutter)
-            .padding(.top, 12)
-            .padding(.bottom, 16)
+            .padding(PanelMetrics.gutter)
             Divider()
             AgentList(
                 groups: state.groups, moreIdle: state.moreIdle, moreIdleTitle: state.moreIdleTitle,
