@@ -62,19 +62,19 @@ export const laptop = {
 } as const;
 
 /**
- * The hero, in seconds into its loop: the lid closes, the agents work on
- * while the clock runs, and one of them finishes. `lift`, `walk` and `down`
- * are for the cut where the closed laptop is carried, `notice` for the cuts
- * that end on the notification.
+ * The hero, in seconds into its loop: the app shows on the open display, the
+ * lid closes, the agents work on while the clock runs, and one of them
+ * finishes. `lift`, `walk` and `down` are for the cut where the closed laptop
+ * is carried, `notice` for the cuts that end on the notification.
  */
 export const heroScene = {
-  loop: 8.2,
+  loop: 8.6,
   rest: 3,
-  close: [0.5, 1.6],
-  lift: [1.9, 2.6],
-  walk: [2.2, 6.6],
-  clock: [1.7, 6.4],
-  down: [6.3, 7],
-  finish: 6.5,
-  notice: [7, 7.45],
+  close: [1.3, 2.4],
+  lift: [2.6, 3.3],
+  walk: [2.9, 6.9],
+  clock: [2.3, 6.8],
+  down: [6.7, 7.4],
+  finish: 6.9,
+  notice: [7.4, 7.85],
 } as const;

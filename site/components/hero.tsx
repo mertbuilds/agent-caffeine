@@ -25,9 +25,14 @@ const GLYPH = {
 /** "a", "b" and "c" are the app over the closed laptop, in the cuts of `HeroScene`. "z" is the hero before them, kept for the comparison at `/hero-lab`. */
 export type HeroVariant = "a" | "b" | "c" | "z";
 
-function WorksWith() {
+/** Where the hero's columns start, and with them the left edge of its words: the classes that put a row and a column at the left from there. */
+type Side = { row: string; column: string };
+const FROM_MD: Side = { row: "md:justify-start", column: "md:items-start" };
+const FROM_LG: Side = { row: "lg:justify-start", column: "lg:items-start" };
+
+function WorksWith({ side }: { side: Side }) {
   return (
-    <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-sm text-muted md:justify-start">
+    <div className={`flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-sm text-muted ${side.row}`}>
       <span>Works with</span>
       <ul className="flex items-center gap-3">
         {SHOWN.map((agent) => (
@@ -47,18 +52,18 @@ function WorksWith() {
   );
 }
 
-function Cta({ release }: { release: Release | null }) {
+function Cta({ release, side }: { release: Release | null; side: Side }) {
   return release === null ? (
-    <div className="flex flex-col items-center gap-3 md:items-start">
+    <div className={`flex flex-col items-center gap-3 ${side.column}`}>
       <BuyButton placement="hero">Buy for {PRICE}</BuyButton>
       <p className="text-sm text-muted">Pay once. No subscription · macOS 13 or later, Apple silicon and Intel</p>
     </div>
   ) : (
-    <div className="flex flex-col items-center gap-4 md:items-start">
+    <div className={`flex flex-col items-center gap-4 ${side.column}`}>
       <DownloadButton release={release} placement="hero">
         <TryFree />
       </DownloadButton>
-      <ul className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-sm text-muted md:justify-start">
+      <ul className={`flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-sm text-muted ${side.row}`}>
         <li className="flex items-center gap-1.5">
           <svg {...GLYPH} height="10.5" viewBox="0 0 12 10.5">
             <path d="M.75 3h10.5v2.5H.75zM1.75 5.5v4.25h8.5V5.5M6 3v6.75M6 3C4.6 3 3.4 2.6 3.4 1.7c0-.6.45-.95.95-.95C5.5.75 6 2 6 3Zm0 0c1.4 0 2.6-.4 2.6-1.3 0-.6-.45-.95-.95-.95C6.5.75 6 2 6 3Z" />
@@ -98,8 +103,8 @@ function ClassicHero({ release }: { release: Release | null }) {
             A menu bar app for Mac. It keeps your Mac awake while Claude Code, Codex or another AI coding agent works, and lets it sleep when the work is done
           </p>
         </div>
-        <WorksWith />
-        <Cta release={release} />
+        <WorksWith side={FROM_MD} />
+        <Cta release={release} side={FROM_MD} />
       </div>
       {/* The base fills 68.28% of the scene, so the scene runs 23.23% of its column past each side and the base spans the column exactly. */}
       <div className="md:-mx-[23.23%]">
@@ -116,20 +121,20 @@ export async function Hero({ variant = "a" }: { variant?: HeroVariant }) {
   }
   // On a phone the picture comes right after the headline, so the first screen shows it with the closed laptop. Side by side, the words and the download are one column.
   return (
-    <section className="relative isolate mx-auto grid w-full max-w-[1120px] items-center gap-x-12 gap-y-7 pb-12 pt-8 text-center md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] md:grid-rows-[1fr_auto_auto_auto_1fr] md:min-h-[calc(100svh-3.5rem)] md:py-10 md:text-left">
+    <section className="relative isolate mx-auto grid w-full max-w-[1120px] items-center gap-x-12 gap-y-5 pb-12 pt-8 text-center lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:grid-rows-[1fr_auto_auto_auto_1fr] lg:gap-y-7 lg:min-h-[calc(100svh-3.5rem)] lg:py-10 lg:text-left">
       <GridTexture />
-      <h1 className="relative z-10 text-balance text-[clamp(2.25rem,9vw,2.75rem)] font-medium leading-[1.1] tracking-[-0.02em] md:col-start-1 md:row-start-2 md:text-[clamp(2.5rem,4.2vw,3.25rem)]">
-        Close your Mac. <span className="text-accent md:block">Your agents keep working</span>
+      <h1 className="relative z-10 text-[clamp(2.25rem,9vw,2.75rem)] font-medium leading-[1.1] tracking-[-0.02em] lg:col-start-1 lg:row-start-2 lg:text-[clamp(2.5rem,4.2vw,3.25rem)]">
+        Close your Mac <span className="block text-balance text-accent">Your agents keep working</span>
       </h1>
-      <div className="md:col-start-2 md:row-span-5 md:row-start-1">
+      <div className="min-w-0 lg:col-start-2 lg:row-span-5 lg:row-start-1">
         <HeroScene cut={variant} />
       </div>
-      <p className="relative z-10 mx-auto max-w-[26rem] text-pretty text-lg leading-relaxed text-muted md:col-start-1 md:row-start-3 md:mx-0 md:-mt-2 md:max-w-[31rem]">
+      <p className="relative z-10 mx-auto max-w-[26rem] text-pretty text-lg leading-relaxed text-muted lg:col-start-1 lg:row-start-3 lg:mx-0 lg:-mt-2 lg:max-w-[31rem]">
         agent caffeine keeps your Mac awake while Claude Code, Codex or Cursor works, also with the lid closed. It lets your Mac sleep when they are done
       </p>
-      <div className="relative z-10 flex flex-col items-center gap-7 md:col-start-1 md:row-start-4 md:items-start">
-        <WorksWith />
-        <Cta release={release} />
+      <div className="relative z-10 flex flex-col items-center gap-7 lg:col-start-1 lg:row-start-4 lg:items-start">
+        <WorksWith side={FROM_LG} />
+        <Cta release={release} side={FROM_LG} />
       </div>
     </section>
   );
