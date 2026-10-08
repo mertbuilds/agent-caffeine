@@ -5,7 +5,6 @@ import { Analytics } from "@/components/analytics";
 import { DevKnobs } from "@/components/dev-knobs";
 import { HashScroll } from "@/components/hash-scroll";
 import { Header } from "@/components/header";
-import { agentsMoreThan } from "@/lib/agents";
 import { PRICE } from "@/lib/pricing";
 import { getLatestRelease } from "@/lib/release";
 import { THEME_SCRIPT } from "@/lib/theme";
@@ -28,7 +27,7 @@ export async function generateMetadata(): Promise<Metadata> {
     alternates: { canonical: "/" },
     title: "Agent Caffeine · Keep your Mac awake while AI agents work",
     description:
-      `Agent-aware sleep prevention for macOS. Detects Claude Code, Codex, opencode and more than ${agentsMoreThan} AI coding agents. Lets the Mac sleep when they are idle or wait for you. ${offer}`,
+      `Agent Caffeine keeps your Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are done. ${offer}`,
     openGraph: {
       title: "Agent Caffeine",
       description:
