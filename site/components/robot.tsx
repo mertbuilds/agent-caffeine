@@ -97,13 +97,11 @@ type RobotProps = {
   paused?: boolean;
   /** A still picture of the pose, as the app shows it with Reduce Motion. */
   still?: boolean;
-  /** Only the float moves: the loops inside the drawing (steam, the antenna's light, the blink) stand still. For a small robot beside other motion. */
-  calm?: boolean;
   /** How far the pose's tone has come in, from 0 (the full colour of the robot awake) to 1, as a CSS number such as `var(--rest)`. With it the tone follows that number and does not fade by itself. */
   rest?: string;
 };
 
-export const Robot = memo(function Robot({ pose, size = SIDE, paused = false, still = false, calm = false, rest }: RobotProps) {
+export const Robot = memo(function Robot({ pose, size = SIDE, paused = false, still = false, rest }: RobotProps) {
   const id = `robot-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const look = LOOKS[pose];
   const lift = `robot-layer ${look.lively ? "robot-float" : ""}`;
@@ -118,7 +116,6 @@ export const Robot = memo(function Robot({ pose, size = SIDE, paused = false, st
     <span
       aria-hidden="true"
       className="robot relative block shrink-0"
-      data-calm={calm || undefined}
       data-paused={paused || undefined}
       data-still={still || undefined}
       style={{ width: size, height: size }}

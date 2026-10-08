@@ -221,7 +221,7 @@ const Panel = memo(function Panel({ minute, paused, still }: { minute: number; p
       <div className="flex items-center gap-3 px-4 py-3">
         {/* A robot that sleeps stands still here: the one that breathes in its sleep is in the menu further down the page. */}
         <span className="flex" data-hero="robot">
-          <Robot calm paused={paused} pose={stance} rest={stance === "asleep" ? "var(--rest)" : undefined} size={48} still={stance === "asleep"} />
+          <Robot paused={paused} pose={stance} rest={stance === "asleep" ? "var(--rest)" : undefined} size={48} still={stance === "asleep"} />
         </span>
         <p className="flex min-w-0 flex-col gap-0.5">
           <span className="text-[15px] leading-5">{title}</span>

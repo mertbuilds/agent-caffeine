@@ -433,8 +433,7 @@
 /*
  * The same arc in the hero (components/hero-scene.tsx), where three of them go round for most of the
  * loop: a ring cut out of a box by a mask, and under it a wedge that turns. Only a transform moves,
- * so the browser turns it without working out a style or drawing a frame on the main thread. The robot
- * there keeps its float and gives up the loops inside its drawing, which cost a frame each as well.
+ * so the browser turns it without working out a style or drawing a frame on the main thread.
  */
 @keyframes ring-turn {
   to {
@@ -464,10 +463,6 @@
 
 .panel-paused .ring-turn::before {
   animation-play-state: paused;
-}
-
-.robot[data-calm] svg * {
-  animation: none !important;
 }
 
 @media (prefers-reduced-motion: reduce) {
