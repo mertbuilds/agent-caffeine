@@ -31,7 +31,7 @@ const CLOCK_START = 14 * 60 + 2;
  */
 const GLASS = { left: 23.07, top: 6.21, width: 53.86, height: 35, round: 0.87 };
 /** The scene's width at which the menu is drawn at its own size, and the glass at that width, in pixels. */
-const FULL = 810;
+const FULL = 705;
 const BOX = { width: (GLASS.width * FULL) / 100, height: (GLASS.height * FULL) / 100 };
 /** The gap between the glass's edge and the menu bar, in pixels at full size. */
 const GAP = 3;
@@ -45,15 +45,14 @@ const DESKTOP_KEPT = 0.45;
 const TONE_DOWN = 0.8;
 /** How much of itself the menu keeps once the Mac sleeps. */
 const ASLEEP = 0.45;
-/** The moment of the loop that stands for all of it, for a reader who asked for less motion: the lid is closed, three agents work and one has just finished. */
-const STILL = 3.78;
+/** The moment of the loop that stands for all of it, for a reader who asked for less motion: the lid is closed, two agents work and one has just finished. */
+const STILL = 3.38;
 
 /** The agents at work, the longest first as the app lists them. `before` is the minutes each has worked when the lid closes, and `done` the minutes after that when it finishes. */
 const AGENTS: readonly { icon: AgentIconName; name: string; folder: string; before: number; done: number }[] = [
-  { icon: "claudecode", name: "Claude Code", folder: "wiki", before: 11, done: 39 },
-  { icon: "codex", name: "Codex", folder: "api", before: 8, done: 30 },
-  { icon: "cursor", name: "Cursor", folder: "website", before: 5, done: 21 },
-  { icon: "opencode", name: "opencode", folder: "docs", before: 3, done: 12 },
+  { icon: "claudecode", name: "Claude Code", folder: "wiki", before: 11, done: 27 },
+  { icon: "codex", name: "Codex", folder: "api", before: 8, done: 18 },
+  { icon: "cursor", name: "Cursor", folder: "website", before: 5, done: 9 },
 ];
 const FIRST_DONE = AGENTS[AGENTS.length - 1];
 const LAST_DONE = AGENTS[0];
@@ -173,7 +172,7 @@ function MenuBar({ time, look, still }: { time: string; look: IconLook; still: b
 
 /**
  * A cut of the app's menu that fits the display: the robot beside the headline, and the agents, without the bar of controls at the bottom.
- * An agent at work has its folder and its time below its name, and one that is idle has its line at the far edge, as in the app. `rest` is how far the robot's tile has lost its colour. With `still` a number that changes does not roll.
+ * An agent has its folder beside its name and its line below. `rest` is how far the robot's tile has lost its colour. With `still` a number that changes does not roll.
  */
 function Panel({ title, subtitle, stance, rest, rows, paused, still }: { title: string; subtitle: string; stance: Pose; rest: number; rows: readonly Row[]; paused: boolean; still: boolean }) {
   return (
@@ -193,22 +192,14 @@ function Panel({ title, subtitle, stance, rest, rows, paused, still }: { title: 
         {rows.map((row) => (
           <li key={row.icon} className="flex h-10 items-center gap-2">
             <Mark icon={row.icon} working={row.working} />
-            {row.working ? (
-              <span className="flex min-w-0 flex-1 flex-col gap-px leading-4">
-                <span className="truncate">{row.title}</span>
-                <span className={`truncate text-[12px] ${MUTED}`}>
-                  <Flow still={still}>{row.detail}</Flow>
-                </span>
+            {/* A finished agent keeps the two lines of one at work, each of a set height, so its name stays where it was. In the app an idle agent has one line. */}
+            <span className="flex min-w-0 flex-1 flex-col gap-px leading-4">
+              <span className={`h-4 truncate ${row.working ? "" : MUTED}`}>{row.title}</span>
+              <span className={`h-4 truncate text-[12px] ${MUTED}`}>
+                <Flow still={still}>{row.detail}</Flow>
               </span>
-            ) : (
-              <>
-                <span className={`min-w-0 flex-1 truncate ${MUTED}`}>{row.title}</span>
-                <span className={`shrink-0 text-[12px] ${MUTED}`}>
-                  <Flow still={still}>{row.detail}</Flow>
-                </span>
-                <Check shown={row.checked} />
-              </>
-            )}
+            </span>
+            {!row.working && <Check shown={row.checked} />}
           </li>
         ))}
       </ul>
@@ -323,7 +314,7 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
     const finished = secondAt(agent.done);
     return {
       icon: agent.icon,
-      title: working ? `${agent.name} · ${agent.folder}` : agent.name,
+      title: `${agent.name} · ${agent.folder}`,
       // Staged, not the app's words: the app says "Finished a moment ago" for a minute and then "Idle for 9 minutes". Here a finished agent keeps one short word, so that what is done reads apart from what works.
       detail: working ? detailOf({ state: "working", command: false, since: -agent.before * 60, before: "idle" }, minutes * 60) : "Finished",
       working,
@@ -335,8 +326,8 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
   const bob = carried * Math.sin(walked * Math.PI * 16);
   const label =
     cut === "b"
-      ? "A laptop shows the Agent Caffeine menu with four AI coding agents at work. The lid closes and the laptop is carried away. The agents keep working and finish one by one, and then the Mac can sleep"
-      : "A laptop shows the Agent Caffeine menu on its display, with four AI coding agents at work. The lid closes, and the menu stays in a dashed outline of the display: the agents keep working and finish one by one. Two minutes after the last one the menu says that the Mac can sleep";
+      ? "A laptop shows the Agent Caffeine menu with three AI coding agents at work. The lid closes and the laptop is carried away. The agents keep working and finish one by one, and then the Mac can sleep"
+      : "A laptop shows the Agent Caffeine menu on its display, with three AI coding agents at work. The lid closes, and the menu stays in a dashed outline of the display: the agents keep working and finish one by one. Two minutes after the last one the menu says that the Mac can sleep";
 
   // How much of themselves the desktop, the outline and the menu show: less once the Mac sleeps.
   const lit = 1 - (1 - ASLEEP) * dimmed;
@@ -378,7 +369,7 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
               />
             </svg>
             <div
-              className="absolute left-1/2 top-0 flex origin-top -translate-x-1/2 scale-[calc(660/810)] flex-col items-center gap-1 sm:scale-100 lg:scale-[calc(630/810)] xl:scale-100"
+              className="absolute left-1/2 top-0 flex origin-top -translate-x-1/2 scale-[calc(660/705)] flex-col items-center gap-1 sm:scale-[calc(810/705)] lg:scale-[calc(630/705)] xl:scale-[calc(810/705)]"
               style={{ width: BOX.width, height: BOX.height, padding: GAP, opacity: lit }}
             >
               <MenuBar look={iconLook(stance)} still={cutting} time={clock(CLOCK_START + Math.floor(minutes))} />
