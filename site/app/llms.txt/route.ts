@@ -27,7 +27,7 @@ const TEXT = `# Agent Caffeine
 - Pause for 30 minutes, 1 hour or until tomorrow. Agent Caffeine starts again by itself.
 - Stay reachable for 1, 2 or 4 hours: the Mac stays awake until that time, also when no agent works, so a message from a phone (Claude Code Remote Control, Codex remote) reaches the agent. On battery with the lid closed it needs the helper, and it uses about 1% of battery per hour. A message cannot wake a Mac that sleeps.
 - Notifications, each with its own switch: an agent is waiting for your answer (on by default), and an agent finished (off by default).
-- A command line tool and an MCP server. \`agent-caffeine hold -- <command>\` keeps the Mac awake while the command runs and ends with its exit code. \`agent-caffeine hold --for 2h\` keeps it awake for a time (1 hour by default, 12 hours at most), and \`agent-caffeine release\` ends that. \`agent-caffeine mcp\` is an MCP server on stdio with the tools \`hold_awake\`, \`release\` and \`status\`. "Set up for agents" in Settings adds a skill to the agents on the Mac, so an agent asks by itself before a long command. Each hold has a line in the menu with "Stop". A low battery, heat, a pause and the switch still let the Mac sleep.
+- A command line tool and an MCP server. \`agent-caffeine hold -- <command>\` keeps the Mac awake while the command runs and ends with its exit code. \`agent-caffeine hold --for 2h\` keeps it awake for a time (1 hour by default, 12 hours at most), and \`agent-caffeine release\` ends that. \`agent-caffeine mcp\` is an MCP server on stdio with the tools \`hold_awake\`, \`release\` and \`status\`. "Set up for agents" in Settings adds a skill to the agents on the Mac, so an agent asks by itself before a long command: asked to render an animation, it runs \`agent-caffeine hold --reason "Blender render" -- blender -b scene.blend -a\`. Each hold has a line in the menu with "Stop". A low battery, heat, a pause and the switch still let the Mac sleep.
 - Keyboard shortcuts that work in every app. By default Control+Option+Command+C turns Agent Caffeine on or off, and Control+Option+Command+P pauses it for 1 hour. You can choose other keys.
 - The menu bar icon can be hidden. The app keeps the Mac awake the same way without it.
 - A 7-day free trial with every feature. It starts the first time the app opens and needs no account, no card and no key. After 7 days the app stops keeping the Mac awake until a license key is entered. The app and its settings stay.
@@ -38,7 +38,7 @@ const TEXT = `# Agent Caffeine
 
 ## Links
 
-- [Home](${SITE_URL}/): product, how it works, price, questions
+- [Home](${SITE_URL}/): product, examples, a demo, price, questions
 - [Compare](${SITE_URL}/compare): Agent Caffeine next to Adrafinil, Hold My Lid, LidRun, Clamshell and Amphetamine, with the price first and a source for each tool
 - [Privacy](${SITE_URL}/privacy): what the app, a purchase and the website collect
 - [Terms](${SITE_URL}/terms): license, trial, payment, refunds and liability
