@@ -30,7 +30,7 @@ export default function OgImage() {
           Agent Caffeine
         </p>
         <h1 className="text-[76px] font-medium leading-[1.06] tracking-[-0.02em]">
-          Close your Mac
+          Close your lid
           <br />
           <span className="text-[#5aa2ff]">with no worry</span>
         </h1>
