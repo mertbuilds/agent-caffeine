@@ -4,7 +4,6 @@ import { easeInOut } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { AgentIcon, type AgentIconName } from "@/components/agent-icons";
 import { Flow, PanelSurface } from "@/components/agents-panel";
-import { lidBrightness, lidDegrees } from "@/components/laptop/geometry";
 import { Laptop } from "@/components/laptop/laptop";
 import { MenuIcon } from "@/components/menu-icon";
 import { Robot } from "@/components/robot";
@@ -39,7 +38,7 @@ const GAP = 3;
 
 /** Seconds the check takes to come in. */
 const CHECK_IN = 0.35;
-/** The Mac's desktop, and how much of it stays in the outline of the display once the lid is closed. */
+/** The Mac's desktop, and how much of itself it keeps in the outline of the display once the lid is closed. */
 const DESKTOP = "bg-[radial-gradient(130%_100%_at_50%_100%,#3b82f0,#12306e_65%,#0a1c44)]";
 const DESKTOP_KEPT = 0.45;
 /** Seconds the robot's tile takes to lose its colour once the Mac can sleep. */
@@ -261,6 +260,27 @@ function Ground({ shown, travelled }: { shown: number; travelled: number }) {
   );
 }
 
+type Hold = { time?: number; wind?: number };
+
+/**
+ * For a look at one moment of the loop while the site is developed:
+ * `window.dispatchEvent(new CustomEvent("hero-hold", { detail: { time: 1.6 } }))`
+ * holds the scene at that second, `{ wind: 0.5 }` holds it half way through
+ * the wind back, and `{ detail: null }` lets it go. A production build never holds.
+ */
+function useHold(): Hold | null {
+  const [hold, setHold] = useState<Hold | null>(null);
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development") {
+      return;
+    }
+    const onHold = (event: Event) => setHold(event instanceof CustomEvent ? (event.detail as Hold | null) : null);
+    window.addEventListener("hero-hold", onHold);
+    return () => window.removeEventListener("hero-hold", onHold);
+  }, []);
+  return hold;
+}
+
 export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
   const ref = useRef<HTMLDivElement>(null);
   const seen = useSeen(ref, 0.3);
@@ -287,12 +307,14 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
     setWinding(at < last);
   }
 
-  const cutting = winding || !begun;
-  const time = reduced ? STILL : cutting ? 0 : at * heroScene.loop;
+  const hold = useHold();
+  const wound = hold !== null ? (hold.wind ?? null) : !reduced && winding ? at : null;
+  const cutting = hold !== null || winding || !begun;
+  const time = hold !== null ? (hold.time ?? 0) : reduced ? STILL : cutting ? 0 : at * heroScene.loop;
   const span = ([from, to]: Span, ease?: (share: number) => number) => stretch(time, from, to, ease);
 
-  const closed = !reduced && winding ? at : span(heroScene.close, easeInOut);
-  const dimmed = !reduced && winding ? at : span(heroScene.dim, easeInOut);
+  const closed = wound ?? span(heroScene.close, easeInOut);
+  const dimmed = wound ?? span(heroScene.dim, easeInOut);
   const minutes = minutesAt(time);
   const line = headlineAt(minutes);
   const stance = pose(line);
@@ -316,8 +338,8 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
       ? "A laptop shows the Agent Caffeine menu with four AI coding agents at work. The lid closes and the laptop is carried away. The agents keep working and finish one by one, and then the Mac can sleep"
       : "A laptop shows the Agent Caffeine menu on its display, with four AI coding agents at work. The lid closes, and the menu stays in a dashed outline of the display: the agents keep working and finish one by one. Two minutes after the last one the menu says that the Mac can sleep";
 
-  // The dashed outline of the display comes in as the lid leaves it.
-  const ghost = stretch(closed, 0.15, 0.85, easeInOut);
+  // How much of themselves the desktop, the outline and the menu show: less once the Mac sleeps.
+  const lit = 1 - (1 - ASLEEP) * dimmed;
 
   return (
     <div ref={ref} role="img" aria-label={label} className="flex justify-center">
@@ -328,17 +350,23 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
             className="absolute inset-0"
             style={{ perspective: "200cqw", perspectiveOrigin: "50% 22%", transform: `translateY(${-(carried * 5 + bob * 0.6)}cqw)` }}
           >
-            <Laptop closed={closed} display={lidBrightness(lidDegrees(closed))} grounded={1 - carried}>
-              <div className={`h-full ${DESKTOP}`} />
+            {/* The lid's own glass is dark: the one desktop of the scene lies flat over it, below. */}
+            <Laptop closed={closed} display={1} grounded={1 - carried}>
+              <div className="h-full bg-[#0d0d0d]" />
             </Laptop>
           </div>
           <div
             className="absolute"
-            style={{ left: `${GLASS.left}%`, top: `${GLASS.top}cqw`, width: `${GLASS.width}%`, height: `${GLASS.height}cqw`, opacity: 1 - (1 - ASLEEP) * dimmed }}
+            style={{ left: `${GLASS.left}%`, top: `${GLASS.top}cqw`, width: `${GLASS.width}%`, height: `${GLASS.height}cqw` }}
           >
-            {/* The desktop stays in the outline, paler than on the display. */}
-            <div className={`absolute inset-0 ${DESKTOP}`} style={{ borderRadius: `${GLASS.round}cqw`, opacity: ghost * DESKTOP_KEPT }} />
-            <svg className="absolute inset-0 size-full overflow-visible" fill="none" style={{ opacity: ghost }} viewBox={`0 0 ${GLASS.width} ${GLASS.height}`}>
+            {/*
+              One desktop that never moves: it lies on the glass of the open display and stays there, paler, as the lid
+              goes down behind it. The page's ground under it keeps the moving lid from showing through, also while
+              the menu is dim: so the ground itself never dims.
+            */}
+            <div className="absolute inset-0 bg-bg" style={{ borderRadius: `${GLASS.round}cqw` }} />
+            <div className={`absolute inset-0 ${DESKTOP}`} style={{ borderRadius: `${GLASS.round}cqw`, opacity: (1 - (1 - DESKTOP_KEPT) * closed) * lit }} />
+            <svg className="absolute inset-0 size-full overflow-visible" fill="none" style={{ opacity: closed * lit }} viewBox={`0 0 ${GLASS.width} ${GLASS.height}`}>
               <rect
                 height={GLASS.height}
                 rx={GLASS.round}
@@ -351,7 +379,7 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
             </svg>
             <div
               className="absolute left-1/2 top-0 flex origin-top -translate-x-1/2 scale-[calc(660/810)] flex-col items-center gap-1 sm:scale-100 lg:scale-[calc(630/810)] xl:scale-100"
-              style={{ width: BOX.width, height: BOX.height, padding: GAP }}
+              style={{ width: BOX.width, height: BOX.height, padding: GAP, opacity: lit }}
             >
               <MenuBar look={iconLook(stance)} still={cutting} time={clock(CLOCK_START + Math.floor(minutes))} />
               <div className="w-[320px]">
