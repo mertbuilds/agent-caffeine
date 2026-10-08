@@ -49,6 +49,19 @@ Some agents can run a command when their state changes. With hooks on, an agent 
 - The lines run `CaffeinagentHook`, a small command inside the app in `/Applications`, never the app itself. It reads the event, writes one small state file per agent process to `~/Library/Application Support/com.caffeinagent.app/hooks/`, prints nothing and always exits 0. It keeps the state and the name of the event, and nothing you or the agent typed. The app does not have to run, and the lines do nothing when the app is gone.
 - Hooks need the app in `/Applications`, because the lines point there.
 
+## Command line and MCP
+
+A script, a long job or an agent that Agent Caffeine does not know can ask for the Mac to stay awake, and let it go again. The tool is `agent-caffeine`, inside the app at `Contents/MacOS/agent-caffeine`. Settings > Agents > Command line shows its path, the command that links it into `~/.local/bin`, and the entry for an agent's MCP servers. The app writes nothing outside its own folders, so you run that command yourself.
+
+- `agent-caffeine hold --for 30m [--reason "text"]` keeps the Mac awake for a time: `90s`, `30m`, `2h`. One hour with no `--for`, 12 hours at most.
+- `agent-caffeine hold [--reason "text"] -- <command> [args...]` runs the command, keeps the Mac awake while it runs, and ends with the exit code of the command. A signal sent to the tool is passed on to the command. The hold ends after 24 hours at the latest, and the command runs on.
+- `agent-caffeine release [<id> | --all]` ends a hold. `agent-caffeine status [--json]` lists the holds and says whether the Mac can sleep.
+- `agent-caffeine mcp` is an MCP server on stdin and stdout with three tools: `hold_awake` (`minutes` from 1 to 720, `reason`), `release` (`id`, or the holds of the session) and `status`.
+- A hold is one small file in `~/Library/Application Support/com.caffeinagent.app/holds/`, which the app reads with every sample and watches. No daemon and no socket. A timed hold is dead at its time. A command hold is dead when the tool that holds it is gone, checked by pid and start time, so a pid that is used again keeps nothing awake. A dead hold is removed.
+- A hold is a reason to stay awake like an agent at work, and goes through the same decision. The battery limit, heat, a pause, the switch and a trial that ended still let the Mac sleep. In the menu each hold has a line with "Stop".
+- `hold --for` is refused while the app does not run. `hold -- <command>` runs the command all the same and says so on stderr.
+- `AGENT_CAFFEINE_HOME` names another folder in place of the app's own. It is for tests and development.
+
 ## Setup window
 
 The first launch opens a setup window once. It names the agents it found, offers the hooks of the agents that have them, and offers the lid closed helper on a Mac with a battery. Every step can be skipped, and the app works the same while the window is open. Everything in it is also in Settings.

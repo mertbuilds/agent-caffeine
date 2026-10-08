@@ -124,6 +124,31 @@ final class DetectionEngineTests: XCTestCase {
         return EvidenceSample(frame: EvidenceFrame(at: now, agents: [agent]), watchedFiles: ["/sessions/100.json"], roots: [identity], cost: 0.001)
     }
 
+    /// A hold from the command line is sampled like an agent: it holds,
+    /// it is looked at every two seconds, and it lets go when it is gone.
+    func testAHoldFromTheCommandLineHoldsWithNoAgent() {
+        state = nil
+        var holds = [ManualHold.timed(id: "aaaa0001", length: 5, now: Self.start)]
+        collector.next = { [unowned self] in EvidenceSample(frame: EvidenceFrame(at: self.now, agents: [], holds: holds), cost: 0.001) }
+        engine.start()
+        scheduler.advance(by: 0)
+        XCTAssertTrue(engine.decision.hold)
+        XCTAssertEqual(engine.decision.headline, .manualHold(.one("A command")))
+        scheduler.advance(by: 4)
+        XCTAssertEqual(collector.samples, 3, "Every 2 seconds, as for an agent")
+        XCTAssertTrue(engine.decision.hold)
+        scheduler.advance(by: 2)
+        XCTAssertFalse(engine.decision.hold, "Its time is over, though the collector still gives it")
+        holds = []
+        scheduler.advance(by: 2)
+        XCTAssertEqual(engine.decision.headline, .noAgents)
+        engine.enabled = false
+        holds = [ManualHold.timed(id: "aaaa0002", length: 600, now: now)]
+        scheduler.advance(by: 5)
+        XCTAssertFalse(engine.decision.hold, "The switch is stronger")
+        XCTAssertEqual(engine.decision.headline, .switchedOff)
+    }
+
     func testNothingRunsBeforeStart() {
         scheduler.advance(by: 60)
         XCTAssertEqual(collector.samples, 0)
