@@ -86,6 +86,7 @@ final class EvidenceCollector: EvidenceCollecting {
         var codexRollouts = CodexRolloutReader()
         var cursorTranscripts = CursorTranscriptReader()
         var grokEvents = GrokEventsReader()
+        var hermesState = HermesStateReader()
         /// Bytes of a rollout that one sample searches for a turn marker.
         var rolloutSearchBudget = CodexRolloutTracker.defaultSearchBudget
         /// Session stores of the agents that are judged by activity, by
@@ -187,6 +188,16 @@ final class EvidenceCollector: EvidenceCollecting {
     /// The working directory of each Grok Build session of the sample
     /// that is being collected.
     private var grokDirectories: [ProcessIdentity: String] = [:]
+    private var hermesHomeList: (at: Date, homes: [URL])?
+    private var hermesDatabases: [String: (signatures: [FileSignature?], leases: [HermesTurnLease]?)] = [:]
+    private var hermesGateways = FileCache<HermesGatewayState>()
+    private var hermesSessions = FileCache<Set<Int32>>()
+    /// The Hermes homes of the sample that is being collected. Nil until
+    /// a Hermes Agent process asks for them.
+    private var hermesHomes: [HermesHomeState]?
+    /// Each Hermes Agent process that had a turn, and when its last one
+    /// ended: the files hold the turn in progress and not its end.
+    private var hermesTurns: [ProcessIdentity: (working: Bool, endedAt: Date?)] = [:]
     /// The hook states of the sample that is being collected, by pid.
     private var sampleHookStates: [Int32: HookStateReader.State] = [:]
     private var transcriptChoices: [ProcessIdentity: (at: Date, path: String?)] = [:]
@@ -283,6 +294,8 @@ final class EvidenceCollector: EvidenceCollecting {
         }
         sessionNames.removeAll(keepingCapacity: true)
         cursorEnds.removeAll(keepingCapacity: true)
+        if hermesHomes == nil { hermesDatabases.removeAll() }
+        hermesHomes = nil
         sampleHookStates.removeAll(keepingCapacity: true)
 
         previous = time
@@ -291,6 +304,7 @@ final class EvidenceCollector: EvidenceCollecting {
         activityReaders = activityReaders.filter { activities[$0.key] != nil }
         transcriptChoices = transcriptChoices.filter { sample.roots.contains($0.key) }
         grokListings = grokListings.filter { sample.roots.contains($0.key) }
+        hermesTurns = hermesTurns.filter { sample.roots.contains($0.key) }
         claudeAppSessions.formIntersection(sample.roots)
         let apps = Set(claudeApps.map(\.identity))
         claudeAppHoldSince = claudeAppHoldSince.filter { apps.contains($0.key) }
@@ -301,6 +315,8 @@ final class EvidenceCollector: EvidenceCollecting {
         rolloutTails.endSample()
         cursorTails.endSample()
         grokLogs.endSample()
+        hermesGateways.endSample()
+        hermesSessions.endSample()
         claudeSettingsFiles.endSample()
         sample.cost = TimeInterval(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
         lastSample = sample
@@ -445,6 +461,8 @@ final class EvidenceCollector: EvidenceCollecting {
             fillCursor(&evidence, instance: instance, now: now, watched: &watched)
         } else if definition.id == AgentCatalog.grokID {
             fillGrok(&evidence, instance: instance, now: now, watched: &watched)
+        } else if definition.id == AgentCatalog.hermesID {
+            fillHermes(&evidence, instance: instance, matches: matches, now: now, watched: &watched)
         } else if let target = sources.fileActivityTargets[definition.id] {
             let activity = activities[definition.id] ?? pollActivity(definition.id, target: target)
             activities[definition.id] = activity
@@ -763,6 +781,70 @@ final class EvidenceCollector: EvidenceCollecting {
         evidence.level = .state
         evidence.reported = report
         evidence.fileActivityAt = newestWrite
+    }
+
+    // MARK: Hermes Agent
+
+    /// Working while a turn of this process holds its row in a
+    /// `state.db`, or while the gateway counts a turn. Idle is said for
+    /// an open chat, for the gateway and for a process that had a turn.
+    /// Any other process is judged by the signs of activity, as an agent
+    /// with no state of its own: `HermesSummary.report`.
+    private func fillHermes(_ evidence: inout AgentEvidence, instance: AgentInstance, matches: [Int32: AgentMatch], now: Date, watched: inout Set<String>) {
+        evidence.level = .activity
+        let homes = hermesHomes ?? readHermesHomes(now: now, watched: &watched)
+        hermesHomes = homes
+        let own = Set(instance.rows.filter { matches[$0.pid].map { $0.definition.id == instance.definition.id && $0.role != .helper } ?? false }.map(\.pid))
+        let reading = HermesSummary.reading(pids: own, started: Date(timeIntervalSince1970: instance.rootStartTime), homes: homes, now: now)
+        var turns = hermesTurns[instance.identity]
+        if reading.working {
+            turns = (true, nil)
+        } else if let known = turns, known.working {
+            turns = (false, now)
+        }
+        hermesTurns[instance.identity] = turns
+        guard let report = HermesSummary.report(of: reading, hadTurn: turns != nil, endedAt: turns?.endedAt, now: now) else { return }
+        evidence.level = .state
+        evidence.reported = report
+    }
+
+    /// The files of every Hermes home, once per sample. A database is
+    /// read again only when it or its WAL was written: a row that is
+    /// taken, renewed or deleted is a write.
+    private func readHermesHomes(now: Date, watched: inout Set<String>) -> [HermesHomeState] {
+        if hermesHomeList.map({ now.timeIntervalSince($0.at) >= Self.listingAge || $0.at > now }) ?? true {
+            hermesHomeList = (now, sources.hermesState.homes())
+        }
+        var states: [HermesHomeState] = []
+        var databases: Set<String> = []
+        for home in hermesHomeList?.homes ?? [] {
+            var state = HermesHomeState()
+            let database = home.appendingPathComponent(HermesStateReader.database)
+            let signatures = [database.path, database.path + "-wal", database.path + "-shm"].map(FileSignature.init(path:))
+            if signatures[0] != nil {
+                databases.insert(database.path)
+                if let known = hermesDatabases[database.path], known.signatures == signatures {
+                    state.leases = known.leases
+                } else {
+                    state.leases = HermesStateReader.leases(inDatabase: database)
+                    hermesDatabases[database.path] = (signatures, state.leases)
+                }
+                watched.insert(signatures[1] != nil ? database.path + "-wal" : database.path)
+            }
+            let gateway = home.appendingPathComponent(HermesStateReader.gatewayFile)
+            if let hit = hermesGateways.value(at: gateway.path, read: { (try? Data(contentsOf: gateway)).flatMap(HermesStateReader.gatewayState) }) {
+                watched.insert(gateway.path)
+                state.gateway = hit.value
+            }
+            let sessions = home.appendingPathComponent(HermesStateReader.sessionsFile)
+            if let hit = hermesSessions.value(at: sessions.path, read: { (try? Data(contentsOf: sessions)).map(HermesStateReader.openSessions) }) {
+                watched.insert(sessions.path)
+                state.openSessions = hit.value ?? []
+            }
+            states.append(state)
+        }
+        hermesDatabases = hermesDatabases.filter { databases.contains($0.key) }
+        return states
     }
 
     // MARK: Process use

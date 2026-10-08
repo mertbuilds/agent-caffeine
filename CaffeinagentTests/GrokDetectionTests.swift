@@ -172,7 +172,7 @@ final class GrokCatalogTests: XCTestCase {
         XCTAssertEqual(definition?.level, .state)
         XCTAssertEqual(definition?.kind, .cli)
         XCTAssertTrue(catalog.cliNames.contains("grok"))
-        XCTAssertEqual(AgentCatalog.version, 7)
+        XCTAssertEqual(AgentCatalog.version, 8)
     }
 
     /// A tool call is a child of the one process, and a Claude Code that

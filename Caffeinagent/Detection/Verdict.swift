@@ -380,7 +380,7 @@ enum VerdictRules {
         if report?.turnEnded == true { return AgentTurn(state: .idle) }
         // The time of a transcript is its last write, not the start of the turn.
         let startsTurn = report?.source == .claudeSessionFile || report?.source == .codexRollout || report?.source == .cursorTranscript
-            || report?.source == .grokEvents
+            || report?.source == .grokEvents || report?.source == .hermesState
         return AgentTurn(state: .working, since: startsTurn ? report?.since : nil)
     }
 
