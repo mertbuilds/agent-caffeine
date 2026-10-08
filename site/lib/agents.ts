@@ -11,7 +11,7 @@ export const agents: readonly Agent[] = [
   // One entry for the editor and for its command line agent (`cursor-agent`): the app finds both.
   { name: "Cursor", icon: "cursor" },
   { name: "Antigravity", icon: "antigravity" },
-  { name: "Grok", icon: "grok" },
+  { name: "Grok Build", icon: "grok" },
   { name: "Gemini CLI", icon: "geminicli" },
   { name: "Amp", icon: "amp" },
   { name: "Goose", icon: "goose" },
@@ -29,6 +29,7 @@ export const agents: readonly Agent[] = [
   { name: "Kilo Code", icon: "kilocode" },
   { name: "Kiro CLI", icon: "kiro" },
   { name: "Hermes Agent", icon: "hermesagent" },
+  { name: "OpenClaw", icon: "openclaw" },
   { name: "Command Code", icon: "commandcode" },
   { name: "GitHub Copilot", icon: "githubcopilot" },
   { name: "Aider" },
@@ -49,7 +50,6 @@ export const agents: readonly Agent[] = [
   { name: "CodeStudio" },
   { name: "CodeMaker" },
   { name: "CodeArts Agent" },
-  { name: "OpenClaw" },
   { name: "Dexto" },
 ];
 
