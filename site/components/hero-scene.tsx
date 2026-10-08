@@ -1,7 +1,8 @@
 "use client";
 
 import { easeInOut } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { useMotionValueEvent } from "motion/react";
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { AgentIcon, type AgentIconName } from "@/components/agent-icons";
 import { Flow, PanelSurface } from "@/components/agents-panel";
 import { Laptop } from "@/components/laptop/laptop";
@@ -9,12 +10,10 @@ import { MenuIcon } from "@/components/menu-icon";
 import { Robot } from "@/components/robot";
 import { heroScene } from "@/lib/motion";
 import { stretch, useLoop } from "@/lib/playhead";
-import { RELEASE_AFTER, detailOf, headlineText, iconLook, pose, type Headline, type IconLook, type Pose } from "@/lib/simulator";
+import { ICON_AT_REST, RELEASE_AFTER, detailOf, headlineText, iconLook, pose, type Headline } from "@/lib/simulator";
 import { useLessMotion } from "@/lib/use-less-motion";
 import { useSeen } from "@/lib/use-seen";
 import { useTabHidden } from "@/lib/use-tab-hidden";
-
-type Span = readonly [from: number, to: number];
 
 const MUTED = "text-[var(--panel-muted)]";
 const GREEN = "light-dark(#28a745, #32d74b)";
@@ -40,8 +39,9 @@ const DESKTOP = "bg-[radial-gradient(130%_100%_at_50%_100%,#3b82f0,#12306e_65%,#
 const DESKTOP_KEPT = 0.45;
 /** Seconds the robot's tile takes to lose its colour, and the icon in the menu bar to go pale, once the Mac can sleep. */
 const TONE_DOWN = 0.8;
-/** How much of itself the menu keeps once the Mac sleeps. */
+/** How much of themselves the desktop and the outline keep once the Mac sleeps, and the menu, which has to stay readable. */
 const ASLEEP = 0.45;
+const MENU_ASLEEP = 0.75;
 /** The moment of the loop that stands for all of it, for a reader who asked for less motion: the lid is closed, two agents work and one has just finished. */
 const STILL = 3.38;
 
@@ -89,48 +89,83 @@ function headlineAt(minutes: number): Headline {
 /** The second of the loop at which the Mac can sleep. */
 const ASLEEP_AT = secondAt(LAST_DONE.done + RELEASE_AFTER / 60);
 
-type Row = { icon: AgentIconName; title: string; detail: string; working: boolean; checked: number };
-
 function clock(minutes: number): string {
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
 }
 
-/** An agent's mark in the slot of its ring, as in the app's menu: the arc goes round while it works, and an idle agent's mark is pale and has no ring. */
+/**
+ * What moves without a step is written by the playhead straight into the
+ * style of the few elements it belongs to, each marked with `data-hero`: so a
+ * frame of the loop changes a few numbers and draws no component again, and
+ * no other element has its style worked out again. `closed` is how far the
+ * lid has closed, `dimmed` how far the sleeping Mac has dimmed, `rest` how
+ * far the robot and the icon have gone pale, and `checks` how far each
+ * agent's check has come in.
+ */
+type Frame = { closed: number; dimmed: number; rest: number; checks: readonly number[] };
+
+const AT_START: Frame = { closed: 0, dimmed: 0, rest: 0, checks: AGENTS.map(() => 0) };
+
+const STYLES: Record<string, (frame: Frame, place: number) => Record<string, string>> = {
+  desktop: ({ closed, dimmed }) => ({ opacity: String(cut4((1 - (1 - DESKTOP_KEPT) * closed) * (1 - (1 - ASLEEP) * dimmed))) }),
+  outline: ({ closed, dimmed }) => ({ opacity: String(cut4(closed * (1 - (1 - ASLEEP) * dimmed))) }),
+  menu: ({ dimmed }) => ({ opacity: String(cut4(1 - (1 - MENU_ASLEEP) * dimmed)) }),
+  icon: ({ rest }) => ({ opacity: String(cut4(1 - (1 - ICON_AT_REST) * rest)) }),
+  // The robot takes its tone from this number (`rest` of `Robot`), and it reaches no other element.
+  robot: ({ rest }) => ({ "--rest": String(rest) }),
+  check: ({ checks }, place) => ({ opacity: String(checks[place]), transform: `scale(${cut4(0.6 + 0.4 * checks[place])})` }),
+};
+
+/** The spans of the loop where something moves without a step: the lid, each check as it comes in, the robot going pale, and the dim. Between them the playhead only counts minutes. */
+const MOVING = [
+  heroScene.close,
+  ...AGENTS.map((agent) => [secondAt(agent.done), secondAt(agent.done) + CHECK_IN] as const).reverse(),
+  [ASLEEP_AT, ASLEEP_AT + TONE_DOWN] as const,
+  heroScene.dim,
+] as const;
+
+type Target = { element: HTMLElement; name: string; place: number; last: Record<string, string> };
+
+/** The marked elements under `root`, to write frames into. */
+function targets(root: HTMLElement): Target[] {
+  return Array.from(root.querySelectorAll<HTMLElement>("[data-hero]"), (element) => {
+    const [name, place] = (element.dataset.hero ?? "").split("-");
+    return { element, name, place: Number(place ?? 0), last: {} };
+  });
+}
+
+/** Writes a frame into the marked elements: only what differs from what was written there last. */
+function paint(marked: readonly Target[], frame: Frame) {
+  for (const target of marked) {
+    for (const [property, value] of Object.entries(STYLES[target.name](frame, target.place))) {
+      if (target.last[property] !== value) {
+        target.last[property] = value;
+        target.element.style.setProperty(property, value);
+      }
+    }
+  }
+}
+
+function cut4(value: number) {
+  return Math.round(value * 1e4) / 1e4;
+}
+
+/** An agent's mark in the slot of its ring, as in the app's menu: the arc goes round while it works, and an idle agent's mark is pale and has no ring. The arc is the `ring-turn` of globals.css, which costs no frame. */
 function Mark({ icon, working }: { icon: AgentIconName; working: boolean }) {
   return (
     <span className="relative flex size-[34px] shrink-0 items-center justify-center">
       <span className={`flex size-7 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--panel-fg)_8%,transparent)] ${working ? "" : "opacity-55"}`}>
         <AgentIcon className="size-[18px]" name={icon} />
       </span>
-      {working && (
-        <svg aria-hidden="true" className="absolute inset-0 size-full" fill="none" viewBox="0 0 34 34">
-          <rect
-            className="ring-sweep"
-            height="32.5"
-            pathLength="1"
-            rx="10.25"
-            stroke="var(--app-blue)"
-            strokeDasharray="0.75 0.25"
-            strokeLinecap="round"
-            strokeWidth="1.5"
-            width="32.5"
-            x="0.75"
-            y="0.75"
-          />
-        </svg>
-      )}
+      {working && <span aria-hidden="true" className="ring-turn" />}
     </span>
   );
 }
 
-/** The check of an agent that has finished. It comes in over `shown`, from 0 to 1. */
-function Check({ shown }: { shown: number }) {
+/** The check of the agent at `place` in the list, which comes in once it has finished. */
+function Check({ place }: { place: number }) {
   return (
-    <span
-      aria-hidden="true"
-      className="flex size-4 shrink-0 items-center justify-center rounded-full"
-      style={{ background: GREEN, opacity: shown, transform: `scale(${0.6 + 0.4 * shown})` }}
-    >
+    <span aria-hidden="true" className="flex size-4 shrink-0 items-center justify-center rounded-full" data-hero={`check-${place}`} style={{ background: GREEN }}>
       <svg className="size-2 text-white" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 10 8">
         <path d="M1 4.2 3.8 7 9 1" />
       </svg>
@@ -138,8 +173,12 @@ function Check({ shown }: { shown: number }) {
   );
 }
 
-/** The Mac's menu bar along the top of the display: the Apple mark, Wi-Fi, the battery, our icon with its menu open, and the clock. Its corners are the display's, less the gap round it. */
-function MenuBar({ time, look, still }: { time: string; look: IconLook; still: boolean }) {
+/**
+ * The Mac's menu bar along the top of the display: the Apple mark, Wi-Fi, the battery, our icon with its menu open, and the clock,
+ * `minute` minutes after the lid closed. Its corners are the display's, less the gap round it. With `still` a number that changes does not roll.
+ */
+const MenuBar = memo(function MenuBar({ minute, still }: { minute: number; still: boolean }) {
+  const stance = pose(headlineAt(minute));
   return (
     <div className="flex h-6 w-full items-center gap-3 rounded-[4px] bg-[color-mix(in_srgb,var(--surface)_88%,transparent)] pl-2.5 pr-2 text-[13px] text-fg backdrop-blur">
       <svg className="h-[0.95em] w-auto shrink-0 -translate-y-px" fill="currentColor" viewBox="0 0 814 1000">
@@ -157,25 +196,33 @@ function MenuBar({ time, look, still }: { time: string; look: IconLook; still: b
         <span className="h-1 w-[1.5px] rounded-r-[1px] bg-current" />
       </span>
       <span className="flex h-[22px] items-center rounded-[5px] bg-[color-mix(in_srgb,var(--fg)_14%,transparent)] px-2">
-        <MenuIcon className="h-5 w-[21px]" look={look} />
+        {/* The playhead makes the icon pale, so the look itself keeps its full strength. */}
+        <span className="flex" data-hero="icon">
+          <MenuIcon className="h-5 w-[21px]" look={{ ...iconLook(stance), opacity: 1 }} />
+        </span>
       </span>
       <span className="tabular-nums">
-        <Flow still={still}>{time}</Flow>
+        <Flow still={still}>{clock(CLOCK_START + minute)}</Flow>
       </span>
     </div>
   );
-}
+});
 
 /**
- * A cut of the app's menu that fits the display: the robot beside the headline, and the agents, without the bar of controls at the bottom.
- * An agent has its folder beside its name and its line below. `rest` is how far the robot's tile has lost its colour. With `still` a number that changes does not roll.
+ * A cut of the app's menu that fits the display, `minute` minutes after the lid closed: the robot beside the headline, and the agents,
+ * without the bar of controls at the bottom. An agent has its folder beside its name and its line below. With `still` a number that changes does not roll.
  */
-function Panel({ title, subtitle, stance, rest, rows, paused, still }: { title: string; subtitle: string; stance: Pose; rest: number; rows: readonly Row[]; paused: boolean; still: boolean }) {
+const Panel = memo(function Panel({ minute, paused, still }: { minute: number; paused: boolean; still: boolean }) {
+  const line = headlineAt(minute);
+  const stance = pose(line);
+  const { title, subtitle } = headlineText(line);
   return (
     <PanelSurface className={`w-full shadow-[0_12px_32px_var(--shadow)] ${paused ? "panel-paused" : ""}`} label="The Agent Caffeine menu">
       <div className="flex items-center gap-3 px-4 py-3">
         {/* A robot that sleeps stands still here: the one that breathes in its sleep is in the menu further down the page. */}
-        <Robot paused={paused} pose={stance} rest={rest} size={48} still={stance === "asleep"} />
+        <span className="flex" data-hero="robot">
+          <Robot calm paused={paused} pose={stance} rest={stance === "asleep" ? "var(--rest)" : undefined} size={48} still={stance === "asleep"} />
+        </span>
         <p className="flex min-w-0 flex-col gap-0.5">
           <span className="text-[15px] leading-5">{title}</span>
           <span className={`text-[12px] ${MUTED}`}>
@@ -185,53 +232,49 @@ function Panel({ title, subtitle, stance, rest, rows, paused, still }: { title: 
       </div>
       <div className="h-px bg-[var(--panel-line)]" />
       <ul className="flex flex-col px-[13px] py-1">
-        {rows.map((row) => (
-          <li key={row.icon} className="flex h-10 items-center gap-2">
-            <Mark icon={row.icon} working={row.working} />
-            {/* A finished agent keeps the two lines of one at work, each of a set height, so its name stays where it was. In the app an idle agent has one line. */}
-            <span className="flex min-w-0 flex-1 flex-col gap-px leading-4">
-              <span className={`h-4 truncate ${row.working ? "" : MUTED}`}>{row.title}</span>
-              <span className={`h-4 truncate text-[12px] ${MUTED}`}>
-                <Flow still={still}>{row.detail}</Flow>
+        {AGENTS.map((agent, place) => {
+          const working = minute < agent.done;
+          return (
+            <li key={agent.icon} className="flex h-10 items-center gap-2">
+              <Mark icon={agent.icon} working={working} />
+              {/* A finished agent keeps the two lines of one at work, each of a set height, so its name stays where it was. In the app an idle agent has one line. */}
+              <span className="flex min-w-0 flex-1 flex-col gap-px leading-4">
+                <span className={`h-4 truncate ${working ? "" : MUTED}`}>
+                  {agent.name} · {agent.folder}
+                </span>
+                {/* The number rolls in a taller box than the line, so the line shows what runs over it, and its words stand on the line of a line without a number. */}
+                <span className={`flex h-4 items-center whitespace-nowrap text-[12px] ${MUTED}`}>
+                  {working ? (
+                    <span>
+                      <Flow still={still}>{detailOf({ state: "working", command: false, since: -agent.before * 60, before: "idle" }, minute * 60)}</Flow>
+                    </span>
+                  ) : (
+                    // Staged, not the app's words: the app says "Finished a moment ago" for a minute and then "Idle for 9 minutes". Here a finished agent keeps one short word, so that what is done reads apart from what works.
+                    "Finished"
+                  )}
+                </span>
               </span>
-            </span>
-            {!row.working && <Check shown={row.checked} />}
-          </li>
-        ))}
+              {!working && <Check place={place} />}
+            </li>
+          );
+        })}
       </ul>
     </PanelSurface>
   );
-}
+});
 
-type Hold = { time?: number; wind?: number };
-
-/**
- * For a look at one moment of the loop while the site is developed:
- * `window.dispatchEvent(new CustomEvent("hero-hold", { detail: { time: 1.6 } }))`
- * holds the scene at that second, `{ wind: 0.5 }` holds it half way through
- * the wind back, and `{ detail: null }` lets it go. A production build never holds.
- */
-function useHold(): Hold | null {
-  const [hold, setHold] = useState<Hold | null>(null);
-  useEffect(() => {
-    if (process.env.NODE_ENV !== "development") {
-      return;
-    }
-    const onHold = (event: Event) => setHold(event instanceof CustomEvent ? (event.detail as Hold | null) : null);
-    window.addEventListener("hero-hold", onHold);
-    return () => window.removeEventListener("hero-hold", onHold);
-  }, []);
-  return hold;
-}
+/** What of the loop changes in steps, and so is drawn again by React: the whole minutes since the lid closed, how far the lid has closed, and whether the story has just cut to another moment. */
+type Beat = { minute: number; closed: number; cutting: boolean };
 
 export function HeroScene() {
   const ref = useRef<HTMLDivElement>(null);
+  const layers = useRef<HTMLDivElement>(null);
   const seen = useSeen(ref, 0.3);
   const hidden = useTabHidden();
   const play = seen && !hidden;
-  const at = useLoop(play, heroScene.loop, heroScene.rest);
-
+  const playhead = useLoop(play, heroScene.loop, heroScene.rest, MOVING);
   const reduced = useLessMotion();
+
   // Before the first play the scene stands at its start, which is also what the server draws.
   const [begun, setBegun] = useState(false);
   useEffect(() => {
@@ -240,48 +283,57 @@ export function HeroScene() {
     }
   }, [play]);
 
-  // The playhead winds back to the start before each replay. The story cuts
-  // to its start at once, and over that time the lid opens and the menu
-  // comes back from its sleep.
-  const [last, setLast] = useState(at);
-  const [winding, setWinding] = useState(false);
-  if (at !== last) {
-    setLast(at);
-    setWinding(at < last);
-  }
+  const [beat, setBeat] = useState<Beat>({ minute: 0, closed: 0, cutting: true });
+  const last = useRef({ at: 1, winding: false });
+  const frame = useRef<Frame>(AT_START);
+  const marked = useRef<Target[]>([]);
+  const drawn = useRef<Beat>({ minute: 0, closed: 0, cutting: true });
 
-  const hold = useHold();
-  const wound = hold !== null ? (hold.wind ?? null) : !reduced && winding ? at : null;
-  const cutting = hold !== null || winding || !begun;
-  const time = hold !== null ? (hold.time ?? 0) : reduced ? STILL : cutting ? 0 : at * heroScene.loop;
-  const span = ([from, to]: Span, ease?: (share: number) => number) => stretch(time, from, to, ease);
+  // One frame of the loop. The playhead winds back to the start before each
+  // replay: the story cuts to its start at once, and over that time the lid
+  // opens and the menu comes back from its sleep.
+  const show = useCallback(
+    (at: number) => {
+      if (at !== last.current.at) {
+        last.current = { at, winding: at < last.current.at };
+      }
+      const winding = last.current.winding;
+      const wound = !reduced && winding ? at : null;
+      const cutting = winding || !begun;
+      const time = reduced ? STILL : cutting ? 0 : at * heroScene.loop;
+      const closed = cut4(wound ?? stretch(time, ...heroScene.close, easeInOut));
+      frame.current = {
+        closed,
+        dimmed: cut4(wound ?? stretch(time, ...heroScene.dim, easeInOut)),
+        rest: cut4(stretch(time, ASLEEP_AT, ASLEEP_AT + TONE_DOWN, easeInOut)),
+        checks: AGENTS.map((agent) => {
+          const finished = secondAt(agent.done);
+          return cut4(stretch(time, finished, finished + CHECK_IN));
+        }),
+      };
+      paint(marked.current, frame.current);
+      const minute = Math.floor(minutesAt(time));
+      // React hears of a frame only when a step changed, which is a few dozen times in a loop.
+      const now = drawn.current;
+      if (now.minute !== minute || now.closed !== closed || now.cutting !== cutting) {
+        drawn.current = { minute, closed, cutting };
+        setBeat(drawn.current);
+      }
+    },
+    [begun, reduced],
+  );
+  useMotionValueEvent(playhead, "change", show);
+  useLayoutEffect(() => show(playhead.get()), [playhead, show]);
+  // What React has just drawn again, such as a check that came in, takes the frame it missed.
+  useLayoutEffect(() => {
+    if (layers.current !== null) {
+      marked.current = targets(layers.current);
+      paint(marked.current, frame.current);
+    }
+  }, [beat]);
 
-  const closed = wound ?? span(heroScene.close, easeInOut);
-  const dimmed = wound ?? span(heroScene.dim, easeInOut);
-  const minutes = minutesAt(time);
-  const line = headlineAt(minutes);
-  const stance = pose(line);
-  const rows: Row[] = AGENTS.map((agent) => {
-    const working = minutes < agent.done;
-    const finished = secondAt(agent.done);
-    return {
-      icon: agent.icon,
-      title: `${agent.name} · ${agent.folder}`,
-      // Staged, not the app's words: the app says "Finished a moment ago" for a minute and then "Idle for 9 minutes". Here a finished agent keeps one short word, so that what is done reads apart from what works.
-      detail: working ? detailOf({ state: "working", command: false, since: -agent.before * 60, before: "idle" }, minutes * 60) : "Finished",
-      working,
-      checked: stretch(time, finished, finished + CHECK_IN),
-    };
-  });
   const label =
     "A laptop shows the Agent Caffeine menu on its display, with three AI coding agents at work. The lid closes, and the menu stays in a dashed outline of the display: the agents keep working and finish one by one. Two minutes after the last one the menu says that the Mac can sleep";
-
-  // The robot's tile loses its colour and the icon in the menu bar goes pale over the same time, once the Mac can sleep.
-  const rest = stretch(time, ASLEEP_AT, ASLEEP_AT + TONE_DOWN, easeInOut);
-  const icon = iconLook(stance);
-
-  // How much of themselves the desktop, the outline and the menu show: less once the Mac sleeps.
-  const lit = 1 - (1 - ASLEEP) * dimmed;
 
   return (
     <div ref={ref} role="img" aria-label={label} className="flex justify-center">
@@ -290,9 +342,10 @@ export function HeroScene() {
         <div className="relative aspect-[10/7] w-full [container-type:inline-size]">
           <div className="absolute inset-0" style={{ perspective: "200cqw", perspectiveOrigin: "50% 22%" }}>
             {/* The lid's own glass is dark: the one desktop of the scene lies flat over it, below. */}
-            <Laptop closed={closed} />
+            <Laptop closed={beat.closed} />
           </div>
           <div
+            ref={layers}
             className="absolute"
             style={{ left: `${GLASS.left}%`, top: `${GLASS.top}cqw`, width: `${GLASS.width}%`, height: `${GLASS.height}cqw` }}
           >
@@ -302,8 +355,8 @@ export function HeroScene() {
               the menu is dim: so the ground itself never dims.
             */}
             <div className="absolute inset-0 bg-bg" style={{ borderRadius: `${GLASS.round}cqw` }} />
-            <div className={`absolute inset-0 ${DESKTOP}`} style={{ borderRadius: `${GLASS.round}cqw`, opacity: (1 - (1 - DESKTOP_KEPT) * closed) * lit }} />
-            <svg className="absolute inset-0 size-full overflow-visible" fill="none" style={{ opacity: closed * lit }} viewBox={`0 0 ${GLASS.width} ${GLASS.height}`}>
+            <div className={`absolute inset-0 ${DESKTOP}`} data-hero="desktop" style={{ borderRadius: `${GLASS.round}cqw` }} />
+            <svg className="absolute inset-0 size-full overflow-visible" data-hero="outline" fill="none" style={{ opacity: 0 }} viewBox={`0 0 ${GLASS.width} ${GLASS.height}`}>
               <rect
                 height={GLASS.height}
                 rx={GLASS.round}
@@ -316,11 +369,12 @@ export function HeroScene() {
             </svg>
             <div
               className="absolute left-1/2 top-0 flex origin-top -translate-x-1/2 scale-[calc(660/705)] flex-col items-center gap-1 sm:scale-[calc(810/705)] lg:scale-[calc(630/705)] xl:scale-[calc(810/705)]"
-              style={{ width: BOX.width, height: BOX.height, padding: GAP, opacity: lit }}
+              data-hero="menu"
+              style={{ width: BOX.width, height: BOX.height, padding: GAP }}
             >
-              <MenuBar look={{ ...icon, opacity: 1 + (icon.opacity - 1) * rest }} still={cutting} time={clock(CLOCK_START + Math.floor(minutes))} />
+              <MenuBar minute={beat.minute} still={beat.cutting} />
               <div className="w-[320px]">
-                <Panel {...headlineText(line)} paused={!play} rest={rest} rows={rows} stance={stance} still={cutting} />
+                <Panel minute={beat.minute} paused={!play} still={beat.cutting} />
               </div>
             </div>
           </div>

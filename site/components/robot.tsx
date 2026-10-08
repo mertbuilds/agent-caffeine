@@ -1,4 +1,4 @@
-import { useId } from "react";
+import { memo, useId } from "react";
 import type { Pose } from "@/lib/simulator";
 
 /**
@@ -97,23 +97,28 @@ type RobotProps = {
   paused?: boolean;
   /** A still picture of the pose, as the app shows it with Reduce Motion. */
   still?: boolean;
-  /** How far the pose's tone has come in, from 0 (the full colour of the robot awake) to 1. With it the tone follows this number and does not fade by itself. */
-  rest?: number;
+  /** Only the float moves: the loops inside the drawing (steam, the antenna's light, the blink) stand still. For a small robot beside other motion. */
+  calm?: boolean;
+  /** How far the pose's tone has come in, from 0 (the full colour of the robot awake) to 1, as a CSS number such as `var(--rest)`. With it the tone follows that number and does not fade by itself. */
+  rest?: string;
 };
 
-export function Robot({ pose, size = SIDE, paused = false, still = false, rest }: RobotProps) {
+export const Robot = memo(function Robot({ pose, size = SIDE, paused = false, still = false, calm = false, rest }: RobotProps) {
   const id = `robot-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const look = LOOKS[pose];
   const lift = `robot-layer ${look.lively ? "robot-float" : ""}`;
   const iconEyes = look.eyes === "happy" ? 1 : look.eyes === "dim" ? 0.3 : 0;
-  const toned = (full: number) => (rest === undefined ? full : 1 + (full - 1) * rest);
-  const filter = `saturate(${toned(look.saturation)}) contrast(${toned(look.contrast)}) brightness(${toned(1 - look.dimming)})`;
+  const toned = (full: number) => (rest === undefined ? String(full) : `calc(1 + ${full - 1} * ${rest})`);
+  // A robot in its full colour has no filter, so its loops are drawn without one.
+  const plain = look.saturation === 1 && look.contrast === 1 && look.dimming === 0;
+  const filter = plain ? undefined : `saturate(${toned(look.saturation)}) contrast(${toned(look.contrast)}) brightness(${toned(1 - look.dimming)})`;
   const picture = { alt: "", decoding: "async", draggable: false, height: PICTURE, loading: "lazy", width: PICTURE } as const;
 
   return (
     <span
       aria-hidden="true"
       className="robot relative block shrink-0"
+      data-calm={calm || undefined}
       data-paused={paused || undefined}
       data-still={still || undefined}
       style={{ width: size, height: size }}
@@ -266,4 +271,4 @@ export function Robot({ pose, size = SIDE, paused = false, still = false, rest }
       </span>
     </span>
   );
-}
+});

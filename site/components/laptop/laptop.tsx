@@ -1,4 +1,4 @@
-import { useMemo, type CSSProperties } from "react";
+import { memo, useMemo, type CSSProperties } from "react";
 import {
   BACK,
   BEZEL,
@@ -106,7 +106,7 @@ type LaptopProps = {
  * drawn from the laptop's projected outline, and the glass on CSS 3D
  * transforms that put it in the same place.
  */
-export function Laptop({ closed }: LaptopProps) {
+export const Laptop = memo(function Laptop({ closed }: LaptopProps) {
   const lid = useMemo(() => lidArt(closed), [closed]);
   const pose = lidPose(closed);
 
@@ -194,4 +194,4 @@ export function Laptop({ closed }: LaptopProps) {
       </div>
     </>
   );
-}
+});
