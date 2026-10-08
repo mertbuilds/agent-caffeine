@@ -24,6 +24,8 @@ const GREEN = "light-dark(#28a745, #32d74b)";
 /** The time on the menu bar when the lid closes, in minutes of the day, and how many minutes then pass. */
 const CLOCK_START = 14 * 60 + 2;
 const MINUTES = 39;
+/** Seconds the check takes to come in. */
+const CHECK_IN = 0.35;
 
 /** The agents at work, the longest first as the app lists them. `before` is the minutes each has worked when the lid closes. The last one finishes. */
 const AGENTS: readonly { icon: AgentIconName; name: string; folder: string; before: number }[] = [
@@ -68,9 +70,14 @@ function Mark({ icon, finished }: { icon: AgentIconName; finished: boolean }) {
   );
 }
 
-function Check() {
+/** The check of the agent that has finished. It comes in over `shown`, from 0 to 1. */
+function Check({ shown }: { shown: number }) {
   return (
-    <span aria-hidden="true" className="flex size-5 shrink-0 items-center justify-center rounded-full" style={{ background: GREEN }}>
+    <span
+      aria-hidden="true"
+      className="flex size-5 shrink-0 items-center justify-center rounded-full"
+      style={{ background: GREEN, opacity: shown, transform: `scale(${0.6 + 0.4 * shown})` }}
+    >
       <svg className="size-2.5 text-white" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 10 8">
         <path d="M1 4.2 3.8 7 9 1" />
       </svg>
@@ -107,7 +114,8 @@ function MenuBar({ time }: { time: string }) {
 }
 
 /** The top of the app's menu and its agents, without the bar of controls at the bottom. */
-function Panel({ minutes, finished, paused }: { minutes: number; finished: boolean; paused: boolean }) {
+/** `checked` is how far the check of the agent that finished has come in, from 0 to 1. */
+function Panel({ minutes, finished, checked, paused }: { minutes: number; finished: boolean; checked: number; paused: boolean }) {
   const working = AGENTS.length - (finished ? 1 : 0);
   return (
     <PanelSurface className={`w-full shadow-[0_12px_32px_var(--shadow)] ${paused ? "panel-paused" : ""}`} label="The agent caffeine menu">
@@ -131,7 +139,7 @@ function Panel({ minutes, finished, paused }: { minutes: number; finished: boole
                   {done ? "Finished a moment ago" : <Flow>{`Working for ${agent.before + minutes} minutes`}</Flow>}
                 </span>
               </span>
-              {done && <Check />}
+              {done && <Check shown={checked} />}
             </li>
           );
         })}
@@ -206,6 +214,7 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
   const closed = winding ? at : span(heroScene.close, easeInOut);
   const minutes = Math.round(MINUTES * span(heroScene.clock, easeInOut));
   const finished = time >= heroScene.finish;
+  const checked = finished ? stretch(time, heroScene.finish, heroScene.finish + CHECK_IN) : 0;
   const carried = cut === "b" ? span(heroScene.lift, easeInOut) - span(heroScene.down, easeInOut) : 0;
   const walked = cut === "b" ? span(heroScene.walk, easeInOut) : 0;
   const bob = carried * Math.sin(walked * Math.PI * 16);
@@ -219,7 +228,7 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
       <div aria-hidden="true" className="relative z-10 flex w-full max-w-[22rem] flex-col items-center gap-1.5">
         <MenuBar time={clock(CLOCK_START + minutes)} />
         <div className="w-full max-w-[320px]">
-          <Panel finished={finished} minutes={minutes} paused={!play} />
+          <Panel checked={checked} finished={finished} minutes={minutes} paused={!play} />
         </div>
       </div>
       {/* The closed lid's far edge is 47% of the scene's width below the scene's top, so the scene is pulled up under the menu. */}

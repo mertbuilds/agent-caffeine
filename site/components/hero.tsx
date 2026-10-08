@@ -114,22 +114,20 @@ export async function Hero({ variant = "a" }: { variant?: HeroVariant }) {
   if (variant === "z") {
     return <ClassicHero release={release} />;
   }
-  // On a phone the picture comes right after the words, before the download. Side by side, the words and the download are one column.
+  // On a phone the picture comes right after the headline, so the first screen shows it with the closed laptop. Side by side, the words and the download are one column.
   return (
-    <section className="relative isolate mx-auto grid w-full max-w-[1120px] items-center gap-x-12 gap-y-7 pb-12 pt-8 text-center md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] md:grid-rows-[1fr_auto_auto_1fr] md:min-h-[calc(100svh-3.5rem)] md:py-10 md:text-left">
+    <section className="relative isolate mx-auto grid w-full max-w-[1120px] items-center gap-x-12 gap-y-7 pb-12 pt-8 text-center md:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] md:grid-rows-[1fr_auto_auto_auto_1fr] md:min-h-[calc(100svh-3.5rem)] md:py-10 md:text-left">
       <GridTexture />
-      <div className="relative z-10 flex flex-col items-center gap-5 md:col-start-1 md:row-start-2 md:items-start">
-        <h1 className="text-balance text-[clamp(2.25rem,9vw,2.75rem)] font-medium leading-[1.1] tracking-[-0.02em] md:text-[clamp(2.5rem,4.2vw,3.25rem)]">
-          Close your Mac. <span className="text-accent md:block">Your agents keep working</span>
-        </h1>
-        <p className="max-w-[26rem] text-pretty text-lg leading-relaxed text-muted md:max-w-[31rem]">
-          agent caffeine keeps your Mac awake while Claude Code, Codex or Cursor works, also with the lid closed. It lets your Mac sleep when they are done
-        </p>
-      </div>
-      <div className="md:col-start-2 md:row-span-4 md:row-start-1">
+      <h1 className="relative z-10 text-balance text-[clamp(2.25rem,9vw,2.75rem)] font-medium leading-[1.1] tracking-[-0.02em] md:col-start-1 md:row-start-2 md:text-[clamp(2.5rem,4.2vw,3.25rem)]">
+        Close your Mac. <span className="text-accent md:block">Your agents keep working</span>
+      </h1>
+      <div className="md:col-start-2 md:row-span-5 md:row-start-1">
         <HeroScene cut={variant} />
       </div>
-      <div className="relative z-10 flex flex-col items-center gap-7 md:col-start-1 md:row-start-3 md:items-start">
+      <p className="relative z-10 mx-auto max-w-[26rem] text-pretty text-lg leading-relaxed text-muted md:col-start-1 md:row-start-3 md:mx-0 md:-mt-2 md:max-w-[31rem]">
+        agent caffeine keeps your Mac awake while Claude Code, Codex or Cursor works, also with the lid closed. It lets your Mac sleep when they are done
+      </p>
+      <div className="relative z-10 flex flex-col items-center gap-7 md:col-start-1 md:row-start-4 md:items-start">
         <WorksWith />
         <Cta release={release} />
       </div>
