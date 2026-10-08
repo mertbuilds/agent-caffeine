@@ -552,6 +552,8 @@ struct AgentPreferences: View {
     var setHooks: (HookCatalogEntry, Bool) -> Void = { _, _ in }
     /// The menu asked for "Other tools": the tab scrolls there once.
     var showsOtherTools: Binding<Bool> = .constant(false)
+    /// The tool in the copy of the app that runs.
+    var commandLine = CommandLineSetup(appPath: Bundle.main.bundleURL.standardizedFileURL.path)
     @State private var newName = ""
 
     private static let otherToolsID = "otherTools"
@@ -620,6 +622,7 @@ struct AgentPreferences: View {
                         .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
+            CommandLinePreferencesSection(setup: commandLine)
         }
         .formStyle(.grouped)
     }
