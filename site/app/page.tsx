@@ -1,11 +1,11 @@
 import { AgentsSection } from "@/components/agents-section";
-import { CommandLine } from "@/components/command-line";
 import { Compare } from "@/components/compare";
+import { Demo } from "@/components/demo";
+import { Examples } from "@/components/examples";
 import { Faq } from "@/components/faq";
 import { Footer } from "@/components/footer";
 import { Guides } from "@/components/guides";
 import { Hero } from "@/components/hero";
-import { HowItWorks } from "@/components/how-it-works";
 import { JsonLd } from "@/components/json-ld";
 import { Pricing } from "@/components/pricing";
 import { SleepScenes } from "@/components/sleep-scenes";
@@ -70,11 +70,11 @@ export default async function Home() {
   return (
     <main id="main" className="relative isolate flex min-h-screen flex-col gap-24 overflow-x-clip px-4 pt-14 md:px-6">
       <Hero />
-      <HowItWorks />
+      <AgentsSection />
+      <Examples />
       <SleepScenes />
       <SmallThings />
-      <AgentsSection />
-      <CommandLine />
+      <Demo />
       <Compare />
       <Pricing />
       <Faq />

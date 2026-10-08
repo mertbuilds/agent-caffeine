@@ -34,13 +34,13 @@ export async function Footer() {
         </div>
         <Column title="Product">
           <li>
-            <Link href="/#how-it-works" className={LINK}>
-              How it works
+            <Link href="/#features" className={LINK}>
+              Features
             </Link>
           </li>
           <li>
-            <Link href="/#features" className={LINK}>
-              Features
+            <Link href="/#demo" className={LINK}>
+              Demo
             </Link>
           </li>
           {release === null ? null : (
