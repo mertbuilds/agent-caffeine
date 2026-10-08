@@ -48,7 +48,7 @@ function split(html: string, file: string): [string, string] {
 
 /** A table gets a box of its own, so a wide one scrolls inside it and not the page. */
 function scrollTables(html: string): string {
-  return html.replaceAll("<table>", '<div class="table-scroll"><table>').replaceAll("</table>", "</table></div>");
+  return html.replaceAll("<table>", '<div class="table-scroll" tabindex="0" role="region" aria-label="Table"><table>').replaceAll("</table>", "</table></div>");
 }
 
 /** Inline HTML to the plain text a reader sees, for structured data. */

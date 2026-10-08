@@ -601,6 +601,11 @@
     overflow-x: auto;
   }
 
+  .article :where(.table-scroll):focus-visible {
+    outline: 1px solid var(--muted);
+    outline-offset: 2px;
+  }
+
   .article :where(table) {
     width: 100%;
     border-collapse: collapse;

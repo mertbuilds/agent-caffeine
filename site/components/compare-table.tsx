@@ -40,7 +40,12 @@ function CellValue({ cell, row }: { cell: Cell; row: Row }) {
 /** Every tool against every row of `lib/compare.ts`. A narrow window scrolls it sideways inside its box, with the row labels in place. */
 export function CompareTable() {
   return (
-    <div className="overflow-x-auto rounded-[20px] border border-border">
+    <div
+      tabIndex={0}
+      role="region"
+      aria-label="Comparison table"
+      className="overflow-x-auto rounded-[20px] border border-border focus-visible:outline focus-visible:outline-1 focus-visible:outline-offset-2 focus-visible:outline-muted"
+    >
       <table className="w-full min-w-[60rem] table-fixed border-separate border-spacing-0 text-left text-sm leading-snug">
         <caption className="sr-only">Agent Caffeine and five other tools, feature by feature</caption>
         <colgroup>
