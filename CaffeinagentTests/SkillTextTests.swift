@@ -189,10 +189,12 @@ final class SkillTextTests: XCTestCase {
 
     // MARK: Settings
 
-    private func model(_ statuses: [(String, SkillAgentStatus)], link: SkillLinkState = .none, planned: [String] = []) -> AgentSetupModel {
+    private func model(
+        _ statuses: [(String, SkillAgentStatus)], link: SkillLinkState = .none, linkAllowed: Bool = true, planned: [String] = []
+    ) -> AgentSetupModel {
         AgentSetupModel(snapshot: SkillSnapshot(
             agents: statuses.compactMap { id, status in SkillCatalog.entry(id: id).map { SkillSnapshot.Agent(entry: $0, status: status) } },
-            link: link, planned: planned
+            link: link, linkAllowed: linkAllowed, planned: planned
         ))
     }
 
@@ -235,6 +237,34 @@ final class SkillTextTests: XCTestCase {
         XCTAssertTrue(model([], link: .dangling).canLink)
     }
 
+    func testALinkToACopyThatIsGoneIsNotLinked() {
+        let dead = model([("claude", .installed(place: ".claude/skills"))], link: .dead)
+        XCTAssertFalse(dead.isLinked)
+        XCTAssertTrue(dead.canLink, "Link repairs it")
+        XCTAssertEqual(dead.linkDetail, "Not linked")
+        XCTAssertNil(dead.linkNote)
+        XCTAssertEqual(model([], link: .dead).changes, ["~/.local/bin/agent-caffeine"])
+    }
+
+    func testOutsideTheApplicationsFolderTheLinkIsNotOffered() {
+        let line = "Move Agent Caffeine to the Applications folder to link the command."
+        let fresh = model([("claude", .notInstalled)], linkAllowed: false, planned: [".claude/skills"])
+        XCTAssertFalse(fresh.canLink)
+        XCTAssertEqual(fresh.summary, "Adds a skill to Claude Code.")
+        XCTAssertEqual(fresh.changes, ["~/.claude/skills/agent-caffeine/SKILL.md"])
+        XCTAssertEqual(fresh.linkNote, line)
+        XCTAssertTrue(fresh.isOffered, "The skill does not need the Applications folder")
+        let none = model([], linkAllowed: false)
+        XCTAssertNil(none.summary, "Nothing to do, so the button is off")
+        XCTAssertEqual(none.linkNote, line)
+        let dead = model([("claude", .installed(place: ".claude/skills"))], link: .dead, linkAllowed: false)
+        XCTAssertFalse(dead.canLink)
+        XCTAssertEqual(dead.linkDetail, line)
+        let linked = model([], link: .ours(target: "/x"), linkAllowed: false)
+        XCTAssertEqual(linked.linkDetail, "Linked in ~/.local/bin", "A link to the copy in the Applications folder is shown as it is")
+        XCTAssertNil(linked.linkNote)
+    }
+
     func testTheLineAboutThePathIsShownOnlyWhenItIsKnown() {
         var linked = model([], link: .ours(target: "/x"))
         XCTAssertNil(linked.pathHint, "Not known")
@@ -260,11 +290,11 @@ final class SkillTextTests: XCTestCase {
         var texts = [
             PanelText.agentSetupButton, PanelText.agentSetupExplained, PanelText.agentSetupOptional, PanelText.agentSetupRemoveExplained,
             PanelText.agentSetupByHand, PanelText.agentSetupUnavailable, PanelText.commandLinkTitle, PanelText.skillNotInstalled,
-            PanelText.commandLinked, PanelText.commandNotLinked, PanelText.localBinNotOnPath(file: "~/.zshrc"),
+            PanelText.commandLinked, PanelText.commandNotLinked, PanelText.commandLinkNeedsApplications, PanelText.localBinNotOnPath(file: "~/.zshrc"),
             PanelText.skillInstalled(in: "x"), PanelText.skillOutdated(in: "x"), PanelText.skillForeign("x"),
             PanelText.agentSetupSummary(agents: ["Pi"], links: true) ?? "",
         ]
-        for error in [SkillInstallError.notOurs, .linkedOutside, .notAFolder, .writeFailed, .noTool, .linkNotOurs] {
+        for error in [SkillInstallError.notOurs, .linkedOutside, .notAFolder, .writeFailed, .noTool, .linkNotOurs, .notInApplications] {
             texts += [error.message(place: ".claude/skills"), error.linkMessage]
         }
         texts += SkillCatalog.entries.map(\.displayName)

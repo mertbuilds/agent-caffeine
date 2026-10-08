@@ -524,6 +524,7 @@ enum PanelText {
     static let skillNotInstalled = "No skill yet"
     static let commandLinked = "Linked in ~/.local/bin"
     static let commandNotLinked = "Not linked"
+    static let commandLinkNeedsApplications = "Move Agent Caffeine to the Applications folder to link the command."
 
     static func localBinNotOnPath(file: String) -> String {
         "~/.local/bin does not seem to be on your PATH. If your shell does not find agent-caffeine, add this line to \(file)."

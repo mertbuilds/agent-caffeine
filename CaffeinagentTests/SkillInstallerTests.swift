@@ -26,7 +26,7 @@ final class SkillInstallerTests: XCTestCase {
         try manager.createDirectory(at: tool.deletingLastPathComponent(), withIntermediateDirectories: true)
         try Data("#!/bin/sh\n".utf8).write(to: tool)
         try manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: tool.path)
-        installer = SkillInstaller(home: home, skill: Self.repoSkill, toolPath: tool.path)
+        installer = SkillInstaller(home: home, skill: Self.repoSkill, toolPath: tool.path, stableToolPath: tool.path)
     }
 
     override func tearDownWithError() throws {
@@ -34,6 +34,19 @@ final class SkillInstallerTests: XCTestCase {
     }
 
     private func url(_ path: String) -> URL { home.appendingPathComponent(path) }
+
+    /// The tool in a second copy of the app, below the stand-in for the
+    /// apps. With `linked`, `~/.local/bin/agent-caffeine` points at it.
+    private func otherCopy(_ folder: String = "Downloads", linked: Bool = false) throws -> String {
+        let tool = "Apps/\(folder)/agent caffeine.app/Contents/MacOS/agent-caffeine"
+        try write("#!/bin/sh\n", to: tool)
+        try manager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url(tool).path)
+        if linked {
+            try make(".local/bin")
+            try manager.createSymbolicLink(atPath: url(link).path, withDestinationPath: url(tool).path)
+        }
+        return url(tool).path
+    }
 
     private func make(_ folders: String...) throws {
         for folder in folders { try manager.createDirectory(at: url(folder), withIntermediateDirectories: true) }
@@ -228,16 +241,62 @@ final class SkillInstallerTests: XCTestCase {
     }
 
     func testOurOwnLinkIsReplaced() throws {
-        try make(".local/bin")
-        let old = "/Somewhere/agent caffeine.app/Contents/MacOS/agent-caffeine"
-        try manager.createSymbolicLink(atPath: url(link).path, withDestinationPath: old)
-        XCTAssertEqual(installer.linkState(), .ours(target: old), "Ours by where it points, also when that copy is gone")
+        let old = try otherCopy(linked: true)
+        XCTAssertEqual(installer.linkState(), .ours(target: old), "Ours by where it points")
         XCTAssertEqual(installer.setUp(), [:])
-        XCTAssertEqual(destination(link), installer.toolPath)
+        XCTAssertEqual(destination(link), installer.toolPath, "The copy in the Applications folder moves it")
         XCTAssertEqual(installer.record().link, SkillInstallRecord.Link(created: [], target: installer.toolPath))
         installer.removeAll()
         XCTAssertFalse(exists(link))
         XCTAssertTrue(exists(".local/bin"), "It was there before")
+    }
+
+    func testACopyOutsideTheApplicationsFolderLeavesOurLinkToAnotherCopy() throws {
+        let applications = installer.toolPath
+        try make(".local/bin")
+        try manager.createSymbolicLink(atPath: url(link).path, withDestinationPath: applications)
+        installer.toolPath = try otherCopy()
+        XCTAssertFalse(installer.isInApplications)
+        XCTAssertEqual(installer.setUp(), [:])
+        XCTAssertEqual(destination(link), applications)
+        XCTAssertThrowsError(try installer.link()) { XCTAssertEqual($0 as? SkillInstallError, .notInApplications) }
+        XCTAssertEqual(destination(link), applications)
+        XCTAssertEqual(installer.record().link, nil)
+        XCTAssertEqual(SkillInstallError.notInApplications.linkMessage, "Move Agent Caffeine to the Applications folder to link the command.")
+        let snapshot = installer.snapshot()
+        XCTAssertEqual(snapshot.link, .ours(target: applications))
+        XCTAssertFalse(snapshot.linkAllowed)
+    }
+
+    func testACopyOutsideTheApplicationsFolderIsNotLinkedBySetUp() throws {
+        try make(".claude")
+        installer.toolPath = try otherCopy()
+        XCTAssertEqual(installer.setUp(), [:])
+        XCTAssertEqual(text(claudeFile), expected, "The skill does not need the Applications folder")
+        XCTAssertFalse(exists(".local"))
+        XCTAssertEqual(installer.record().link, nil)
+        XCTAssertFalse(installer.snapshot().linkAllowed)
+    }
+
+    func testOurLinkToACopyThatIsGoneIsDeadAndAnyCopyRepairsIt() throws {
+        try make(".local/bin")
+        let old = "/Somewhere/agent caffeine.app/Contents/MacOS/agent-caffeine"
+        try manager.createSymbolicLink(atPath: url(link).path, withDestinationPath: old)
+        XCTAssertEqual(installer.linkState(), .dead, "Not linked, though it points into a copy of the app")
+        installer.toolPath = try otherCopy()
+        XCTAssertEqual(installer.setUp(), [:])
+        XCTAssertEqual(destination(link), old, "Set up for agents makes no link from outside the Applications folder")
+        try installer.link()
+        XCTAssertEqual(destination(link), installer.toolPath)
+        XCTAssertEqual(installer.linkState(), .ours(target: installer.toolPath))
+    }
+
+    func testRemoveTakesOurDeadLink() throws {
+        try make(".local/bin")
+        try manager.createSymbolicLink(atPath: url(link).path, withDestinationPath: "/Somewhere/agent caffeine.app/Contents/MacOS/agent-caffeine")
+        XCTAssertEqual(installer.removeAll(), [:])
+        XCTAssertFalse(exists(link))
+        XCTAssertTrue(exists(".local/bin"))
     }
 
     func testADanglingLinkIsReplaced() throws {
@@ -250,6 +309,7 @@ final class SkillInstallerTests: XCTestCase {
 
     func testNoLinkWithoutTheTool() throws {
         installer.toolPath = url("Apps/none").path
+        installer.stableToolPath = installer.toolPath
         XCTAssertEqual(
             installer.setUp()[SkillInstaller.linkKey],
             "The command line tool is not in this copy of Agent Caffeine, so no link was made."

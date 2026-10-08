@@ -30,9 +30,17 @@ struct AgentSetupModel: Equatable {
         return false
     }
 
-    /// The link can be made: nothing is there, or a link to something
-    /// that is gone.
-    var canLink: Bool { snapshot.link == .none || snapshot.link == .dangling }
+    /// Nothing is there, or a link to something that is gone.
+    private var linkIsMissing: Bool { [.none, .dead, .dangling].contains(snapshot.link) }
+
+    /// The link can be made, and this copy of the app may make it.
+    var canLink: Bool { snapshot.linkAllowed && linkIsMissing }
+
+    /// The line in place of the offer to link, for a copy of the app that
+    /// does not run from the Applications folder.
+    var linkNote: String? {
+        !snapshot.linkAllowed && linkIsMissing ? PanelText.commandLinkNeedsApplications : nil
+    }
 
     /// Something of ours is on this Mac, so the rows and "Remove" are shown.
     var isSetUp: Bool {
@@ -95,7 +103,7 @@ struct AgentSetupModel: Equatable {
     var linkDetail: String {
         switch snapshot.link {
         case .ours: return PanelText.commandLinked
-        case .none, .dangling: return PanelText.commandNotLinked
+        case .none, .dead, .dangling: return linkNote ?? PanelText.commandNotLinked
         case .foreign: return PanelText.skillForeign("~/" + SkillInstaller.linkPath)
         }
     }
@@ -111,6 +119,12 @@ struct AgentSetupOffer: View {
         VStack(alignment: .leading, spacing: 6) {
             if let summary = model.summary {
                 Text(summary)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if let note = model.linkNote {
+                Text(note)
                     .font(.callout)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

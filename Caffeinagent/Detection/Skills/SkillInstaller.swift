@@ -19,8 +19,11 @@ enum SkillAgentStatus: Equatable {
 /// What is at `~/.local/bin/agent-caffeine`.
 enum SkillLinkState: Equatable {
     case none
-    /// A link to the tool inside a copy of the app.
+    /// A link to the tool inside a copy of the app that is there.
     case ours(target: String)
+    /// A link to the tool inside a copy of the app that is gone. It is
+    /// replaced.
+    case dead
     /// A link to something that is gone. It is replaced.
     case dangling
     /// A file, a folder or a link to something else. It is never changed.
@@ -34,6 +37,7 @@ enum SkillInstallError: Error, Equatable {
     case writeFailed
     case noTool
     case linkNotOurs
+    case notInApplications
 
     /// One plain line for Settings.
     /// - Parameter place: the skills folder, relative to the home folder.
@@ -45,7 +49,7 @@ enum SkillInstallError: Error, Equatable {
         case .linkedOutside: return "~/\(place) is a link to a folder outside \(root), so Agent Caffeine did not write there."
         case .notAFolder: return "~/\(place) is not a folder, so Agent Caffeine did not write there."
         case .writeFailed: return "Agent Caffeine could not write \(folder). Nothing was changed."
-        case .noTool, .linkNotOurs: return linkMessage
+        case .noTool, .linkNotOurs, .notInApplications: return linkMessage
         }
     }
 
@@ -55,6 +59,7 @@ enum SkillInstallError: Error, Equatable {
         switch self {
         case .linkNotOurs, .notOurs: return "\(link) was not made by Agent Caffeine, so it did not change it."
         case .noTool: return "The command line tool is not in this copy of Agent Caffeine, so no link was made."
+        case .notInApplications: return PanelText.commandLinkNeedsApplications
         case .linkedOutside, .notAFolder, .writeFailed: return "Agent Caffeine could not make the link \(link). Nothing was changed."
         }
     }
@@ -97,6 +102,9 @@ struct SkillSnapshot: Equatable {
     /// The agents that are set up on this Mac.
     var agents: [Agent] = []
     var link: SkillLinkState = .none
+    /// False when the app does not run from the Applications folder. The
+    /// link is not offered then: see `SkillInstaller.link`.
+    var linkAllowed = true
     /// The skills folders "Set up for agents" would write to now,
     /// relative to the home folder.
     var planned: [String] = []
@@ -117,6 +125,9 @@ struct SkillInstaller {
     var skill: String
     /// The tool in the copy of the app that runs.
     var toolPath: String
+    /// The tool in the copy in the Applications folder, where the link
+    /// belongs.
+    var stableToolPath = CommandLineSetup(appPath: HookCatalog.stableAppPath).toolPath
 
     private static let log = Logger(subsystem: "com.caffeinagent.app", category: "Skills")
 
@@ -138,6 +149,10 @@ struct SkillInstaller {
     }
 
     private var installedText: String? { SkillCatalog.installedText(of: skill) }
+
+    /// A debug build, a copy in Downloads and a disk image move away or
+    /// go, so the link is offered only from the Applications folder.
+    var isInApplications: Bool { toolPath == stableToolPath }
 
     // MARK: What is there
 
@@ -203,8 +218,9 @@ struct SkillInstaller {
         case .file, .folder: return .foreign
         case .link:
             guard let target = try? FileManager.default.destinationOfSymbolicLink(atPath: linkURL.path) else { return .foreign }
-            if target.hasSuffix(CommandLineSetup.pathInApp) { return .ours(target: target) }
-            return FileManager.default.fileExists(atPath: linkURL.path) ? .foreign : .dangling
+            let isThere = FileManager.default.fileExists(atPath: linkURL.path)
+            if target.hasSuffix(CommandLineSetup.pathInApp) { return isThere ? .ours(target: target) : .dead }
+            return isThere ? .foreign : .dangling
         }
     }
 
@@ -238,6 +254,7 @@ struct SkillInstaller {
         SkillSnapshot(
             agents: SkillCatalog.entries.filter(isFound).map { SkillSnapshot.Agent(entry: $0, status: status(of: $0)) },
             link: linkState(),
+            linkAllowed: isInApplications,
             planned: plan().map(\.place)
         )
     }
@@ -371,9 +388,10 @@ struct SkillInstaller {
         }
     }
 
-    /// Makes `~/.local/bin/agent-caffeine` a link to the tool. A link of
-    /// ours and a link to something that is gone are replaced. A file, a
-    /// folder and a link to something else are refused.
+    /// Makes `~/.local/bin/agent-caffeine` a link to the tool. A link to
+    /// something that is gone is replaced. A link of ours to another copy
+    /// that is there is moved only by the copy in the Applications folder.
+    /// A file, a folder and a link to something else are refused.
     func link() throws {
         guard FileManager.default.isExecutableFile(atPath: toolPath) else { throw SkillInstallError.noTool }
         var record = record()
@@ -386,7 +404,10 @@ struct SkillInstaller {
                 save(record)
             }
             return
-        case .ours, .dangling:
+        case .ours:
+            guard isInApplications else { throw SkillInstallError.notInApplications }
+            guard unlink(linkURL.path) == 0 else { throw SkillInstallError.writeFailed }
+        case .dead, .dangling:
             guard unlink(linkURL.path) == 0 else { throw SkillInstallError.writeFailed }
         case .none:
             made = try makeFolders((Self.linkPath as NSString).deletingLastPathComponent)
@@ -403,7 +424,8 @@ struct SkillInstaller {
     }
 
     /// "Set up for agents": the skill for every agent on this Mac that has
-    /// it nowhere, and the link. Gives what went wrong in plain words, by
+    /// it nowhere, and the link when the app runs from the Applications
+    /// folder. Gives what went wrong in plain words, by
     /// agent id and `linkKey`. One place that fails does not stop the rest.
     @discardableResult
     func setUp() -> [String: String] {
@@ -420,6 +442,7 @@ struct SkillInstaller {
         for entry in SkillCatalog.entries where errors[entry.id] != nil {
             if case .installed = status(of: entry) { errors[entry.id] = nil }
         }
+        guard isInApplications else { return errors }
         do {
             try link()
         } catch {
@@ -462,13 +485,15 @@ struct SkillInstaller {
                 errors[place] = "Agent Caffeine could not remove ~/\(place)/\(SkillCatalog.skillName)/\(SkillCatalog.fileName)."
             }
         }
-        if case .ours = linkState() {
+        switch linkState() {
+        case .ours, .dead:
             if unlink(linkURL.path) == 0 {
                 let folder = (Self.linkPath as NSString).deletingLastPathComponent
                 removeFolders(believed(record.link?.created ?? [], onTheWayTo: folder))
             } else {
                 errors[Self.linkKey] = "Agent Caffeine could not remove ~/\(Self.linkPath)."
             }
+        case .none, .dangling, .foreign: break
         }
         record.link = nil
         save(record)
@@ -480,7 +505,7 @@ struct SkillInstaller {
     /// Brings what is already installed up to this build, with no word of
     /// the user: a file of ours from an older build, only while it is to
     /// the letter what that build wrote, and a link of ours that points
-    /// at another copy of the app. Nothing new is installed here. A file
+    /// at another copy of the app or at one that is gone. Nothing new is installed here. A file
     /// the user edited stays, and Settings offers "Update" for it.
     @discardableResult
     func updateOwn() -> [String] {
@@ -492,7 +517,13 @@ struct SkillInstaller {
             Self.log.notice("updated the skill in \(place, privacy: .public) from v=\(version) to v=\(SkillCatalog.version)")
             updated.append(place)
         }
-        if case .ours(let target) = linkState(), target != toolPath, (try? link()) != nil {
+        let moves: Bool
+        switch linkState() {
+        case .ours(let target): moves = target != toolPath
+        case .dead: moves = true
+        case .none, .dangling, .foreign: moves = false
+        }
+        if moves, (try? link()) != nil {
             Self.log.notice("the link to the command line tool points at this copy of the app now")
             updated.append(Self.linkPath)
         }
