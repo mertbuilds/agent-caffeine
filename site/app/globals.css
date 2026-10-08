@@ -596,6 +596,35 @@
     color: var(--muted);
   }
 
+  .article :where(.table-scroll) {
+    margin-top: 1.25em;
+    overflow-x: auto;
+  }
+
+  .article :where(table) {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .article :where(th, td) {
+    border-bottom: 1px solid var(--border);
+    min-width: 6.5rem;
+    padding: 0.625rem 1rem 0.625rem 0;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .article :where(th) {
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .article :where(th:last-child, td:last-child) {
+    padding-right: 0;
+  }
+
   .article :where(hr) {
     margin-top: 2.5em;
     border-color: var(--border);

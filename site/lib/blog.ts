@@ -46,6 +46,11 @@ function split(html: string, file: string): [string, string] {
   return [parts[0], parts[1] ?? ""];
 }
 
+/** A table gets a box of its own, so a wide one scrolls inside it and not the page. */
+function scrollTables(html: string): string {
+  return html.replaceAll("<table>", '<div class="table-scroll"><table>').replaceAll("</table>", "</table></div>");
+}
+
 /** Inline HTML to the plain text a reader sees, for structured data. */
 function plain(html: string): string {
   return html
@@ -75,7 +80,7 @@ function readPosts(): Post[] {
           const html = marked.parseInline(a, { async: false });
           return { q, a, html, text: plain(html) };
         }),
-        html: split(marked.parse(content, { async: false }), file),
+        html: split(scrollTables(marked.parse(content, { async: false })), file),
       };
     })
     .sort((a, b) => b.date.localeCompare(a.date));
