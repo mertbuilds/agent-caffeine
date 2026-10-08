@@ -33,6 +33,9 @@ struct ProcessInfoRow: Equatable {
     let logicalWriteBytes: UInt64?
     /// Package idle plus interrupt wakeups.
     let wakeups: UInt64?
+    /// Stopped by a signal, as with `kill -STOP` or Ctrl-Z, until it is
+    /// continued. See `ProcessCensus.isStopped`.
+    var isStopped = false
 
     static let noTTY: Int32 = -1
 
@@ -113,6 +116,12 @@ enum ProcessCensus {
     /// usage, and it does no work any more. `status` is `p_stat`.
     static func isRunning(status: Int8) -> Bool {
         Int32(status) != SZOMB
+    }
+
+    /// True for a process that a signal stopped: it is still there and
+    /// does nothing until it is continued. `status` is `p_stat`.
+    static func isStopped(status: Int8) -> Bool {
+        Int32(status) == SSTOP
     }
 
     /// Children by parent pid. The kernel task is its own parent and is left out.
@@ -241,7 +250,8 @@ final class SystemProcessCensus: ProcessCensusing {
                 energyNanojoules: usage.energyNanojoules,
                 instructions: usage.instructions,
                 logicalWriteBytes: usage.logicalWriteBytes,
-                wakeups: usage.wakeups
+                wakeups: usage.wakeups,
+                isStopped: ProcessCensus.isStopped(status: entry.kp_proc.p_stat)
             ))
         }
         images = alive
@@ -275,7 +285,8 @@ final class SystemProcessCensus: ProcessCensusing {
             energyNanojoules: nil,
             instructions: nil,
             logicalWriteBytes: nil,
-            wakeups: nil
+            wakeups: nil,
+            isStopped: ProcessCensus.isStopped(status: entry.kp_proc.p_stat)
         )
     }
 

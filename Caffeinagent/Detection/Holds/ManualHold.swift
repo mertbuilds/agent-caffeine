@@ -94,6 +94,14 @@ struct ManualHold: Codable, Equatable, Identifiable {
         return abs(running - pidStart) <= Self.startTolerance
     }
 
+    /// True for a command hold whose holder a signal stopped, as with
+    /// `kill -STOP` or Ctrl-Z: the tool waits for nothing while it is
+    /// stopped, so the hold does not count until it is continued.
+    func holderIsStopped(_ stopped: (Int32) -> Bool) -> Bool {
+        guard kind == .command, let pid else { return false }
+        return stopped(pid)
+    }
+
     /// As it is taken from a file: the texts cut and cleaned again, so a
     /// file that was written by hand shows nothing the tool would refuse.
     var cleaned: ManualHold {

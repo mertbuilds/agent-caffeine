@@ -96,11 +96,16 @@ struct HoldStore {
 
     /// The holds that count at `now`, the oldest first. A hold whose time
     /// is over, or whose holder is gone or is another process by now, is
-    /// dead: it is never among them, and its file is removed.
+    /// dead: it is never among them, and its file is removed. A hold
+    /// whose holder is stopped is not among them either, and its file
+    /// stays: it counts again when the holder is continued.
     /// - Parameters:
     ///   - startTime: of a process that runs now, nil when it is gone.
+    ///   - stopped: true for a process that a signal stopped.
     ///   - removeDead: false only reads.
-    func live(now: Date, startTime: (Int32) -> TimeInterval?, removeDead: Bool = true) -> [ManualHold] {
+    func live(
+        now: Date, startTime: (Int32) -> TimeInterval?, stopped: (Int32) -> Bool = { _ in false }, removeDead: Bool = true
+    ) -> [ManualHold] {
         let names = ((try? FileManager.default.contentsOfDirectory(atPath: directory.path)) ?? [])
             .filter { $0.hasSuffix(".json") && !$0.hasPrefix(".") }
         var holds: [ManualHold] = []
@@ -125,6 +130,7 @@ struct HoldStore {
                 if removeDead, old { unlink(path) }
                 continue
             }
+            if hold.holderIsStopped(stopped) { continue }
             holds.append(hold)
         }
         holds.sort { ($0.start, $0.id) < ($1.start, $1.id) }

@@ -125,6 +125,20 @@ final class ManualHoldTests: XCTestCase {
         XCTAssertFalse(hold.holderIsAlive { _ in 2000 }, "The pid belongs to another process now")
     }
 
+    func testAHoldWhoseHolderIsStoppedIsNotLiveAndKeepsItsFile() throws {
+        store.write(command(pid: 500, pidStart: 1000))
+        store.write(timed())
+        try setModified("bbbb0001", to: at(0))
+        let live = store.live(now: at(1799), startTime: { _ in 1000 }, stopped: { $0 == 500 })
+        XCTAssertEqual(live.map(\.id), ["aaaa0001"], "A timed hold has no holder that can be stopped")
+        XCTAssertEqual(files(), ["aaaa0001.json", "bbbb0001.json"])
+        XCTAssertEqual(store.live(now: at(1799), startTime: { _ in 1000 }).map(\.id), ["aaaa0001", "bbbb0001"], "Continued")
+        XCTAssertFalse(timed().holderIsStopped { _ in true })
+        XCTAssertTrue(ProcessCensus.isStopped(status: Int8(SSTOP)))
+        XCTAssertFalse(ProcessCensus.isStopped(status: Int8(SRUN)))
+        XCTAssertFalse(ProcessCensus.isStopped(status: Int8(SZOMB)))
+    }
+
     func testACommandHoldWithNoHolderIsDead() {
         var hold = command()
         hold.pid = nil

@@ -244,6 +244,29 @@ final class EvidenceCollectorTests: XCTestCase {
         XCTAssertEqual(sample(at: 61).frame.holds, [], "The time of the other one is over")
     }
 
+    /// `kill -STOP` on the tool, or Ctrl-Z in its terminal.
+    func testAHoldWhoseHolderIsStoppedDoesNotCountUntilItIsContinued() throws {
+        let store = HoldStore(directory: root.appendingPathComponent("holds"))
+        sources.holdDirectory = store.directory
+        collector = EvidenceCollector(sources: sources)
+        let path = "/Applications/agent caffeine.app/Contents/MacOS/agent-caffeine"
+        let holder = Row.fixture(700, ppid: 1, start: processStart, path: path, args: ["agent-caffeine"])
+        let command = ManualHold.command(id: "bbbb0001", holder: holder.identity, command: "ffmpeg", now: at(0))
+        store.write(command)
+        let file = store.directory.appendingPathComponent("bbbb0001.json").path
+        try FileManager.default.setAttributes([.modificationDate: at(0)], ofItemAtPath: file)
+        census.rows = [holder]
+        XCTAssertEqual(sample(at: 1).frame.holds, [command])
+
+        census.rows = [.fixture(700, ppid: 1, start: processStart, path: path, args: ["agent-caffeine"], stopped: true)]
+        let stopped = sample(at: 3600)
+        XCTAssertEqual(stopped.frame.holds, [], "Nothing is held for a holder that is stopped")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: file), "The file stays, however old it is")
+
+        census.rows = [holder]
+        XCTAssertEqual(sample(at: 3602).frame.holds, [command], "It counts again")
+    }
+
     func testNoHoldIsReadWithoutAFolder() {
         census.rows = []
         XCTAssertEqual(sample(at: 1).frame.holds, [])

@@ -244,7 +244,8 @@ final class EvidenceCollector: EvidenceCollecting {
         if let hookReader { sample.watchedFiles.insert(hookReader.directory.path) }
         if let holdStore {
             let alive = Dictionary(snapshot.map { ($0.pid, $0.startTime) }, uniquingKeysWith: { first, _ in first })
-            sample.frame.holds = holdStore.live(now: now, startTime: { alive[$0] })
+            let stopped = Set(snapshot.filter(\.isStopped).map(\.pid))
+            sample.frame.holds = holdStore.live(now: now, startTime: { alive[$0] }, stopped: stopped.contains)
             // A new hold is a new entry in the folder, and a holder that
             // is killed leaves its file behind.
             sample.watchedFiles.insert(holdStore.directory.path)

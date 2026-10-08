@@ -7,12 +7,12 @@ extension ProcessInfoRow {
         path: String = "/usr/bin/true", args: [String] = [],
         tty: Int32 = ProcessInfoRow.noTTY, pgid: Int32? = nil, tpgid: Int32 = 0,
         cpu: TimeInterval = 0, energy: UInt64? = nil, instructions: UInt64? = nil,
-        writes: UInt64? = nil, wakeups: UInt64? = nil
+        writes: UInt64? = nil, wakeups: UInt64? = nil, stopped: Bool = false
     ) -> ProcessInfoRow {
         ProcessInfoRow(
             pid: pid, ppid: ppid, startTime: start, executablePath: path, arguments: args,
             uid: 501, tty: tty, pgid: pgid ?? pid, tpgid: tpgid, cpuTime: cpu,
-            energyNanojoules: energy, instructions: instructions, logicalWriteBytes: writes, wakeups: wakeups
+            energyNanojoules: energy, instructions: instructions, logicalWriteBytes: writes, wakeups: wakeups, isStopped: stopped
         )
     }
 }
@@ -272,6 +272,36 @@ final class ProcessCensusTests: XCTestCase {
         XCTAssertFalse((census.snapshot() ?? []).contains { $0.pid == pid })
         XCTAssertNil(SystemProcessCensus.row(of: pid))
         XCTAssertEqual(status(), SZOMB, "Still not reaped after the snapshot")
+    }
+
+    /// A stopped process stays in the census and says that it is stopped.
+    func testLiveSnapshotSaysThatAProcessIsStopped() throws {
+        var pid: pid_t = 0
+        let arguments: [UnsafeMutablePointer<CChar>?] = [strdup("sleep"), strdup("60"), nil]
+        defer { arguments.forEach { free($0) } }
+        XCTAssertEqual(posix_spawn(&pid, "/bin/sleep", nil, nil, arguments, nil), 0)
+        defer {
+            kill(pid, SIGKILL)
+            var status: Int32 = 0
+            waitpid(pid, &status, 0)
+        }
+        func wait(for condition: () -> Bool) -> Bool {
+            for _ in 0..<500 where !condition() { usleep(10_000) }
+            return condition()
+        }
+        let census = SystemProcessCensus()
+        func stopped() -> Bool? { census.snapshot()?.first { $0.pid == pid }?.isStopped }
+
+        XCTAssertTrue(wait { stopped() == false })
+        XCTAssertEqual(SystemProcessCensus.row(of: pid)?.isStopped, false)
+
+        kill(pid, SIGSTOP)
+        XCTAssertTrue(wait { stopped() == true })
+        XCTAssertEqual(SystemProcessCensus.row(of: pid)?.isStopped, true)
+
+        kill(pid, SIGCONT)
+        XCTAssertTrue(wait { stopped() == false })
+        XCTAssertEqual(SystemProcessCensus.row(of: pid)?.isStopped, false)
     }
 
     func testLiveSnapshotTiming() {
