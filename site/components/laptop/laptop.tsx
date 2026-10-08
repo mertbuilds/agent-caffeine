@@ -132,17 +132,23 @@ export function Laptop({ closed, display, grounded = 1, children }: LaptopProps)
               <stop offset="1" style={{ stopColor: "var(--shadow)", stopOpacity: 0 }} />
             </linearGradient>
           )}
+          {/*
+            A mask and not a clip path: the three shapes are painted one over the other, so which way round each
+            outline runs does not matter. As two paths of one clip path the lid went missing for single frames of
+            its swing, at the angles where the outline that clears it happened to run the other way.
+          */}
           {lid.cut && (
-            <clipPath id="laptop-lid-cut">
-              <path d={`M-50 -50H150V120H-50Z${lid.cut.hidden}`} clipRule="evenodd" />
-              <path d={lid.cut.clear} />
-            </clipPath>
+            <mask id="laptop-lid-cut" maskUnits="userSpaceOnUse" x="-50" y="-50" width="200" height="170">
+              <rect x="-50" y="-50" width="200" height="170" fill="white" />
+              <path d={lid.cut.hidden} fill="black" />
+              <path d={lid.cut.clear} fill="white" />
+            </mask>
           )}
         </defs>
         <g opacity={fixed(grounded)}>{SHADOWS}</g>
         {BASE}
         {lid.shadow && <path d={DECK.top} fill="url(#laptop-lid-shadow)" opacity={fixed(closed)} />}
-        <g clipPath={lid.cut ? "url(#laptop-lid-cut)" : undefined}>
+        <g mask={lid.cut ? "url(#laptop-lid-cut)" : undefined}>
           <path d={lid.hull} style={SURFACE} />
           <path d={lid.hull} style={shade(SIDE)} />
           {lid.facing ? (
