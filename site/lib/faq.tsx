@@ -57,8 +57,8 @@ const questions: FaqItem[] = [
     question: "Can I reach my agent from my phone while the lid is closed?",
     answer: (
       <>
-        Yes. Choose Stay reachable in the menu, and your Mac stays awake for 1, 2 or 4 hours. A
-        message cannot wake a Mac that sleeps.
+        Yes. Choose Stay reachable, and your Mac stays awake for 1, 2 or 4 hours. On battery with
+        the lid closed it needs the helper. A message cannot wake a sleeping Mac.
       </>
     ),
   },
