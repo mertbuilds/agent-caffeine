@@ -32,6 +32,16 @@ enum ProcessMatcher: Equatable {
     /// The executable is at `relativePath` inside an app bundle. `bundle` is
     /// the bundle's file name ("Antigravity.app"), nil for any bundle.
     case appBundle(bundle: String?, relativePath: String)
+    /// An interpreter runs a script or a module of this name. A binary
+    /// of the same name is another program: the JavaScript engine Hermes
+    /// is a binary `hermes`, and Hermes Agent is a Python script.
+    case script(String)
+    /// An interpreter runs source that was passed on the command line
+    /// (`python -c <source>`), and the source contains this.
+    case inlineSource(contains: String)
+    /// argv[0] is this: the title a process gave itself. Not one of the
+    /// names the user's old list knew, so not in `processNames`.
+    case title(String)
 }
 
 /// Matches the arguments that follow the command.
@@ -139,13 +149,15 @@ struct AgentCatalog {
 
     /// Raised when a definition changes what it matches, so a lab recording
     /// says which catalog saw its processes.
-    static let version = 7
+    static let version = 8
 
     // MARK: Data
 
     static let cursorDesktopID = "cursor-desktop"
     static let claudeDesktopID = "claude-desktop"
     static let grokID = "grok"
+    static let hermesID = "hermes-agent"
+    static let openClawID = "openclaw"
     /// `entrypoint` in the session file of a Claude Code that the Claude
     /// app started.
     static let claudeDesktopEntrypoint = "claude-desktop"
@@ -313,7 +325,34 @@ struct AgentCatalog {
             exclusions: [],
             verified: true
         ),
-        cli("hermes-agent", "Hermes Agent"),
+        // Seen 2026-10-08 (docs/research/11-hermes-agent.md). The command
+        // `hermes` is a shell script that runs `python3 -I -c <source>
+        // <arguments>` with the Python of `~/.hermes/tools`, and the
+        // source ends in `from hermes_cli.main import main`. So no script
+        // name is in argv, and the process title stays that of Python. A
+        // `hermes` that pip installed is a script that Python runs. The
+        // binary `hermes` of React Native is the JavaScript engine, and
+        // `/Applications/Hermes.app/Contents/MacOS/Hermes-Setup` is the
+        // installer: neither is matched. `hermes gateway run` is the
+        // messaging gateway: it lives all day and works in turns. The
+        // service starts it below `hermes --run-module
+        // hermes_cli.stderr_timestamp ... -- <hermes> gateway run`, which
+        // only stamps its error log.
+        AgentDefinition(
+            id: hermesID, displayName: "Hermes Agent", level: .state, kind: .cli,
+            matchers: [
+                AgentMatcher(.inlineSource(contains: "from hermes_cli.main import main"), unless: [.firstIsOne(of: hermesCommands)]),
+                AgentMatcher(.script("hermes"), unless: [.firstIsOne(of: hermesCommands)]),
+                AgentMatcher(.script("hermes_cli"), unless: [.firstIsOne(of: hermesCommands)]),
+                AgentMatcher(.name("hermes-agent"), unless: [.firstIsOne(of: hermesCommands)]),
+            ],
+            exclusions: [
+                AgentExclusion(arguments: .leading(["--run-module"])),
+                AgentExclusion(arguments: .contains(["gateway", "run"]), role: .engine),
+                AgentExclusion(arguments: .firstIsOne(of: ["gateway"])),
+            ],
+            verified: true
+        ),
         cli("iflow-cli", "iFlow CLI"),
         cli("junie", "Junie"),
         // The text editor kilo is started as `kilo <file>`. Kilo Code
@@ -325,7 +364,23 @@ struct AgentCatalog {
         cli("mistral-vibe", "Mistral Vibe"),
         cli("neovate", "Neovate"),
         cli("opencode", "opencode", verified: true),
-        cli("openclaw", "OpenClaw"),
+        // Seen 2026-10-08, OpenClaw 2026.9.9 (docs/research/12-openclaw.md):
+        // `node /opt/homebrew/bin/openclaw onboard` with a child whose
+        // title is `openclaw` and whose arguments are gone. The gateway
+        // sets the title `openclaw-gateway` (read in the package, not seen
+        // running). It lives all day and works in turns, so it is an
+        // engine. No state of a turn is read yet: judged by activity.
+        AgentDefinition(
+            id: openClawID, displayName: "OpenClaw", level: .activity, kind: .cli,
+            matchers: [
+                AgentMatcher(.name("openclaw"), unless: [.firstIsOne(of: openClawCommands)]),
+                AgentMatcher(.title("openclaw-gateway")),
+            ],
+            exclusions: [AgentExclusion(process: .title("openclaw-gateway"), role: .engine)]
+                + openClawGatewayCommands.map { AgentExclusion(arguments: .leading(["gateway", $0])) }
+                + [AgentExclusion(arguments: .firstIsOne(of: ["gateway"]), role: .engine)],
+            verified: false
+        ),
         cli("openhands", "OpenHands"),
         cli("pi", "Pi"),
         cli("pochi", "Pochi"),
@@ -344,6 +399,36 @@ struct AgentCatalog {
     private static let grokCommands: Set<String> = [
         "completions", "doctor", "export", "help", "inspect", "login", "logout", "mcp", "memory", "models", "plugin",
         "sessions", "setup", "trace", "update", "version", "v", "worktree", "wrap",
+    ]
+
+    /// The commands of Hermes Agent that run no turn, from the parsers in
+    /// `hermes_cli/subcommands`. `chat`, `resume`, `acp`, `cron`, `serve`,
+    /// `dashboard`, `desktop` and the others that can run a turn are
+    /// left sessions.
+    private static let hermesCommands: Set<String> = [
+        "approvals", "auth", "backup", "bundles", "checkpoints", "claw", "completion", "config", "debug", "doctor", "dump",
+        "egress", "fallback", "hooks", "import", "import-agent", "insights", "journey", "login", "logout", "logs", "mcp",
+        "memory", "migrate", "model", "monitoring", "pairing", "pause", "peer", "pets", "plugins", "profile", "prompt-size",
+        "secrets", "security", "sessions", "setup", "skills", "skin", "slack", "status", "tools", "uninstall", "update", "usage",
+        "vault", "verify", "webhook", "whatsapp", "whatsapp-cloud", "worktree",
+    ]
+
+    /// The commands of OpenClaw that run no turn, from the command tree
+    /// of its `docs/cli/index.md`. `agent`, `tui`, `chat`, `acp`, `node`,
+    /// `worker`, `cron` and the others that can run a turn are left
+    /// sessions.
+    private static let openClawCommands: Set<String> = [
+        "setup", "onboard", "configure", "config", "database", "completion", "doctor", "triage", "backup", "migrate", "security",
+        "secrets", "reset", "uninstall", "update", "channels", "directory", "skills", "plugins", "memory", "transcripts", "path",
+        "wiki", "status", "health", "sessions", "audit", "tasks", "logs", "models", "devices", "users", "approvals", "hooks",
+        "webhooks", "pairing", "qr", "docs", "dns",
+    ]
+
+    /// `openclaw gateway <command>` for the service and for questions to
+    /// a gateway that runs. `openclaw gateway` and `gateway run` are the
+    /// gateway itself.
+    private static let openClawGatewayCommands = [
+        "status", "install", "uninstall", "start", "stop", "restart", "call", "health", "probe", "discover", "usage-cost",
     ]
 
     private static let textFileExtensions: Set<String> = [
@@ -384,8 +469,10 @@ struct AgentCatalog {
         /// that an interpreter runs.
         let arguments: [String]
         /// The executable is an interpreter and one of the names is the
-        /// script it runs.
+        /// script it runs, or it runs `inlineSource`.
         var interpreterRunsScript = false
+        /// The source of `python -c <source>`.
+        var inlineSource: String?
     }
 
     /// The names are the basename of argv[0] (a CLI that sets its process
@@ -409,14 +496,39 @@ struct AgentCatalog {
             arguments = target.rest
             runsScript = isInterpreter(executable)
         }
+        var inlineSource: String?
         if let target = launched(by: argv0, arguments) {
             note(target)
+        } else if let inline = [argv0, executable].first(where: isInterpreter).flatMap({ inline(of: $0, arguments) }) {
+            inlineSource = inline.source
+            arguments = inline.rest
+            runsScript = isInterpreter(executable)
         } else if let interpreter = [argv0, executable].first(where: isInterpreter), let script = script(of: interpreter, arguments) {
             note(script)
             if let target = launched(by: script.name, script.rest) { note(target) }
         }
         if !executable.isEmpty && !names.contains(executable) { names.append(executable) }
-        return Command(names: names, arguments: arguments, interpreterRunsScript: runsScript)
+        return Command(names: names, arguments: arguments, interpreterRunsScript: runsScript, inlineSource: inlineSource)
+    }
+
+    /// The source of `python -I -c <source> <arguments>`, and the
+    /// arguments after it. Python only: it is the one interpreter an
+    /// agent of the catalog is started this way with.
+    private static func inline(of interpreter: String, _ arguments: [String]) -> (source: String, rest: [String])? {
+        guard interpreter.hasPrefix("python") || interpreter.hasPrefix("pypy") else { return nil }
+        let valued = flags(of: interpreter).valued
+        var index = 0
+        while index < arguments.count {
+            let argument = arguments[index]
+            guard argument.hasPrefix("-"), argument != "-", !argument.hasPrefix("--") else { return nil }
+            if argument.hasSuffix("c") {
+                guard index + 1 < arguments.count else { return nil }
+                return (arguments[index + 1], Array(arguments[(index + 2)...]))
+            }
+            if argument.hasSuffix("m") { return nil }
+            index += valued.contains(argument) ? 2 : 1
+        }
+        return nil
     }
 
     /// The flags of each interpreter that take the next argument as their
@@ -647,6 +759,12 @@ struct AgentCatalog {
         case .appBundle(let bundle, let relativePath):
             if let bundle { return row.executablePath.hasSuffix("/\(bundle)/\(relativePath)") }
             return row.executablePath.hasSuffix(".app/\(relativePath)")
+        case .script(let name):
+            return command.interpreterRunsScript && command.inlineSource == nil && command.names.contains(name.lowercased())
+        case .inlineSource(let part):
+            return command.inlineSource?.contains(part) ?? false
+        case .title(let title):
+            return baseName(row.arguments.first ?? "").lowercased() == title
         }
     }
 

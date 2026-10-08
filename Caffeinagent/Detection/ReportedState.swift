@@ -18,6 +18,7 @@ struct StateReport: Equatable {
         case codexRollout
         case cursorTranscript
         case grokEvents
+        case hermesState
         case fileActivity
     }
 

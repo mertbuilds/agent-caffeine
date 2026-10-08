@@ -35,6 +35,7 @@ extension StateReport.Source: NameCoded {
     static let names: [(value: StateReport.Source, name: String)] = [
         (.claudeSessionFile, "claudeSession"), (.claudeJobState, "claudeJob"), (.claudeTranscript, "claudeTranscript"),
         (.codexRollout, "codexRollout"), (.cursorTranscript, "cursorTranscript"), (.grokEvents, "grokEvents"),
+        (.hermesState, "hermesState"),
         (.fileActivity, "fileActivity"),
     ]
 }
