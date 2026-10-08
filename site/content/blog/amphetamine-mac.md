@@ -11,7 +11,7 @@ faq:
   - q: "What is Amphetamine Enhancer?"
     a: "A helper app from the same developer, on GitHub under the MIT license. Its README says it \"adds a fail-safe for the closed-display mode feature found in Amphetamine 5.0+\" and lets Amphetamine use all running processes with Triggers. It is not on the App Store."
   - q: "Does Amphetamine work on Apple silicon Macs?"
-    a: "The App Store version history speaks of Apple silicon Macs directly: version 5.3.2 added a warning when Amphetamine runs using Rosetta, and Power Protect is described as \"only needed/available on Apple Silicon Mac laptops\"."
+    a: "The App Store version history speaks of Apple silicon Macs directly: the notes for versions 5.3.1 and 5.3.2 list a warning when Amphetamine runs using Rosetta, and Power Protect is described as \"only needed/available on Apple Silicon Mac laptops\"."
   - q: "What is the Mac command that does what Amphetamine does?"
     a: "`caffeinate`. It is built into macOS. `caffeinate -i` keeps the Mac awake until you press Ctrl+C, and `caffeinate -i -t 3600` keeps it awake for one hour."
 ---
@@ -81,7 +81,7 @@ The configuration file is a sudoers rule of two lines. It lets administrator acc
 
 ### Amphetamine Enhancer
 
-[Amphetamine Enhancer](https://github.com/x74353/Amphetamine-Enhancer) is an older helper app. Its README describes it this way: "Amphetamine Enhancer is a helper application that enhances a couple of Amphetamine's features." It adds two things:
+[Amphetamine Enhancer](https://github.com/x74353/Amphetamine-Enhancer) is a helper app from the same developer. Its README describes it this way: "Amphetamine Enhancer is a helper application that enhances a couple of Amphetamine's features." It adds two things:
 
 - "Adds a fail-safe for the closed-display mode feature found in Amphetamine 5.0+"
 - "Gives Amphetamine 5.0+ the ability to use all running processes with Triggers and app-based sessions"

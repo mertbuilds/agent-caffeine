@@ -40,7 +40,8 @@ const RIVALS: Record<Exclude<ToolId, "ours">, ReactNode> = {
       <p>
         Adrafinil is free and open source (MIT). One installer sets up hooks for 9 agents: Claude Code, Codex,
         Cursor, Gemini CLI, Aider, Hermes, OpenCode, Cline and Pi. It keeps the Mac awake with the lid closed
-        only while an agent works, and it stops when the Mac gets too hot under a closed lid.
+        only while an agent works, and it stops when the Mac gets too hot under a closed lid. Its release
+        notes also name a battery cutout, with no level.
       </p>
       <p>
         It has two things we do not have. An agent can ask it for more time after its answer, through an MCP
@@ -48,9 +49,14 @@ const RIVALS: Record<Exclude<ToolId, "ours">, ReactNode> = {
         own.
       </p>
       <p>
+        For Claude Code it also knows when a session waits for you. A setting decides what happens then: the
+        Mac stays awake, sleeps after a grace period, or sleeps at once. The menu shows what the session
+        waits for.
+      </p>
+      <p>
         If you want a free tool and your agent is on that list, Adrafinil does the job. It needs macOS 26.4 or
-        later. Its pages do not state a stop at a low battery, a state for an agent that waits for you, or a
-        notification when an agent finishes.
+        later. Its pages state a chime when the hold starts and a summary when you open the lid. They do not
+        state a notification when an agent finishes.
       </p>
     </>
   ),
@@ -58,8 +64,10 @@ const RIVALS: Record<Exclude<ToolId, "ours">, ReactNode> = {
     <>
       <p>
         Hold My Lid costs $9.99 once for up to 3 Macs, and has a free trial. Its page calls $9.99 an early
-        price and names $14.99 as the normal one. It reads the lifecycle hooks of Claude Code, Codex and
-        OpenCode, and checks the process for agents such as Cursor. It runs on macOS 14 or later, on Apple
+        price and names $14.99 as the normal one. Its page gives two lists of the agents whose
+        lifecycle hooks it reads. The answer in its FAQ names 3: Claude Code, Codex and OpenCode. The grid
+        "Works out of the box" marks 7: those 3 and Gemini, Pi, Copilot CLI and Hermes. For others, such as
+        Cursor, it checks the process. It runs on macOS 14 or later, on Apple
         silicon and Intel.
       </p>
       <p>
@@ -77,8 +85,8 @@ const RIVALS: Record<Exclude<ToolId, "ours">, ReactNode> = {
     <>
       <p>
         LidRun has a free plan that keeps the Mac awake with the lid open, with timers, a mode for charging
-        only and a stop at a low battery. The closed lid and Auto Mode are in the paid plan: $9.90 once for 1
-        Mac, $19.90 for 3 Macs, with a refund within 14 days.
+        only and a stop at a low battery. The closed lid and Auto Mode are in the paid plan, after a limited
+        number of free closed-lid runs: $9.90 once for 1 Mac, $19.90 for 3 Macs, with a refund within 14 days.
       </p>
       <p>
         Auto Mode watches the processes of Claude Code, Cursor, Docker and Ollama. LidRun also has webhooks,

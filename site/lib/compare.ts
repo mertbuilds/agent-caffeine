@@ -92,7 +92,7 @@ export const ROWS: readonly Row[] = [
       ours: text(PRICE_LIST, "7-day free trial. Closed source"),
       adrafinil: text("Free", "Open source (MIT)"),
       holdmylid: text("$9.99 for 3 Macs", "Early price, then $14.99. Free trial"),
-      lidrun: text("Free with the lid open", "Lid closed: $9.90 for 1 Mac, $19.90 for 3 Macs"),
+      lidrun: text("Free with the lid open", "Lid closed: a few free runs, then $9.90 for 1 Mac, $19.90 for 3 Macs"),
       clamshell: text("$9.99 for 1 Mac, $19.99 for 3 Macs", "7-day free trial"),
       amphetamine: text("Free", "Mac App Store"),
     },
@@ -104,7 +104,7 @@ export const ROWS: readonly Row[] = [
       ours: yes(),
       adrafinil: partly("On battery: not stated"),
       holdmylid: yes("Not in every case, its page says"),
-      lidrun: yes("Paid plan"),
+      lidrun: yes("A few free runs, then the paid plan"),
       clamshell: yes(),
       amphetamine: partly("On battery: not stated"),
     },
@@ -128,7 +128,7 @@ export const ROWS: readonly Row[] = [
     cells: {
       ours: yes(`Agent's own state: 6 agents. Signs of work: more than ${agentsMoreThan} agents`),
       adrafinil: yes("Agent's own state: 9 agents"),
-      holdmylid: yes("Agent's own state: 3 agents. Process check: others"),
+      holdmylid: yes("Agent's own state: 3 to 7 agents, its page gives both. Process check: others"),
       lidrun: partly("Process check"),
       clamshell: no("You arm it yourself"),
       amphetamine: partly("While an app you pick runs"),
@@ -139,7 +139,7 @@ export const ROWS: readonly Row[] = [
     label: "Knows when an agent waits",
     cells: {
       ours: yes(),
-      adrafinil: unstated(),
+      adrafinil: yes("Claude Code"),
       holdmylid: unstated(),
       lidrun: partly("An alert"),
       clamshell: no(),
@@ -163,7 +163,7 @@ export const ROWS: readonly Row[] = [
     label: "Stops at a low battery",
     cells: {
       ours: yes(`At ${BATTERY_FLOOR}%, adjustable`),
-      adrafinil: unstated(),
+      adrafinil: yes("Level not stated"),
       holdmylid: yes("Adjustable"),
       lidrun: yes("Adjustable"),
       clamshell: yes("Off by default"),
@@ -211,7 +211,7 @@ export const ROWS: readonly Row[] = [
     label: "Display dims as the lid closes",
     cells: {
       ours: yes("With a lid angle sensor"),
-      adrafinil: unstated(),
+      adrafinil: partly("Off at lid close"),
       holdmylid: partly("Off at lid close"),
       lidrun: unstated(),
       clamshell: partly("Off at lid close"),
@@ -227,7 +227,7 @@ export const ROWS: readonly Row[] = [
       holdmylid: yes(),
       lidrun: yes(),
       clamshell: no("Apple silicon only"),
-      amphetamine: unstated(),
+      amphetamine: yes("macOS 10.13 or later"),
     },
   },
   {

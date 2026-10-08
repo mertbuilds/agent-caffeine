@@ -5,7 +5,7 @@ date: "2026-10-08"
 updated: "2026-10-08"
 faq:
   - q: "Is there still a Caffeine app for Mac?"
-    a: "Yes. The Caffeine app with the coffee cup is maintained again. Version 1.6.4 is on caffeine-app.net, was released on April 20, 2026, and needs macOS 11 Big Sur or later."
+    a: "Yes. The Caffeine app with the coffee cup is maintained again. Version 1.6.4 is on caffeine-app.net, and was released on April 20, 2026. Version 1.6.4 needs macOS 14.6 or later. For an older macOS, the site offers an older version: choose your macOS there."
   - q: "Is Caffeine for Mac free?"
     a: "The download on caffeine-app.net has no price, and the app is open source under the MIT license."
   - q: "Is there a caffeine command on Mac?"
@@ -18,7 +18,7 @@ faq:
 
 "Caffeine for Mac" means one of three things, so find your case first:
 
-- You want the Caffeine app, the coffee cup in the menu bar. It still exists. Download version 1.6.4 from [caffeine-app.net](https://www.caffeine-app.net/en/). It needs macOS 11 Big Sur or later.
+- You want the Caffeine app, the coffee cup in the menu bar. It still exists. Download version 1.6.4 from [caffeine-app.net](https://www.caffeine-app.net/en/). Version 1.6.4 needs macOS 14.6 or later. For an older macOS, the site offers an older version: choose your macOS there.
 - You mean the command. It is named `caffeinate`, not caffeine, and it is on every Mac. Open Terminal and run `caffeinate -d` to keep the display on until you press Ctrl+C.
 - You want any tool that keeps your Mac awake. For the screen, set the timers in System Settings > **Lock Screen** to Never. For other cases, the table near the end of this guide names the tool.
 
@@ -40,7 +40,7 @@ These are the facts we read on October 8, 2026:
 | --- | --- |
 | Version | 1.6.4, 4.5 MB |
 | Released | April 20, 2026 (GitHub release) |
-| Needs | "at least macOS 11 (Big Sur)" |
+| Needs | macOS 14.6 or later (the update feed of the app). The site says "at least macOS 11 (Big Sur)" |
 | macOS versions the site lists | Monterey, Ventura, Sonoma, Sequoia, Tahoe |
 | License | MIT, source on GitHub |
 | Site | caffeine-app.net, copyright Dominic Rodemer |
@@ -49,7 +49,7 @@ For a Mac with macOS 10.x, the site points to the older version from IntelliScap
 
 Two things to know when you look for it:
 
-- Homebrew has a cask named `caffeine`. On the day we checked, it installs version 1.1.4 from the IntelliScape repository, not version 1.6.4. For the current version, use the download on caffeine-app.net.
+- Homebrew has a cask named `caffeine`. On the day we checked, it installs version 1.1.4 from the IntelliScape repository, not version 1.6.4. The current version is also a cask: `domzilla-caffeine` installs version 1.6.4. Or use the download on caffeine-app.net.
 - The Mac App Store has several apps with "Caffeine" in the name from other makers. They are different apps. We did not find this Caffeine there.
 
 ### How to use it
@@ -132,7 +132,9 @@ Caffeine is the right one when you want a single switch in the menu bar and noth
 
 - [Caffeine](https://www.caffeine-app.net/en/) (description, history, version and system requirements, read on October 8, 2026)
 - [Caffeine on GitHub](https://github.com/domzilla/Caffeine) (release 1.6.4 and its date, license)
+- [Caffeine update feed](https://dr-caffeine-mac.s3.amazonaws.com/appcast.xml) (the macOS version that each release needs)
 - [Homebrew cask caffeine](https://formulae.brew.sh/cask/caffeine) (version and source of the cask)
+- [Homebrew cask domzilla-caffeine](https://formulae.brew.sh/cask/domzilla-caffeine) (version of the cask)
 - `man caffeinate` (caffeinate(8), macOS)
 - [KeepingYouAwake on GitHub](https://github.com/newmarcel/KeepingYouAwake)
 - [Amphetamine on the Mac App Store](https://apps.apple.com/us/app/amphetamine/id937984704?mt=12)
