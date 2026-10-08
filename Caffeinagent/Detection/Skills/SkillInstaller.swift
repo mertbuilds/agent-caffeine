@@ -504,8 +504,10 @@ struct SkillInstaller {
 
     /// Brings what is already installed up to this build, with no word of
     /// the user: a file of ours from an older build, only while it is to
-    /// the letter what that build wrote, and a link of ours that points
-    /// at another copy of the app or at one that is gone. Nothing new is installed here. A file
+    /// the letter what that build wrote, and the link: one the record
+    /// says the app made, when it points at another copy, and one to a
+    /// copy that is gone. A link the user made by hand to another copy,
+    /// for example to a build of their own, stays. Nothing new is installed here. A file
     /// the user edited stays, and Settings offers "Update" for it.
     @discardableResult
     func updateOwn() -> [String] {
@@ -519,7 +521,7 @@ struct SkillInstaller {
         }
         let moves: Bool
         switch linkState() {
-        case .ours(let target): moves = target != toolPath
+        case .ours(let target): moves = target != toolPath && record().link != nil
         case .dead: moves = true
         case .none, .dangling, .foreign: moves = false
         }

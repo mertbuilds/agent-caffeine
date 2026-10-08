@@ -383,6 +383,27 @@ final class SkillInstallerTests: XCTestCase {
         XCTAssertEqual(installer.updateOwn(), [])
     }
 
+    func testLaunchLeavesALinkTheAppDidNotRecord() throws {
+        let other = try otherCopy("Build", linked: true)
+        XCTAssertEqual(installer.linkState(), .ours(target: other))
+        XCTAssertEqual(installer.updateOwn(), [], "The user made it by hand")
+        XCTAssertEqual(destination(link), other)
+        XCTAssertEqual(installer.record().link, nil)
+    }
+
+    func testLaunchMovesTheLinkTheAppRecorded() throws {
+        let applications = installer.toolPath
+        installer.toolPath = try otherCopy()
+        installer.stableToolPath = installer.toolPath
+        try installer.link()
+        XCTAssertNotNil(installer.record().link)
+        installer.toolPath = applications
+        installer.stableToolPath = applications
+        XCTAssertEqual(installer.updateOwn(), [link])
+        XCTAssertEqual(destination(link), applications)
+        XCTAssertEqual(installer.record().link?.target, applications)
+    }
+
     // MARK: Remove
 
     func testRemoveTakesEverythingWeMade() throws {
