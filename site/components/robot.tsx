@@ -97,14 +97,17 @@ type RobotProps = {
   paused?: boolean;
   /** A still picture of the pose, as the app shows it with Reduce Motion. */
   still?: boolean;
+  /** How far the pose's tone has come in, from 0 (the full colour of the robot awake) to 1. With it the tone follows this number and does not fade by itself. */
+  rest?: number;
 };
 
-export function Robot({ pose, size = SIDE, paused = false, still = false }: RobotProps) {
+export function Robot({ pose, size = SIDE, paused = false, still = false, rest }: RobotProps) {
   const id = `robot-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
   const look = LOOKS[pose];
   const lift = `robot-layer ${look.lively ? "robot-float" : ""}`;
   const iconEyes = look.eyes === "happy" ? 1 : look.eyes === "dim" ? 0.3 : 0;
-  const filter = `saturate(${look.saturation}) contrast(${look.contrast}) brightness(${1 - look.dimming})`;
+  const toned = (full: number) => (rest === undefined ? full : 1 + (full - 1) * rest);
+  const filter = `saturate(${toned(look.saturation)}) contrast(${toned(look.contrast)}) brightness(${toned(1 - look.dimming)})`;
   const picture = { alt: "", decoding: "async", draggable: false, height: PICTURE, loading: "lazy", width: PICTURE } as const;
 
   return (
@@ -117,7 +120,7 @@ export function Robot({ pose, size = SIDE, paused = false, still = false }: Robo
     >
       <span className="absolute left-0 top-0 block size-24 origin-top-left" style={{ transform: size === SIDE ? undefined : `scale(${size / SIDE})` }}>
         <span className="robot-clip absolute inset-0 block overflow-hidden rounded-[21.6px]">
-          <span className="robot-layer transition-[filter] duration-[350ms] ease-out motion-reduce:transition-none" style={{ filter }}>
+          <span className={`robot-layer ${rest === undefined ? "transition-[filter] duration-[350ms] ease-out motion-reduce:transition-none" : ""}`} style={{ filter }}>
             <img {...picture} className="robot-layer" src="/robot/tile.png" />
             <span className={lift}>
               <img {...picture} className="robot-layer" src="/robot/body.png" />

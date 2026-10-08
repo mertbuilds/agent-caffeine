@@ -5,7 +5,8 @@ import { Hero, type HeroVariant } from "@/components/hero";
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
 const VARIANTS: readonly { letter: string; variant: HeroVariant; name: string }[] = [
-  { letter: "A", variant: "a", name: "App in front" },
+  { letter: "A1", variant: "a", name: "App in front, \u201cwith no worry\u201d (the home page)" },
+  { letter: "A2", variant: "a2", name: "App in front, \u201cwith no fear\u201d" },
   { letter: "B", variant: "b", name: "Pack and go" },
   { letter: "C", variant: "c", name: "Both" },
   { letter: "Z", variant: "z", name: "The hero before" },

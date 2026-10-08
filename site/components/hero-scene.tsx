@@ -39,6 +39,11 @@ const GAP = 3;
 
 /** Seconds the check takes to come in. */
 const CHECK_IN = 0.35;
+/** The Mac's desktop, and how much of it stays in the outline of the display once the lid is closed. */
+const DESKTOP = "bg-[radial-gradient(130%_100%_at_50%_100%,#3b82f0,#12306e_65%,#0a1c44)]";
+const DESKTOP_KEPT = 0.45;
+/** Seconds the robot's tile takes to lose its colour once the Mac can sleep. */
+const TONE_DOWN = 0.8;
 /** How much of itself the menu keeps once the Mac sleeps. */
 const ASLEEP = 0.45;
 /** The moment of the loop that stands for all of it, for a reader who asked for less motion: the lid is closed, three agents work and one has just finished. */
@@ -86,6 +91,9 @@ function headlineAt(minutes: number): Headline {
     ? { kind: "finishedRecently", subject: { one: LAST_DONE.name } }
     : { kind: "idle", subject: { many: AGENTS.length } };
 }
+
+/** The second of the loop at which the Mac can sleep. */
+const ASLEEP_AT = secondAt(LAST_DONE.done + RELEASE_AFTER / 60);
 
 type Row = { icon: AgentIconName; title: string; detail: string; working: boolean; checked: number };
 
@@ -166,14 +174,14 @@ function MenuBar({ time, look, still }: { time: string; look: IconLook; still: b
 
 /**
  * A cut of the app's menu that fits the display: the robot beside the headline, and the agents, without the bar of controls at the bottom.
- * An agent at work has its folder and its time below its name, and one that is idle has its time at the far edge, as in the app. With `still` a number that changes does not roll.
+ * An agent at work has its folder and its time below its name, and one that is idle has its line at the far edge, as in the app. `rest` is how far the robot's tile has lost its colour. With `still` a number that changes does not roll.
  */
-function Panel({ title, subtitle, stance, rows, paused, still }: { title: string; subtitle: string; stance: Pose; rows: readonly Row[]; paused: boolean; still: boolean }) {
+function Panel({ title, subtitle, stance, rest, rows, paused, still }: { title: string; subtitle: string; stance: Pose; rest: number; rows: readonly Row[]; paused: boolean; still: boolean }) {
   return (
     <PanelSurface className={`w-full shadow-[0_12px_32px_var(--shadow)] ${paused ? "panel-paused" : ""}`} label="The agent caffeine menu">
       <div className="flex items-center gap-3 px-4 py-3">
         {/* A robot that sleeps stands still here: the one that breathes in its sleep is in the menu further down the page. */}
-        <Robot paused={paused} pose={stance} size={48} still={stance === "asleep"} />
+        <Robot paused={paused} pose={stance} rest={rest} size={48} still={stance === "asleep"} />
         <p className="flex min-w-0 flex-col gap-0.5">
           <span className="text-[15px] leading-5">{title}</span>
           <span className={`text-[12px] ${MUTED}`}>
@@ -294,9 +302,8 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
     return {
       icon: agent.icon,
       title: working ? `${agent.name} · ${agent.folder}` : agent.name,
-      detail: working
-        ? detailOf({ state: "working", command: false, since: -agent.before * 60, before: "idle" }, minutes * 60)
-        : detailOf({ state: "idle", command: false, since: agent.done * 60, before: "working" }, minutes * 60),
+      // Staged, not the app's words: the app says "Finished a moment ago" for a minute and then "Idle for 9 minutes". Here a finished agent keeps one short word, so that what is done reads apart from what works.
+      detail: working ? detailOf({ state: "working", command: false, since: -agent.before * 60, before: "idle" }, minutes * 60) : "Finished",
       working,
       checked: stretch(time, finished, finished + CHECK_IN),
     };
@@ -322,20 +329,22 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
             style={{ perspective: "200cqw", perspectiveOrigin: "50% 22%", transform: `translateY(${-(carried * 5 + bob * 0.6)}cqw)` }}
           >
             <Laptop closed={closed} display={lidBrightness(lidDegrees(closed))} grounded={1 - carried}>
-              <div className="h-full bg-[radial-gradient(130%_100%_at_50%_100%,#3b82f0,#12306e_65%,#0a1c44)]" />
+              <div className={`h-full ${DESKTOP}`} />
             </Laptop>
           </div>
           <div
             className="absolute"
             style={{ left: `${GLASS.left}%`, top: `${GLASS.top}cqw`, width: `${GLASS.width}%`, height: `${GLASS.height}cqw`, opacity: 1 - (1 - ASLEEP) * dimmed }}
           >
+            {/* The desktop stays in the outline, paler than on the display. */}
+            <div className={`absolute inset-0 ${DESKTOP}`} style={{ borderRadius: `${GLASS.round}cqw`, opacity: ghost * DESKTOP_KEPT }} />
             <svg className="absolute inset-0 size-full overflow-visible" fill="none" style={{ opacity: ghost }} viewBox={`0 0 ${GLASS.width} ${GLASS.height}`}>
               <rect
                 height={GLASS.height}
                 rx={GLASS.round}
                 strokeDasharray="5 5"
                 strokeWidth="1"
-                style={{ fill: "color-mix(in srgb, var(--surface) 45%, transparent)", stroke: "var(--hairline)" }}
+                style={{ stroke: "var(--hairline)" }}
                 vectorEffect="non-scaling-stroke"
                 width={GLASS.width}
               />
@@ -346,7 +355,7 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
             >
               <MenuBar look={iconLook(stance)} still={cutting} time={clock(CLOCK_START + Math.floor(minutes))} />
               <div className="w-[320px]">
-                <Panel {...headlineText(line)} paused={!play} rows={rows} stance={stance} still={cutting} />
+                <Panel {...headlineText(line)} paused={!play} rest={stretch(time, ASLEEP_AT, ASLEEP_AT + TONE_DOWN, easeInOut)} rows={rows} stance={stance} still={cutting} />
               </div>
             </div>
           </div>

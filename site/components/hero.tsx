@@ -22,8 +22,8 @@ const GLYPH = {
   strokeWidth: 1.5,
 } as const;
 
-/** "a", "b" and "c" are the app over the closed laptop, in the cuts of `HeroScene`. "z" is the hero before them, kept for the comparison at `/hero-lab`. */
-export type HeroVariant = "a" | "b" | "c" | "z";
+/** "a", "b" and "c" are the app on the laptop, in the cuts of `HeroScene`, and "a2" is "a" with another second line of the headline. "z" is the hero before them, kept for the comparison at `/hero-lab`. */
+export type HeroVariant = "a" | "a2" | "b" | "c" | "z";
 
 /** Where the hero's columns start, and with them the left edge of its words: the classes that put a row and a column at the left from there. */
 type Side = { row: string; column: string };
@@ -124,13 +124,13 @@ export async function Hero({ variant = "a" }: { variant?: HeroVariant }) {
     <section className="relative isolate mx-auto grid w-full max-w-[1120px] items-center gap-x-12 gap-y-5 pb-12 pt-8 text-center lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:grid-rows-[1fr_auto_auto_auto_1fr] lg:gap-y-7 lg:min-h-[calc(100svh-3.5rem)] lg:py-10 lg:text-left">
       <GridTexture />
       <h1 className="relative z-10 text-[clamp(2.25rem,9vw,2.75rem)] font-medium leading-[1.1] tracking-[-0.02em] lg:col-start-1 lg:row-start-2 lg:text-[clamp(2.5rem,4.2vw,3.25rem)]">
-        Close your Mac <span className="block text-balance text-accent">Your agents keep working</span>
+        Close your Mac <span className="block text-accent">{variant === "a2" ? "with no fear" : "with no worry"}</span>
       </h1>
       <div className="min-w-0 lg:col-start-2 lg:row-span-5 lg:row-start-1">
-        <HeroScene cut={variant} />
+        <HeroScene cut={variant === "a2" ? "a" : variant} />
       </div>
       <p className="relative z-10 mx-auto max-w-[26rem] text-pretty text-lg leading-relaxed text-muted lg:col-start-1 lg:row-start-3 lg:mx-0 lg:-mt-2 lg:max-w-[31rem]">
-        agent caffeine keeps your Mac awake while Claude Code, Codex or Cursor works, also with the lid closed. Then it lets your Mac sleep
+        Agent Caffeine keeps your Mac awake while your agents work, also with the lid closed. Then it lets your Mac sleep
       </p>
       <div className="relative z-10 flex flex-col items-center gap-7 lg:col-start-1 lg:row-start-4 lg:items-start">
         <WorksWith side={FROM_LG} />
