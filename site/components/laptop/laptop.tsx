@@ -50,11 +50,17 @@ const HOLES_SHOWN = [
   "hidden [@media(max-resolution:1.99dppx)]:[@container(max-width:559.98px)]:inline [@container(max-width:279.98px)]:inline",
 ];
 
-/** The base, which never changes as the lid moves. */
-const BASE = (
+/** The base's shadows on the desk. */
+const SHADOWS = (
   <>
     <path d={DECK.ground} filter="url(#laptop-far)" style={shade(1)} />
     <path d={DECK.contact} filter="url(#laptop-near)" style={shade(1)} />
+  </>
+);
+
+/** The base, which never changes as the lid moves. */
+const BASE = (
+  <>
     <path d={DECK.hull} style={SURFACE} />
     <path d={DECK.hull} style={shade(SIDE)} />
     <path d={DECK.hinge} style={{ fill: HINGE }} />
@@ -101,6 +107,8 @@ type LaptopProps = {
   closed: number;
   /** How bright the display is, from 0 (off) to 1. */
   display: number;
+  /** How much of its shadow the laptop casts on the desk, from 0 (carried) to 1. */
+  grounded?: number;
   children: ReactNode;
 };
 
@@ -109,7 +117,7 @@ type LaptopProps = {
  * display: one SVG drawn from the laptop's projected outline, and the screen
  * on CSS 3D transforms that put it in the same place.
  */
-export function Laptop({ closed, display, children }: LaptopProps) {
+export function Laptop({ closed, display, grounded = 1, children }: LaptopProps) {
   const lid = useMemo(() => lidArt(closed), [closed]);
   const pose = lidPose(closed);
 
@@ -131,6 +139,7 @@ export function Laptop({ closed, display, children }: LaptopProps) {
             </clipPath>
           )}
         </defs>
+        <g opacity={fixed(grounded)}>{SHADOWS}</g>
         {BASE}
         {lid.shadow && <path d={DECK.top} fill="url(#laptop-lid-shadow)" opacity={fixed(closed)} />}
         <g clipPath={lid.cut ? "url(#laptop-lid-cut)" : undefined}>

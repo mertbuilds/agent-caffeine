@@ -60,3 +60,21 @@ export const laptop = {
   pillOut: [5.9, 6.25],
   open: [6.35, 7.45],
 } as const;
+
+/**
+ * The hero, in seconds into its loop: the lid closes, the agents work on
+ * while the clock runs, and one of them finishes. `lift`, `walk` and `down`
+ * are for the cut where the closed laptop is carried, `notice` for the cuts
+ * that end on the notification.
+ */
+export const heroScene = {
+  loop: 8.2,
+  rest: 3,
+  close: [0.5, 1.6],
+  lift: [1.9, 2.6],
+  walk: [2.2, 6.6],
+  clock: [1.7, 6.4],
+  down: [6.3, 7],
+  finish: 6.5,
+  notice: [7, 7.45],
+} as const;
