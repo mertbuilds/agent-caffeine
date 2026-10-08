@@ -42,8 +42,8 @@ const questions: FaqItem[] = [
     question: "How does it know that an agent is working?",
     answer: (
       <>
-        Claude Code, Codex and Cursor report their state, and Agent Caffeine reads it on your Mac.
-        For other agents it watches signs of work. It knows{" "}
+        Claude Code, Codex and Cursor report their state. opencode, Pi and Droid do too, after you
+        turn on one switch. For other agents it watches signs of work. It knows{" "}
         <a href="#agents">more than {agentsMoreThan} agents</a>.
       </>
     ),
