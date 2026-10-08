@@ -13,6 +13,8 @@ import {
   clockTime,
   detailOf,
   headlineText,
+  iconLabel,
+  iconLook,
   lasting,
   preset,
   resume,
@@ -286,4 +288,15 @@ test("a session that finished says so for a minute, then counts as idle, and the
   assert.equal(headlineText({ kind: "working", subject: { many: 2 } }).subtitle, "2 agents are working");
   assert.equal(headlineText({ kind: "working", subject: { one: "Claude Code" } }).subtitle, "Claude Code is working");
   assert.deepEqual(headlineText({ kind: "idle", subject: { many: 4 } }), { title: "Your Mac can sleep", subtitle: "All agents are idle" });
+});
+
+test("the icon in the menu bar is pale while the Mac can sleep, as when off or paused, and each keeps its own label", () => {
+  for (const rest of ["asleep", "off", "paused"] as const) {
+    assert.deepEqual({ eyes: iconLook(rest).eyes, opacity: iconLook(rest).opacity }, { eyes: "closed", opacity: 0.45 });
+  }
+  assert.equal(iconLabel(iconLook("asleep")), "agent caffeine: your Mac can sleep");
+  assert.equal(iconLabel(iconLook("off")), "agent caffeine: off");
+  assert.equal(iconLabel(iconLook("paused")), "agent caffeine: paused");
+  assert.equal(iconLook("awake").opacity, 1);
+  assert.equal(view(preset(INITIAL, "idle")).iconLabel, "agent caffeine: your Mac can sleep");
 });

@@ -1,8 +1,8 @@
 import { useId } from "react";
-import type { IconLook } from "@/lib/simulator";
+import { iconLook, type IconLook } from "@/lib/simulator";
 
-const AWAKE: IconLook = { eyes: "happy", opacity: 1 };
-const ASLEEP: IconLook = { eyes: "closed", opacity: 1 };
+const AWAKE = iconLook("awake");
+const ASLEEP = iconLook("asleep");
 
 const FADE = "transition-opacity duration-fast ease-smooth-out motion-reduce:transition-none";
 const EYES = [6, 12];

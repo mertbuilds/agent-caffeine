@@ -836,38 +836,44 @@ export function pose(line: Headline): Pose {
   }
 }
 
-/** `MenuBarLook`: what the robot in the menu bar is drawn from. */
-export type IconLook = { eyes: "happy" | "open" | "closed" | "dead"; opacity: number; paused?: boolean };
+/** How much of itself the icon in the menu bar shows while agent caffeine keeps nothing awake: off, paused, or all agents done. */
+export const ICON_AT_REST = 0.45;
+
+/** `MenuBarLook`: what the robot in the menu bar is drawn from, and the pose it stands for. */
+export type IconLook = { eyes: "happy" | "open" | "closed" | "dead"; opacity: number; pose: Pose };
 
 export function iconLook(of: Pose): IconLook {
   switch (of) {
     case "awake":
     case "reachable":
-      return { eyes: "happy", opacity: 1 };
+      return { eyes: "happy", opacity: 1, pose: of };
     case "attentive":
-      return { eyes: "open", opacity: 1 };
+      return { eyes: "open", opacity: 1, pose: of };
+    // From version 1.0.1 of the app the icon is as pale while the Mac can sleep as while agent caffeine is off or paused.
     case "asleep":
-      return { eyes: "closed", opacity: 1 };
     case "paused":
-      return { eyes: "closed", opacity: 0.45, paused: true };
     case "off":
-      return { eyes: "closed", opacity: 0.45 };
+      return { eyes: "closed", opacity: ICON_AT_REST, pose: of };
     case "trouble":
-      return { eyes: "dead", opacity: 1 };
+      return { eyes: "dead", opacity: 1, pose: of };
   }
 }
 
 /** `MenuBarLook.accessibilityLabel`, and `PanelText.menuBarReachable` when the Mac stays reachable until `reachable`. */
 export function iconLabel(look: IconLook, reachable: number | null = null): string {
-  switch (look.eyes) {
-    case "happy":
+  switch (look.pose) {
+    case "awake":
+    case "reachable":
       return reachable === null ? "agent caffeine: your Mac stays awake" : `agent caffeine: reachable until ${clockTime(reachable)}`;
-    case "open":
+    case "attentive":
       return "agent caffeine: an agent is waiting for you";
-    case "closed":
-      if (look.paused === true) return "agent caffeine: paused";
-      return look.opacity < 1 ? "agent caffeine: off" : "agent caffeine: your Mac can sleep";
-    case "dead":
+    case "paused":
+      return "agent caffeine: paused";
+    case "off":
+      return "agent caffeine: off";
+    case "asleep":
+      return "agent caffeine: your Mac can sleep";
+    case "trouble":
       return "agent caffeine: needs attention";
   }
 }

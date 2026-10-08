@@ -41,7 +41,7 @@ const CHECK_IN = 0.35;
 /** The Mac's desktop, and how much of itself it keeps in the outline of the display once the lid is closed. */
 const DESKTOP = "bg-[radial-gradient(130%_100%_at_50%_100%,#3b82f0,#12306e_65%,#0a1c44)]";
 const DESKTOP_KEPT = 0.45;
-/** Seconds the robot's tile takes to lose its colour once the Mac can sleep. */
+/** Seconds the robot's tile takes to lose its colour, and the icon in the menu bar to go pale, once the Mac can sleep. */
 const TONE_DOWN = 0.8;
 /** How much of itself the menu keeps once the Mac sleeps. */
 const ASLEEP = 0.45;
@@ -329,6 +329,10 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
       ? "A laptop shows the Agent Caffeine menu with three AI coding agents at work. The lid closes and the laptop is carried away. The agents keep working and finish one by one, and then the Mac can sleep"
       : "A laptop shows the Agent Caffeine menu on its display, with three AI coding agents at work. The lid closes, and the menu stays in a dashed outline of the display: the agents keep working and finish one by one. Two minutes after the last one the menu says that the Mac can sleep";
 
+  // The robot's tile loses its colour and the icon in the menu bar goes pale over the same time, once the Mac can sleep.
+  const rest = stretch(time, ASLEEP_AT, ASLEEP_AT + TONE_DOWN, easeInOut);
+  const icon = iconLook(stance);
+
   // How much of themselves the desktop, the outline and the menu show: less once the Mac sleeps.
   const lit = 1 - (1 - ASLEEP) * dimmed;
 
@@ -372,9 +376,9 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
               className="absolute left-1/2 top-0 flex origin-top -translate-x-1/2 scale-[calc(660/705)] flex-col items-center gap-1 sm:scale-[calc(810/705)] lg:scale-[calc(630/705)] xl:scale-[calc(810/705)]"
               style={{ width: BOX.width, height: BOX.height, padding: GAP, opacity: lit }}
             >
-              <MenuBar look={iconLook(stance)} still={cutting} time={clock(CLOCK_START + Math.floor(minutes))} />
+              <MenuBar look={{ ...icon, opacity: 1 + (icon.opacity - 1) * rest }} still={cutting} time={clock(CLOCK_START + Math.floor(minutes))} />
               <div className="w-[320px]">
-                <Panel {...headlineText(line)} paused={!play} rest={stretch(time, ASLEEP_AT, ASLEEP_AT + TONE_DOWN, easeInOut)} rows={rows} stance={stance} still={cutting} />
+                <Panel {...headlineText(line)} paused={!play} rest={rest} rows={rows} stance={stance} still={cutting} />
               </div>
             </div>
           </div>
