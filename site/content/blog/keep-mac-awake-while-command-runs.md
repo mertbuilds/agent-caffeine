@@ -11,7 +11,7 @@ faq:
   - q: "Does the exit code of my command change?"
     a: "No. `agent-caffeine hold -- <command>` ends with the exit code of the command, and in our test on macOS `caffeinate -i <command>` did the same. A script that checks the result works as before."
   - q: "Can an AI coding agent keep the Mac awake for its own long command?"
-    a: "Yes, from version 1.0.1 of Agent Caffeine. With its skill, an agent puts `agent-caffeine hold --` in front of a long command by itself. It can also call the tool `hold_awake` of the MCP server."
+    a: "Yes, with Agent Caffeine. With its skill, an agent puts `agent-caffeine hold --` in front of a long command by itself. It can also call the tool `hold_awake` of the MCP server."
   - q: "What happens to the hold when the battery gets low?"
     a: "`caffeinate` does not look at the battery. Agent Caffeine lets the Mac sleep at 20% battery by default and when the Mac gets too hot, also while a hold is active."
 ---
@@ -64,7 +64,7 @@ caffeinate also does not look at the battery level or at heat. A job that hangs 
 
 ## With Agent Caffeine: agent-caffeine hold
 
-[Agent Caffeine](/) is our menu bar app. It keeps a Mac awake while AI coding agents work and lets it sleep after. It finds agents by itself, but it cannot see a plain script, a render, a model training run, a backup or a large download. From version 1.0.1 it has a command line tool for those.
+[Agent Caffeine](/) is our menu bar app. It keeps a Mac awake while AI coding agents work and lets it sleep after. It finds agents by itself, but it cannot see a plain script, a render, a model training run, a backup or a large download. It has a command line tool for those.
 
 Put it in front of the command:
 
@@ -103,7 +103,7 @@ The tool is inside the app. In Settings, the button "Set up for agents" links it
 
 ## Let a coding agent ask for it
 
-An agent such as Claude Code or Codex often starts a long command itself: a test suite, a release build, a migration. Agent Caffeine sees most agents work, but two more ways make this certain. Both are in version 1.0.1.
+An agent such as Claude Code or Codex often starts a long command itself: a test suite, a release build, a migration. Agent Caffeine sees most agents work, but two more ways make this certain.
 
 **The skill.** A skill is a short text that tells an agent when and how to use a tool. "Set up for agents" in Settings adds the skill to the agents on your Mac: Claude Code, Codex, opencode, Cursor, Gemini CLI, Pi, Droid, Grok Build, Amp, goose and OpenClaw. With it, an agent puts `agent-caffeine hold --` in front of a long command by itself.
 
@@ -126,4 +126,4 @@ Agent Caffeine has a 7-day free trial, then costs {{price}} once, and needs macO
 - `man caffeinate` (caffeinate(8), macOS)
 - `man pmset` (pmset(1), macOS)
 - [Model Context Protocol](https://modelcontextprotocol.io/) (what an MCP server is)
-- The command line reference and the agent skill of Agent Caffeine, version 1.0.1
+- The command line reference and the agent skill of Agent Caffeine

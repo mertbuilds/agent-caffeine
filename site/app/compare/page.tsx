@@ -45,8 +45,8 @@ const RIVALS: Record<Exclude<ToolId, "ours">, ReactNode> = {
       </p>
       <p>
         An agent can ask it for more time after its answer, through an MCP tool or a command, for example
-        for a long build. Agent Caffeine has a command and an MCP server for this from version 1.0.1.
-        Adrafinil has one thing we do not have: it gives you the lines to add an agent of your own.
+        for a long build. Agent Caffeine has a command and an MCP server for this too. Adrafinil has
+        one thing we do not have: it gives you the lines to add an agent of your own.
       </p>
       <p>
         For Claude Code it also knows when a session waits for you. A setting decides what happens then: the

@@ -222,7 +222,7 @@ export const ROWS: readonly Row[] = [
     id: "cli",
     label: "Command line tool",
     cells: {
-      ours: yes("From version 1.0.1"),
+      ours: yes(),
       adrafinil: yes(),
       holdmylid: unstated(),
       lidrun: yes("An agent can drive it from the terminal"),
@@ -234,7 +234,7 @@ export const ROWS: readonly Row[] = [
     id: "mcp",
     label: "MCP server",
     cells: {
-      ours: yes("From version 1.0.1"),
+      ours: yes(),
       adrafinil: yes(),
       holdmylid: unstated(),
       lidrun: unstated(),

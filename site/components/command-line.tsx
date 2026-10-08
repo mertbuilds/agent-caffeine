@@ -80,66 +80,62 @@ export function CommandLine() {
         lead="A script, a render, a backup: one command keeps your Mac awake until the job ends"
         title="It works for any long job too"
       />
-      <div className="flex flex-col gap-4">
-        <ul className="mx-auto grid w-full max-w-[36rem] gap-4 lg:max-w-none lg:grid-cols-3">
-          <Card
-            text="Your Mac stays awake while the command runs, and can sleep when it ends. The exit code stays the same"
-            title="Put it in front of a command"
+      <ul className="mx-auto grid w-full max-w-[36rem] gap-4 lg:max-w-none lg:grid-cols-3">
+        <Card
+          text="Your Mac stays awake while the command runs, and can sleep when it ends. The exit code stays the same"
+          title="Put it in front of a command"
+        >
+          <Terminal
+            command="agent-caffeine hold -- npm run build"
+            label="A terminal that runs agent-caffeine hold -- npm run build"
+            output="> next build"
+          />
+          <HoldRow
+            detail="Keeps your Mac awake while it runs, for 12 minutes"
+            label="The line of this command in the Agent Caffeine menu, with Stop"
+            title="npm"
+          />
+        </Card>
+        <Card
+          text="One click in Settings adds a skill to your agents. Then an agent keeps your Mac awake by itself before a long command. There is an MCP server too"
+          title="Your agents can ask for it"
+        >
+          <PanelSurface
+            className="flex flex-1 flex-col items-start justify-center gap-2.5 rounded-md bg-[color-mix(in_srgb,var(--panel-fg)_4%,var(--panel))] px-4"
+            label="Settings: the button Set up for agents, and the agents that get the skill"
           >
-            <Terminal
-              command="agent-caffeine hold -- npm run build"
-              label="A terminal that runs agent-caffeine hold -- npm run build"
-              output="> next build"
-            />
-            <HoldRow
-              detail="Keeps your Mac awake while it runs, for 12 minutes"
-              label="The line of this command in the Agent Caffeine menu, with Stop"
-              title="npm"
-            />
-          </Card>
-          <Card
-            text="One click in Settings adds a skill to your agents. Then an agent keeps your Mac awake by itself before a long command. There is an MCP server too"
-            title="Your agents can ask for it"
-          >
-            <PanelSurface
-              className="flex flex-1 flex-col items-start justify-center gap-2.5 rounded-md bg-[color-mix(in_srgb,var(--panel-fg)_4%,var(--panel))] px-4"
-              label="Settings: the button Set up for agents, and the agents that get the skill"
-            >
-              <span className="flex h-[22px] items-center rounded-md bg-[var(--app-blue)] px-2.5 text-white">Set up for agents</span>
-              <span className={`text-pretty text-[12px] ${MUTED}`}>
-                Adds a skill to Claude Code, Codex and opencode, and links the command agent-caffeine.
-              </span>
-              <ul className="grid grid-cols-5 gap-1.5">
-                {SKILL_AGENTS.map((agent) => (
-                  <li
-                    key={agent.name}
-                    className="flex size-7 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--panel-fg)_8%,transparent)]"
-                  >
-                    <AgentIcon className="size-[18px]" label={agent.name} name={agent.icon} />
-                  </li>
-                ))}
-              </ul>
-            </PanelSurface>
-          </Card>
-          <Card
-            text="Ask for up to 12 hours, and release it when the work is done. Each hold has a line in the menu. A low battery, heat and a pause still let your Mac sleep"
-            title="Hold for a time"
-          >
-            <Terminal
-              command="agent-caffeine hold --for 2h"
-              label="A terminal that runs agent-caffeine hold --for 2h"
-              output="Agent Caffeine keeps your Mac awake until 14:30. Hold 4e5f6a7b."
-            />
-            <HoldRow
-              detail="Keeps your Mac awake until 14:30"
-              label="The line of this hold in the Agent Caffeine menu, with Stop"
-              title="Command line"
-            />
-          </Card>
-        </ul>
-        {/* Until 1.0.1 is the download: remove this line then. */}
-        <p className="text-center text-sm text-muted">From version 1.0.1</p>
-      </div>
+            <span className="flex h-[22px] items-center rounded-md bg-[var(--app-blue)] px-2.5 text-white">Set up for agents</span>
+            <span className={`text-pretty text-[12px] ${MUTED}`}>
+              Adds a skill to Claude Code, Codex and opencode, and links the command agent-caffeine.
+            </span>
+            <ul className="grid grid-cols-5 gap-1.5">
+              {SKILL_AGENTS.map((agent) => (
+                <li
+                  key={agent.name}
+                  className="flex size-7 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--panel-fg)_8%,transparent)]"
+                >
+                  <AgentIcon className="size-[18px]" label={agent.name} name={agent.icon} />
+                </li>
+              ))}
+            </ul>
+          </PanelSurface>
+        </Card>
+        <Card
+          text="Ask for up to 12 hours, and release it when the work is done. Each hold has a line in the menu. A low battery, heat and a pause still let your Mac sleep"
+          title="Hold for a time"
+        >
+          <Terminal
+            command="agent-caffeine hold --for 2h"
+            label="A terminal that runs agent-caffeine hold --for 2h"
+            output="Agent Caffeine keeps your Mac awake until 14:30. Hold 4e5f6a7b."
+          />
+          <HoldRow
+            detail="Keeps your Mac awake until 14:30"
+            label="The line of this hold in the Agent Caffeine menu, with Stop"
+            title="Command line"
+          />
+        </Card>
+      </ul>
     </section>
   );
 }
