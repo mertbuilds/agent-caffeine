@@ -118,7 +118,7 @@ function Thing({ children, text, title }: { children: ReactNode; text: string; t
 export function SmallThings() {
   return (
     <section id="small-things" className="mx-auto flex w-full max-w-[1120px] scroll-mt-20 flex-col gap-10">
-      <SectionHeading lead="Each one is in the menu or in Settings" title="It does the small things too" />
+      <SectionHeading lead="Each one is in the menu or in Settings" title="The details" />
       <ul className="mx-auto grid w-full max-w-[36rem] gap-4 sm:grid-cols-2 lg:max-w-none lg:grid-cols-3">
         <Thing
           text="It dims from 45 degrees and is off with the lid closed, so it does not use battery or warm your Mac"
