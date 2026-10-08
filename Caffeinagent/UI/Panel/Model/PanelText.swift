@@ -185,13 +185,12 @@ enum PanelText {
     static let menuBarOff = menuBar("Off")
     static let menuBarNeedsAttention = menuBar("Needs attention")
 
-    /// The five looks of the icon with a word or two each, for the setup
+    /// The four looks of the icon with a word or two each, for the setup
     /// window.
     static let iconLegend: [(pose: HeroPose, text: String)] = [
         (.awake(wisps: 2), "Awake"),
         (.attentive, "An agent is waiting for you"),
-        (.asleep, "Your Mac can sleep, or paused"),
-        (.off, "Off, or the trial has ended"),
+        (.asleep, "Your Mac can sleep, paused or off"),
         (.safetyStop(.battery), "Needs attention"),
     ]
 

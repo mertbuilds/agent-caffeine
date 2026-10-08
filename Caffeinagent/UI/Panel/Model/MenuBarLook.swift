@@ -14,34 +14,45 @@ struct MenuBarLook: Equatable, Hashable {
         case dead
     }
 
+    /// Why the app holds nothing. All three are drawn alike, grey with
+    /// closed eyes, and each is said to VoiceOver as its own state.
+    enum Rest: Equatable, Hashable {
+        case canSleep
+        case paused
+        case off
+    }
+
+    /// Of the whole picture while the app holds nothing.
+    static let restingOpacity = 0.45
+
     var eyes: Eyes
     /// A solid head while the Mac is kept awake, an outline when it is not.
     var solid: Bool
-    /// Of the whole picture. Less than 1 when the app is off.
-    var opacity: Double = 1
-    /// Drawn like "can sleep", and said to VoiceOver as its own state.
-    var paused = false
+    /// Nil while the Mac is kept awake, and after a stop.
+    var rest: Rest?
+
+    /// Of the whole picture.
+    var opacity: Double { rest == nil ? 1 : Self.restingOpacity }
 
     init(look: RobotLook) {
         switch look.eyes {
         case .happy: self.init(eyes: .happy, solid: true)
         case .open: self.init(eyes: .open, solid: true)
-        case .closed: self.init(eyes: .closed, solid: false)
-        case .dim: self.init(eyes: .closed, solid: false, opacity: 0.45)
+        case .closed: self.init(eyes: .closed, solid: false, rest: .canSleep)
+        case .dim: self.init(eyes: .closed, solid: false, rest: .off)
         case .dead: self.init(eyes: .dead, solid: false)
         }
     }
 
     init(pose: HeroPose) {
         self.init(look: RobotLook(pose: pose))
-        paused = pose == .paused
+        if pose == .paused { rest = .paused }
     }
 
-    init(eyes: Eyes, solid: Bool, opacity: Double = 1, paused: Bool = false) {
+    init(eyes: Eyes, solid: Bool, rest: Rest? = nil) {
         self.eyes = eyes
         self.solid = solid
-        self.opacity = opacity
-        self.paused = paused
+        self.rest = rest
     }
 
     /// What VoiceOver says for the item in the menu bar, and its tooltip.
@@ -49,8 +60,12 @@ struct MenuBarLook: Equatable, Hashable {
         switch eyes {
         case .happy: return PanelText.menuBarAwake
         case .open: return PanelText.menuBarWaiting
-        case .closed where paused: return PanelText.menuBarPaused
-        case .closed: return opacity < 1 ? PanelText.menuBarOff : PanelText.menuBarCanSleep
+        case .closed:
+            switch rest {
+            case .paused: return PanelText.menuBarPaused
+            case .off: return PanelText.menuBarOff
+            case .canSleep, nil: return PanelText.menuBarCanSleep
+            }
         case .dead: return PanelText.menuBarNeedsAttention
         }
     }

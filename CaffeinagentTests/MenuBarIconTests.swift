@@ -18,12 +18,14 @@ final class MenuBarIconTests: XCTestCase {
             let hero = RobotLook(pose: state.pose)
             let bar = MenuBarLook(pose: state.pose)
             var drawn = MenuBarLook(look: hero)
-            drawn.paused = state.pose == .paused
+            if state.pose == .paused { drawn.rest = .paused }
             XCTAssertEqual(bar, drawn, name)
             XCTAssertEqual(bar.eyes, eyes(hero.eyes), name)
             // A solid head exactly while the title says the Mac stays awake.
             XCTAssertEqual(bar.solid, state.title == PanelText.awakeTitle, name)
-            XCTAssertEqual(bar.opacity < 1, hero.eyes == .dim, name)
+            // Grey exactly while the app holds nothing: can sleep, paused and off.
+            XCTAssertEqual(bar.opacity, bar.eyes == .closed ? MenuBarLook.restingOpacity : 1, name)
+            XCTAssertEqual(bar.rest == .off, hero.eyes == .dim, name)
         }
         let poses = Set(PanelFixtures.all.map { MenuBarLook(pose: $0.state.pose) })
         XCTAssertEqual(poses.count, 6, "Awake, waiting, can sleep, paused, off and knocked out are all among the fixtures")
@@ -34,9 +36,9 @@ final class MenuBarIconTests: XCTestCase {
             (.awake(wisps: 2), MenuBarLook(eyes: .happy, solid: true), "agent caffeine: your Mac stays awake"),
             (.awake(wisps: 3), MenuBarLook(eyes: .happy, solid: true), "agent caffeine: your Mac stays awake"),
             (.attentive, MenuBarLook(eyes: .open, solid: true), "agent caffeine: an agent is waiting for you"),
-            (.asleep, MenuBarLook(eyes: .closed, solid: false), "agent caffeine: your Mac can sleep"),
-            (.off, MenuBarLook(eyes: .closed, solid: false, opacity: 0.45), "agent caffeine: off"),
-            (.paused, MenuBarLook(eyes: .closed, solid: false, paused: true), "agent caffeine: paused"),
+            (.asleep, MenuBarLook(eyes: .closed, solid: false, rest: .canSleep), "agent caffeine: your Mac can sleep"),
+            (.off, MenuBarLook(eyes: .closed, solid: false, rest: .off), "agent caffeine: off"),
+            (.paused, MenuBarLook(eyes: .closed, solid: false, rest: .paused), "agent caffeine: paused"),
             (.safetyStop(.battery), MenuBarLook(eyes: .dead, solid: false), "agent caffeine: needs attention"),
             (.safetyStop(.heat), MenuBarLook(eyes: .dead, solid: false), "agent caffeine: needs attention"),
             (.helperOff, MenuBarLook(eyes: .dead, solid: false), "agent caffeine: needs attention"),
@@ -45,6 +47,20 @@ final class MenuBarIconTests: XCTestCase {
             XCTAssertEqual(MenuBarLook(pose: pose), look, "\(pose)")
             XCTAssertEqual(look.accessibilityLabel, label)
         }
+    }
+
+    func testTheIconIsGreyOnlyWhileTheAppHoldsNothing() {
+        XCTAssertEqual(MenuBarLook.restingOpacity, 0.45)
+        for pose in [HeroPose.asleep, .paused, .off] {
+            XCTAssertEqual(MenuBarLook(pose: pose).opacity, MenuBarLook.restingOpacity, "\(pose)")
+        }
+        for pose in [HeroPose.awake(wisps: 2), .reachable, .attentive, .safetyStop(.battery), .safetyStop(.heat), .helperOff] {
+            XCTAssertEqual(MenuBarLook(pose: pose).opacity, 1, "\(pose)")
+        }
+        // Held for a moment after the last agent finished: still the awake look.
+        let finished = MenuBarLook(pose: MenuModel.pose(for: .finishedRecently(.one("Claude Code"))))
+        XCTAssertEqual(finished, MenuBarLook(eyes: .happy, solid: true))
+        XCTAssertEqual(Set([HeroPose.asleep, .paused, .off].map { MenuBarLook(pose: $0) }).count, 3, "One look, and so one label, for each")
     }
 
     func testOnlyTheKnockedOutRobotLeavesTheTemplate() {
