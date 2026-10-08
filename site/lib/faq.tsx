@@ -3,12 +3,13 @@ import type { ReactNode } from "react";
 import { agentsMoreThan } from "@/lib/agents";
 import { BATTERY_FLOOR } from "@/lib/simulator";
 
-/** `open` is for an answer the page shows from the start. */
-type FaqItem = { question: string; answer: ReactNode; open?: boolean };
+/** `id` names the question where it is counted, and stays when the list is put in another order. `open` is for an answer the page shows from the start. */
+type FaqItem = { id: string; question: string; answer: ReactNode; open?: boolean };
 
 /** Short answers, the direct one first. The first three are what a reader asks before a download, and they are open from the start. */
 const questions: FaqItem[] = [
   {
+    id: "caffeinate",
     question: "Does caffeinate or Amphetamine not do this already?",
     open: true,
     answer: (
@@ -20,6 +21,7 @@ const questions: FaqItem[] = [
     ),
   },
   {
+    id: "battery",
     question: "Does it drain my battery when nothing runs?",
     open: true,
     answer: (
@@ -30,6 +32,7 @@ const questions: FaqItem[] = [
     ),
   },
   {
+    id: "admin",
     question: "Does it need admin rights?",
     open: true,
     answer: (
@@ -40,6 +43,7 @@ const questions: FaqItem[] = [
     ),
   },
   {
+    id: "detection",
     question: "How does it know that an agent is working?",
     answer: (
       <>
@@ -50,10 +54,12 @@ const questions: FaqItem[] = [
     ),
   },
   {
+    id: "waiting",
     question: "What happens when an agent waits for my answer?",
     answer: <>Your Mac stays awake for 5 minutes, so you can answer. After that it can sleep.</>,
   },
   {
+    id: "phone",
     question: "Can I reach my agent from my phone while the lid is closed?",
     answer: (
       <>
@@ -63,6 +69,7 @@ const questions: FaqItem[] = [
     ),
   },
   {
+    id: "privacy",
     question: "Does it send my data anywhere?",
     answer: (
       <>
@@ -72,6 +79,7 @@ const questions: FaqItem[] = [
     ),
   },
   {
+    id: "refund",
     question: "Can I get a refund?",
     answer: <>No. All sales are final, because the full app is free to try for 7 days first.</>,
   },

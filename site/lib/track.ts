@@ -21,7 +21,8 @@ export type TrackEvents = {
   buy_click: { plan: Plan["id"]; price: number; placement: Placement };
   /** The first time in a page view that a visitor touches the menu bar simulator. */
   simulator_use: { control: string };
-  faq_open: { index: number; question: string };
+  /** A question of the home page opened, by its `id` in `lib/faq.tsx`. */
+  faq_open: { id: string };
 };
 
 /** Counts an event. Does nothing off the live site, or while OpenPanel is not there. */

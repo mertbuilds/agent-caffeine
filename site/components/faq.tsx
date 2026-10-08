@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { faqItems } from "@/lib/faq";
 import { track } from "@/lib/track";
 
-function Question({ question, answer, index, initiallyOpen }: { question: string; answer: ReactNode; index: number; initiallyOpen: boolean }) {
+function Question({ name, question, answer, initiallyOpen }: { name: string; question: string; answer: ReactNode; initiallyOpen: boolean }) {
   const id = useId();
   const [open, setOpen] = useState(initiallyOpen);
   const questionId = `${id}-question`;
@@ -21,7 +21,7 @@ function Question({ question, answer, index, initiallyOpen }: { question: string
           aria-controls={answerId}
           onClick={() => {
             if (!open) {
-              track("faq_open", { index, question });
+              track("faq_open", { id: name });
             }
             setOpen(!open);
           }}
@@ -70,8 +70,8 @@ export function Faq() {
         Questions
       </h2>
       <div>
-        {faqItems().map((item, index) => (
-          <Question key={item.question} question={item.question} answer={item.answer} index={index} initiallyOpen={item.open === true} />
+        {faqItems().map((item) => (
+          <Question key={item.id} name={item.id} question={item.question} answer={item.answer} initiallyOpen={item.open === true} />
         ))}
       </div>
     </section>
