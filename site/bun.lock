@@ -19,7 +19,7 @@
         "@types/react": "19.0.0",
         "@types/react-dom": "19.0.0",
         "autoprefixer": "10.4.20",
-        "devknobs": "0.0.3",
+        "devknobs": "0.1.1",
         "postcss": "8.4.49",
         "tailwindcss": "3.4.15",
         "typescript": "5.6.3",
@@ -173,7 +173,7 @@
 
     "detect-libc": ["detect-libc@2.1.2", "", {}, "sha512-Btj2BOOO83o3WyH59e8MgXsxEQVcarkUOpEYrubB0urwnN10yQ364rsiByU11nZlqWYZm05i/of7io4mzihBtQ=="],
 
-    "devknobs": ["devknobs@0.0.3", "", { "peerDependencies": { "react": ">=18" }, "optionalPeers": ["react"] }, "sha512-lG1JnFCmddpPzPOe9Sl1qqASVADKHLrEHJBCz2/X9wZdi7MHZxejRaGCfKf+Ynm+Hn9b9h8YWXAOAtKHeLAmqw=="],
+    "devknobs": ["devknobs@0.1.1", "", { "peerDependencies": { "react": ">=18" }, "optionalPeers": ["react"] }, "sha512-nVvfhl6LmXT9MRrjIYr4ykU++qpWmVGoXNCwAYRk/Q5J/LL8mXce4aSywpTXd8h+AUu3O250sbgZSrmj3l/bDQ=="],
 
     "didyoumean": ["didyoumean@1.2.2", "", {}, "sha512-gxtyfqMg7GKyhQmb056K7M3xszy/myH8w+B4RT+QXBQsvAOdc3XymqDDPHx1BgPgsdAA5SIifona89YtRATDzw=="],
 
