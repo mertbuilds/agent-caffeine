@@ -86,8 +86,8 @@ export async function Hero() {
   return (
     <section className="relative isolate mx-auto grid w-full max-w-[1120px] items-center gap-x-12 gap-y-5 pb-12 pt-8 text-center lg:grid-cols-[minmax(0,7fr)_minmax(0,5fr)] lg:grid-rows-[1fr_auto_auto_auto_1fr] lg:gap-y-7 lg:min-h-[calc(100svh-3.5rem)] lg:py-10 lg:text-left">
       <GridTexture />
-      <h1 className="relative z-10 text-[clamp(2.25rem,9vw,2.75rem)] font-medium leading-[1.1] tracking-[-0.02em] lg:col-start-1 lg:row-start-2 lg:text-[clamp(2.5rem,4.2vw,3.25rem)]">
-        Close your lid <span className="block text-accent">with no worry</span>
+      <h1 className="relative z-10 text-[clamp(2.25rem,9vw,2.75rem)] font-medium leading-[1.1] tracking-[-0.02em] lg:col-start-1 lg:row-start-2 lg:text-[clamp(2.5rem,4.2vw,3rem)]">
+        Close your lid <span className="block text-balance text-accent xl:whitespace-nowrap">Come back to finished work</span>
       </h1>
       <div className="min-w-0 lg:col-start-2 lg:row-span-5 lg:row-start-1">
         <HeroScene />

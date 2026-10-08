@@ -32,7 +32,11 @@ export default function OgImage() {
         <h1 className="text-[76px] font-medium leading-[1.06] tracking-[-0.02em]">
           Close your lid
           <br />
-          <span className="text-[#5aa2ff]">with no worry</span>
+          <span className="text-[#5aa2ff]">
+            Come back to
+            <br />
+            finished work
+          </span>
         </h1>
         <p className="text-[34px] leading-none text-[#a3a3a3]">Free for 7 days, then {PRICE} once</p>
       </div>
