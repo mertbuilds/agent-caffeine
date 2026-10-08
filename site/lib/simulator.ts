@@ -252,7 +252,7 @@ export const INITIAL: SimState = preset(
     idleExtra: NO_EXTRA,
     now: 0,
   },
-  "working",
+  "waiting",
 );
 
 // MARK: Demo
@@ -263,14 +263,14 @@ export const INITIAL: SimState = preset(
  * with the situation of `INITIAL`.
  */
 export const DEMO: readonly { preset: PresetId; hold: number }[] = [
-  { preset: "working", hold: 3000 },
-  // Long enough for the waiting hold to run out and the outcome to be read.
+  // The hero shows agents at work, so the demo starts where it differs. Long enough for the waiting hold to run out and the outcome to be read.
   { preset: "waiting", hold: 8500 },
   { preset: "build", hold: 3200 },
   { preset: "idle", hold: 2800 },
   { preset: "reachable", hold: 3400 },
   { preset: "lid", hold: 3200 },
   { preset: "low", hold: 3800 },
+  { preset: "working", hold: 3000 },
 ];
 
 /** Before the first step, in real milliseconds. */
