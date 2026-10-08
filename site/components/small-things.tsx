@@ -1,3 +1,4 @@
+import Image from "next/image";
 import type { ReactNode } from "react";
 import { BatteryLine, Gear, PanelSurface, TimerChoices } from "@/components/agents-panel";
 import { Robot } from "@/components/robot";
@@ -162,7 +163,7 @@ export function SmallThings() {
             className="flex w-full max-w-[19rem] items-start gap-2.5 rounded-2xl p-2.5 shadow-[0_8px_24px_var(--shadow)]"
             label="A notification from Agent Caffeine: Claude Code is waiting for you"
           >
-            <img alt="" className="size-8 shrink-0" decoding="async" height={32} loading="lazy" src="/icon.png" width={32} />
+            <Image alt="" className="size-8 shrink-0" height={32} loading="lazy" src="/icon.png" width={32} />
             <span className="flex min-w-0 flex-col gap-px text-[12px] leading-4">
               <span className="font-medium">Claude Code is waiting for you</span>
               <span className="font-medium">wiki</span>

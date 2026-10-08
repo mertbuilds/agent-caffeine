@@ -1,6 +1,7 @@
 "use client";
 
 import NumberFlow from "@number-flow/react";
+import Image from "next/image";
 import { useRef, type ReactNode } from "react";
 import { GroupRows, PanelSurface } from "@/components/agents-panel";
 import { Robot } from "@/components/robot";
@@ -103,7 +104,7 @@ function BatteryStop() {
         style={{ transitionDelay: low && !lessMotion ? `${DRAIN}ms` : "0ms" }}
       >
       <PanelSurface className="flex items-start gap-2.5 rounded-2xl p-2.5 shadow-[0_8px_24px_var(--shadow)]" label="A notification from Agent Caffeine">
-        <img alt="" className="size-8 shrink-0" decoding="async" height={32} loading="lazy" src="/icon.png" width={32} />
+        <Image alt="" className="size-8 shrink-0" height={32} loading="lazy" src="/icon.png" width={32} />
         <span className="flex min-w-0 flex-col gap-px text-[12px] leading-4">
           <span className="font-medium">Agent Caffeine</span>
           <span className="text-pretty">Agent Caffeine let your Mac sleep because the battery is at {BATTERY_FLOOR}%</span>
