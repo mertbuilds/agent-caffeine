@@ -351,7 +351,7 @@ struct AgentCatalog {
                 AgentExclusion(arguments: .contains(["gateway", "run"]), role: .engine),
                 AgentExclusion(arguments: .firstIsOne(of: ["gateway"])),
             ],
-            verified: true
+            verified: false
         ),
         cli("iflow-cli", "iFlow CLI"),
         cli("junie", "Junie"),
