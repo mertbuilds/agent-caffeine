@@ -43,7 +43,7 @@ const questions: FaqItem[] = [
     answer: (
       <>
         Claude Code, Codex and Cursor report their state. opencode, Pi and Droid do too, after you
-        turn on one switch. For other agents it watches signs of work. It knows{" "}
+        turn it on for each in Settings. For other agents it watches signs of work. It knows{" "}
         <a href="#agents">more than {agentsMoreThan} agents</a>.
       </>
     ),
