@@ -2,7 +2,7 @@
 title: "How to stop a Mac from sleeping, also with the lid closed"
 description: "Keep the screen on, keep the Mac awake with the display off, use caffeinate for one task, or keep a MacBook running with the lid closed. Exact steps."
 date: "2026-10-05"
-updated: "2026-10-05"
+updated: "2026-10-08"
 faq:
   - q: "How do I keep a MacBook Air awake?"
     a: "To keep the screen on, open System Settings > Lock Screen and set \"Turn display off on battery when inactive\" and \"Turn display off on power adapter when inactive\" to Never. To keep it awake for one task, run `caffeinate -i` in Terminal. With the lid closed, use closed-display mode with power, an external display, keyboard and mouse."
@@ -66,7 +66,7 @@ That is two hours. Add `-d` to keep the screen on too. Press Ctrl+C to stop it e
 
 ## 4. With the lid closed
 
-None of the settings above, and not `caffeinate -i`, stop a MacBook from sleeping when you close the lid. You have two options.
+None of the settings above, and not `caffeinate -i`, stop a MacBook from sleeping when you close the lid. You have two options. This section is the short version; our guide on [how to keep a Mac awake with the lid closed](/blog/keep-mac-awake-lid-closed) has each method with its limits and a test.
 
 ### Closed-display mode (clamshell mode)
 
@@ -101,11 +101,11 @@ sudo pmset -a disablesleep 0
 
 If you would rather click than type, these menu bar apps do the job. Each is good at something different.
 
-**Amphetamine.** An app on the Mac App Store. You start sessions that last until you stop them, for a set time, or until a set time. Triggers start sessions on their own, for example while a certain app runs or while an external display is connected. It is the most complete option if you want rules.
+**Amphetamine.** An app on the Mac App Store. You start sessions that last until you stop them, for a set time, or until a set time. Triggers start sessions on their own, for example while a certain app runs or while an external display is connected. It is the most complete option if you want rules. Our [guide to Amphetamine for Mac](/blog/amphetamine-mac) explains its closed-display mode.
 
 **KeepingYouAwake.** A small menu bar app. Its README calls it "a small wrapper around Apple's `caffeinate` command line utility". Click the icon to keep the Mac awake for a set time or until you click again. Install it from its GitHub releases or with `brew install --cask keepingyouawake`.
 
-**Caffeine.** A coffee cup in the menu bar. Click the cup and the Mac will not sleep, dim the screen, or start the screen saver. Click it again to stop. It does one thing and stays out of the way.
+**Caffeine.** A coffee cup in the menu bar. Click the cup and the Mac will not sleep, dim the screen, or start the screen saver. Click it again to stop. It does one thing and stays out of the way. Our [guide to Caffeine for Mac](/blog/caffeine-mac) says where to get the current version.
 
 **Agent Caffeine.** Our app, for people who run AI coding agents like Claude Code, Codex or opencode. It detects more than 40 agents, and reads from Claude Code and Codex whether they work, wait for you or are idle. It keeps the Mac awake in one of three modes: always, while an agent is open, or while an agent is working. In the last mode the Mac can sleep again when every agent is idle, or has waited 5 minutes for your answer. A closed lid on the power adapter works from the start; on battery it needs a small helper that you allow once. It has a 7-day free trial, then costs {{price}} once, and needs macOS 13 or later. See [Agent Caffeine](/) for details. If you do not run agents, one of the apps above is the better fit.
 
