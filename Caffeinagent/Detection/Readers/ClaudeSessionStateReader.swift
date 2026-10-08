@@ -26,6 +26,9 @@ struct ClaudeSessionState: Equatable {
     var jobID: String?
     var cwd: String?
     var version: String?
+    /// `entrypoint`: `cli` for a terminal, `claude-desktop` for a session
+    /// of the Claude app's Code tab.
+    var entrypoint: String?
     /// `name`: the session's own name. It can come from what the user
     /// typed, so it is for the menu only and never part of a report.
     var name: String?
@@ -81,8 +84,9 @@ struct ClaudeSessionStateReader {
     /// The format is undocumented, so every key is optional except `status`
     /// (written since Claude Code 2.1.119, per other projects). `busy` and
     /// `idle` were seen on this Mac on 2.1.286 to 2.1.289, `waiting` in an
-    /// earlier measurement. `shell` (the turn ended, background work still
-    /// runs) is known only from other projects.
+    /// earlier measurement, and `shell` (the turn ended, background work
+    /// still runs) on 2.1.289. A session of the Claude app writes `busy`,
+    /// `waiting` and `idle` only (docs/research/09-claude-desktop.md).
     nonisolated static func parse(_ data: Data, now: Date) -> ClaudeSessionState? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let status = object["status"] as? String else { return nil }
@@ -103,6 +107,7 @@ struct ClaudeSessionStateReader {
             jobID: object["jobId"] as? String,
             cwd: object["cwd"] as? String,
             version: object["version"] as? String,
+            entrypoint: object["entrypoint"] as? String,
             name: SessionHint.cleaned(name: object["name"] as? String),
             observedAt: now
         )

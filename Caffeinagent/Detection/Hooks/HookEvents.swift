@@ -113,9 +113,10 @@ enum HookEvents {
     static let stampedAgents: Set<String> = ["opencode", "pi"]
 
     /// The `AgentDefinition.id`s a hook agent id covers. The Codex app runs
-    /// the same hooks file as the Codex CLI.
+    /// the same hooks file as the Codex CLI, and the Claude app starts its
+    /// Claude Code with `--setting-sources=user,project,local`.
     static let definitionIDs: [String: Set<String>] = [
-        "claude": ["claude"],
+        "claude": ["claude", AgentCatalog.claudeDesktopID],
         "codex": ["codex", "codex-desktop"],
         "droid": ["droid"],
         "opencode": ["opencode"],

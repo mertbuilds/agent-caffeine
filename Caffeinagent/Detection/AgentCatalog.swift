@@ -139,11 +139,15 @@ struct AgentCatalog {
 
     /// Raised when a definition changes what it matches, so a lab recording
     /// says which catalog saw its processes.
-    static let version = 5
+    static let version = 6
 
     // MARK: Data
 
     static let cursorDesktopID = "cursor-desktop"
+    static let claudeDesktopID = "claude-desktop"
+    /// `entrypoint` in the session file of a Claude Code that the Claude
+    /// app started.
+    static let claudeDesktopEntrypoint = "claude-desktop"
 
     /// Cursor's agent runs a command as a shell below an extension host:
     /// `Cursor Helper (Plugin)` -> `/bin/zsh -c ...` -> the command. A
@@ -198,9 +202,29 @@ struct AgentCatalog {
             ],
             verified: true
         ),
-        // Placeholders. Their engine paths are unconfirmed, so they have no
-        // matchers and match nothing until someone measures a running app.
-        AgentDefinition(id: "claude-desktop", displayName: "Claude", level: .activity, kind: .desktop, matchers: [], exclusions: [], verified: false),
+        // Seen 2026-10-08, Claude 2.26454.2 (docs/research/09-claude-desktop.md).
+        // The engine is the main process: chat and Cowork have no process
+        // of their own. Each session of the Code tab is a Claude Code of
+        // its own that the app keeps in Application Support:
+        // `Contents/Helpers/disclaimer --pgroup -- ~/Library/Application
+        // Support/Claude/claude-code/<version>/<hash>/claude.app/Contents/
+        // MacOS/claude --output-format stream-json ...`. It writes the
+        // session file of a Claude Code, so it is a session of this app
+        // and no Claude Code of a terminal. Every other binary of the
+        // bundle is a helper.
+        AgentDefinition(
+            id: claudeDesktopID, displayName: "Claude", level: .state, kind: .desktop,
+            matchers: [AgentMatcher(.appBundle(bundle: "Claude.app", relativePath: "Contents/MacOS/Claude"))],
+            exclusions: [
+                AgentExclusion(process: .appBundle(bundle: "claude.app", relativePath: "Contents/MacOS/claude"), role: .session),
+                AgentExclusion(process: .executableContains("/Claude.app/Contents/Frameworks/")),
+                AgentExclusion(process: .executableContains("/Claude.app/Contents/Helpers/")),
+                AgentExclusion(process: .executableContains("/Claude.app/Contents/Resources/")),
+            ],
+            verified: true
+        ),
+        // A placeholder. Its engine path is unconfirmed, so it has no
+        // matchers and matches nothing until someone measures a running app.
         AgentDefinition(id: "t3-code", displayName: "T3 Code", level: .activity, kind: .desktop, matchers: [], exclusions: [], verified: false),
     ]
 

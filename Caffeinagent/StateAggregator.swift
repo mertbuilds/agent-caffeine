@@ -863,10 +863,11 @@ final class StateAggregator: ObservableObject {
 
     /// The folder of each session that works or waits, so the menu can tell
     /// two sessions of one agent apart. It is shown only, never logged.
+    /// The Claude app has a process for each session of its Code tab.
     private func refreshRows() {
         let readings = decision.perAgent.map(\.reading)
         var next: [ProcessIdentity: String] = [:]
-        for reading in readings where reading.verdict.state != .idle && reading.kind == .cli {
+        for reading in readings where reading.verdict.state != .idle && (reading.kind == .cli || reading.agentID == AgentCatalog.claudeDesktopID) {
             next[reading.identity] = sessionLabels[reading.identity]
                 ?? MenuModel.sessionLabel(workingDirectory: openFiles.workingDirectory(of: reading.identity.pid))
         }

@@ -133,6 +133,14 @@ final class EvidenceCollector: EvidenceCollecting {
     /// while the process table cannot be read. A time and not a count of
     /// samples: an event brings a sample 0.2 seconds after the one before.
     static let heldSeconds: TimeInterval = 30
+    /// The Claude app holds one sleep assertion for all it does, and a
+    /// turn of a Code session is one of the claims on it: held from the
+    /// prompt, given up 30 seconds after the turn (`Zcr` in its bundle,
+    /// docs/research/09-claude-desktop.md). The session file tells that
+    /// turn exactly. So the assertion counts for the app itself (Cowork,
+    /// a tool call for a remote session, a scheduled wake) only when it
+    /// was held for this long in a row with no Code session in a turn.
+    static let claudeAppHoldSettle: TimeInterval = 45
 
     /// One more way to say that phone access is on, next to what
     /// `RemoteAccessDetector` finds. Nothing detects SSH or screen sharing yet.
@@ -181,6 +189,15 @@ final class EvidenceCollector: EvidenceCollecting {
     /// The session names of the sample that is being collected.
     private var sessionNames: [ProcessIdentity: String] = [:]
     private var claudeSettingsFiles = FileCache<RemoteAccessDetector.ClaudeSettings>()
+    /// The sessions whose session file named the Claude app as their
+    /// entry point. Kept, so a file that is read in the middle of a write
+    /// does not move the session to Claude Code for one sample.
+    private var claudeAppSessions: Set<ProcessIdentity> = []
+    /// Since when each Claude app holds its assertion with no Code
+    /// session in a turn: see `claudeAppHoldSettle`.
+    private var claudeAppHoldSince: [ProcessIdentity: Date] = [:]
+    /// The last sign of work of each Claude app itself.
+    private var claudeAppSignAt: [ProcessIdentity: Date] = [:]
 
     init(sources: Sources = .system()) {
         self.sources = sources
@@ -204,7 +221,10 @@ final class EvidenceCollector: EvidenceCollecting {
         // A clock that was set is a hole too: no interval can be trusted.
         let gap = SampleGap.length(from: previous, to: time) != nil
         let interval = gap ? 0 : previous.map { SampleGap.interval(from: $0, to: time) } ?? 0
-        if gap { childWindows.removeAll() }
+        if gap {
+            childWindows.removeAll()
+            claudeAppHoldSince.removeAll()
+        }
 
         var sample = EvidenceSample(frame: EvidenceFrame(at: now, agents: [], context: context(snapshot: snapshot, matches: matches)))
         sample.frame.awake = time.awake
@@ -216,7 +236,12 @@ final class EvidenceCollector: EvidenceCollecting {
         var activities: [String: FileActivity] = [:]
         var rows: [ProcessIdentity: ProcessInfoRow] = [:]
         var liveUnits: Set<ProcessIdentity> = []
-        for instance in instances {
+        // The Claude app comes after its Code sessions: what its assertion
+        // says depends on their state.
+        let claudeApps = instances.filter(Self.isClaudeApp)
+        var codeSessions = 0
+        var codeTurns = 0
+        for instance in instances.filter({ !Self.isClaudeApp($0) }) + claudeApps {
             for row in instance.rows { rows[row.identity] = row }
             guard var evidence = agentEvidence(for: instance, matches: matches, now: now, activities: &activities, watched: &sample.watchedFiles) else { continue }
             noteUse(of: instance, matches: matches, interval: interval, now: now, in: &evidence, liveUnits: &liveUnits)
@@ -224,8 +249,21 @@ final class EvidenceCollector: EvidenceCollecting {
                 // Cursor's own wake lock is held by the main process. A
                 // `caffeinate` in a terminal of the editor is not the agent's.
                 evidence.ownsSleepAssertion = asserting.contains(instance.rootPID)
+            } else if Self.isClaudeApp(instance) {
+                let held = asserting.contains(instance.rootPID) && codeTurns == 0
+                let since = held ? claudeAppHoldSince[instance.identity].flatMap { $0 <= now ? $0 : nil } ?? now : nil
+                claudeAppHoldSince[instance.identity] = since
+                evidence.ownsSleepAssertion = since.map { now.timeIntervalSince($0) >= Self.claudeAppHoldSettle } ?? false
+                if evidence.ownsSleepAssertion || evidence.busyChildCommands > 0 { claudeAppSignAt[instance.identity] = now }
+                // With Code sessions open, the app has a line of its own
+                // only when it did something itself in the last hour.
+                if codeSessions > 0, !isRecent(claudeAppSignAt[instance.identity], now: now) { continue }
             } else {
                 evidence.ownsSleepAssertion = instance.rows.contains { asserting.contains($0.pid) }
+            }
+            if evidence.agentID == AgentCatalog.claudeDesktopID, evidence.role == .session {
+                codeSessions += 1
+                if let state = evidence.reported?.state, state != .idle { codeTurns += 1 }
             }
             noteHooks(of: instance, matches: matches, states: hookStates, now: now, in: &evidence, watched: &sample.watchedFiles)
             sample.frame.agents.append(evidence)
@@ -245,6 +283,10 @@ final class EvidenceCollector: EvidenceCollecting {
         childWindows = childWindows.filter { liveUnits.contains($0.key) }
         activityReaders = activityReaders.filter { activities[$0.key] != nil }
         transcriptChoices = transcriptChoices.filter { sample.roots.contains($0.key) }
+        claudeAppSessions.formIntersection(sample.roots)
+        let apps = Set(claudeApps.map(\.identity))
+        claudeAppHoldSince = claudeAppHoldSince.filter { apps.contains($0.key) }
+        claudeAppSignAt = claudeAppSignAt.filter { apps.contains($0.key) }
         sessionFiles.endSample()
         jobFiles.endSample()
         transcripts.endSample()
@@ -380,7 +422,10 @@ final class EvidenceCollector: EvidenceCollecting {
             role: instance.role == .helperMaybeSession ? .session : instance.role,
             pid: instance.rootPID, startTime: instance.rootStartTime
         )
-        if definition.id == "claude" {
+        if Self.isClaudeApp(instance) {
+            // Chat and Cowork write no state that says what they do.
+            evidence.level = .activity
+        } else if definition.id == "claude" || definition.id == AgentCatalog.claudeDesktopID {
             guard fillClaude(&evidence, instance: instance, matches: matches, now: now, watched: &watched) else { return nil }
         } else if Self.codexIDs.contains(definition.id) {
             fillCodex(&evidence, instance: instance, matches: matches, now: now, watched: &watched)
@@ -408,11 +453,27 @@ final class EvidenceCollector: EvidenceCollecting {
 
     // MARK: Claude Code
 
+    /// The main process of the Claude app, not one of its Code sessions.
+    private static func isClaudeApp(_ instance: AgentInstance) -> Bool {
+        instance.definition.id == AgentCatalog.claudeDesktopID && instance.role == .engine
+    }
+
+    /// A session of the Claude app's Code tab is a line of the app.
+    private func noteClaudeApp(in evidence: inout AgentEvidence) {
+        guard let app = sources.catalog.definitions.first(where: { $0.id == AgentCatalog.claudeDesktopID }) else { return }
+        evidence.agentID = app.id
+        evidence.displayName = app.displayName
+        evidence.kind = app.kind
+        evidence.hasLiveSession = true
+    }
+
     /// False when the instance is to be left out of the frame.
     private func fillClaude(_ evidence: inout AgentEvidence, instance: AgentInstance, matches: [Int32: AgentMatch], now: Date, watched: inout Set<String>) -> Bool {
+        let inApp = instance.definition.id == AgentCatalog.claudeDesktopID
+        if inApp || claudeAppSessions.contains(instance.identity) { noteClaudeApp(in: &evidence) }
         // A launcher and the binary it starts are one instance, and the
         // session file is under the pid of the one that runs the session.
-        let own = instance.rows.filter { matches[$0.pid].map { $0.definition.id == "claude" && $0.role != .helper } ?? false }
+        let own = instance.rows.filter { matches[$0.pid].map { $0.definition.id == instance.definition.id && $0.role != .helper } ?? false }
         var found: (state: ClaudeSessionState?, path: String)?
         for row in own {
             let path = sources.claudeSessions.fileURL(forPid: row.pid).path
@@ -422,8 +483,10 @@ final class EvidenceCollector: EvidenceCollecting {
             break
         }
         guard let found else {
-            // A spare with no session file has no job yet.
-            guard instance.role != .helperMaybeSession else { return false }
+            // A spare with no session file has no job yet. The Claude Code
+            // of the Claude app always writes one, so without it the
+            // process is no session: it starts up, or runs one command.
+            guard instance.role != .helperMaybeSession, !inApp else { return false }
             fillFromTranscript(&evidence, instance: instance, now: now, watched: &watched)
             return true
         }
@@ -432,6 +495,9 @@ final class EvidenceCollector: EvidenceCollecting {
         // verdict remembers the last state for a short time.
         guard var state = found.state else { return true }
         if instance.role == .helperMaybeSession, state.kind == .spare, state.state == .idle { return false }
+        if !inApp, state.entrypoint == AgentCatalog.claudeDesktopEntrypoint, claudeAppSessions.insert(instance.identity).inserted {
+            noteClaudeApp(in: &evidence)
+        }
         state.observedAt = now
         evidence.reported = state.report
         sessionNames[instance.identity] = state.name
@@ -662,8 +728,10 @@ final class EvidenceCollector: EvidenceCollecting {
             let delta = ProcessCensus.delta(of: instance.rows, since: previousRows)
             evidence.sampleInterval = interval
             // The CPU of an editor says nothing about its agent: the
-            // renderer is busy while the user types or scrolls.
-            evidence.subtreeCPUSeconds = cursor ? 0 : delta.cpuTime
+            // renderer is busy while the user types or scrolls. The same
+            // holds for the Claude app, where a chat answer is drawn here
+            // and made on a server.
+            evidence.subtreeCPUSeconds = cursor || Self.isClaudeApp(instance) ? 0 : delta.cpuTime
             evidence.energyNanojoules = delta.energyNanojoules
             evidence.logicalWriteBytes = delta.logicalWriteBytes
         }

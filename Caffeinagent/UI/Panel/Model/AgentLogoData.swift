@@ -6,6 +6,7 @@ extension AgentLogo {
     /// By `AgentDefinition.id`.
     static let markByAgentID: [String: String] = [
         "claude": "claudecode",
+        "claude-desktop": "claudecode",
         "codex": "codex",
         "codex-desktop": "codex",
         "grok": "grok",

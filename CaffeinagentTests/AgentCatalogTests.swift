@@ -35,8 +35,8 @@ final class AgentCatalogTests: XCTestCase {
             ("claude told to work on a daemon", claudeBinary, ["claude", "-p", "daemon", "run"], "claude", .session),
             // Seen 2026-10-05: the Grep tool runs the Claude Code binary as ugrep.
             ("claude binary as its own search tool", claudeBinary, ["ugrep", "-G", "--ignore-files", "--hidden", "TODO"], nil, nil),
-            ("claude desktop app", "/Applications/Claude.app/Contents/MacOS/Claude", ["/Applications/Claude.app/Contents/MacOS/Claude"], nil, nil),
-            ("claude helper in a bundle with spaces", "/Users/me/My Apps/Claude.app/Contents/Helpers/claude", ["/Users/me/My Apps/Claude.app/Contents/Helpers/claude", "--stdio"], nil, nil),
+            ("claude desktop app", "/Applications/Claude.app/Contents/MacOS/Claude", ["/Applications/Claude.app/Contents/MacOS/Claude"], "claude-desktop", .engine),
+            ("claude helper in a bundle with spaces", "/Users/me/My Apps/Claude.app/Contents/Helpers/claude", ["/Users/me/My Apps/Claude.app/Contents/Helpers/claude", "--stdio"], "claude-desktop", .helper),
             ("claude with a bundle path as argument", "/usr/local/bin/claude", ["/usr/local/bin/claude", "/Applications/Foo.app/Contents/x"], "claude", .session),
 
             // Codex CLI.
@@ -272,10 +272,10 @@ final class AgentCatalogTests: XCTestCase {
         let ids = catalog.definitions.map(\.id)
         XCTAssertEqual(Set(ids).count, ids.count)
         let stateIDs = catalog.definitions.filter { $0.level == .state }.map(\.id)
-        XCTAssertEqual(Set(stateIDs), ["claude", "codex", "codex-desktop", "cursor-desktop"])
+        XCTAssertEqual(Set(stateIDs), ["claude", "codex", "codex-desktop", "cursor-desktop", "claude-desktop"])
         XCTAssertFalse(catalog.definitions.contains { $0.level == .generic })
         // Placeholders match nothing and say so.
-        for id in ["claude-desktop", "t3-code"] {
+        for id in ["t3-code"] {
             let definition = catalog.definitions.first { $0.id == id }
             XCTAssertEqual(definition?.kind, .desktop, id)
             XCTAssertEqual(definition?.verified, false, id)
