@@ -1,18 +1,13 @@
 import { useId } from "react";
-import { iconLook, type IconLook } from "@/lib/simulator";
-
-const AWAKE = iconLook("awake");
-const ASLEEP = iconLook("asleep");
+import type { IconLook } from "@/lib/simulator";
 
 const FADE = "transition-opacity duration-fast ease-smooth-out motion-reduce:transition-none";
 const EYES = [6, 12];
 
 type MenuIconProps = {
   className?: string;
-  /** Whether the Mac is held awake. */
-  held?: boolean;
-  /** The state to draw, in place of `held`. */
-  look?: IconLook;
+  /** The state to draw. */
+  look: IconLook;
 };
 
 /**
@@ -21,9 +16,8 @@ type MenuIconProps = {
  * state, grey when the app is off or paused, red crosses in trouble. Every
  * state is in the drawing, so a change crossfades.
  */
-export function MenuIcon({ className, held = true, look }: MenuIconProps) {
+export function MenuIcon({ className, look: shown }: MenuIconProps) {
   const id = `menu-icon-${useId().replace(/[^a-zA-Z0-9]/g, "")}`;
-  const shown = look ?? (held ? AWAKE : ASLEEP);
   const eyes = (kind: IconLook["eyes"]) => ({ className: FADE, opacity: shown.eyes === kind ? 1 : 0 });
   return (
     <svg aria-hidden="true" className={className} fill="currentColor" viewBox="0 0 21 20">

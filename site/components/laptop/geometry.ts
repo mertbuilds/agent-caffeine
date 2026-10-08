@@ -11,7 +11,7 @@ export const CHIN = 4.15;
 // The lid opens to 105 degrees and stands LIFT above the deck. The camera
 // sits PERSPECTIVE away, level with ORIGIN; the laptop stands BACK behind its
 // focus at ANCHOR and turns towards it by CAMERA degrees. The scene's CSS
-// (laptop-scene.tsx and the screen in laptop.tsx) uses the same numbers.
+// (hero-scene.tsx and the glass in laptop.tsx) uses the same numbers.
 export const OPEN = -75;
 export const CAMERA = -15;
 export const BACK = 14;
@@ -354,22 +354,6 @@ export function lidPose(closed: number) {
     along: y * (1 - Math.cos(turn)) + z * Math.sin(turn),
     up: z * (1 - Math.cos(turn)) - y * Math.sin(turn),
   };
-}
-
-/** Degrees between the lid and the keyboard, from 105 open to 0 shut. */
-export function lidDegrees(closed: number): number {
-  return (180 + OPEN) * (1 - closed);
-}
-
-/**
- * The share of its brightness the display keeps at a lid angle, as the app
- * sets it while it keeps the Mac awake (`Power/LidDimming.swift`, `curve`):
- * all of it at 45 degrees and above, none at 3 degrees and below, and a
- * smoothstep between them.
- */
-export function lidBrightness(degrees: number): number {
-  const share = Math.min(1, Math.max(0, (degrees - 3) / (45 - 3)));
-  return share * share * (3 - 2 * share);
 }
 
 /** The lid's paths for one frame, `closed` from 0 (open) to 1 (shut on the base). */

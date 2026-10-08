@@ -14,9 +14,6 @@ import { useLessMotion } from "@/lib/use-less-motion";
 import { useSeen } from "@/lib/use-seen";
 import { useTabHidden } from "@/lib/use-tab-hidden";
 
-/** "a" is the app over the closed laptop, "b" also carries the laptop away, and "b" and "c" end on the notification. */
-export type HeroSceneCut = "a" | "b" | "c";
-
 type Span = readonly [from: number, to: number];
 
 const MUTED = "text-[var(--panel-muted)]";
@@ -54,7 +51,6 @@ const AGENTS: readonly { icon: AgentIconName; name: string; folder: string; befo
   { icon: "codex", name: "Codex", folder: "api", before: 8, done: 18 },
   { icon: "cursor", name: "Cursor", folder: "website", before: 5, done: 9 },
 ];
-const FIRST_DONE = AGENTS[AGENTS.length - 1];
 const LAST_DONE = AGENTS[0];
 
 /** The minutes that have passed since the lid closed, at `time` seconds into the loop. */
@@ -207,50 +203,6 @@ function Panel({ title, subtitle, stance, rest, rows, paused, still }: { title: 
   );
 }
 
-/** The notification the app sends when an agent finishes (`AgentNoticeText`): the agent, its folder, and how long it worked. */
-function Notice({ shown }: { shown: number }) {
-  if (shown <= 0) {
-    return null;
-  }
-  return (
-    <div
-      className="absolute inset-x-0 bottom-[6%] z-20 mx-auto w-[19rem]"
-      style={{ opacity: shown, transform: `translateY(${(shown - 1) * 12}px)` }}
-    >
-      <PanelSurface className="flex items-start gap-2.5 rounded-2xl p-2.5 shadow-[0_8px_24px_var(--shadow)]" label={`A notification from Agent Caffeine: ${FIRST_DONE.name} finished`}>
-        <img alt="" className="size-8 shrink-0" decoding="async" height={32} src="/icon.png" width={32} />
-        <span className="flex min-w-0 flex-col gap-px text-[12px] leading-4">
-          <span className="font-medium">{FIRST_DONE.name} finished</span>
-          <span className="font-medium">{FIRST_DONE.folder}</span>
-          <span>After {FIRST_DONE.before + FIRST_DONE.done} minutes</span>
-        </span>
-      </PanelSurface>
-    </div>
-  );
-}
-
-/** The ground going by under a laptop that is carried: short marks that slide to the left. */
-function Ground({ shown, travelled }: { shown: number; travelled: number }) {
-  if (shown <= 0) {
-    return null;
-  }
-  return (
-    <svg aria-hidden="true" className="absolute inset-x-[12%] bottom-[9%] h-px w-[76%] overflow-visible" style={{ opacity: shown }} viewBox="0 0 100 1" preserveAspectRatio="none">
-      <line
-        stroke="var(--hairline)"
-        strokeDasharray="7 5"
-        strokeDashoffset={travelled}
-        strokeLinecap="round"
-        vectorEffect="non-scaling-stroke"
-        x1="0"
-        x2="100"
-        y1="0.5"
-        y2="0.5"
-      />
-    </svg>
-  );
-}
-
 type Hold = { time?: number; wind?: number };
 
 /**
@@ -272,7 +224,7 @@ function useHold(): Hold | null {
   return hold;
 }
 
-export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
+export function HeroScene() {
   const ref = useRef<HTMLDivElement>(null);
   const seen = useSeen(ref, 0.3);
   const hidden = useTabHidden();
@@ -321,13 +273,8 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
       checked: stretch(time, finished, finished + CHECK_IN),
     };
   });
-  const carried = cut === "b" ? span(heroScene.lift, easeInOut) - span(heroScene.down, easeInOut) : 0;
-  const walked = cut === "b" ? span(heroScene.walk, easeInOut) : 0;
-  const bob = carried * Math.sin(walked * Math.PI * 16);
   const label =
-    cut === "b"
-      ? "A laptop shows the Agent Caffeine menu with three AI coding agents at work. The lid closes and the laptop is carried away. The agents keep working and finish one by one, and then the Mac can sleep"
-      : "A laptop shows the Agent Caffeine menu on its display, with three AI coding agents at work. The lid closes, and the menu stays in a dashed outline of the display: the agents keep working and finish one by one. Two minutes after the last one the menu says that the Mac can sleep";
+    "A laptop shows the Agent Caffeine menu on its display, with three AI coding agents at work. The lid closes, and the menu stays in a dashed outline of the display: the agents keep working and finish one by one. Two minutes after the last one the menu says that the Mac can sleep";
 
   // The robot's tile loses its colour and the icon in the menu bar goes pale over the same time, once the Mac can sleep.
   const rest = stretch(time, ASLEEP_AT, ASLEEP_AT + TONE_DOWN, easeInOut);
@@ -341,14 +288,9 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
       {/* The scene has a set width at each size of the page, so the menu on its display has one known scale. */}
       <div aria-hidden="true" className="w-[660px] shrink-0 sm:w-[810px] lg:w-[630px] xl:w-[810px]">
         <div className="relative aspect-[10/7] w-full [container-type:inline-size]">
-          <div
-            className="absolute inset-0"
-            style={{ perspective: "200cqw", perspectiveOrigin: "50% 22%", transform: `translateY(${-(carried * 5 + bob * 0.6)}cqw)` }}
-          >
+          <div className="absolute inset-0" style={{ perspective: "200cqw", perspectiveOrigin: "50% 22%" }}>
             {/* The lid's own glass is dark: the one desktop of the scene lies flat over it, below. */}
-            <Laptop closed={closed} display={1} grounded={1 - carried}>
-              <div className="h-full bg-[#0d0d0d]" />
-            </Laptop>
+            <Laptop closed={closed} />
           </div>
           <div
             className="absolute"
@@ -382,8 +324,6 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
               </div>
             </div>
           </div>
-          <Ground shown={carried} travelled={walked * 120} />
-          {cut !== "a" && <Notice shown={span(heroScene.notice)} />}
         </div>
       </div>
     </div>
