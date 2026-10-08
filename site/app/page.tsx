@@ -49,7 +49,7 @@ function structuredData(trial: boolean) {
       },
       {
         "@type": "FAQPage",
-        mainEntity: faqItems(trial).map((item) => ({
+        mainEntity: faqItems().map((item) => ({
           "@type": "Question",
           name: item.question,
           acceptedAnswer: { "@type": "Answer", text: answerText(item.answer) },
@@ -71,7 +71,7 @@ export default async function Home() {
       <SmallThings />
       <AgentsSection />
       <Pricing />
-      <Faq trial={trial} />
+      <Faq />
       <Footer />
       <JsonLd data={structuredData(trial)} />
     </main>

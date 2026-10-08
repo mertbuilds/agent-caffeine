@@ -16,4 +16,4 @@ export const CONTACT_EMAIL = "hi@caffeinagent.com";
 
 export const PRIVACY_UPDATED = "2026-10-07";
 
-export const TERMS_UPDATED = "2026-10-07";
+export const TERMS_UPDATED = "2026-10-08";

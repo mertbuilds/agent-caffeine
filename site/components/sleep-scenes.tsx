@@ -150,7 +150,7 @@ export function SleepScenes() {
           </PanelSurface>
         </Scene>
         <Scene
-          text={`Your agents keep working. On battery, macOS asks you once to allow a small helper. Agent Caffeine lets your Mac sleep at ${BATTERY_FLOOR}% battery and when it gets too hot. Do not put a working Mac in a closed bag`}
+          text={`Your agents keep working. On battery, macOS asks you once to allow a small helper. Agent Caffeine lets your Mac sleep at ${BATTERY_FLOOR}% battery and when it gets too hot`}
           title="The lid is closed and your Mac runs on battery"
         >
           <BatteryStop />

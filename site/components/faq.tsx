@@ -63,15 +63,14 @@ function Question({ question, answer, index, initiallyOpen }: { question: string
   );
 }
 
-/** `trial` adds the free trial's question, for a page that has a download to offer. */
-export function Faq({ trial }: { trial: boolean }) {
+export function Faq() {
   return (
     <section id="faq" className="mx-auto flex w-full max-w-[640px] scroll-mt-20 flex-col gap-6">
       <h2 className="text-balance text-[1.75rem] font-medium leading-[1.2] tracking-[-0.01em]">
         Questions
       </h2>
       <div>
-        {faqItems(trial).map((item, index) => (
+        {faqItems().map((item, index) => (
           <Question key={item.question} question={item.question} answer={item.answer} index={index} initiallyOpen={item.open === true} />
         ))}
       </div>

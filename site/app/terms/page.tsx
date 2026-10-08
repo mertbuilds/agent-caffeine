@@ -59,8 +59,7 @@ export default function Terms() {
       <h2>No warranty</h2>
       <p>
         The app is provided as is, without any warranty. A Mac that is kept awake uses battery and
-        makes heat, most of all when it is closed in a bag. You are responsible for where you leave
-        it.
+        makes heat. You are responsible for where you leave it.
       </p>
 
       <h2>Liability</h2>
