@@ -12,12 +12,12 @@ struct LidDimInputs: Equatable {
     /// Both settings are on.
     var enabled = true
     var sensorAvailable = true
-    /// agent caffeine keeps the Mac awake.
+    /// Agent Caffeine keeps the Mac awake.
     var holding = false
     var externalDisplay = false
     /// What the power root domain says about the lid.
     var clamshellClosed = false
-    /// agent caffeine put the displays to sleep and did not wake them yet.
+    /// Agent Caffeine put the displays to sleep and did not wake them yet.
     var slept = false
 }
 
@@ -104,7 +104,7 @@ struct LidDimStep: Equatable {
 }
 
 /// The built-in display gets darker as the lid closes and brighter as it
-/// opens, while agent caffeine keeps the Mac awake. Pure: the caller keeps
+/// opens, while Agent Caffeine keeps the Mac awake. Pure: the caller keeps
 /// the memory and passes the time.
 ///
 /// At 45 degrees and above the brightness is the user's. From 45 degrees
@@ -144,7 +144,7 @@ enum LidDimming {
     static let sensorTimeout: TimeInterval = 0.5
     /// A change smaller than this is not written.
     static let minChange: Float = 0.001
-    /// A brightness key counts after the lid and agent caffeine were quiet
+    /// A brightness key counts after the lid and Agent Caffeine were quiet
     /// for this long. See `BrightnessKeyDetector`.
     static let userQuiet: TimeInterval = 0.3
     /// The longest time one step counts for, so a late step does not jump.
@@ -215,8 +215,8 @@ enum LidDimming {
             if !inputs.holding, !inputs.externalDisplay {
                 // The Mac goes to sleep, and wakes with its own brightness.
                 if memory.phase != .idle {
-                    step.actions.append(.restore(reason: "agent caffeine no longer keeps the Mac awake"))
-                    step.notes.append("the fade ends: agent caffeine no longer keeps the Mac awake")
+                    step.actions.append(.restore(reason: "Agent Caffeine no longer keeps the Mac awake"))
+                    step.notes.append("the fade ends: Agent Caffeine no longer keeps the Mac awake")
                     memory = idle(memory)
                 }
                 step.memory = memory

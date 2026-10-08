@@ -231,7 +231,7 @@ Local observation, not a fault report: at 14:49 this Mac was on AC with `SleepDi
 
 ---
 
-## E. Recommendation for agent caffeine
+## E. Recommendation for Agent Caffeine
 
 1. **Keep `SleepDisabled` as the mechanism** for lid closed on battery. Nothing more reliable is available to third parties. The entitled assertion properties are Apple-only.
 2. **Arm it earlier.** Set it when the agent works **and** the user enabled lid-closed mode, on AC as well as on battery (or at least as soon as the lid closes or the power source changes while armed). This removes the unplug-while-closed race. Use `-a` in the command; `-b` has no meaning for this setting.

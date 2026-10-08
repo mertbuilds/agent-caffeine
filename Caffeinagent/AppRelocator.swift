@@ -40,8 +40,8 @@ enum AppRelocator {
         (try? url.resourceValues(forKeys: [.volumeIsReadOnlyKey]))?.volumeIsReadOnly ?? true
     }
 
-    static let dragTitle = "Move agent caffeine to the Applications folder"
-    static let dragText = "Drag agent caffeine to the Applications folder, then open it from there."
+    static let dragTitle = "Move Agent Caffeine to the Applications folder"
+    static let dragText = "Drag Agent Caffeine to the Applications folder, then open it from there."
     static let dragQuit = "Quit"
     static let dragContinue = "Continue anyway"
 
@@ -70,8 +70,8 @@ enum AppRelocator {
         if UserDefaults.standard.bool(forKey: declinedKey) { return }
 
         let alert = NSAlert()
-        alert.messageText = "Move agent caffeine to Applications?"
-        alert.informativeText = "agent caffeine is running from \(bundleURL.deletingLastPathComponent().path). Move it to the Applications folder so it stays in one place and updates install cleanly."
+        alert.messageText = "Move Agent Caffeine to Applications?"
+        alert.informativeText = "Agent Caffeine is running from \(bundleURL.deletingLastPathComponent().path). Move it to the Applications folder so it stays in one place and updates install cleanly."
         alert.addButton(withTitle: "Move")
         alert.addButton(withTitle: "Not now")
         alert.alertStyle = .informational
@@ -103,7 +103,7 @@ enum AppRelocator {
             }
         } catch {
             log.error("relocate failed: \(error.localizedDescription, privacy: .public)")
-            showError("agent caffeine could not be copied to the Applications folder: \(error.localizedDescription). Drag it there yourself.")
+            showError("Agent Caffeine could not be copied to the Applications folder: \(error.localizedDescription). Drag it there yourself.")
             return
         }
 
@@ -120,7 +120,7 @@ enum AppRelocator {
 
     private static func showError(_ msg: String) {
         let alert = NSAlert()
-        alert.messageText = "agent caffeine could not be moved"
+        alert.messageText = "Agent Caffeine could not be moved"
         alert.informativeText = msg
         alert.alertStyle = .warning
         alert.runModal()

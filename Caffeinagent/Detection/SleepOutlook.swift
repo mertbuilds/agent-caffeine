@@ -6,7 +6,7 @@ struct MacSleepState: Equatable {
     var lidClosed = false
     var onBattery = false
     /// The sleep flag of the helper is set: with the lid closed on battery
-    /// the Mac is awake only for as long as agent caffeine holds.
+    /// the Mac is awake only for as long as Agent Caffeine holds.
     var flagInUse = false
     /// The system sleep timer of macOS for the power source in use, in
     /// minutes. 0 is never. Nil when it was not read.
@@ -18,7 +18,7 @@ struct MacSleepState: Equatable {
 /// What happens when the hold for the agents that wait ends. It speaks for
 /// the whole Mac, so the menu and a notification say the same.
 enum SleepOutlook: Equatable {
-    /// What the Mac does once agent caffeine lets go with the lid open.
+    /// What the Mac does once Agent Caffeine lets go with the lid open.
     /// Only what rules sleep out is known for sure, so no line says when
     /// the Mac sleeps from this.
     enum Afterwards: Equatable {
@@ -34,7 +34,7 @@ enum SleepOutlook: Equatable {
     /// said about sleep.
     case silent
     /// The lid is closed on battery and only the sleep flag keeps the Mac
-    /// awake, so it sleeps when agent caffeine lets go.
+    /// awake, so it sleeps when Agent Caffeine lets go.
     case sleeps(after: TimeInterval)
     /// Agent caffeine lets go then. What the Mac does next is its own.
     case letsGo(after: TimeInterval, then: Afterwards)
@@ -72,7 +72,7 @@ enum SleepOutlook: Equatable {
             case .neverSleeps: next = "macOS never sleeps on this power source"
             case .otherAppHolds: next = "another app keeps the Mac awake"
             }
-            return "sleep outlook: agent caffeine lets go in \(Int(after.rounded())) s, \(next)"
+            return "sleep outlook: Agent Caffeine lets go in \(Int(after.rounded())) s, \(next)"
         }
     }
 }

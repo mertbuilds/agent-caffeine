@@ -93,7 +93,7 @@ final class CursorHookTests: XCTestCase {
         XCTAssertFalse(HookEvents.rules["cursor"]?.contains { $0.action == .set(.waitingForUser) } ?? true, "No event exists for an approval")
         XCTAssertEqual(HookEvents.hookAgent(forDefinition: "cursor-desktop"), "cursor")
         XCTAssertNil(HookEvents.hookAgent(forDefinition: "cursor-agent"), "Not confirmed for the CLI")
-        XCTAssertEqual(cursor.benefit, "Lets agent caffeine see at once when Cursor starts and stops working")
+        XCTAssertEqual(cursor.benefit, "Lets Agent Caffeine see at once when Cursor starts and stops working")
         XCTAssertEqual(cursor.configPath, ".cursor/hooks.json")
     }
 

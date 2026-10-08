@@ -462,7 +462,7 @@ if [ -f "release-notes/$VERSION.md" ]; then
   cp "release-notes/$VERSION.md" "$NOTES"
 else
   cat > "$NOTES" <<NOTESFILE
-agent caffeine $VERSION for Mac, build $BUILD.
+Agent Caffeine $VERSION for Mac, build $BUILD.
 NOTESFILE
 fi
 

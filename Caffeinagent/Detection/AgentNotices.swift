@@ -73,7 +73,7 @@ struct AgentNoticeInput {
     /// The user touched the keyboard or the pointer a moment ago.
     var userActive = false
     var settings = AgentNoticeSettings()
-    /// False while agent caffeine is off, paused or without a license.
+    /// False while Agent Caffeine is off, paused or without a license.
     var active = true
 }
 
@@ -110,7 +110,7 @@ struct AgentNoticeDecision: Equatable {
             let after = workedFor.map { " after \(Int($0.rounded())) s" } ?? ""
             return "\(name) fired pid \(pid)\(after)"
         case .atLaunch: return "\(name) skipped pid \(pid): it waited already at launch"
-        case .notActive: return "\(name) skipped pid \(pid): agent caffeine is off or paused"
+        case .notActive: return "\(name) skipped pid \(pid): Agent Caffeine is off or paused"
         case .inFront: return "\(name) skipped pid \(pid): front app is its app"
         case .backAtWork(let after): return "\(name) skipped pid \(pid): working again after \(String(format: "%.1f", after)) s"
         case .waitEnded(let after): return "\(name) skipped pid \(pid): the wait ended after \(String(format: "%.1f", after)) s"
@@ -328,7 +328,7 @@ enum AgentNoticeDelivery: Equatable {
     case delivered
     /// macOS took it and shows no banner: the style is "None" in System Settings.
     case noBanner
-    /// Notifications are off for agent caffeine.
+    /// Notifications are off for Agent Caffeine.
     case notAllowed
     /// macOS did not take it.
     case failed
@@ -354,7 +354,7 @@ struct AgentNoticeHistory: Equatable {
             case .sent(.notAllowed): return "Not shown: notifications are off in System Settings"
             case .sent(.failed): return "Not shown: macOS did not take it"
             case .inFront: return "Not sent: you were in the agent's app"
-            case .notActive: return "Not sent: agent caffeine was off or paused"
+            case .notActive: return "Not sent: Agent Caffeine was off or paused"
             }
         }
     }

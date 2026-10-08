@@ -95,7 +95,7 @@ enum MenuModel {
         return input.reachableUntil.map { PanelText.reachableUntil($0, calendar: input.calendar, locale: input.locale) }
     }
 
-    /// Offered while agent caffeine could keep the Mac awake.
+    /// Offered while Agent Caffeine could keep the Mac awake.
     static func canStayReachable(_ input: PanelInput) -> Bool {
         guard input.enabled, input.entitlement.allowsHolding else { return false }
         if case .safetyStop = input.decision.headline { return false }
@@ -193,7 +193,7 @@ enum MenuModel {
     // MARK: Battery
 
     /// The battery floor stops every hold on battery, with the lid open
-    /// too, and with the floor off the user has to see the end coming, so the line is there whenever agent caffeine could hold on
+    /// too, and with the floor off the user has to see the end coming, so the line is there whenever Agent Caffeine could hold on
     /// battery, with or without the helper for a closed lid.
     static func battery(_ input: PanelInput) -> PanelBattery? {
         guard input.onBattery, let percent = input.batteryPercent,
@@ -215,7 +215,7 @@ enum MenuModel {
     }
 
     /// The hint of the first time. Not for a helper that was set up
-    /// before, and not while agent caffeine brings it back.
+    /// before, and not while Agent Caffeine brings it back.
     static func lidClosedNeedsSetup(setup: HelperSetup, wasSetUp: Bool, wanted: Bool, hasBattery: Bool) -> Bool {
         hasBattery && wanted && !wasSetUp && (setup == .notSetUp || setup == .requiresApproval)
     }

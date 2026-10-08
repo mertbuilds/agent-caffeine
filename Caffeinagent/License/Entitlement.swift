@@ -1,6 +1,6 @@
 import Foundation
 
-/// Whether agent caffeine may keep the Mac awake.
+/// Whether Agent Caffeine may keep the Mac awake.
 enum Entitlement: Equatable {
     case licensed
     case trial(daysLeft: Int)
@@ -12,7 +12,7 @@ enum Entitlement: Equatable {
     }
 }
 
-/// Why agent caffeine may not keep the Mac awake, so a paying user is never
+/// Why Agent Caffeine may not keep the Mac awake, so a paying user is never
 /// told to buy a key.
 enum ExpiredReason: Equatable {
     /// No key was activated here, and the trial is over.
@@ -25,7 +25,7 @@ enum ExpiredReason: Equatable {
 
     var text: String {
         switch self {
-        case .trialOver: return "Your trial has ended. agent caffeine is not keeping your Mac awake."
+        case .trialOver: return "Your trial has ended. Agent Caffeine is not keeping your Mac awake."
         case .unverified: return "Your license was not checked for 30 days. Connect to the internet to keep your Mac awake."
         case .activationRemoved: return "This Mac is no longer activated for this key."
         }

@@ -182,7 +182,7 @@ final class DisplayController {
     /// The sensor is open and asked.
     private var armed = false
     private var poll: LidPoll?
-    /// agent caffeine put the displays to sleep and did not wake them yet.
+    /// Agent Caffeine put the displays to sleep and did not wake them yet.
     private var slept = false
     /// macOS said the Mac goes to sleep, and it did not wake yet.
     private var asleep = false

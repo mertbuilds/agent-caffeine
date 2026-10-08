@@ -463,7 +463,7 @@ final class LidDimmingTests: XCTestCase {
         line.move(from: 110, to: 0, over: 1)
         line.inputs.holding = false
         let step = line.feed(0)
-        XCTAssertEqual(step.actions, [.restore(reason: "agent caffeine no longer keeps the Mac awake")])
+        XCTAssertEqual(step.actions, [.restore(reason: "Agent Caffeine no longer keeps the Mac awake")])
         XCTAssertEqual(line.panel, 0.6, "The Mac goes to sleep and wakes with its own brightness")
         XCTAssertEqual(line.memory.phase, .idle)
     }

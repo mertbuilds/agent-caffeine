@@ -79,7 +79,7 @@ final class SystemAgentHosts: AgentHostFinding {
         if #available(macOS 14.0, *) {
             // From macOS 14 an app comes to the front when the active app
             // gives way to it. A click on the menu or on a notification
-            // made agent caffeine the app the user works with.
+            // made Agent Caffeine the app the user works with.
             NSApp.yieldActivation(to: app)
             return app.activate(from: .current, options: [])
         }

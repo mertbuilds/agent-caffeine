@@ -14,7 +14,7 @@ enum LicenseMessage: Equatable {
         case .limitReached: return "This key is in use on as many Macs as it allows. Choose Deactivate this Mac on one of them, or remove one in Manage in Polar, then try again."
         case .notFound: return "Polar does not recognize this key. Check it for typos."
         case .revoked: return "This key was turned off."
-        case .unavailable: return "agent caffeine could not reach Polar. Check your connection and try again."
+        case .unavailable: return "Agent Caffeine could not reach Polar. Check your connection and try again."
         case .activationGone: return "This Mac is no longer activated for this key. Activate it again."
         }
     }

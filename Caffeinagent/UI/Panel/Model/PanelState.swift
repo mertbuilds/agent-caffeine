@@ -81,8 +81,8 @@ struct PanelAttention: Equatable {
     var actions: [PanelAction] = []
 }
 
-/// The charge of the battery and the level where agent caffeine lets the
-/// Mac sleep, on one line below the headline. Only while the Mac runs on battery and agent caffeine
+/// The charge of the battery and the level where Agent Caffeine lets the
+/// Mac sleep, on one line below the headline. Only while the Mac runs on battery and Agent Caffeine
 /// could keep it awake.
 struct PanelBattery: Equatable {
     enum Level: Equatable {
@@ -90,7 +90,7 @@ struct PanelBattery: Equatable {
         /// Within `MenuModel.batteryWarningPoints` of the floor, or low with
         /// no floor.
         case nearFloor
-        /// The battery floor stopped agent caffeine.
+        /// The battery floor stopped Agent Caffeine.
         case stopped
         /// With no floor, close to empty. See `NoLimitBatteryWarning.levels`.
         case nearEmpty
@@ -119,7 +119,7 @@ struct PanelBattery: Equatable {
         case .stopped, .nearEmpty: return .red
         }
     }
-    /// "88%". Nil while the floor stopped agent caffeine: the headline
+    /// "88%". Nil while the floor stopped Agent Caffeine: the headline
     /// says the number then.
     var charge: String? { level == .stopped ? nil : PanelText.percent(percent) }
     /// What follows from it, after the number.
@@ -314,7 +314,7 @@ struct PanelState: Equatable {
     var pausedLabel: String?
     /// "Reachable until 18:30" for the bar at the bottom. Nil when not on.
     var reachableLabel: String?
-    /// The choices of "stay reachable". Empty while agent caffeine may
+    /// The choices of "stay reachable". Empty while Agent Caffeine may
     /// not keep the Mac awake.
     var reachableActions: [PanelAction] = []
     /// What "stay reachable" costs, below its choices. Only on battery.
@@ -343,7 +343,7 @@ struct PanelBar: Equatable {
     var pausedLabel: String?
     /// "Reachable until 18:30". Nil when not on.
     var reachableLabel: String?
-    /// The choices of "stay reachable". Empty while agent caffeine may
+    /// The choices of "stay reachable". Empty while Agent Caffeine may
     /// not keep the Mac awake.
     var reachableActions: [PanelAction] = []
     /// What "stay reachable" costs, below its choices. Only on battery.

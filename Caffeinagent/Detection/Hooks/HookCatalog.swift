@@ -29,7 +29,7 @@ struct HookCatalogEntry: Equatable, Identifiable {
     /// Relative to the home folder.
     let configPath: String
     let format: Format
-    /// The states the hooks add to what agent caffeine sees without them.
+    /// The states the hooks add to what Agent Caffeine sees without them.
     let adds: [ReportedState]
     /// One line for Preferences: what turning it on gives.
     let benefit: String
@@ -76,7 +76,7 @@ enum HookCatalog {
             id: "claude", displayName: "Claude Code", configPath: ".claude/settings.json",
             format: .jsonHookGroups(keyPath: ["hooks"]),
             adds: [.waitingForUser],
-            benefit: "Tells agent caffeine when Claude Code is waiting for your permission.",
+            benefit: "Tells Agent Caffeine when Claude Code is waiting for your permission.",
             afterInstall: nil,
             confirmedBy: "code.claude.com/docs/en/hooks, and the file on the test Mac"
         ),
@@ -84,15 +84,15 @@ enum HookCatalog {
             id: "codex", displayName: "Codex", configPath: ".codex/hooks.json",
             format: .jsonHookGroups(keyPath: ["hooks"]),
             adds: [.waitingForUser],
-            benefit: "Tells agent caffeine when Codex is waiting for your permission.",
-            afterInstall: "One more step for Codex: type /hooks in Codex and approve agent caffeine.",
+            benefit: "Tells Agent Caffeine when Codex is waiting for your permission.",
+            afterInstall: "One more step for Codex: type /hooks in Codex and approve Agent Caffeine.",
             confirmedBy: "learn.chatgpt.com/docs/hooks, the Codex 0.159 binary, and the file on the test Mac"
         ),
         HookCatalogEntry(
             id: "droid", displayName: "Droid", configPath: ".factory/settings.json",
             format: .jsonHookGroups(keyPath: ["hooks"]),
             adds: [.working, .waitingForUser, .idle],
-            benefit: "Tells agent caffeine when Droid is working, waiting for you or done.",
+            benefit: "Tells Agent Caffeine when Droid is working, waiting for you or done.",
             afterInstall: nil,
             confirmedBy: "docs.factory.com/cli/configuration/hooks-guide, and the file on the test Mac"
         ),
@@ -100,7 +100,7 @@ enum HookCatalog {
             id: "opencode", displayName: "opencode", configPath: ".config/opencode/plugins/\(pluginFileName)",
             format: .pluginFile,
             adds: [.working, .waitingForUser, .idle],
-            benefit: "Tells agent caffeine when opencode is working, waiting for you or done.",
+            benefit: "Tells Agent Caffeine when opencode is working, waiting for you or done.",
             afterInstall: "opencode loads the plugin the next time it starts.",
             confirmedBy: "opencode.ai/docs/plugins for the folder, the plugin form and the event names. The event payload and the call of `event` without a wait are from the opencode 1.18.16 binary. A turn was measured live."
         ),
@@ -108,7 +108,7 @@ enum HookCatalog {
             id: piID, displayName: "Pi", configPath: ".pi/agent/extensions/\(pluginFileName)",
             format: .pluginFile,
             adds: [.working, .waitingForUser, .idle],
-            benefit: "Lets agent caffeine see at once when Pi starts and stops working",
+            benefit: "Lets Agent Caffeine see at once when Pi starts and stops working",
             afterInstall: "Pi loads the extension the next time it starts, or when you type /reload in Pi.",
             confirmedBy: "Pi 1.0.4 on the test Mac: docs/extensions.md and docs/configuration.md for the folder and the form, dist/core/extensions/types.d.ts for the event names, dist/core/extensions/runner.js and dist/core/agent-session.js for the wait on each handler and for agent_settled after every run. The extension was loaded by Pi and its session events were recorded. A turn with a model was not run live."
         ),
@@ -116,7 +116,7 @@ enum HookCatalog {
             id: "cursor", displayName: "Cursor", configPath: ".cursor/hooks.json",
             format: .jsonFlatHooks(keyPath: ["hooks"]),
             adds: [],
-            benefit: "Lets agent caffeine see at once when Cursor starts and stops working",
+            benefit: "Lets Agent Caffeine see at once when Cursor starts and stops working",
             afterInstall: nil,
             confirmedBy: "cursor.com/docs/hooks for the form and the events, and the file on the test Mac. Our entries were not run live."
         ),

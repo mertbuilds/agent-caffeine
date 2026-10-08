@@ -56,8 +56,8 @@ targets:
     info:
       path: Caffeinagent/Info.plist
       properties:
-        CFBundleName: agent caffeine
-        CFBundleDisplayName: agent caffeine
+        CFBundleName: Agent Caffeine
+        CFBundleDisplayName: Agent Caffeine
         CFBundleIdentifier: $(PRODUCT_BUNDLE_IDENTIFIER)
         CFBundleShortVersionString: $(MARKETING_VERSION)
         CFBundleVersion: $(CURRENT_PROJECT_VERSION)

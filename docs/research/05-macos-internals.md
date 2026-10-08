@@ -1,4 +1,4 @@
-# 05 - macOS internals for the agent caffeine detection engine
+# 05 - macOS internals for the Agent Caffeine detection engine
 
 Date: 2026-10-05. Test machine: macOS 26.7.1 (25G241), arm64, Darwin 25.6.0, AC power, lid open.
 All probes ran as the normal user (uid 501), no root, no entitlements, ad-hoc binaries from clang/swiftc.

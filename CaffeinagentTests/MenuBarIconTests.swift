@@ -33,15 +33,15 @@ final class MenuBarIconTests: XCTestCase {
 
     func testEveryPose() {
         let cases: [(HeroPose, MenuBarLook, String)] = [
-            (.awake(wisps: 2), MenuBarLook(eyes: .happy, solid: true), "agent caffeine: your Mac stays awake"),
-            (.awake(wisps: 3), MenuBarLook(eyes: .happy, solid: true), "agent caffeine: your Mac stays awake"),
-            (.attentive, MenuBarLook(eyes: .open, solid: true), "agent caffeine: an agent is waiting for you"),
-            (.asleep, MenuBarLook(eyes: .closed, solid: false, rest: .canSleep), "agent caffeine: your Mac can sleep"),
-            (.off, MenuBarLook(eyes: .closed, solid: false, rest: .off), "agent caffeine: off"),
-            (.paused, MenuBarLook(eyes: .closed, solid: false, rest: .paused), "agent caffeine: paused"),
-            (.safetyStop(.battery), MenuBarLook(eyes: .dead, solid: false), "agent caffeine: needs attention"),
-            (.safetyStop(.heat), MenuBarLook(eyes: .dead, solid: false), "agent caffeine: needs attention"),
-            (.helperOff, MenuBarLook(eyes: .dead, solid: false), "agent caffeine: needs attention"),
+            (.awake(wisps: 2), MenuBarLook(eyes: .happy, solid: true), "Agent Caffeine: your Mac stays awake"),
+            (.awake(wisps: 3), MenuBarLook(eyes: .happy, solid: true), "Agent Caffeine: your Mac stays awake"),
+            (.attentive, MenuBarLook(eyes: .open, solid: true), "Agent Caffeine: an agent is waiting for you"),
+            (.asleep, MenuBarLook(eyes: .closed, solid: false, rest: .canSleep), "Agent Caffeine: your Mac can sleep"),
+            (.off, MenuBarLook(eyes: .closed, solid: false, rest: .off), "Agent Caffeine: off"),
+            (.paused, MenuBarLook(eyes: .closed, solid: false, rest: .paused), "Agent Caffeine: paused"),
+            (.safetyStop(.battery), MenuBarLook(eyes: .dead, solid: false), "Agent Caffeine: needs attention"),
+            (.safetyStop(.heat), MenuBarLook(eyes: .dead, solid: false), "Agent Caffeine: needs attention"),
+            (.helperOff, MenuBarLook(eyes: .dead, solid: false), "Agent Caffeine: needs attention"),
         ]
         for (pose, look, label) in cases {
             XCTAssertEqual(MenuBarLook(pose: pose), look, "\(pose)")

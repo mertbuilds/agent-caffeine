@@ -1,6 +1,6 @@
 import Foundation
 
-/// After macOS says the Mac goes to sleep, agent caffeine starts no hold
+/// After macOS says the Mac goes to sleep, Agent Caffeine starts no hold
 /// and takes no sleep flag until the Mac woke in full and a sample from
 /// after that wake was taken. Pure: the caller passes the events and the
 /// time, in seconds the Mac was awake (`SampleGap.awakeSeconds`).

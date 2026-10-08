@@ -1,13 +1,13 @@
 import Foundation
 
-/// How long the user pauses agent caffeine for.
+/// How long the user pauses Agent Caffeine for.
 enum PauseChoice: Equatable, CaseIterable {
     case thirtyMinutes
     case oneHour
     case untilTomorrow
 }
 
-/// A pause: agent caffeine acts as if it were off until a time of day,
+/// A pause: Agent Caffeine acts as if it were off until a time of day,
 /// then starts again by itself. Pure: the caller passes the time.
 ///
 /// The end is a date on the wall clock, as in "paused until 15:30". So the
@@ -79,7 +79,7 @@ struct PauseSwitch: Equatable {
     var pause: Pause
 
     /// The switch itself. Off ends a pause, and so does on: whoever
-    /// switches agent caffeine on wants it on now.
+    /// switches Agent Caffeine on wants it on now.
     mutating func set(enabled: Bool) {
         self.enabled = enabled
         pause.resume()

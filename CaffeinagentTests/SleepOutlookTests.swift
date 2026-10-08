@@ -159,7 +159,7 @@ final class SleepOutlookTests: XCTestCase {
             case 215..<320:
                 // opencode waits since 20 s, so its hold ends at 320 s.
                 let minutes = seconds < 260 ? "2 more minutes" : "1 more minute"
-                XCTAssertEqual(body, "agent caffeine keeps your Mac awake for \(minutes)", "at \(seconds) s")
+                XCTAssertEqual(body, "Agent Caffeine keeps your Mac awake for \(minutes)", "at \(seconds) s")
                 XCTAssertEqual(subtitle, "opencode is waiting for you, for at least \(minutes)", "at \(seconds) s")
             default:
                 XCTAssertFalse(decision.hold, "at \(seconds) s")
@@ -182,7 +182,7 @@ final class SleepOutlookTests: XCTestCase {
             XCTAssertEqual(body == nil, seconds < 215 || seconds >= 600, "at \(seconds) s")
             if let body, bodies.last != body { bodies.append(body) }
         }
-        XCTAssertEqual(bodies, [7, 6, 5, 4, 3, 2].map { "agent caffeine keeps your Mac awake for \($0) more minutes" } + ["agent caffeine keeps your Mac awake for 1 more minute"])
+        XCTAssertEqual(bodies, [7, 6, 5, 4, 3, 2].map { "Agent Caffeine keeps your Mac awake for \($0) more minutes" } + ["Agent Caffeine keeps your Mac awake for 1 more minute"])
     }
 
     // MARK: Words
@@ -196,12 +196,12 @@ final class SleepOutlookTests: XCTestCase {
             (.sleeps(after: 60), "Your Mac sleeps in 1 minute"),
             (.sleeps(after: 1), "Your Mac sleeps in 1 minute"),
             (.sleeps(after: 5396), "Your Mac sleeps in 1 hour 30 minutes"),
-            (.letsGo(after: 296, then: .unknown), "agent caffeine keeps your Mac awake for 5 more minutes"),
-            (.letsGo(after: 296, then: .neverSleeps), "agent caffeine keeps your Mac awake for 5 more minutes"),
-            (.letsGo(after: 296, then: .otherAppHolds), "agent caffeine keeps your Mac awake for 5 more minutes"),
-            (.letsGo(after: 296, then: .sleepTimer(minutes: 1)), "agent caffeine keeps your Mac awake for 5 more minutes"),
-            (.letsGo(after: 50, then: .unknown), "agent caffeine keeps your Mac awake for 1 more minute"),
-            (.letsGo(after: 5396, then: .unknown), "agent caffeine keeps your Mac awake for 1 hour 30 minutes more"),
+            (.letsGo(after: 296, then: .unknown), "Agent Caffeine keeps your Mac awake for 5 more minutes"),
+            (.letsGo(after: 296, then: .neverSleeps), "Agent Caffeine keeps your Mac awake for 5 more minutes"),
+            (.letsGo(after: 296, then: .otherAppHolds), "Agent Caffeine keeps your Mac awake for 5 more minutes"),
+            (.letsGo(after: 296, then: .sleepTimer(minutes: 1)), "Agent Caffeine keeps your Mac awake for 5 more minutes"),
+            (.letsGo(after: 50, then: .unknown), "Agent Caffeine keeps your Mac awake for 1 more minute"),
+            (.letsGo(after: 5396, then: .unknown), "Agent Caffeine keeps your Mac awake for 1 hour 30 minutes more"),
         ]
         for (outlook, text) in cases {
             XCTAssertEqual(PanelText.sleepOutlook(outlook), text, "\(outlook)")
@@ -228,7 +228,7 @@ final class SleepOutlookTests: XCTestCase {
         XCTAssertEqual(SleepOutlook.sleeps(after: 296).logLine, "sleep outlook: the Mac sleeps in 296 s")
         XCTAssertEqual(
             SleepOutlook.letsGo(after: 296, then: .neverSleeps).logLine,
-            "sleep outlook: agent caffeine lets go in 296 s, macOS never sleeps on this power source"
+            "sleep outlook: Agent Caffeine lets go in 296 s, macOS never sleeps on this power source"
         )
     }
 

@@ -6,7 +6,7 @@ import UserNotifications
 enum NotificationPermission: Equatable {
     case notAsked
     case allowed
-    /// Switched off for agent caffeine in System Settings.
+    /// Switched off for Agent Caffeine in System Settings.
     case denied
 }
 
@@ -27,7 +27,7 @@ protocol AgentNotifying: AnyObject {
     func openSystemSettings()
 }
 
-/// What System Settings says about the notifications of agent caffeine.
+/// What System Settings says about the notifications of Agent Caffeine.
 struct NotificationAllowance: Equatable {
     enum Status: String {
         case notDetermined, denied, authorized, provisional
@@ -124,7 +124,7 @@ final class Notifier: NSObject, AgentNotifying, UNUserNotificationCenterDelegate
         center.setDelegate(self)
     }
 
-    /// Tells the user that agent caffeine stopped keeping the Mac awake,
+    /// Tells the user that Agent Caffeine stopped keeping the Mac awake,
     /// or cannot do its work. macOS asks for permission the first time.
     /// Without permission nothing is shown. A new notice replaces the one
     /// before it.
@@ -223,7 +223,7 @@ final class Notifier: NSObject, AgentNotifying, UNUserNotificationCenterDelegate
 
     // MARK: UNUserNotificationCenterDelegate
 
-    /// Without this macOS shows nothing while agent caffeine is the app
+    /// Without this macOS shows nothing while Agent Caffeine is the app
     /// in front, as with Preferences open. The sound is the request's own.
     static func presentation(of content: UNNotificationContent) -> UNNotificationPresentationOptions {
         content.sound == nil ? [.banner, .list] : [.banner, .list, .sound]

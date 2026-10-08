@@ -318,7 +318,7 @@ final class HoldPolicyTests: XCTestCase {
             let decision = decide([claude(.working)], mode: mode, enabled: false, context: FrameContext(remoteAccessDetected: true))
             XCTAssertFalse(decision.hold, "\(mode)")
             XCTAssertFalse(decision.lidClosedFlag, "\(mode)")
-            XCTAssertEqual(decision.headline.text, "Mac can sleep: agent caffeine is off", "\(mode)")
+            XCTAssertEqual(decision.headline.text, "Mac can sleep: Agent Caffeine is off", "\(mode)")
             XCTAssertEqual(decision.perAgent.map(\.cause), [nil], "\(mode)")
         }
     }
@@ -343,7 +343,7 @@ final class HoldPolicyTests: XCTestCase {
                 }
             }
         }
-        XCTAssertEqual(decide([claude(.working)], entitlement: .expired(.trialOver)).headline.text, "Your trial has ended. agent caffeine is not keeping your Mac awake.")
+        XCTAssertEqual(decide([claude(.working)], entitlement: .expired(.trialOver)).headline.text, "Your trial has ended. Agent Caffeine is not keeping your Mac awake.")
         XCTAssertTrue(decide([claude(.working)], entitlement: nil).hold)
     }
 
@@ -540,8 +540,8 @@ final class HoldPolicyTests: XCTestCase {
             (.safetyStop(.batteryLow(percent: 20)), "Sleeping allowed: battery at 20%"),
             (.safetyStop(.weakCharger(percent: 20)), "Sleeping allowed: weak charger, battery at 20%"),
             (.safetyStop(.tooHot), "Sleeping allowed: the Mac is too hot"),
-            (.switchedOff, "Mac can sleep: agent caffeine is off"),
-            (.paused(until: Self.start), "Mac can sleep: agent caffeine is paused"),
+            (.switchedOff, "Mac can sleep: Agent Caffeine is off"),
+            (.paused(until: Self.start), "Mac can sleep: Agent Caffeine is paused"),
             (.notEntitled(.unverified), "Your license was not checked for 30 days. Connect to the internet to keep your Mac awake."),
         ]
         for c in cases {

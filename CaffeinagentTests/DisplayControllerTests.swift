@@ -127,7 +127,7 @@ final class DisplayControllerTests: XCTestCase {
         DisplayController(reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: methods, defaults: defaults), watcher: watcher)
     }
 
-    /// With the lid angle sensor, and agent caffeine holding.
+    /// With the lid angle sensor, and Agent Caffeine holding.
     private func fading(watcher: Watcher? = nil) -> DisplayController {
         let controller = DisplayController(
             reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: [Method("first", panel: panel)], defaults: defaults),

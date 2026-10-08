@@ -6,7 +6,7 @@ enum HelperSetup: Equatable {
     case notSetUp
     case requiresApproval
     case ready
-    /// agent caffeine is bringing the helper back.
+    /// Agent Caffeine is bringing the helper back.
     case repairing
     /// No answer, or a repair that did not bring the helper back yet.
     case notResponding

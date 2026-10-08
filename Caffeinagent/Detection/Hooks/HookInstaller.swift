@@ -25,12 +25,12 @@ enum HookInstallError: Error, Equatable {
     func message(file: String) -> String {
         switch self {
         case .configMissing: return "This agent is not set up on this Mac. \(file) does not exist."
-        case .unreadable: return "agent caffeine could not read \(file), so it did not change it. Check that the file is valid JSON."
-        case .unexpectedShape: return "\(file) has a layout agent caffeine does not recognize, so it did not change it."
-        case .changedWhileEditing: return "\(file) changed while agent caffeine was working on it. Nothing was written. Try again."
-        case .notOurFile: return "\(file) was not written by agent caffeine, so it did not change it."
-        case .notWritable: return "\(file) is read-only, so agent caffeine did not change it. Allow writing to the file, then try again."
-        case .writeFailed: return "agent caffeine could not write \(file). Nothing was changed."
+        case .unreadable: return "Agent Caffeine could not read \(file), so it did not change it. Check that the file is valid JSON."
+        case .unexpectedShape: return "\(file) has a layout Agent Caffeine does not recognize, so it did not change it."
+        case .changedWhileEditing: return "\(file) changed while Agent Caffeine was working on it. Nothing was written. Try again."
+        case .notOurFile: return "\(file) was not written by Agent Caffeine, so it did not change it."
+        case .notWritable: return "\(file) is read-only, so Agent Caffeine did not change it. Allow writing to the file, then try again."
+        case .writeFailed: return "Agent Caffeine could not write \(file). Nothing was changed."
         }
     }
 }

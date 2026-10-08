@@ -22,7 +22,7 @@ enum SmokeTest {
     /// The parts of the aggregator for this run. Nil in the app.
     @MainActor private(set) static var parts: AggregatorParts?
 
-    static let label = "agent caffeine smoke test"
+    static let label = "Agent Caffeine smoke test"
     private static let domain = "com.caffeinagent.app.smoke-test"
     private static let settingsWindowID = "com_apple_SwiftUI_Settings_window"
 
@@ -80,7 +80,7 @@ enum SmokeTest {
         guard Bundle.main.bundleIdentifier == domain, UserDefaults.standard.bool(forKey: probe) else {
             CFPreferencesSetAppValue(probe as CFString, nil, domain as CFString)
             CFPreferencesAppSynchronize(domain as CFString)
-            FileHandle.standardError.write(Data("agent caffeine smoke test: could not get settings of its own, so it did not run.\n".utf8))
+            FileHandle.standardError.write(Data("Agent Caffeine smoke test: could not get settings of its own, so it did not run.\n".utf8))
             exit(4)
         }
         // Also what a run that was cut left behind.
@@ -293,7 +293,7 @@ enum SmokeTest {
                 )
                 print(line)
                 fflush(stdout)
-                FileHandle.standardError.write(Data("agent caffeine smoke test: the main thread hangs.\n".utf8))
+                FileHandle.standardError.write(Data("Agent Caffeine smoke test: the main thread hangs.\n".utf8))
                 _exit(3)
             }
         }

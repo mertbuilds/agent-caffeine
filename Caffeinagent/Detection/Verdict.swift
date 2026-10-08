@@ -59,7 +59,7 @@ enum VerdictReason: Equatable {
         case .onlyWeakSigns(let minutes):
             return ["Using the processor", HumaneDuration.lasting(minutes: minutes), "with no other sign of work"].compactMap { $0 }.joined(separator: " ")
         case .alwaysWorkingByRule: return "You set this agent to always count as working"
-        case .ignoredByRule: return "You set agent caffeine to ignore this agent"
+        case .ignoredByRule: return "You set Agent Caffeine to ignore this agent"
         }
     }
 

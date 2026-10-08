@@ -72,7 +72,7 @@ struct HookRow: View {
             switch row.status {
             case .outdated:
                 HStack {
-                    Text("These lines are from another version of agent caffeine.")
+                    Text("These lines are from another version of Agent Caffeine.")
                         .font(.callout)
                     Spacer()
                     Button("Update") { set(true) }
@@ -98,7 +98,7 @@ struct HookRow: View {
     }
 }
 
-/// "Show what changes": the lines agent caffeine adds for one agent, in
+/// "Show what changes": the lines Agent Caffeine adds for one agent, in
 /// Settings and in the setup window.
 struct HookChanges: View {
     let entry: HookCatalogEntry
@@ -127,9 +127,9 @@ struct HookChanges: View {
     private var changeSummary: String {
         switch entry.format {
         case .pluginFile:
-            return "agent caffeine writes this file: \(path). Turning this off removes the file."
+            return "Agent Caffeine writes this file: \(path). Turning this off removes the file."
         case .jsonHookGroups, .jsonFlatHooks:
-            return "agent caffeine adds these lines to \(path) and saves a copy of the file next to it first. Turning this off removes the lines and nothing else. If agent caffeine created the file and nothing else is in it, the file is removed too."
+            return "Agent Caffeine adds these lines to \(path) and saves a copy of the file next to it first. Turning this off removes the lines and nothing else. If Agent Caffeine created the file and nothing else is in it, the file is removed too."
         }
     }
 }

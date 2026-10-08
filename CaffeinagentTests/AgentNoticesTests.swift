@@ -549,7 +549,7 @@ final class AgentNoticesTests: XCTestCase {
         let content = AgentNoticeText.content(notice, outlook: .letsGo(after: 296, then: .unknown), now: start.addingTimeInterval(4))
         XCTAssertEqual(content.title, "Claude Code is waiting for you")
         XCTAssertEqual(content.subtitle, "wiki-6e")
-        XCTAssertEqual(content.body, "agent caffeine keeps your Mac awake for 5 more minutes")
+        XCTAssertEqual(content.body, "Agent Caffeine keeps your Mac awake for 5 more minutes")
         XCTAssertTrue(content.sound)
         XCTAssertEqual(content.thread, "agent-claude")
         XCTAssertEqual(content.key, "waiting-7-5")
@@ -606,7 +606,7 @@ final class AgentNoticesTests: XCTestCase {
             outlook: .letsGo(after: 296, then: .neverSleeps), now: start.addingTimeInterval(4)
         )
         XCTAssertEqual(waiting.title, "3 agents are waiting for you")
-        XCTAssertEqual(waiting.body, "agent caffeine keeps your Mac awake for 5 more minutes")
+        XCTAssertEqual(waiting.body, "Agent Caffeine keeps your Mac awake for 5 more minutes")
         XCTAssertTrue(waiting.sound)
         XCTAssertEqual(waiting.ownerPid, 500)
     }

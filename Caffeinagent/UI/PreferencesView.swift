@@ -108,8 +108,8 @@ struct PreferencesView: View {
         }
     }
 
-    private static let deactivateQuestion = "Deactivate agent caffeine on this Mac?"
-    private static let deactivateConsequence = "You can then use the key on another Mac. agent caffeine stops keeping this Mac awake until you activate a key again."
+    private static let deactivateQuestion = "Deactivate Agent Caffeine on this Mac?"
+    private static let deactivateConsequence = "You can then use the key on another Mac. Agent Caffeine stops keeping this Mac awake until you activate a key again."
 
     private var licenseSection: some View {
         Section("License") {
@@ -192,7 +192,7 @@ struct PreferencesView: View {
                 }
             }
             if let error = license.storageError {
-                Text("\(error.hasSuffix(".") ? error : error + ".") agent caffeine keeps your trial and your last license check in its preferences until it can read the Keychain again.")
+                Text("\(error.hasSuffix(".") ? error : error + ".") Agent Caffeine keeps your trial and your last license check in its preferences until it can read the Keychain again.")
                     .font(.caption)
                     .foregroundStyle(.red)
             }
@@ -249,10 +249,10 @@ struct AboutPreferences: View {
                     Button("Check for updates…", action: checkForUpdates)
                         .disabled(!canCheckForUpdates)
                 }
-                Text("While it keeps the Mac awake, agent caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. For a closed lid on battery, its helper also turns on the SleepDisabled setting of macOS, and turns it off when agent caffeine stops or quits.")
+                Text("While it keeps the Mac awake, Agent Caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. For a closed lid on battery, its helper also turns on the SleepDisabled setting of macOS, and turns it off when Agent Caffeine stops or quits.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Text("agent caffeine checks caffeinagent.com for updates. It checks your license key with Polar. It sends the key and your Mac's model, and nothing about you or your agents.")
+                Text("Agent Caffeine checks caffeinagent.com for updates. It checks your license key with Polar. It sends the key and your Mac's model, and nothing about you or your agents.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 4) {
@@ -273,13 +273,13 @@ struct AboutPreferences: View {
                 row("Questions and answers") { Link("Open help", destination: AppLinks.help) }
                 row("Contact") { Link(AppLinks.contactAddress, destination: AppLinks.contact) }
             }
-            Section("Remove agent caffeine") {
-                Text("Do these steps before you move agent caffeine to the Trash, so nothing of it stays on your Mac.")
+            Section("Remove Agent Caffeine") {
+                Text("Do these steps before you move Agent Caffeine to the Trash, so nothing of it stays on your Mac.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 step(
                     hooksOn.isEmpty ? "Better detection is off" : "Turn off better detection for \(hooksOn.map(\.displayName).joined(separator: ", "))",
-                    help: "This removes the lines that agent caffeine added to the settings files of your agents.",
+                    help: "This removes the lines that Agent Caffeine added to the settings files of your agents.",
                     done: hooksOn.isEmpty
                 ) { Button("Turn off") { turnOffHooks(hooksOn) } }
                 step(
@@ -293,7 +293,7 @@ struct AboutPreferences: View {
                     done: !licensed
                 ) { Button("Deactivate…", action: deactivate).disabled(busy) }
                 step(
-                    "Quit agent caffeine and move it to the Trash",
+                    "Quit Agent Caffeine and move it to the Trash",
                     help: "The app is in your Applications folder.",
                     done: false
                 ) { Button("Show in Finder", action: showInFinder) }
@@ -376,11 +376,11 @@ struct GeneralPreferences: View {
                 )
                 duration(
                     "After other agents go quiet", $settings.releaseAfterActivity,
-                    help: "Other agents do not say when they finish. For those, agent caffeine watches for activity, such as a running command, and your Mac stays awake this long after the last of it."
+                    help: "Other agents do not say when they finish. For those, Agent Caffeine watches for activity, such as a running command, and your Mac stays awake this long after the last of it."
                 )
                 duration(
                     "While an agent is waiting for you", $settings.waitingHold,
-                    help: "Your Mac stays awake this long while an agent is waiting for your answer. After that agent caffeine lets it sleep, unless another agent is working."
+                    help: "Your Mac stays awake this long while an agent is waiting for your answer. After that Agent Caffeine lets it sleep, unless another agent is working."
                 )
             }
             Section {
@@ -388,12 +388,12 @@ struct GeneralPreferences: View {
                     .disabled(loginItem == .unavailable)
                 switch loginItem {
                 case .on, .off:
-                    Text("agent caffeine starts when you log in, so it also runs after a restart of your Mac.")
+                    Text("Agent Caffeine starts when you log in, so it also runs after a restart of your Mac.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 case .needsApproval:
                     HStack {
-                        Text("Allow agent caffeine in System Settings > General > Login Items to open it at login.")
+                        Text("Allow Agent Caffeine in System Settings > General > Login Items to open it at login.")
                             .font(.callout)
                         Spacer()
                         Button("Open System Settings", action: openLoginItems)
@@ -410,8 +410,8 @@ struct GeneralPreferences: View {
                 }
             }
             Section {
-                Toggle("Show agent caffeine in the menu bar", isOn: $showMenuBarIcon)
-                Text("When hidden, open agent caffeine again from Applications or Spotlight to see this window.")
+                Toggle("Show Agent Caffeine in the menu bar", isOn: $showMenuBarIcon)
+                Text("When hidden, open Agent Caffeine again from Applications or Spotlight to see this window.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -444,7 +444,7 @@ struct GeneralPreferences: View {
 /// switch: nobody should miss why the Mac slept.
 struct AlertPreferences: View {
     @Binding var notices: AgentNoticeSettings
-    /// Notifications are switched off for agent caffeine in System Settings.
+    /// Notifications are switched off for Agent Caffeine in System Settings.
     var denied = false
     var history: [AgentNoticeHistory.Entry] = []
     var batteryFloorEnabled = true
@@ -455,7 +455,7 @@ struct AlertPreferences: View {
             if denied {
                 Section {
                     HStack {
-                        Label("Notifications are off for agent caffeine in System Settings", systemImage: "bell.slash")
+                        Label("Notifications are off for Agent Caffeine in System Settings", systemImage: "bell.slash")
                             .foregroundStyle(.orange)
                         Spacer()
                         Button("Open System Settings", action: openSystemSettings)
@@ -589,7 +589,7 @@ struct AgentPreferences: View {
                 HookPreferencesSection(rows: hookRows, available: hooksAvailable, set: setHooks)
             }
             Section("Other agents") {
-                Text("Agents marked Not tested yet are found by name. agent caffeine sees them as working while they use the processor or run a command.")
+                Text("Agents marked Not tested yet are found by name. Agent Caffeine sees them as working while they use the processor or run a command.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 ForEach(Self.definitions.filter { !foundIDs.contains($0.id) }, id: \.id, content: row)
@@ -707,10 +707,10 @@ struct LidClosedPreferences: View {
                 Group {
                     if settings.batteryFloorEnabled {
                         Text(SafetyText.floorOnHelp)
-                        Text("agent caffeine also lets your Mac sleep when it gets too hot.")
+                        Text("Agent Caffeine also lets your Mac sleep when it gets too hot.")
                     } else {
                         Label(SafetyText.floorOffWarning, systemImage: "exclamationmark.triangle")
-                        Text("agent caffeine still lets your Mac sleep when it gets too hot.")
+                        Text("Agent Caffeine still lets your Mac sleep when it gets too hot.")
                     }
                 }
                 .font(.callout)
@@ -738,7 +738,7 @@ struct LidClosedPreferences: View {
                         .foregroundStyle(.secondary)
                 }
                 Toggle("Turn the display off when the lid is closed", isOn: $settings.displayOffLidClosed)
-                Text("With the lid closed, agent caffeine keeps the built-in display dark so it does not use the battery or warm your Mac.")
+                Text("With the lid closed, Agent Caffeine keeps the built-in display dark so it does not use the battery or warm your Mac.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 if hasLidAngleSensor {
@@ -751,7 +751,7 @@ struct LidClosedPreferences: View {
             }
             if needsSudoersCleanup {
                 Section {
-                    Text("An older version of agent caffeine added an admin entry to this Mac. It is no longer used.")
+                    Text("An older version of Agent Caffeine added an admin entry to this Mac. It is no longer used.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                     Button("Remove the old admin entry…", action: removeSudoersEntry)

@@ -1,6 +1,6 @@
 # Third-party notices
 
-agent caffeine for Mac carries the components below, each under its own
+Agent Caffeine for Mac carries the components below, each under its own
 license. The full license texts are in `Resources/Licenses/` beside this file,
 and in `Contents/Resources/Licenses/` inside the app, next to a copy of this
 file.

@@ -20,20 +20,20 @@ enum PanelText {
 
     static let awakeTitle = "Your Mac stays awake"
     static let canSleepTitle = "Your Mac can sleep"
-    static let offTitle = "agent caffeine is off"
-    static let pausedTitle = "agent caffeine is paused"
+    static let offTitle = "Agent Caffeine is off"
+    static let pausedTitle = "Agent Caffeine is paused"
     /// A safety stop or a license that does not allow a hold: the reason
     /// stands below it.
-    static let stoppedTitle = "agent caffeine has stopped"
+    static let stoppedTitle = "Agent Caffeine has stopped"
     static let helperOffTitle = "Your Mac cannot sleep"
-    static let helperOffReason = "The helper of agent caffeine was turned off in Login Items"
+    static let helperOffReason = "The helper of Agent Caffeine was turned off in Login Items"
 
     /// In place of the list when no agent is open.
     /// - Parameter invites: nothing but a missing agent keeps the Mac from
     ///   staying awake. Not so in a stop, while off or paused, and while
     ///   the Mac stays awake without an agent.
     static func empty(invites: Bool) -> String {
-        invites ? "Start an agent and agent caffeine keeps your Mac awake while it works" : noAgentOpen
+        invites ? "Start an agent and Agent Caffeine keeps your Mac awake while it works" : noAgentOpen
     }
 
     static let noAgentOpen = "No agent is open"
@@ -102,13 +102,13 @@ enum PanelText {
 
     /// The body of a notification about an agent that waits. Nil when
     /// something else keeps the Mac awake. With the lid open it says what
-    /// agent caffeine does, never when the Mac sleeps: the sleep timer of
+    /// Agent Caffeine does, never when the Mac sleeps: the sleep timer of
     /// macOS and other apps decide that.
     static func sleepOutlook(_ outlook: SleepOutlook) -> String? {
         switch outlook {
         case .silent: return nil
         case .sleeps(let after): return "Your Mac sleeps in \(timeLeft(after))"
-        case .letsGo(let after, _): return "agent caffeine keeps your Mac awake for \(moreTime(after))"
+        case .letsGo(let after, _): return "Agent Caffeine keeps your Mac awake for \(moreTime(after))"
         }
     }
 
@@ -173,9 +173,9 @@ enum PanelText {
     // MARK: Menu bar
 
     /// The state in words, for VoiceOver and the tooltip of the item in
-    /// the menu bar: "agent caffeine: your Mac stays awake".
+    /// the menu bar: "Agent Caffeine: your Mac stays awake".
     static func menuBar(_ state: String) -> String {
-        "agent caffeine: \(state.prefix(1).lowercased() + state.dropFirst())"
+        "Agent Caffeine: \(state.prefix(1).lowercased() + state.dropFirst())"
     }
 
     static let menuBarAwake = menuBar(awakeTitle)
@@ -207,7 +207,7 @@ enum PanelText {
         case .lidClosedSettingOff: return "the lid was closed on battery and staying awake with the lid closed is turned off"
         case .battery(let percent): return "the battery was at \(Self.percent(percent))"
         case .tooHot: return "your Mac got too hot"
-        case .paused: return "agent caffeine was paused"
+        case .paused: return "Agent Caffeine was paused"
         case .notEntitled(.trialOver): return "your trial has ended"
         case .notEntitled(.unverified): return "your license was not checked for 30 days"
         case .notEntitled(.activationRemoved): return "this Mac is no longer activated"
@@ -220,28 +220,28 @@ enum PanelText {
     // MARK: Settings and the setup window
 
     /// Where the hooks are offered.
-    static let hooksExplained = "Some agents can tell agent caffeine what they are doing. For that, agent caffeine adds a few lines to the agent's settings file and saves a copy of the file first. It never reads what you type."
-    static let hooksOptionalInSetup = "If you skip this, agent caffeine still works."
-    static let hooksOptionalInSettings = "agent caffeine still works without this."
+    static let hooksExplained = "Some agents can tell Agent Caffeine what they are doing. For that, Agent Caffeine adds a few lines to the agent's settings file and saves a copy of the file first. It never reads what you type."
+    static let hooksOptionalInSetup = "If you skip this, Agent Caffeine still works."
+    static let hooksOptionalInSettings = "Agent Caffeine still works without this."
 
     /// Where the helper for a closed lid is offered.
-    static let lidClosedExplained = "On battery, macOS puts your Mac to sleep when you close the lid, even while an agent is working. agent caffeine can prevent that with a small helper that you allow once."
-    static let helperExplained = "The helper is a background item of agent caffeine. It changes one sleep setting of macOS while agent caffeine keeps your Mac awake, and changes it back after."
+    static let lidClosedExplained = "On battery, macOS puts your Mac to sleep when you close the lid, even while an agent is working. Agent Caffeine can prevent that with a small helper that you allow once."
+    static let helperExplained = "The helper is a background item of Agent Caffeine. It changes one sleep setting of macOS while Agent Caffeine keeps your Mac awake, and changes it back after."
     static let helperRemoveHere = "You can remove it here at any time."
     static let helperRemoveInSettings = "You can remove it in Settings > Battery and lid at any time."
     static let closedBagWarning = "Do not put your Mac in a closed bag while an agent works."
-    static let allowInLoginItems = "Allow agent caffeine in System Settings > General > Login Items."
+    static let allowInLoginItems = "Allow Agent Caffeine in System Settings > General > Login Items."
     static let helperIsSetUp = "The helper is set up"
-    static let moveToApplicationsToSetUp = "Move agent caffeine to the Applications folder to set this up."
-    static let moveToApplicationsToUse = "Move agent caffeine to the Applications folder to use this."
+    static let moveToApplicationsToSetUp = "Move Agent Caffeine to the Applications folder to set this up."
+    static let moveToApplicationsToUse = "Move Agent Caffeine to the Applications folder to use this."
 
     /// In Settings > License, from what Polar said at the activation.
     static func keyRunsOn(macs: Int) -> String {
         "This key runs on \(HumaneDuration.counted(macs, "Mac"))."
     }
 
-    static let openAtLogin = "Open agent caffeine at login"
-    static let openAtLoginInSetup = "Open agent caffeine when you log in"
+    static let openAtLogin = "Open Agent Caffeine at login"
+    static let openAtLoginInSetup = "Open Agent Caffeine when you log in"
 
     // MARK: Trial
 
@@ -250,7 +250,7 @@ enum PanelText {
 
     /// On the last page of the setup window.
     static let trialIntro = "Your free trial runs for \(HumaneDuration.counted(trialDays, "day")). \(trialThen)"
-    static let trialThen = "After that, agent caffeine needs a license key to keep your Mac awake."
+    static let trialThen = "After that, Agent Caffeine needs a license key to keep your Mac awake."
 
     /// In Settings > License: "Your free trial has 5 days left.", and in
     /// the last 24 hours the day it ends on.
@@ -268,9 +268,9 @@ enum PanelText {
     static func notification(_ notice: TrialNotice, end: Date?, now: Date, calendar: Calendar = .current) -> String {
         switch notice {
         case .endsSoon:
-            return "Your agent caffeine trial ends \(trialEndDay(end, now: now, calendar: calendar)). After that it does not keep your Mac awake without a license key."
+            return "Your Agent Caffeine trial ends \(trialEndDay(end, now: now, calendar: calendar)). After that it does not keep your Mac awake without a license key."
         case .ended:
-            return "Your agent caffeine trial has ended. agent caffeine does not keep your Mac awake until you enter a license key."
+            return "Your Agent Caffeine trial has ended. Agent Caffeine does not keep your Mac awake until you enter a license key."
         }
     }
 
@@ -287,22 +287,22 @@ enum PanelText {
     // MARK: Attention
 
     static func startsAgain(atBatteryPercent percent: Int) -> String {
-        "agent caffeine starts again at \(Self.percent(percent))"
+        "Agent Caffeine starts again at \(Self.percent(percent))"
     }
 
     /// For VoiceOver.
     static func startsAgainSpoken(atBatteryPercent percent: Int) -> String {
-        "agent caffeine starts again at \(percent) percent"
+        "Agent Caffeine starts again at \(percent) percent"
     }
 
-    static let startsAgainWhenCool = "agent caffeine starts again when your Mac is cool"
-    static let allowHelperAgain = "Allow agent caffeine again in Login Items, and your Mac sleeps as usual"
+    static let startsAgainWhenCool = "Agent Caffeine starts again when your Mac is cool"
+    static let allowHelperAgain = "Allow Agent Caffeine again in Login Items, and your Mac sleeps as usual"
     static let buyToKeepAwake = "Buy a key to keep your Mac awake"
     static let connectAndCheck = "Connect to the internet, then check again"
     static let activateAgain = "Activate this Mac again to keep it awake"
-    static let helperNotResponding = "agent caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery."
+    static let helperNotResponding = "Agent Caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery."
     static let helperRepairing = "Setting up the helper again…"
-    static let helperLost = "agent caffeine has to set up its helper again"
+    static let helperLost = "Agent Caffeine has to set up its helper again"
     static let lidClosedNotSetUp = "Your Mac still sleeps with the lid closed on battery"
 
     static func trialEnds(inDays days: Int) -> String {
@@ -328,7 +328,7 @@ enum PanelText {
     }
 
     static func batterySpoken(percent: Int, floor: Int) -> String {
-        "Battery \(percent) percent, agent caffeine lets your Mac sleep at \(floor) percent"
+        "Battery \(percent) percent, Agent Caffeine lets your Mac sleep at \(floor) percent"
     }
 
     static func batterySpokenStopped(percent: Int, recovery: Int) -> String {
@@ -458,12 +458,12 @@ enum PanelText {
 
     static let modePicker = "Keep your Mac awake"
     static let preferences = "Settings…"
-    static let buyInMenu = "Buy agent caffeine from $19"
+    static let buyInMenu = "Buy Agent Caffeine from $19"
     static let help = "Help…"
-    static let quit = "Quit agent caffeine"
+    static let quit = "Quit Agent Caffeine"
     static let gearMenu = "Settings and more"
     static let timerMenu = "Pause or stay reachable"
-    static let mainSwitch = "agent caffeine"
+    static let mainSwitch = "Agent Caffeine"
     static let expanded = "Expanded"
     static let collapsed = "Collapsed"
 }

@@ -42,7 +42,7 @@ final class MenuModelTests: XCTestCase {
     func testHeadlinePairs() {
         let awake = "Your Mac stays awake"
         let canSleep = "Your Mac can sleep"
-        let stopped = "agent caffeine has stopped"
+        let stopped = "Agent Caffeine has stopped"
         let cases: [(HoldHeadline, String, String)] = [
             (.working(.one("Claude Code")), awake, "Claude Code is working"),
             (.working(.many(2)), awake, "2 agents are working"),
@@ -63,7 +63,7 @@ final class MenuModelTests: XCTestCase {
             (.safetyStop(.batteryLow(percent: 20)), stopped, "The battery is at 20%"),
             (.safetyStop(.weakCharger(percent: 20)), stopped, "Your charger is too weak and the battery is at 20%"),
             (.safetyStop(.tooHot), stopped, "Your Mac got too hot"),
-            (.switchedOff, "agent caffeine is off", "Your Mac sleeps as usual"),
+            (.switchedOff, "Agent Caffeine is off", "Your Mac sleeps as usual"),
             (.notEntitled(.trialOver), stopped, "Your trial has ended"),
             (.notEntitled(.unverified), stopped, "Your license was not checked for 30 days"),
             (.notEntitled(.activationRemoved), stopped, "This Mac is no longer activated"),
@@ -172,13 +172,13 @@ final class MenuModelTests: XCTestCase {
             input.flagLeftOn = true
             let state = MenuModel.state(input, now: now)
             XCTAssertEqual(state.title, "Your Mac cannot sleep", "\(headline)")
-            XCTAssertEqual(state.subtitle, "The helper of agent caffeine was turned off in Login Items", "\(headline)")
+            XCTAssertEqual(state.subtitle, "The helper of Agent Caffeine was turned off in Login Items", "\(headline)")
             XCTAssertEqual(state.attention?.actions.map(\.title), ["Open System Settings"], "\(headline)")
         }
         // A safety stop keeps its own headline, as it keeps its robot.
         var stopped = input(.safetyStop(.tooHot))
         stopped.flagLeftOn = true
-        XCTAssertEqual(MenuModel.state(stopped, now: now).title, "agent caffeine has stopped")
+        XCTAssertEqual(MenuModel.state(stopped, now: now).title, "Agent Caffeine has stopped")
     }
 
     // MARK: Pause
@@ -196,7 +196,7 @@ final class MenuModelTests: XCTestCase {
     func testThePausedHeadlineSaysWhenItStartsAgain() {
         let today = MenuModel.state(pausedInput(until: now.addingTimeInterval(104 * 60)), now: now)
         XCTAssertEqual(today.pose, .paused)
-        XCTAssertEqual(today.title, "agent caffeine is paused")
+        XCTAssertEqual(today.title, "Agent Caffeine is paused")
         XCTAssertEqual(today.subtitle, "Starts again at 15:30")
         XCTAssertEqual(today.pausedLabel, "Paused until 15:30")
         XCTAssertNil(today.attention)
@@ -227,7 +227,7 @@ final class MenuModelTests: XCTestCase {
         var stopped = pausedInput(until: now.addingTimeInterval(600))
         stopped.decision.headline = .safetyStop(.tooHot)
         let state = MenuModel.state(stopped, now: now)
-        XCTAssertEqual(state.title, "agent caffeine has stopped")
+        XCTAssertEqual(state.title, "Agent Caffeine has stopped")
         XCTAssertEqual(state.pausedLabel, "Paused until 13:56")
     }
 
@@ -249,7 +249,7 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(state.title, "Your Mac stays awake")
         XCTAssertEqual(state.subtitle, "Reachable until 18:30")
         XCTAssertEqual(state.reachableLabel, "Reachable until 18:30")
-        XCTAssertEqual(state.menuBarAccessibilityLabel, "agent caffeine: reachable until 18:30")
+        XCTAssertEqual(state.menuBarAccessibilityLabel, "Agent Caffeine: reachable until 18:30")
         XCTAssertNil(state.pausedLabel)
         XCTAssertNil(state.attention)
         func plain(_ text: String?) -> String? { text?.replacingOccurrences(of: "\u{202F}", with: " ") }
@@ -504,7 +504,7 @@ final class MenuModelTests: XCTestCase {
     func testAttentionTexts() {
         var battery = input(.safetyStop(.batteryLow(percent: 18)))
         battery.settings.batteryFloorPercent = 20
-        XCTAssertEqual(MenuModel.attention(battery), PanelAttention(kind: .safetyStop, text: "agent caffeine starts again at 25%"))
+        XCTAssertEqual(MenuModel.attention(battery), PanelAttention(kind: .safetyStop, text: "Agent Caffeine starts again at 25%"))
         // The line of the battery says it when it is there, so the sentence comes once.
         battery.onBattery = true
         battery.batteryPercent = 18
@@ -512,19 +512,19 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(MenuModel.battery(battery)?.consequence, "starts again at 25%")
         battery.lidClosedNeedsSetup = true
         XCTAssertEqual(MenuModel.attention(battery)?.kind, .lidClosedNotSetUp, "What else needs the user is still said")
-        XCTAssertEqual(MenuModel.attention(input(.safetyStop(.tooHot))), PanelAttention(kind: .safetyStop, text: "agent caffeine starts again when your Mac is cool"))
+        XCTAssertEqual(MenuModel.attention(input(.safetyStop(.tooHot))), PanelAttention(kind: .safetyStop, text: "Agent Caffeine starts again when your Mac is cool"))
 
         var helper = input(.alwaysOn)
         helper.flagLeftOn = true
         XCTAssertEqual(MenuModel.attention(helper), PanelAttention(
             kind: .helperSwitchedOff,
-            text: "Allow agent caffeine again in Login Items, and your Mac sleeps as usual",
+            text: "Allow Agent Caffeine again in Login Items, and your Mac sleeps as usual",
             actions: [.openLoginItems]
         ))
 
         var silent = input(.working(.one("Claude Code")))
         silent.helperNotResponding = true
-        let cannotReach = "agent caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery."
+        let cannotReach = "Agent Caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery."
         XCTAssertEqual(MenuModel.attention(silent), PanelAttention(kind: .helperNotResponding, text: cannotReach, actions: [.tryHelperAgain]))
         silent.helperRepairTried = true
         XCTAssertEqual(MenuModel.attention(silent), PanelAttention(
@@ -592,7 +592,7 @@ final class MenuModelTests: XCTestCase {
         XCTAssertTrue(MenuModel.helperLost(setup: .lost, wasSetUp: true, wanted: true, hasBattery: true))
         XCTAssertTrue(MenuModel.helperLost(setup: .requiresApproval, wasSetUp: true, wanted: true, hasBattery: true))
         XCTAssertFalse(MenuModel.helperLost(setup: .requiresApproval, wasSetUp: false, wanted: true, hasBattery: true))
-        XCTAssertFalse(MenuModel.helperLost(setup: .repairing, wasSetUp: true, wanted: true, hasBattery: true), "agent caffeine is still at it")
+        XCTAssertFalse(MenuModel.helperLost(setup: .repairing, wasSetUp: true, wanted: true, hasBattery: true), "Agent Caffeine is still at it")
         XCTAssertFalse(MenuModel.helperLost(setup: .notResponding, wasSetUp: true, wanted: true, hasBattery: true))
         XCTAssertFalse(MenuModel.helperLost(setup: .lost, wasSetUp: true, wanted: false, hasBattery: true), "The user switched it off")
         XCTAssertFalse(MenuModel.helperLost(setup: .lost, wasSetUp: true, wanted: true, hasBattery: false), "No battery")
@@ -601,7 +601,7 @@ final class MenuModelTests: XCTestCase {
         lost.helperLost = true
         lost.lidClosedHintDismissed = true
         XCTAssertEqual(MenuModel.attention(lost), PanelAttention(
-            kind: .helperLost, text: "agent caffeine has to set up its helper again", actions: [.setUpLidClosed]
+            kind: .helperLost, text: "Agent Caffeine has to set up its helper again", actions: [.setUpLidClosed]
         ))
         XCTAssertEqual(PanelText.helperRepairing, "Setting up the helper again…")
     }
@@ -679,7 +679,7 @@ final class MenuModelTests: XCTestCase {
     func testNoAgentsGiveTheEmptyLine() {
         let state = MenuModel.state(input(.noAgents), now: now)
         XCTAssertEqual(state.groups, [])
-        XCTAssertEqual(state.emptyText, "Start an agent and agent caffeine keeps your Mac awake while it works")
+        XCTAssertEqual(state.emptyText, "Start an agent and Agent Caffeine keeps your Mac awake while it works")
         XCTAssertEqual(state.emptyAction, .agentNotListed)
         XCTAssertEqual(state.emptyAction?.title, "My agent is not listed")
         let idle = MenuModel.state(input(.idle(.one("Codex")), [hold("codex", "Codex", pid: 1, .idle, .atPrompt)]), now: now)
@@ -710,13 +710,13 @@ final class MenuModelTests: XCTestCase {
         XCTAssertNil(MenuModel.state(helperOff, now: now).emptyAction)
     }
 
-    /// The title of a stop names agent caffeine, so a row that says
+    /// The title of a stop names Agent Caffeine, so a row that says
     /// "Working" below it is no contradiction.
     func testAStopKeepsTheRealStatesOfTheRows() {
         let working = claude(pid: 1, .working, .reportsBusy)
         for headline in [HoldHeadline.safetyStop(.tooHot), .safetyStop(.batteryLow(percent: 20)), .notEntitled(.trialOver)] {
             let state = MenuModel.state(input(headline, [working]), now: now)
-            XCTAssertEqual(state.title, "agent caffeine has stopped", "\(headline)")
+            XCTAssertEqual(state.title, "Agent Caffeine has stopped", "\(headline)")
             XCTAssertEqual(state.groups.first?.header.state, .working, "\(headline)")
         }
     }
@@ -748,7 +748,7 @@ final class MenuModelTests: XCTestCase {
             (.lidClosedSettingOff, "the lid was closed on battery and staying awake with the lid closed is turned off"),
             (.battery(percent: 20), "the battery was at 20%"),
             (.tooHot, "your Mac got too hot"),
-            (.paused, "agent caffeine was paused"),
+            (.paused, "Agent Caffeine was paused"),
             (.notEntitled(.trialOver), "your trial has ended"),
             (.notEntitled(.unverified), "your license was not checked for 30 days"),
             (.notEntitled(.activationRemoved), "this Mac is no longer activated"),
@@ -780,9 +780,9 @@ final class MenuModelTests: XCTestCase {
         XCTAssertNil(MenuModel.state(input(.switchedOff), now: now).menuBarAccessibilityLabel)
         XCTAssertNil(MenuModel.state(input(.working(.one("Codex"))), now: now).menuBarAccessibilityLabel)
         let cases: [(ExpiredReason, String)] = [
-            (.trialOver, "agent caffeine: your trial has ended"),
-            (.unverified, "agent caffeine: your license was not checked for 30 days"),
-            (.activationRemoved, "agent caffeine: this Mac is no longer activated"),
+            (.trialOver, "Agent Caffeine: your trial has ended"),
+            (.unverified, "Agent Caffeine: your license was not checked for 30 days"),
+            (.activationRemoved, "Agent Caffeine: this Mac is no longer activated"),
         ]
         for (reason, label) in cases {
             XCTAssertEqual(MenuModel.state(input(.notEntitled(reason)), now: now).menuBarAccessibilityLabel, label)

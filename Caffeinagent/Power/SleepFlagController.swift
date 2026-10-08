@@ -15,9 +15,9 @@ enum SleepFlagError: LocalizedError, Equatable {
     var errorDescription: String? {
         switch self {
         case .requiresApproval:
-            return "Allow agent caffeine in System Settings > General > Login Items."
+            return "Allow Agent Caffeine in System Settings > General > Login Items."
         case .flagNotCleared:
-            return "agent caffeine could not let your Mac sleep again, so the helper was not removed. Try again."
+            return "Agent Caffeine could not let your Mac sleep again, so the helper was not removed. Try again."
         }
     }
 }
@@ -216,7 +216,7 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
         case .requiresApproval:
             return .requiresApproval
         case .notRegistered, .notFound:
-            // While agent caffeine still tries, the user has nothing to set up.
+            // While Agent Caffeine still tries, the user has nothing to set up.
             if lostByRepair, slowRetriesLeft > 0 { return .notResponding }
             return lostByRepair || wasSetUp ? .lost : .notSetUp
         }

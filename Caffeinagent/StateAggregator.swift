@@ -73,7 +73,7 @@ final class StateAggregator: ObservableObject {
             if !enabled { stopReachable() }
         }
     }
-    /// Until when agent caffeine acts as if it were off. The end is saved,
+    /// Until when Agent Caffeine acts as if it were off. The end is saved,
     /// so a pause lasts over a restart of the app and a sleep of the Mac.
     @PublishedOnChange private(set) var pause: Pause {
         didSet {
@@ -155,7 +155,7 @@ final class StateAggregator: ObservableObject {
     /// The menu asked for "Other tools" of the tab Agents. The tab clears
     /// it once it is there.
     @PublishedOnChange var showsOtherTools = false
-    /// "Open agent caffeine at login", as macOS has it.
+    /// "Open Agent Caffeine at login", as macOS has it.
     @PublishedOnChange private(set) var loginItem = LoginItemState.unavailable
     @PublishedOnChange private(set) var loginItemError: String?
     /// Why the Mac slept under an agent, until the user dismisses it or
@@ -371,7 +371,7 @@ final class StateAggregator: ObservableObject {
         // slows down, and a slowed timer would see an agent start late.
         // This option keeps App Nap off and still lets the Mac sleep.
         napActivity = ProcessInfo.processInfo.beginActivity(
-            options: .userInitiatedAllowingIdleSystemSleep, reason: "agent caffeine watches for agents"
+            options: .userInitiatedAllowingIdleSystemSleep, reason: "Agent Caffeine watches for agents"
         )
 
         license.start()
@@ -534,7 +534,7 @@ final class StateAggregator: ObservableObject {
 
     // MARK: Pause
 
-    /// Nothing to pause while agent caffeine is off. A pause ends "stay
+    /// Nothing to pause while Agent Caffeine is off. A pause ends "stay
     /// reachable". See `TimedModes`.
     func startPause(_ choice: PauseChoice) {
         guard enabled else { return }
@@ -543,7 +543,7 @@ final class StateAggregator: ObservableObject {
         (reachable, pause) = (next.reachable, next.pause)
     }
 
-    /// Not while agent caffeine is off or may not keep the Mac awake.
+    /// Not while Agent Caffeine is off or may not keep the Mac awake.
     /// "Stay reachable" ends a pause.
     func startReachable(_ choice: ReachableChoice) {
         guard enabled, entitlement.allowsHolding else { return }
@@ -768,7 +768,7 @@ final class StateAggregator: ObservableObject {
         if macSleep != state { macSleep = state }
     }
 
-    /// With the icon hidden, the menu's word that agent caffeine cannot do
+    /// With the icon hidden, the menu's word that Agent Caffeine cannot do
     /// its work reaches nobody, so it is told once as a notification.
     private func announceHiddenNotice() {
         let current = HiddenNotice.current(
@@ -855,7 +855,7 @@ final class StateAggregator: ObservableObject {
 
     private func updatePower() {
         if decision.hold, let reason = decision.headline.awakeReason {
-            power.hold(reason: "agent caffeine: \(reason)")
+            power.hold(reason: "Agent Caffeine: \(reason)")
         } else {
             power.release()
         }

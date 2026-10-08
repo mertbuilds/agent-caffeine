@@ -1,6 +1,6 @@
 import Foundation
 
-/// What agent caffeine knew at the moment macOS said the Mac goes to sleep.
+/// What Agent Caffeine knew at the moment macOS said the Mac goes to sleep.
 struct SleepSnapshot: Equatable {
     var at: Date
     var headline: HoldHeadline

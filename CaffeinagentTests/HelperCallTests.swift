@@ -97,7 +97,7 @@ final class HelperCallTests: XCTestCase {
 
     func testTheErrorsReadAsOneSentence() {
         for error in [HelperCallError.timedOut, .connectionLost] {
-            XCTAssertEqual(error.localizedDescription, "agent caffeine cannot reach its helper.")
+            XCTAssertEqual(error.localizedDescription, "Agent Caffeine cannot reach its helper.")
         }
     }
 }

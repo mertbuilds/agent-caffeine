@@ -878,7 +878,7 @@ final class VerdictTests: XCTestCase {
             (.onlyWeakSigns(minutes: 30), "Using the processor for 30 minutes with no other sign of work"),
             (.onlyWeakSigns(minutes: 120), "Using the processor for 2 hours with no other sign of work"),
             (.alwaysWorkingByRule, "You set this agent to always count as working"),
-            (.ignoredByRule, "You set agent caffeine to ignore this agent"),
+            (.ignoredByRule, "You set Agent Caffeine to ignore this agent"),
         ]
         for c in cases {
             XCTAssertEqual(c.reason.text, c.text)

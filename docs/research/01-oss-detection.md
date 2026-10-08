@@ -1,6 +1,6 @@
 # 01 - How open source projects detect AI coding agent state
 
-Research date: 2026-10-05. Read-only research for the agent caffeine detection redesign.
+Research date: 2026-10-05. Read-only research for the Agent Caffeine detection redesign.
 
 Method: shallow clones of each repo at HEAD (in `./repos/`), source read with grep and sed. Official docs fetched with WebFetch. One local check on this Mac (Claude Code 2.1.289).
 
@@ -19,14 +19,14 @@ Evidence labels used below:
 1. **Claude Code publishes its own live state on disk.** `~/.claude/sessions/<pid>.json` has `status` and `statusUpdatedAt`. No hook is needed. [LOCAL] on 2.1.289: 12 files, one per live `claude` process, values seen `busy` and `idle`. Other tools report `waiting` and `shell` too [README]. This file is not in the official `.claude` directory docs (grep of the docs page found no match), so it is undocumented and can change.
 2. **Every serious multi-agent tool uses layers, not one signal.** Order is: agent-reported state (hooks, plugin, SSE, state file) with a freshness window, then terminal screen rules, then activity heuristics.
 3. **Hooks alone are not enough.** Proven gaps: Esc interrupt fires no Claude hook, Stop can arrive late, a crash sends nothing, background work continues after Stop.
-4. **Only one project does what agent caffeine does today (ps + CPU): `ovedaydin/agent-mode`.** It adds network bytes from `nettop` and switches to hooks when hooks are present.
+4. **Only one project does what Agent Caffeine does today (ps + CPU): `ovedaydin/agent-mode`.** It adds network bytes from `nettop` and switches to hooks when hooks are present.
 5. **Screen scraping needs to own the pty or tmux.** A menu bar app does not have that. Those rule sets are still useful as a catalogue of states.
 
 ---
 
 ## 1. Sleep-prevention tools (direct peers)
 
-### 1.1 ovedaydin/agent-mode (macOS menu bar, Swift) - closest to agent caffeine
+### 1.1 ovedaydin/agent-mode (macOS menu bar, Swift) - closest to Agent Caffeine
 - URL: https://github.com/ovedaydin/agent-mode - commit 57d25ae (2026-10-05)
 - Logic: `Sources/Agents.swift` (`ProcessTable`, `AgentTracker`), `Sources/CLI.swift` (hook CLI), `Sources/AppDelegate.swift` (10 s tick, 120 s sleep delay). [SRC]
 - Signals:
@@ -315,7 +315,7 @@ A menu bar app owns none of these. Reach is limited to `tmux capture-pane` / `#{
 
 ---
 
-## 8. What this means for agent caffeine
+## 8. What this means for Agent Caffeine
 
 Contradictions with the current design:
 

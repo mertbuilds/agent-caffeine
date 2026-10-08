@@ -6,7 +6,7 @@ enum HelperCallError: LocalizedError, Equatable {
     case connectionLost
 
     var errorDescription: String? {
-        "agent caffeine cannot reach its helper."
+        "Agent Caffeine cannot reach its helper."
     }
 }
 

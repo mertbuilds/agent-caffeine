@@ -3,7 +3,7 @@ import Foundation
 /// What is known about the displays at one moment.
 struct DisplayInputs: Equatable {
     var lidClosed = false
-    /// agent caffeine keeps the Mac awake.
+    /// Agent Caffeine keeps the Mac awake.
     var holding = false
     /// A display that is not the built-in one is connected.
     var externalDisplay = false
@@ -25,7 +25,7 @@ struct DisplayMemory: Equatable {
     var lastDimAt: Date?
     /// Tries to dim that did not work, one after the other.
     var dimFailures = 0
-    /// agent caffeine set the brightness of the built-in display to zero
+    /// Agent Caffeine set the brightness of the built-in display to zero
     /// and has the user's value to put back.
     var dimmed = false
 }
@@ -126,7 +126,7 @@ enum DisplayRules {
         guard memory.dimmed else { return [] }
         if !inputs.lidClosed { return [.restoreBuiltin(reason: "the lid is open")] }
         if !enabled { return [.restoreBuiltin(reason: "the setting is off")] }
-        if !inputs.externalDisplay { return [.restoreBuiltin(reason: "agent caffeine no longer keeps the Mac awake")] }
+        if !inputs.externalDisplay { return [.restoreBuiltin(reason: "Agent Caffeine no longer keeps the Mac awake")] }
         return []
     }
 

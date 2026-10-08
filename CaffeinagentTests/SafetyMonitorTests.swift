@@ -287,11 +287,11 @@ final class SafetyMonitorTests: XCTestCase {
     func testTexts() {
         XCTAssertEqual(
             NoLimitBatteryWarning.notificationText(percent: 10),
-            "The battery is at 10%. agent caffeine keeps your Mac awake because the battery limit is off."
+            "The battery is at 10%. Agent Caffeine keeps your Mac awake because the battery limit is off."
         )
         XCTAssertEqual(
             NoLimitBatteryWarning.notificationText(percent: 5),
-            "The battery is at 5%. agent caffeine keeps your Mac awake because the battery limit is off."
+            "The battery is at 5%. Agent Caffeine keeps your Mac awake because the battery limit is off."
         )
         var settings = DetectionSettings()
         settings.batteryFloorPercent = 35
@@ -307,11 +307,11 @@ final class SafetyMonitorTests: XCTestCase {
     }
 
     func testNotificationText() {
-        XCTAssertEqual(SafetyStop.batteryLow(percent: 20).notificationText, "agent caffeine let your Mac sleep because the battery is at 20%")
-        XCTAssertEqual(SafetyStop.tooHot.notificationText, "agent caffeine let your Mac sleep because it got too hot")
+        XCTAssertEqual(SafetyStop.batteryLow(percent: 20).notificationText, "Agent Caffeine let your Mac sleep because the battery is at 20%")
+        XCTAssertEqual(SafetyStop.tooHot.notificationText, "Agent Caffeine let your Mac sleep because it got too hot")
         XCTAssertEqual(
             SafetyStop.weakCharger(percent: 20).notificationText,
-            "agent caffeine let your Mac sleep because your charger is too weak and the battery is at 20%"
+            "Agent Caffeine let your Mac sleep because your charger is too weak and the battery is at 20%"
         )
     }
 }

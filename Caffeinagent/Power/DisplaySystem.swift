@@ -63,7 +63,7 @@ struct SystemDisplaySleep: DisplaySleeping {
     private static var activity: IOPMAssertionID = 0
 
     func wakeDisplays() {
-        let result = IOPMAssertionDeclareUserActivity("agent caffeine: the lid opens" as CFString, kIOPMUserActiveLocal, &Self.activity)
+        let result = IOPMAssertionDeclareUserActivity("Agent Caffeine: the lid opens" as CFString, kIOPMUserActiveLocal, &Self.activity)
         if result != kIOReturnSuccess { Self.log.error("IOPMAssertionDeclareUserActivity failed: \(result)") }
     }
 
@@ -362,7 +362,7 @@ final class SystemLidTicker: LidTicking {
 /// 20 times a second while the lid is below 70 degrees. `lidAngle` is the
 /// lid angle sensor in degrees, `lidEstimate` is the angle without the
 /// steps of the sensor, and `wouldSet` is the brightness the fade would set
-/// if agent caffeine kept the Mac awake. It only reads. It starts no app,
+/// if Agent Caffeine kept the Mac awake. It only reads. It starts no app,
 /// takes no hold, and sets nothing. With the switch of `DisplayTrace` on,
 /// it also writes a trace of every step of each fade, 120 per second, with
 /// no value in the `written` column.

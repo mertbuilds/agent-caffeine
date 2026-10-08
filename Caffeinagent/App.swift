@@ -80,7 +80,7 @@ enum Main {
                 Notification.Name(Reopen.notificationName), object: nil, userInfo: nil, deliverImmediately: true
             )
             _ = otherCopies().first?.activate(options: [])
-            FileHandle.standardError.write(Data("agent caffeine is already running.\n".utf8))
+            FileHandle.standardError.write(Data("Agent Caffeine is already running.\n".utf8))
             exit(0)
         case .start:
             CaffeinagentApp.main()

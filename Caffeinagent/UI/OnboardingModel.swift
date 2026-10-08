@@ -24,7 +24,7 @@ enum Onboarding {
         return nil
     }
 
-    /// The box "Open agent caffeine when you log in" on the last page.
+    /// The box "Open Agent Caffeine when you log in" on the last page.
     /// Checked at the first launch, and later as macOS has it. Nil when
     /// the app cannot open at login from where it is.
     static func openAtLoginBox(_ state: LoginItemState, firstRun: Bool) -> Bool? {

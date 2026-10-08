@@ -39,7 +39,7 @@ final class PanelBatteryTests: XCTestCase {
         XCTAssertEqual(battery.tone, .quiet)
         XCTAssertEqual(battery.charge, "58%")
         XCTAssertEqual(battery.consequence, "sleeps at 20%")
-        XCTAssertEqual(battery.accessibilityLabel, "Battery 58 percent, agent caffeine lets your Mac sleep at 20 percent")
+        XCTAssertEqual(battery.accessibilityLabel, "Battery 58 percent, Agent Caffeine lets your Mac sleep at 20 percent")
     }
 
     func testTheRealFloorIsUsed() throws {
@@ -47,7 +47,7 @@ final class PanelBatteryTests: XCTestCase {
         input.settings.batteryFloorPercent = 35
         let battery = try XCTUnwrap(MenuModel.battery(input))
         XCTAssertEqual(battery.consequence, "sleeps at 35%")
-        XCTAssertEqual(battery.accessibilityLabel, "Battery 58 percent, agent caffeine lets your Mac sleep at 35 percent")
+        XCTAssertEqual(battery.accessibilityLabel, "Battery 58 percent, Agent Caffeine lets your Mac sleep at 35 percent")
     }
 
     func testAmberWithinTenPointsOfTheFloor() {
@@ -71,7 +71,7 @@ final class PanelBatteryTests: XCTestCase {
         XCTAssertNil(battery.charge, "The headline says the number")
         XCTAssertEqual(battery.fill, 0.19, accuracy: 0.0001)
         XCTAssertEqual(battery.consequence, "starts again at 25%")
-        XCTAssertEqual(battery.accessibilityLabel, "Battery 19 percent, agent caffeine starts again at 25 percent")
+        XCTAssertEqual(battery.accessibilityLabel, "Battery 19 percent, Agent Caffeine starts again at 25 percent")
         // Heat is not the battery's stop.
         let hot = self.input(.safetyStop(.tooHot), percent: 60)
         XCTAssertEqual(MenuModel.battery(hot)?.level, .normal)
@@ -81,14 +81,14 @@ final class PanelBatteryTests: XCTestCase {
         var input = input(.safetyStop(.batteryLow(percent: 19)), percent: 19)
         input.settings.batteryFloorPercent = 20
         let state = MenuModel.state(input, now: Date())
-        XCTAssertEqual(state.title, "agent caffeine has stopped")
+        XCTAssertEqual(state.title, "Agent Caffeine has stopped")
         XCTAssertEqual(state.subtitle, "The battery is at 19%")
         XCTAssertNil(state.battery?.charge, "The number is said once, in the headline")
         XCTAssertEqual(state.battery?.consequence, "starts again at 25%")
-        XCTAssertNil(state.attention, "The line of the battery says when agent caffeine starts again")
+        XCTAssertNil(state.attention, "The line of the battery says when Agent Caffeine starts again")
         // Heat keeps its line: the battery says nothing about it.
         let hot = MenuModel.state(self.input(.safetyStop(.tooHot), percent: 60), now: Date())
-        XCTAssertEqual(hot.attention?.text, "agent caffeine starts again when your Mac is cool")
+        XCTAssertEqual(hot.attention?.text, "Agent Caffeine starts again when your Mac is cool")
         XCTAssertEqual(hot.battery?.consequence, "sleeps at 20%")
     }
 

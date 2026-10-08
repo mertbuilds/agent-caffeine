@@ -43,15 +43,15 @@ final class TrialNoticeTests: XCTestCase {
         let tomorrow = now.addingTimeInterval(20 * 3600)
         XCTAssertEqual(
             PanelText.notification(.endsSoon, end: tomorrow, now: now, calendar: calendar),
-            "Your agent caffeine trial ends tomorrow. After that it does not keep your Mac awake without a license key."
+            "Your Agent Caffeine trial ends tomorrow. After that it does not keep your Mac awake without a license key."
         )
         XCTAssertEqual(
             PanelText.notification(.endsSoon, end: today, now: now, calendar: calendar),
-            "Your agent caffeine trial ends today. After that it does not keep your Mac awake without a license key."
+            "Your Agent Caffeine trial ends today. After that it does not keep your Mac awake without a license key."
         )
         XCTAssertEqual(
             PanelText.notification(.ended, end: today, now: now, calendar: calendar),
-            "Your agent caffeine trial has ended. agent caffeine does not keep your Mac awake until you enter a license key."
+            "Your Agent Caffeine trial has ended. Agent Caffeine does not keep your Mac awake until you enter a license key."
         )
     }
 
@@ -75,7 +75,7 @@ final class TrialNoticeTests: XCTestCase {
         XCTAssertEqual(PanelText.trialDays, 7)
         XCTAssertEqual(
             PanelText.trialIntro,
-            "Your free trial runs for 7 days. After that, agent caffeine needs a license key to keep your Mac awake."
+            "Your free trial runs for 7 days. After that, Agent Caffeine needs a license key to keep your Mac awake."
         )
         XCTAssertEqual(Onboarding.trialNote(.trial(daysLeft: 7)), PanelText.trialIntro)
         XCTAssertNil(Onboarding.trialNote(.licensed))

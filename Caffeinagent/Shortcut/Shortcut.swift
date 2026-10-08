@@ -1,6 +1,6 @@
 import Foundation
 
-/// What a keyboard shortcut of agent caffeine does.
+/// What a keyboard shortcut of Agent Caffeine does.
 enum ShortcutAction: String, CaseIterable {
     /// The same as the switch. A pause ends. See `PauseSwitch`.
     case toggle
@@ -8,7 +8,7 @@ enum ShortcutAction: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .toggle: return "Turn agent caffeine on or off"
+        case .toggle: return "Turn Agent Caffeine on or off"
         case .pauseOneHour: return PanelText.title(of: .pause(.oneHour))
         }
     }
@@ -106,7 +106,7 @@ struct Shortcut: Codable, Equatable {
 enum ShortcutProblem: Equatable {
     case needsModifier
     case usedBySystem
-    /// The other shortcut of agent caffeine has the same keys.
+    /// The other shortcut of Agent Caffeine has the same keys.
     case usedTwice
     /// macOS refused to register it.
     case usedByAnotherApp
@@ -115,7 +115,7 @@ enum ShortcutProblem: Equatable {
         switch self {
         case .needsModifier: return "Add Command, Control or Option to the shortcut"
         case .usedBySystem: return "macOS already uses this shortcut"
-        case .usedTwice: return "The other shortcut of agent caffeine already uses these keys"
+        case .usedTwice: return "The other shortcut of Agent Caffeine already uses these keys"
         case .usedByAnotherApp: return "This shortcut is already used by another app"
         }
     }
@@ -140,7 +140,7 @@ enum ShortcutRules {
     /// Nil when the shortcut can be registered.
     /// - Parameters:
     ///   - system: the shortcuts that are switched on in System Settings.
-    ///   - others: the other shortcuts of agent caffeine.
+    ///   - others: the other shortcuts of Agent Caffeine.
     static func problem(_ shortcut: Shortcut, system: Set<Shortcut.Keys> = [], others: [Shortcut] = []) -> ShortcutProblem? {
         // Shift alone would take a capital letter away from every app.
         if shortcut.modifiers.isDisjoint(with: [.command, .control, .option]) { return .needsModifier }

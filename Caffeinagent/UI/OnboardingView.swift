@@ -77,12 +77,12 @@ struct OnboardingView: View {
 
     @ViewBuilder
     private var welcome: some View {
-        title("agent caffeine keeps your Mac awake while your agents work")
-        paragraph("When the last agent is done, your Mac can sleep again. agent caffeine lives in the menu bar and needs no window.")
+        title("Agent Caffeine keeps your Mac awake while your agents work")
+        paragraph("When the last agent is done, your Mac can sleep again. Agent Caffeine lives in the menu bar and needs no window.")
         VStack(alignment: .leading, spacing: 6) {
             Text("Open on this Mac now")
             if foundAgents.isEmpty {
-                paragraph("No agent is open right now. agent caffeine notices an agent as soon as it starts.")
+                paragraph("No agent is open right now. Agent Caffeine notices an agent as soon as it starts.")
             }
             ForEach(foundAgents, id: \.self) { name in
                 Label(name, systemImage: "checkmark.circle")
@@ -186,7 +186,7 @@ struct OnboardingView: View {
 
     @ViewBuilder
     private var done: some View {
-        title("agent caffeine is ready")
+        title("Agent Caffeine is ready")
         paragraph("It lives in the menu bar. You can change everything in Settings, and open this setup again in Settings > About.")
         VStack(alignment: .leading, spacing: 6) {
             Text("The icon in the menu bar")
@@ -283,7 +283,7 @@ enum OnboardingWindow {
             aggregator: aggregator, steps: steps, offered: Set(rows.map(\.id)), firstRun: Onboarding.isPending
         ) { window?.close() }
         let created = NSWindow(contentViewController: NSHostingController(rootView: content))
-        created.title = "Set up agent caffeine"
+        created.title = "Set up Agent Caffeine"
         created.styleMask = [.titled, .closable]
         created.isReleasedWhenClosed = false
         created.center()

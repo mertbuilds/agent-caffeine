@@ -32,7 +32,7 @@ Marks: [DOC] official docs. [OSS] open source read. [BUNDLE] read in the install
 3. [MAC] **Agent shell commands are children of the extension host**, not of the pty host:
    `Cursor` (main) -> `Cursor Helper (Plugin): extension-host Agents Window [1-1]` -> `/bin/zsh -c builtin export PATH=...; snap=$(command cat <&3); ...` -> `sleep 60`.
 4. [DOC][MAC] **Hooks run in the editor's agent**, from `~/.cursor/hooks.json`. No hook event exists for an approval wait. Cursor also runs the hooks of
-   `~/.claude/settings.json` (setting on by default), so agent caffeine's Claude hook already ran inside Cursor today (29 times) and was ignored by our hook command, as designed.
+   `~/.claude/settings.json` (setting on by default), so Agent Caffeine's Claude hook already ran inside Cursor today (29 times) and was ignored by our hook command, as designed.
 5. [DOC][BUNDLE] **Cloud agents**: user-level hooks do not run there, Cursor takes no wake lock for them, and their commands are not local processes.
 
 ## 1. Process model [MAC]
@@ -136,7 +136,7 @@ Format:
 | superset | prints `{"continue":true}` for its permission event "so cursor-agent isn't left blocked" | |
 | Vibe Island (this Mac) | the 12 events above | returns a valid response |
 
-### The entry agent caffeine would add
+### The entry Agent Caffeine would add
 New hook agent id `cursor`, config `~/.cursor/hooks.json`, a new installer format "flat" (`hooks.<event>` is an array of `{command, timeout}` objects, with no `matcher` wrapper and no inner `hooks` array; top-level `"version": 1` must exist, add it only when missing).
 
 ```json

@@ -29,8 +29,8 @@ final class AppRelocatorTests: XCTestCase {
     }
 
     func testTheWordsOfTheAlertOnADiskImage() {
-        XCTAssertEqual(AppRelocator.dragTitle, "Move agent caffeine to the Applications folder")
-        XCTAssertEqual(AppRelocator.dragText, "Drag agent caffeine to the Applications folder, then open it from there.")
+        XCTAssertEqual(AppRelocator.dragTitle, "Move Agent Caffeine to the Applications folder")
+        XCTAssertEqual(AppRelocator.dragText, "Drag Agent Caffeine to the Applications folder, then open it from there.")
         XCTAssertEqual(AppRelocator.dragQuit, "Quit")
         XCTAssertEqual(AppRelocator.dragContinue, "Continue anyway")
     }

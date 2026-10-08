@@ -1037,7 +1037,7 @@ final class HookInstallerTests: XCTestCase {
         XCTAssertEqual(HookCatalog.pluginVersion, 3)
         XCTAssertEqual(HookCatalog.pluginSource(for: opencode, appPath: appPath), HookCatalog.pluginSource(appPath: appPath))
         XCTAssertEqual(HookCatalog.pluginVersion(for: opencode), 3)
-        XCTAssertEqual(pi.benefit, "Lets agent caffeine see at once when Pi starts and stops working")
+        XCTAssertEqual(pi.benefit, "Lets Agent Caffeine see at once when Pi starts and stops working")
     }
 
     private static let piSpawnImport = "import { spawn } from \"node:child_process\";"

@@ -68,7 +68,7 @@ Evidence from this Mac's `pmset -g log` [P-log]. How I read the lid: a HID tickl
 
    The system asked for the display, and took it away again in one second, because the lid was closed.
 
-3. The Mac was awake from 2026-10-05 22:38:04 to 2026-10-06 09:12:19 with the display off the whole time (no "Sleep", "Wake" or "DarkWake" entry in that window; agent caffeine's assertions were summarized each 15 minutes). The lid was opened at 09:12:19 (`lidopen` + `AppleM68Buttons`).
+3. The Mac was awake from 2026-10-05 22:38:04 to 2026-10-06 09:12:19 with the display off the whole time (no "Sleep", "Wake" or "DarkWake" entry in that window; Agent Caffeine's assertions were summarized each 15 minutes). The lid was opened at 09:12:19 (`lidopen` + `AppleM68Buttons`).
 
 Other reports:
 
@@ -87,13 +87,13 @@ Keyboard backlight and Touch Bar:
 ## 1.2 Lid closed with an external display
 
 - On AC this is Apple's closed-display mode. The kernel does not sleep (`desktopMode && acAdaptorConnected`). The built-in panel is off. The external display is the main display. [P, note 02]
-- The external display obeys the user's display sleep timer, because agent caffeine does not hold a display assertion. On this Mac the AC timer is `displaysleep 0` (never). That is the owner's own setting. [P, `pmset -g custom`]
+- The external display obeys the user's display sleep timer, because Agent Caffeine does not hold a display assertion. On this Mac the AC timer is `displaysleep 0` (never). That is the owner's own setting. [P, `pmset -g custom`]
 - An external display uses wall power, not the battery (a bus-powered USB-C display on battery is the one exception).
 - Should the app turn displays off when the user is away? No. The correct trigger would be "user idle for N minutes", and macOS already has that timer. A second timer in our app would fight the user's setting. If the owner wants it later, the API is in 1.4 (`IORequestIdle`), behind an opt-in.
 
 ## 1.3 Lid open, agent works, user away
 
-- agent caffeine holds `PreventUserIdleSystemSleep` and `PreventSystemSleep`. It does not hold `PreventUserIdleDisplaySleep`. [P, `pmset -g assertions` on this Mac: both from pid `caffeinagent`, named "agent caffeine: 2 agents are working"]
+- Agent Caffeine holds `PreventUserIdleSystemSleep` and `PreventSystemSleep`. It does not hold `PreventUserIdleDisplaySleep`. [P, `pmset -g assertions` on this Mac: both from pid `caffeinagent`, named "agent caffeine: 2 agents are working"]
 - SDK header for `PreventUserIdleSystemSleep`: the display may dim and sleep. [P, note 05]
 - So the display follows the user's display sleep timer. Log proof with our assertions held [P-log]:
 
@@ -104,7 +104,7 @@ Keyboard backlight and Touch Bar:
 ```
 
   On battery this Mac's timer is 2 minutes (`displaysleep 2`). Nothing to build.
-- Note: another app can hold the display on. At the time of this research `pmset -g` showed "display sleep prevented by ego lite". That is not agent caffeine.
+- Note: another app can hold the display on. At the time of this research `pmset -g` showed "display sleep prevented by ego lite". That is not Agent Caffeine.
 
 ## 1.4 APIs that force the display off or to zero brightness
 
@@ -158,7 +158,7 @@ Conclusion: a lit panel would cost 1 to 2 W, which is more than the whole idle M
 
 Test plan (the owner, by hand, about 10 minutes plus one optional overnight run):
 
-1. Unplug the charger. Start an agent task so that agent caffeine holds. Check `pmset -g | grep SleepDisabled` shows 1.
+1. Unplug the charger. Start an agent task so that Agent Caffeine holds. Check `pmset -g | grep SleepDisabled` shows 1.
 2. In Terminal run: `"${TMPDIR%/}/agent-caffeine-research/probe07/lidprobe" 2 > ~/lidprobe.tsv`
 3. Wait 30 seconds with the lid open. Do not touch the Mac.
 4. Close the lid. Look at the hinge gap in a dark room: there must be no glow. Wait 2 minutes.
@@ -303,7 +303,7 @@ A cheaper variant: do not schedule anything. This Mac already has a dark wake ab
 Test A: the real cost of "stay reachable" (D5). Safe. Uses only the app.
 
 1. Charge to 100 percent. Unplug. Quit heavy apps that you do not need.
-2. Start one Claude Code session with `/remote-control`. Make agent caffeine hold (or run `sudo pmset -a disablesleep 1` yourself for the test).
+2. Start one Claude Code session with `/remote-control`. Make Agent Caffeine hold (or run `sudo pmset -a disablesleep 1` yourself for the test).
 3. Note the time and `ioreg -r -c AppleSmartBattery | grep AppleRawCurrentCapacity`.
 4. Close the lid. Leave the Mac for 3 hours on a table.
 5. From the phone, send a message to the session after 1 hour and after 2 hours. Note how fast the agent answers. Pass: an answer in seconds.
@@ -312,14 +312,14 @@ Test A: the real cost of "stay reachable" (D5). Safe. Uses only the app.
 
 Test B: can a scheduled wake carry a message (D1)? This needs `sudo` and one schedule entry. I did not run it.
 
-1. Unplug. Start a Claude Code session with `/remote-control`. Make sure agent caffeine is **not** holding (quit it for this test), so that the Mac really sleeps.
+1. Unplug. Start a Claude Code session with `/remote-control`. Make sure Agent Caffeine is **not** holding (quit it for this test), so that the Mac really sleeps.
 2. Schedule one wake 10 minutes ahead: `sudo pmset schedule wake "MM/DD/YY HH:MM:SS"`. Check with `pmset -g sched`.
 3. Close the lid. From the phone, send a message to the session 3 minutes later. It must stay unanswered.
 4. Wait until 5 minutes after the wake time. Open the lid.
 5. Run `pmset -g log | grep -E "DarkWake|Wake |Sleep " | tail -40`. Find the entry at the wake time. Note its type (DarkWake or Wake), the reason (`rtc/...`) and the seconds.
 6. Look at the session. Did the agent get the message during the wake, or only now? If the wake was 5 seconds and the message came only now, part 1 or part 3 failed without a hold: go to step 7.
 7. Repeat steps 2 to 5 with a hold. Before you close the lid, start this in a root shell (`sudo -s`), with WAKE set to the wake time as epoch seconds (`date -j -f "%m/%d/%y %H:%M:%S" "MM/DD/YY HH:MM:SS" +%s`): `while [ $(date +%s) -lt $WAKE ]; do sleep 1; done; pmset -a disablesleep 1; sleep 40; pmset -a disablesleep 0; pmset sleepnow`. The loop stops while the Mac sleeps and continues at the wake. Send the phone message 3 minutes after you close the lid.
-8. Pass for D1: the log shows the Mac up for about 40 seconds at the wake time, the agent started on the message in that window, and agent caffeine (start it again for this run) took the hold.
+8. Pass for D1: the log shows the Mac up for about 40 seconds at the wake time, the agent started on the message in that window, and Agent Caffeine (start it again for this run) took the hold.
 9. Also run the same test with `claude remote-control` (server mode) to see if it exits during sleep, and with Codex remote access.
 10. Clean up: `pmset -g sched` must not show your wake entry (a fired entry is removed by itself; if it is still there, `sudo pmset schedule cancel wake "MM/DD/YY HH:MM:SS"` with the same date). Do not use `cancelall`: the list also holds Apple's own `com.apple.alarm` entries. `pmset -g | grep SleepDisabled` must show 0.
 

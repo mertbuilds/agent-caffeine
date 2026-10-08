@@ -100,7 +100,7 @@ final class ShortcutTests: XCTestCase {
             XCTAssertFalse(problem.text.hasSuffix("."), problem.text)
             XCTAssertFalse(problem.text.contains("\u{2014}"), problem.text)
         }
-        XCTAssertEqual(ShortcutAction.toggle.title, "Turn agent caffeine on or off")
+        XCTAssertEqual(ShortcutAction.toggle.title, "Turn Agent Caffeine on or off")
         XCTAssertEqual(ShortcutAction.pauseOneHour.title, "Pause for 1 hour")
     }
 

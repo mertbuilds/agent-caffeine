@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// The quiet controls: the mode, the gear menu, the timer menu and the
-/// switch. While agent caffeine is paused, the end of the pause stands in
+/// switch. While Agent Caffeine is paused, the end of the pause stands in
 /// place of the mode, and while the Mac stays reachable, the end of that.
 ///
 /// SwiftUI closes the open submenu of a `Menu` when it works the menu out

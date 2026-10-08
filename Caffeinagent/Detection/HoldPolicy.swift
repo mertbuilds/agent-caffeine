@@ -45,7 +45,7 @@ enum HoldHeadline: Equatable {
     case noAgents
     case safetyStop(SafetyStop)
     case switchedOff
-    /// The user paused agent caffeine until this time.
+    /// The user paused Agent Caffeine until this time.
     case paused(until: Date)
     case notEntitled(ExpiredReason)
 
@@ -81,8 +81,8 @@ enum HoldHeadline: Equatable {
         case .safetyStop(.batteryLow(let percent)): return "Sleeping allowed: battery at \(PanelText.percent(percent))"
         case .safetyStop(.weakCharger(let percent)): return "Sleeping allowed: weak charger, battery at \(PanelText.percent(percent))"
         case .safetyStop(.tooHot): return "Sleeping allowed: the Mac is too hot"
-        case .switchedOff: return "Mac can sleep: agent caffeine is off"
-        case .paused: return "Mac can sleep: agent caffeine is paused"
+        case .switchedOff: return "Mac can sleep: Agent Caffeine is off"
+        case .paused: return "Mac can sleep: Agent Caffeine is paused"
         case .notEntitled(let reason): return reason.text
         }
     }
@@ -103,7 +103,7 @@ struct HoldDecision: Equatable {
     var headline: HoldHeadline
     /// In the order of the readings.
     var perAgent: [AgentHold]
-    /// When agent caffeine lets go, while it holds only for agents that
+    /// When Agent Caffeine lets go, while it holds only for agents that
     /// wait for the user. Nil when anything else keeps the Mac awake: an
     /// agent that works, finished a moment ago or is open, the mode,
     /// "stay reachable", or phone access on power. See `SleepOutlook`.

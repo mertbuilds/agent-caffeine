@@ -1,6 +1,6 @@
 import Foundation
 
-/// What only the menu tells the user: agent caffeine cannot do its work.
+/// What only the menu tells the user: Agent Caffeine cannot do its work.
 /// With the icon hidden nobody sees the menu, so a notification says it.
 enum HiddenNotice: Equatable {
     /// The sleep flag is on and the helper was switched off in Login Items.
@@ -12,11 +12,11 @@ enum HiddenNotice: Equatable {
 
     var notificationText: String {
         switch self {
-        case .helperSwitchedOff: return "Your Mac cannot sleep. Allow agent caffeine again in System Settings > General > Login Items."
+        case .helperSwitchedOff: return "Your Mac cannot sleep. Allow Agent Caffeine again in System Settings > General > Login Items."
         case .helperNotResponding: return PanelText.helperNotResponding
-        case .licenseExpired(.trialOver): return "agent caffeine cannot keep your Mac awake because your trial has ended"
-        case .licenseExpired(.unverified): return "agent caffeine cannot keep your Mac awake because your license was not checked for 30 days"
-        case .licenseExpired(.activationRemoved): return "agent caffeine cannot keep your Mac awake because this Mac is no longer activated"
+        case .licenseExpired(.trialOver): return "Agent Caffeine cannot keep your Mac awake because your trial has ended"
+        case .licenseExpired(.unverified): return "Agent Caffeine cannot keep your Mac awake because your license was not checked for 30 days"
+        case .licenseExpired(.activationRemoved): return "Agent Caffeine cannot keep your Mac awake because this Mac is no longer activated"
         }
     }
 

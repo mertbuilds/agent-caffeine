@@ -23,10 +23,10 @@ struct DetectionSettings: Codable, Equatable {
     /// as working.
     var weakEvidenceCap: TimeInterval = 1800
     var batteryFloorPercent = SafetyMonitor.defaultBatteryFloorPercent
-    /// Off: agent caffeine keeps the Mac awake until the battery is empty.
+    /// Off: Agent Caffeine keeps the Mac awake until the battery is empty.
     var batteryFloorEnabled = true
     var stayAwakeLidClosedOnBattery = true
-    /// While agent caffeine keeps the Mac awake with the lid closed, the
+    /// While Agent Caffeine keeps the Mac awake with the lid closed, the
     /// built-in display is kept dark. See `DisplayRules`.
     var displayOffLidClosed = true
     /// On a Mac with a lid angle sensor, the built-in display gets darker
