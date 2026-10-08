@@ -78,6 +78,8 @@ struct MenuBarView: View {
             openPreferences()
         case .goToAgent(let agent, _):
             if aggregator.goToAgent(agent) { panel.close() }
+        case .stopHold(let id):
+            aggregator.stopHold(id: id)
         case .dismissSleepNote:
             aggregator.dismissSleepNote()
         case .openHelp:

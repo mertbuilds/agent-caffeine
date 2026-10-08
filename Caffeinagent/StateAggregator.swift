@@ -240,6 +240,11 @@ final class StateAggregator: ObservableObject {
     private var napActivity: NSObjectProtocol?
     private var pauseTimer: Timer?
     private var reachableTimer: Timer?
+    /// The folder of the holds from the command line.
+    private let holdStore = HoldStore()
+    /// Tells the command line tool that the app runs. Nil in the smoke
+    /// test, which runs next to a copy that is installed.
+    private var holdLock: HoldStore.AppLock?
     private var cancellables = Set<AnyCancellable>()
     private var sigtermSource: DispatchSourceSignal?
     private static let enabledKey = "StateAggregator.enabled"
@@ -382,6 +387,10 @@ final class StateAggregator: ObservableObject {
             options: .userInitiatedAllowingIdleSystemSleep, reason: "Agent Caffeine watches for agents"
         )
 
+        if !SmokeTest.isActive {
+            holdLock = HoldStore.AppLock(store: holdStore)
+            writeHoldStatus()
+        }
         license.start()
         engine.start()
         updateOwnHookFiles()
@@ -446,7 +455,7 @@ final class StateAggregator: ObservableObject {
         sleepSnapshot = SleepSnapshot(
             at: Date(),
             headline: decision.headline,
-            agentActive: decision.perAgent.contains {
+            agentActive: !decision.manualHolds.isEmpty || decision.perAgent.contains {
                 $0.reading.verdict.state != .idle && settings.rule(for: $0.reading.agentID) != .ignore
             },
             lidClosed: powerContext.context().lidClosed,
@@ -562,6 +571,13 @@ final class StateAggregator: ObservableObject {
         var next = TimedModes(pause: pause, reachable: reachable)
         next.startReachable(choice, now: Date())
         (pause, reachable) = (next.pause, next.reachable)
+    }
+
+    /// "Stop" on the line of a hold from the command line. The file goes,
+    /// and the sample that follows lets go. A command that holds runs on.
+    func stopHold(id: String) {
+        holdStore.remove(id: id)
+        engine.requestSample()
     }
 
     func stopReachable() {
@@ -691,6 +707,7 @@ final class StateAggregator: ObservableObject {
     private func apply(_ decision: HoldDecision) {
         self.decision = decision
         refreshRows()
+        writeHoldStatus()
         updatePower()
         syncSleepFlag()
         // A stop gives the brightness back at once, not at the next sample.
@@ -902,6 +919,16 @@ final class StateAggregator: ObservableObject {
         lidChimer.preview(settings.lidChimeSound)
     }
 
+    /// What `status` of the command line tool says. Only the copy that
+    /// holds the lock writes it.
+    private func writeHoldStatus() {
+        guard holdLock != nil else { return }
+        let headline = PanelText.headline(decision.headline)
+        holdStore.write(HoldStore.Status(
+            awake: decision.hold, line: "\(headline.title): \(headline.subtitle)", stopped: decision.headline.isStop
+        ))
+    }
+
     private func updatePower() {
         if decision.hold, let reason = decision.headline.awakeReason {
             power.hold(reason: "Agent Caffeine: \(reason)")
@@ -1037,6 +1064,10 @@ final class StateAggregator: ObservableObject {
         display?.stop()
         sleepFlag.clearForQuit(timeout: 2)
         power.release()
+        if holdLock != nil {
+            holdStore.removeStatus()
+            holdLock = nil
+        }
         if let napActivity {
             ProcessInfo.processInfo.endActivity(napActivity)
             self.napActivity = nil

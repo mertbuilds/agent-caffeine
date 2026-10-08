@@ -52,6 +52,8 @@ enum PanelAction: Equatable {
     /// From a click on the line of one agent: brings the app it runs in
     /// to the front.
     case goToAgent(ProcessIdentity, app: String)
+    /// From the line of a hold from the command line: ends that hold.
+    case stopHold(id: String)
     case dismissSleepNote
     case openHelp
 
@@ -240,6 +242,9 @@ struct PanelGroup: Equatable, Identifiable {
     var idle = 0
     /// What the user set for this agent, for the menu of the row.
     var rule = AgentRule.automatic
+    /// Only on the line of a hold from the command line: the way to end
+    /// it. Such a line has no rule and no sessions.
+    var stop: PanelAction?
 
     /// `AgentDefinition.id`: the group keeps its place when its sessions
     /// change state.

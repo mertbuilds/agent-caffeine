@@ -13,7 +13,13 @@ struct AgentGroupView: View {
         let layout = Self.childLayout(of: group)
         VStack(alignment: .leading, spacing: 0) {
             Group {
-                if group.canToggle {
+                if let stop = group.stop {
+                    HStack(spacing: 8) {
+                        AgentRowView(row: group.header, summary: Self.summaryPlace(group))
+                        Button(stop.title) { perform(stop) }
+                            .buttonStyle(.link)
+                    }
+                } else if group.canToggle {
                     Button(action: toggle) {
                         AgentRowView(row: group.header, summary: Self.summaryPlace(group), isOpen: isOpen)
                             .contentShape(Rectangle())
@@ -26,7 +32,13 @@ struct AgentGroupView: View {
                         .goTo(group.header.goTo, radius: PanelMetrics.rowHoverRadius, perform: perform)
                 }
             }
-            .contextMenu { AgentRuleMenu(agentID: group.id, rule: group.rule, goTo: group.header.goTo, perform: perform) }
+            .contextMenu {
+                if let stop = group.stop {
+                    Button(stop.title) { perform(stop) }
+                } else {
+                    AgentRuleMenu(agentID: group.id, rule: group.rule, goTo: group.header.goTo, perform: perform)
+                }
+            }
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(group.children) { child in
                     AgentChildView(child: child, layout: layout)
@@ -48,6 +60,8 @@ struct AgentGroupView: View {
 
     private static func summaryPlace(_ group: PanelGroup) -> AgentRowView.SummaryPlace {
         if group.canToggle { return .whereItFits }
+        // What a hold does is a sentence, and has its line below the title.
+        if group.stop != nil { return .below }
         return group.header.state == .idle ? .trailing : .below
     }
 

@@ -64,6 +64,10 @@ enum PanelText {
             return (awakeTitle, reachableWhilePluggedIn)
         case .reachable(let until):
             return (awakeTitle, reachableUntil(until, calendar: calendar, locale: locale))
+        case .manualHold(.one(let name)):
+            return (awakeTitle, "\(name) asked for it")
+        case .manualHold(.many(let count)):
+            return (awakeTitle, "\(count) commands asked for it")
         case .idle(.one(let name)):
             return (canSleepTitle, "\(name) is idle")
         case .idle(.many):
@@ -364,6 +368,7 @@ enum PanelText {
         case .setAgentRule(_, .automatic): return "Automatic"
         case .openAgentSettings: return "Open agent settings…"
         case .goToAgent(_, let app): return "Go to \(app)"
+        case .stopHold: return "Stop"
         case .dismissSleepNote: return "Dismiss"
         case .openHelp: return help
         }
@@ -450,6 +455,31 @@ enum PanelText {
     }
 
     static let ignored = "Ignored"
+
+    // MARK: Holds from the command line
+
+    /// The line below a hold from the command line.
+    /// - Parameter holding: Agent Caffeine keeps the Mac awake. Not so in
+    ///   a stop, where the hold is only asked for.
+    static func hold(_ hold: ManualHold, holding: Bool, now: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
+        let lead = holding ? "Keeps your Mac awake" : "Asked to keep your Mac awake"
+        switch hold.kind {
+        case .timed:
+            return "\(lead) until \(time(hold.endsAt, calendar: calendar, locale: locale))"
+        case .command:
+            let lasting = holding ? HumaneDuration.lasting(seconds: now.timeIntervalSince(hold.startedAt)) : nil
+            return ["\(lead) while it runs", lasting].compactMap { $0 }.joined(separator: ", ")
+        }
+    }
+
+    /// The tooltip of such a line.
+    static let holdHint = "Asked for from the command line"
+
+    // MARK: Settings, command line
+
+    static let commandLineExplained = "A script or a long job can ask Agent Caffeine to keep your Mac awake, and an agent can ask through MCP. The battery limit, a pause and the switch still let your Mac sleep."
+    static let commandLineInstallExplained = "This command makes a link to the tool in ~/.local/bin. Run it in Terminal."
+    static let commandLineMCPExplained = "Add this to the MCP servers of your agent."
 
     /// What tells a session apart when nothing else does: "since 14:05",
     /// or "since 2:05 PM" for a user who set the 12-hour clock.
