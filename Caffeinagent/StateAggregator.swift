@@ -245,6 +245,7 @@ final class StateAggregator: ObservableObject {
     /// Tells the command line tool that the app runs. Nil in the smoke
     /// test, which runs next to a copy that is installed.
     private var holdLock: HoldStore.AppLock?
+    private lazy var holdStatus = HoldStore.StatusWriter(store: holdStore)
     private var cancellables = Set<AnyCancellable>()
     private var sigtermSource: DispatchSourceSignal?
     private static let enabledKey = "StateAggregator.enabled"
@@ -924,7 +925,7 @@ final class StateAggregator: ObservableObject {
     private func writeHoldStatus() {
         guard holdLock != nil else { return }
         let headline = PanelText.headline(decision.headline)
-        holdStore.write(HoldStore.Status(
+        holdStatus.write(HoldStore.Status(
             awake: decision.hold, line: "\(headline.title): \(headline.subtitle)", stopped: decision.headline.isStop
         ))
     }
@@ -1065,7 +1066,7 @@ final class StateAggregator: ObservableObject {
         sleepFlag.clearForQuit(timeout: 2)
         power.release()
         if holdLock != nil {
-            holdStore.removeStatus()
+            holdStatus.remove()
             holdLock = nil
         }
         if let napActivity {

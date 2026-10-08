@@ -264,6 +264,40 @@ final class ManualHoldTests: XCTestCase {
         XCTAssertEqual(store.live(now: at(0), startTime: { _ in nil }), [], "The lock and the status are no holds")
     }
 
+    /// The app watches the holds folder, and what it writes there itself
+    /// would bring one more sample.
+    func testTheLockAndTheStatusAreNotInTheFolderTheAppWatches() throws {
+        let lock = HoldStore.AppLock(store: store)
+        XCTAssertTrue(store.write(HoldStore.Status(awake: false, line: "Your Mac can sleep: No agent is open", stopped: false)))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path), [])
+        XCTAssertEqual(
+            try FileManager.default.contentsOfDirectory(atPath: directory.deletingLastPathComponent().path).sorted(), [".app", ".status", "holds"]
+        )
+        XCTAssertNotNil(store.status())
+        _ = lock
+    }
+
+    func testAStatusThatSaysNothingNewIsNotWrittenAgain() throws {
+        let writer = HoldStore.StatusWriter(store: store)
+        let lock = HoldStore.AppLock(store: store)
+        let asleep = HoldStore.Status(awake: false, line: "Your Mac can sleep: No agent is open", stopped: false)
+        let awake = HoldStore.Status(awake: true, line: "Your Mac stays awake: ffmpeg asked for it", stopped: false)
+        let path = directory.deletingLastPathComponent().appendingPathComponent(HoldStore.statusName).path
+        func file() throws -> UInt64? { (try FileManager.default.attributesOfItem(atPath: path)[.systemFileNumber] as? NSNumber)?.uint64Value }
+        XCTAssertTrue(writer.write(asleep))
+        let first = try file()
+        XCTAssertFalse(writer.write(asleep))
+        XCTAssertEqual(try file(), first, "The file is the one that was there")
+        XCTAssertTrue(writer.write(awake))
+        XCTAssertNotEqual(try file(), first, "A new file took its place")
+        XCTAssertEqual(store.status(), awake)
+        writer.remove()
+        XCTAssertNil(store.status())
+        XCTAssertTrue(writer.write(awake), "Written again after it was removed")
+        XCTAssertEqual(store.status(), awake)
+        _ = lock
+    }
+
     // MARK: Policy
 
     private func working(_ name: String = "Claude Code") -> AgentReading {

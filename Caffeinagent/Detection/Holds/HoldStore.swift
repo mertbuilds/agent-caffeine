@@ -22,6 +22,10 @@ struct HoldStore {
     static let statusName = ".status"
 
     let directory: URL
+    /// The folder above the holds. The lock and the status are here: the
+    /// app watches the holds folder, and a status it wrote there itself
+    /// would bring one more sample each time.
+    var home: URL { directory.deletingLastPathComponent() }
 
     init(directory: URL = HoldStore.directory()) {
         self.directory = directory
@@ -136,7 +140,7 @@ struct HoldStore {
     // MARK: The app
 
     /// How the command line tool knows that the app runs: the app holds a
-    /// lock on a file in the folder, and the lock is gone with the app,
+    /// lock on a file next to the folder, and the lock is gone with the app,
     /// also when it is killed. The same as `LabRecorder` does for a
     /// recording.
     final class AppLock {
@@ -146,7 +150,7 @@ struct HoldStore {
         /// cannot be written.
         init?(store: HoldStore) {
             guard store.prepare() else { return nil }
-            let opened = open(store.directory.appendingPathComponent(HoldStore.lockName).path, O_RDWR | O_CREAT | O_CLOEXEC, 0o600)
+            let opened = open(store.home.appendingPathComponent(HoldStore.lockName).path, O_RDWR | O_CREAT | O_CLOEXEC, 0o600)
             guard opened >= 0 else { return nil }
             guard flock(opened, LOCK_EX | LOCK_NB) == 0 else {
                 close(opened)
@@ -161,7 +165,7 @@ struct HoldStore {
     }
 
     var appIsRunning: Bool {
-        let descriptor = open(directory.appendingPathComponent(Self.lockName).path, O_RDONLY | O_CLOEXEC)
+        let descriptor = open(home.appendingPathComponent(Self.lockName).path, O_RDONLY | O_CLOEXEC)
         guard descriptor >= 0 else { return false }
         defer { close(descriptor) }
         if flock(descriptor, LOCK_SH | LOCK_NB) == 0 {
@@ -191,16 +195,40 @@ struct HoldStore {
     @discardableResult
     func write(_ status: Status) -> Bool {
         guard prepare(), let data = try? JSONEncoder().encode(status) else { return false }
-        return Self.writeWhole(data, to: directory.appendingPathComponent(Self.statusName).path, in: directory)
+        return Self.writeWhole(data, to: home.appendingPathComponent(Self.statusName).path, in: home)
     }
 
     func removeStatus() {
-        unlink(directory.appendingPathComponent(Self.statusName).path)
+        unlink(home.appendingPathComponent(Self.statusName).path)
+    }
+
+    /// Writes the status for the app, and only one that differs from the
+    /// one it wrote last: most decisions change nothing the tool says.
+    final class StatusWriter {
+        private let store: HoldStore
+        private var written: Status?
+
+        init(store: HoldStore) {
+            self.store = store
+        }
+
+        /// False when nothing was written.
+        @discardableResult
+        func write(_ status: Status) -> Bool {
+            guard status != written, store.write(status) else { return false }
+            written = status
+            return true
+        }
+
+        func remove() {
+            store.removeStatus()
+            written = nil
+        }
     }
 
     /// Nil when the app does not run: what it wrote last says nothing then.
     func status() -> Status? {
-        guard appIsRunning, let data = try? Data(contentsOf: directory.appendingPathComponent(Self.statusName)),
+        guard appIsRunning, let data = try? Data(contentsOf: home.appendingPathComponent(Self.statusName)),
               data.count <= Self.maxFileBytes, let status = try? JSONDecoder().decode(Status.self, from: data), status.v == 1 else { return nil }
         return status
     }
