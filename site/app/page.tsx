@@ -1,6 +1,7 @@
 import { AgentsSection } from "@/components/agents-section";
 import { Faq } from "@/components/faq";
 import { Footer } from "@/components/footer";
+import { Guides } from "@/components/guides";
 import { Hero } from "@/components/hero";
 import { HowItWorks } from "@/components/how-it-works";
 import { JsonLd } from "@/components/json-ld";
@@ -72,6 +73,7 @@ export default async function Home() {
       <AgentsSection />
       <Pricing />
       <Faq />
+      <Guides />
       <Footer />
       <JsonLd data={structuredData(trial)} />
     </main>
