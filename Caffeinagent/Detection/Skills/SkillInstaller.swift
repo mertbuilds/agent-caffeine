@@ -67,7 +67,8 @@ enum SkillInstallError: Error, Equatable {
 
 /// What the installer has to know from "Set up for agents" to "Remove":
 /// the folders it made, so they go again when they are empty, and the
-/// text it wrote, so a file the user edited is not replaced at launch.
+/// text it wrote, so a file the user edited is not replaced at launch
+/// and not taken out by "Remove".
 /// It is kept in our own Application Support folder. Without it "Remove"
 /// still takes out our files and our link, and leaves the folders.
 struct SkillInstallRecord: Codable, Equatable {
@@ -453,13 +454,18 @@ struct SkillInstaller {
     // MARK: Remove
 
     /// Takes our file out of one place, then our folder and the folders
-    /// the record says we made, each only when it is empty.
-    private func remove(place: String, record: inout SkillInstallRecord) throws {
+    /// the record says we made, each only when it is empty. A file that
+    /// is no longer what the record says we wrote was edited: it stays,
+    /// with its record, and the answer is false.
+    private func remove(place: String, record: inout SkillInstallRecord) throws -> Bool {
         let folder = place + "/" + SkillCatalog.skillName
         let created = believed(record.places[place]?.created ?? [], onTheWayTo: folder)
         // Seen through a link that leads out of the agent's folder: the
         // file is removed where it is, by the place it belongs to.
         if case .ours = state(of: place), (try? checkContainment(of: place)) != nil {
+            if let known = record.places[place], let data = try? Data(contentsOf: fileURL(in: place)), Self.digest(data) != known.digest {
+                return false
+            }
             guard unlink(fileURL(in: place).path) == 0 else { throw SkillInstallError.writeFailed }
             removeFolders([folder] + created)
         } else if state(of: place) == .none {
@@ -467,10 +473,12 @@ struct SkillInstaller {
             removeFolders(created)
         }
         record.places[place] = nil
+        return true
     }
 
     /// "Remove": every file, link and empty folder the app made, and
-    /// nothing else. Gives what could not be removed, by place and `linkKey`.
+    /// nothing else. Gives what was not removed and why, by place and
+    /// `linkKey`.
     @discardableResult
     func removeAll() -> [String: String] {
         var errors: [String: String] = [:]
@@ -479,7 +487,9 @@ struct SkillInstaller {
         places += record.places.keys.sorted().filter { !places.contains($0) }
         for place in places {
             do {
-                try remove(place: place, record: &record)
+                if try !remove(place: place, record: &record) {
+                    errors[place] = "~/\(place)/\(SkillCatalog.skillName)/\(SkillCatalog.fileName) was edited, so it was left."
+                }
             } catch {
                 errors[place] = "Agent Caffeine could not remove ~/\(place)/\(SkillCatalog.skillName)/\(SkillCatalog.fileName)."
             }

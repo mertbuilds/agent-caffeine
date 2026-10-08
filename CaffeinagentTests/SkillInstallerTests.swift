@@ -436,6 +436,22 @@ final class SkillInstallerTests: XCTestCase {
         XCTAssertFalse(manager.fileExists(atPath: installer.recordURL.path))
     }
 
+    func testRemoveLeavesASkillTheUserEdited() throws {
+        try make(".claude", ".codex")
+        installer.setUp()
+        try write(expected + "My own line.\n", to: claudeFile)
+        XCTAssertEqual(installer.removeAll(), [".claude/skills": "~/.claude/skills/agent-caffeine/SKILL.md was edited, so it was left."])
+        XCTAssertEqual(text(claudeFile), expected + "My own line.\n")
+        XCTAssertFalse(exists(sharedFile), "The one nobody edited goes")
+        XCTAssertFalse(exists(link))
+        XCTAssertEqual(installer.record().places.keys.sorted(), [".claude/skills"], "Still known, so the folders go once the skill is gone")
+        XCTAssertEqual(installer.removeAll().count, 1, "And again")
+        try manager.removeItem(at: url(".claude/skills/agent-caffeine"))
+        XCTAssertEqual(installer.removeAll(), [:])
+        XCTAssertFalse(exists(".claude/skills"))
+        XCTAssertEqual(installer.record(), SkillInstallRecord())
+    }
+
     func testRemoveKeepsFoldersThatWereThereBefore() throws {
         try make(".claude/skills", ".codex", ".agents/skills", ".local/bin")
         installer.setUp()
