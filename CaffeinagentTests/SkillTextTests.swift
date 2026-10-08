@@ -150,19 +150,18 @@ final class SkillTextTests: XCTestCase {
 
     func testWhetherLocalBinIsOnThePath() {
         let home = "/Users/me"
-        let cases: [(name: String, shell: String, path: String?, files: [String], expected: Bool?)] = [
-            ("on the PATH of the login shell", "/bin/zsh", "/usr/bin:/Users/me/.local/bin:/bin", [], true),
-            ("not on it, and no file names it", "/bin/zsh", "/usr/bin:/bin", ["export EDITOR=vi"], false),
-            ("set for an interactive shell only", "/bin/zsh", "/usr/bin:/bin", ["export PATH=\"$HOME/.local/bin:$PATH\""], true),
-            ("a file names it, and the shell gave no answer", "/bin/bash", nil, [". \"$HOME/.local/bin/env\""], true),
-            ("the shell gave no answer", "/bin/zsh", nil, [], nil),
-            ("the shell gave an empty PATH", "/bin/zsh", "", [], nil),
-            ("a shell we do not know", "/opt/homebrew/bin/fish", "/usr/bin:/Users/me/.local/bin", [], nil),
-            ("with a slash at the end", "/bin/bash", "/Users/me/.local/bin/:/bin", [], true),
-            ("of another user", "/bin/zsh", "/Users/you/.local/bin:/bin", [], false),
+        let cases: [(name: String, shell: String, system: [String], files: [String], expected: Bool?)] = [
+            ("in the system's list of paths", "/bin/zsh", ["/usr/bin", "/Users/me/.local/bin", "/bin"], [], true),
+            ("not in it, and no file names it", "/bin/zsh", ["/usr/bin", "/bin"], ["export EDITOR=vi"], false),
+            ("a file of the shell names it", "/bin/zsh", ["/usr/bin", "/bin"], ["export PATH=\"$HOME/.local/bin:$PATH\""], true),
+            ("a file reads a script from it", "/bin/bash", [], [". \"$HOME/.local/bin/env\""], true),
+            ("nothing to read", "/bin/zsh", [], [], false),
+            ("a shell we do not know", "/opt/homebrew/bin/fish", ["/Users/me/.local/bin"], [], nil),
+            ("with a slash at the end", "/bin/bash", ["/Users/me/.local/bin/", "/bin"], [], true),
+            ("of another user", "/bin/zsh", ["/Users/you/.local/bin", "/bin"], [], false),
         ]
         for c in cases {
-            XCTAssertEqual(ShellPath.hasLocalBin(shell: c.shell, home: home, loginPath: c.path, startupFiles: c.files), c.expected, c.name)
+            XCTAssertEqual(ShellPath.hasLocalBin(shell: c.shell, home: home, startupFiles: c.files, systemPaths: c.system), c.expected, c.name)
         }
         XCTAssertEqual(ShellPath.startupFile(shell: "/bin/zsh"), "~/.zshrc")
         XCTAssertEqual(ShellPath.startupFile(shell: "/bin/bash"), "~/.bash_profile")
@@ -170,11 +169,28 @@ final class SkillTextTests: XCTestCase {
         XCTAssertEqual(ShellPath.exportLine, "export PATH=\"$HOME/.local/bin:$PATH\"")
     }
 
-    func testThePathIsReadBetweenOurMarks() {
-        XCTAssertEqual(ShellPath.path(inOutput: "Welcome back\n__agent_caffeine_path__/usr/bin:/bin__end__"), "/usr/bin:/bin")
-        XCTAssertEqual(ShellPath.path(inOutput: "__agent_caffeine_path____end__"), "")
-        XCTAssertNil(ShellPath.path(inOutput: "/usr/bin:/bin"))
-        XCTAssertNil(ShellPath.path(inOutput: "__agent_caffeine_path__/usr/bin"))
+    /// Temp folders stand in for the home folder and for `/etc`. No shell
+    /// is run and no file of the user is read.
+    func testThePathIsDecidedFromFilesAlone() throws {
+        let manager = FileManager.default
+        let root = manager.temporaryDirectory.appendingPathComponent("shell-path-\(UUID().uuidString)")
+        defer { try? manager.removeItem(at: root) }
+        let home = root.appendingPathComponent("home"), etc = root.appendingPathComponent("etc")
+        try manager.createDirectory(at: home, withIntermediateDirectories: true)
+        try manager.createDirectory(at: etc.appendingPathComponent("paths.d"), withIntermediateDirectories: true)
+        XCTAssertEqual(ShellPath.systemPaths(etc: etc), [])
+        XCTAssertEqual(ShellPath.localBinIsOnPath(shell: "/bin/zsh", home: home, etc: etc), false)
+        try Data("/usr/local/bin\n/usr/bin\n\n".utf8).write(to: etc.appendingPathComponent("paths"))
+        try Data("/opt/tool/bin\n".utf8).write(to: etc.appendingPathComponent("paths.d/10-tool"))
+        XCTAssertEqual(ShellPath.systemPaths(etc: etc), ["/usr/local/bin", "/usr/bin", "/opt/tool/bin"])
+        XCTAssertEqual(ShellPath.localBinIsOnPath(shell: "/bin/zsh", home: home, etc: etc), false)
+        XCTAssertNil(ShellPath.localBinIsOnPath(shell: "/opt/homebrew/bin/fish", home: home, etc: etc))
+        try Data("\(home.path)/.local/bin\n".utf8).write(to: etc.appendingPathComponent("paths.d/20-local"))
+        XCTAssertEqual(ShellPath.localBinIsOnPath(shell: "/bin/zsh", home: home, etc: etc), true)
+        try manager.removeItem(at: etc.appendingPathComponent("paths.d/20-local"))
+        try Data("export PATH=\"$HOME/.local/bin:$PATH\"\n".utf8).write(to: home.appendingPathComponent(".zprofile"))
+        XCTAssertEqual(ShellPath.localBinIsOnPath(shell: "/bin/zsh", home: home, etc: etc), true)
+        XCTAssertEqual(ShellPath.localBinIsOnPath(shell: "/bin/bash", home: home, etc: etc), false, "bash does not read the files of zsh")
     }
 
     func testTheStartupFilesAreReadBelowTheGivenHome() throws {

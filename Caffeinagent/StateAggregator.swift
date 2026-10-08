@@ -1089,13 +1089,13 @@ final class StateAggregator: ObservableObject {
     }
 
     /// Once per launch, when the link is there, and off the main thread:
-    /// it asks the login shell. See `ShellPath`.
+    /// it reads the files of the login shell. See `ShellPath`.
     private func checkShellPath() {
         guard agentSetup.isLinked, !askedForShellPath, !SmokeTest.isActive else { return }
         askedForShellPath = true
         DispatchQueue.global(qos: .utility).async { [weak self] in
             let shell = ShellPath.loginShell()
-            let onPath = ShellPath.localBinIsOnPath()
+            let onPath = shell.flatMap { ShellPath.localBinIsOnPath(shell: $0) }
             DispatchQueue.main.async {
                 guard let self else { return }
                 var next = self.agentSetup

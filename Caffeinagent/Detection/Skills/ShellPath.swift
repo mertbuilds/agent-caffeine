@@ -1,9 +1,10 @@
 import Darwin
 import Foundation
 
-/// Whether `~/.local/bin` is on the PATH of the user's login shell, for
-/// the one line Settings shows below the link to the tool. It only
-/// reads. When it cannot tell, it says nothing.
+/// Whether `~/.local/bin` seems to be on the PATH of the user's login
+/// shell, for the one line Settings shows below the link to the tool. It
+/// only reads files and runs nothing. For a shell it does not know, it
+/// says nothing.
 enum ShellPath {
     static let folder = ".local/bin"
     static let exportLine = #"export PATH="$HOME/.local/bin:$PATH""#
@@ -24,19 +25,18 @@ enum ShellPath {
         shells[name(ofShell: shell)].map { "~/" + $0.addTo }
     }
 
-    /// Nil when it cannot be told: a shell we do not know, or a login
-    /// shell that gave no PATH. True when the PATH of the login shell has
-    /// the folder, or one of the shell's own files names it: a PATH that
-    /// is set for an interactive shell only is not in `loginPath`.
+    /// Nil for a shell we do not know. True when one of the shell's own
+    /// files names the folder, or the system's list of paths has it. No
+    /// shell is run for this, so a PATH that is set in another way is
+    /// not seen, and the line Settings shows says "does not seem".
     /// - Parameters:
-    ///   - loginPath: the PATH of a login shell that is not interactive.
     ///   - startupFiles: the text of the files the shell reads at its start.
-    static func hasLocalBin(shell: String, home: String, loginPath: String?, startupFiles: [String]) -> Bool? {
+    ///   - systemPaths: the lines of `/etc/paths` and `/etc/paths.d`.
+    static func hasLocalBin(shell: String, home: String, startupFiles: [String], systemPaths: [String]) -> Bool? {
         guard shells[name(ofShell: shell)] != nil else { return nil }
         if startupFiles.contains(where: { $0.contains(folder) }) { return true }
-        guard let loginPath, !loginPath.isEmpty else { return nil }
         let wanted = URL(fileURLWithPath: home).appendingPathComponent(folder).standardizedFileURL.path
-        return loginPath.split(separator: ":").contains { URL(fileURLWithPath: String($0)).standardizedFileURL.path == wanted }
+        return systemPaths.contains { URL(fileURLWithPath: $0).standardizedFileURL.path == wanted }
     }
 
     // MARK: The Mac
@@ -51,46 +51,23 @@ enum ShellPath {
         (shells[name(ofShell: shell)]?.reads ?? []).compactMap { try? String(contentsOf: home.appendingPathComponent($0), encoding: .utf8) }
     }
 
-    private static let open = "__agent_caffeine_path__", close = "__end__"
-
-    /// The PATH between our two marks: a profile may print lines of its own.
-    static func path(inOutput output: String) -> String? {
-        guard let start = output.range(of: open, options: .backwards),
-              let end = output.range(of: close, range: start.upperBound..<output.endIndex) else { return nil }
-        return String(output[start.upperBound..<end.lowerBound])
+    /// The lines of `paths` and of the files in `paths.d`, which
+    /// `path_helper` makes the PATH of a login shell from.
+    static func systemPaths(etc: URL = URL(fileURLWithPath: "/etc", isDirectory: true)) -> [String] {
+        let folder = etc.appendingPathComponent("paths.d")
+        let names = ((try? FileManager.default.contentsOfDirectory(atPath: folder.path)) ?? []).sorted()
+        return ([etc.appendingPathComponent("paths")] + names.map(folder.appendingPathComponent))
+            .compactMap { try? String(contentsOf: $0, encoding: .utf8) }
+            .flatMap { $0.split(whereSeparator: \.isNewline) }
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
     }
 
-    /// Asks a login shell that is not interactive for its PATH, with no
-    /// input. Nil for a shell we do not know, and when the shell gives no
-    /// answer within `timeout`. Never on the main thread.
-    static func loginPath(shell: String, timeout: TimeInterval = 5) -> String? {
-        guard shells[name(ofShell: shell)] != nil, FileManager.default.isExecutableFile(atPath: shell) else { return nil }
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: shell)
-        process.arguments = ["-l", "-c", "printf '%s%s%s' '\(open)' \"$PATH\" '\(close)'"]
-        process.standardInput = FileHandle.nullDevice
-        process.standardError = FileHandle.nullDevice
-        let pipe = Pipe()
-        process.standardOutput = pipe
-        let done = DispatchSemaphore(value: 0)
-        var output = Data()
-        guard (try? process.run()) != nil else { return nil }
-        DispatchQueue.global(qos: .utility).async {
-            output = pipe.fileHandleForReading.readDataToEndOfFile()
-            done.signal()
-        }
-        guard done.wait(timeout: .now() + timeout) == .success else {
-            process.terminate()
-            return nil
-        }
-        return path(inOutput: String(decoding: output, as: UTF8.self))
-    }
-
-    /// The whole check for this Mac. Never on the main thread.
-    static func localBinIsOnPath(home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)) -> Bool? {
-        guard let shell = loginShell() else { return nil }
-        let files = startupFiles(shell: shell, home: home)
-        if hasLocalBin(shell: shell, home: home.path, loginPath: nil, startupFiles: files) == true { return true }
-        return hasLocalBin(shell: shell, home: home.path, loginPath: loginPath(shell: shell), startupFiles: files)
+    /// The whole check for a shell. It reads files and starts no process.
+    static func localBinIsOnPath(
+        shell: String, home: URL = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true),
+        etc: URL = URL(fileURLWithPath: "/etc", isDirectory: true)
+    ) -> Bool? {
+        hasLocalBin(shell: shell, home: home.path, startupFiles: startupFiles(shell: shell, home: home), systemPaths: systemPaths(etc: etc))
     }
 }
