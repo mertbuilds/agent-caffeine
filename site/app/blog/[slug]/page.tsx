@@ -115,7 +115,7 @@ export default async function BlogPost({ params }: Props) {
         </div>
         <aside className="flex flex-col items-start gap-5 rounded-lg border border-border bg-surface px-6 py-8 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-pretty leading-relaxed">
-            We built agent caffeine to keep a Mac awake while coding agents work, also with
+            We built Agent Caffeine to keep a Mac awake while coding agents work, also with
             the lid closed.{" "}
             {release === null
               ? `${PRICE} once. macOS 13 or later, Apple silicon and Intel.`

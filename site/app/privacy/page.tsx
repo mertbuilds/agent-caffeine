@@ -3,7 +3,7 @@ import { CONTACT_EMAIL, PRIVACY_UPDATED } from "@/lib/site";
 
 export const metadata = legalMetadata(
   "Privacy",
-  "What agent caffeine, its purchase and this website collect: no telemetry in the app, Polar for payments, self-hosted analytics with no cookies.",
+  "What Agent Caffeine, its purchase and this website collect: no telemetry in the app, Polar for payments, self-hosted analytics with no cookies.",
   "/privacy"
 );
 
@@ -11,7 +11,7 @@ export default function Privacy() {
   return (
     <LegalPage title="Privacy" updated={PRIVACY_UPDATED}>
       <p>
-        agent caffeine is made and sold by me, Mert Duzgun, an individual based in Antalya, Türkiye.
+        Agent Caffeine is made and sold by me, Mert Duzgun, an individual based in Antalya, Türkiye.
         I am responsible for the data on this page. Here is what the app, a purchase and this website
         collect, and why.
       </p>
@@ -30,11 +30,11 @@ export default function Privacy() {
         Mac.
       </p>
       <p>
-        Better detection is off until you switch it on for an agent. agent caffeine then adds a few
+        Better detection is off until you switch it on for an agent. Agent Caffeine then adds a few
         lines to that agent&apos;s own settings file and keeps a backup next to it. The agent
-        writes its state to a small file in agent caffeine&apos;s folder on your Mac. That file
+        writes its state to a small file in Agent Caffeine&apos;s folder on your Mac. That file
         holds the state and the name of the event, and nothing you or the agent typed. When you
-        switch better detection off, agent caffeine removes its lines again.
+        switch better detection off, Agent Caffeine removes its lines again.
       </p>
       <p>It makes two kinds of network request:</p>
       <ul>

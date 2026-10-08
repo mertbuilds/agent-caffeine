@@ -7,7 +7,7 @@ faq:
   - q: "Does caffeinate work on a Mac?"
     a: "Yes. `caffeinate` is part of macOS and lives at `/usr/bin/caffeinate`. Open Terminal, type `caffeinate`, and your Mac will not idle sleep until you press Ctrl+C."
   - q: "Is there a caffeinate app for Mac?"
-    a: "The command itself has no app, but several menu bar apps do the same job with a click. KeepingYouAwake is a small wrapper around `caffeinate`. Amphetamine and Caffeine are other options, and agent caffeine keeps the Mac awake while coding agents work, also with the lid closed."
+    a: "The command itself has no app, but several menu bar apps do the same job with a click. KeepingYouAwake is a small wrapper around `caffeinate`. Amphetamine and Caffeine are other options, and Agent Caffeine keeps the Mac awake while coding agents work, also with the lid closed."
   - q: "Why isn't the caffeinate command working on my Mac?"
     a: "The usual reasons: you closed the lid, the display went dark because you did not add `-d`, the timeout ran out, or you closed the Terminal window that ran it. Run `pmset -g assertions` to see if caffeinate still holds an assertion."
   - q: "Does caffeinate work with the lid closed?"
@@ -211,7 +211,7 @@ Both work. Both fail in two ways:
 
 There is also a cost the other way: a wrapped agent holds the Mac awake while it sits idle at its prompt, waiting for you.
 
-That is why we built [agent caffeine](/), a menu bar app that does this automatically. It detects more than 40 coding agents, and reads from Claude Code and Codex whether they work, wait for you or are idle. It keeps the Mac awake in one of three modes: always, while an agent is open, or while an agent is working. A closed lid on the power adapter works from the start. On battery it needs a small helper that you allow once. It has a 7-day free trial, then costs {{price}} once, and needs macOS 13 or later. If caffeinate in a tab works for you, keep using it.
+That is why we built [Agent Caffeine](/), a menu bar app that does this automatically. It detects more than 40 coding agents, and reads from Claude Code and Codex whether they work, wait for you or are idle. It keeps the Mac awake in one of three modes: always, while an agent is open, or while an agent is working. A closed lid on the power adapter works from the start. On battery it needs a small helper that you allow once. It has a 7-day free trial, then costs {{price}} once, and needs macOS 13 or later. If caffeinate in a tab works for you, keep using it.
 
 ## caffeinate on Windows and Linux
 

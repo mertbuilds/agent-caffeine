@@ -178,7 +178,7 @@ function MenuBar({ time, look, still }: { time: string; look: IconLook; still: b
  */
 function Panel({ title, subtitle, stance, rest, rows, paused, still }: { title: string; subtitle: string; stance: Pose; rest: number; rows: readonly Row[]; paused: boolean; still: boolean }) {
   return (
-    <PanelSurface className={`w-full shadow-[0_12px_32px_var(--shadow)] ${paused ? "panel-paused" : ""}`} label="The agent caffeine menu">
+    <PanelSurface className={`w-full shadow-[0_12px_32px_var(--shadow)] ${paused ? "panel-paused" : ""}`} label="The Agent Caffeine menu">
       <div className="flex items-center gap-3 px-4 py-3">
         {/* A robot that sleeps stands still here: the one that breathes in its sleep is in the menu further down the page. */}
         <Robot paused={paused} pose={stance} rest={rest} size={48} still={stance === "asleep"} />
@@ -227,7 +227,7 @@ function Notice({ shown }: { shown: number }) {
       className="absolute inset-x-0 bottom-[6%] z-20 mx-auto w-[19rem]"
       style={{ opacity: shown, transform: `translateY(${(shown - 1) * 12}px)` }}
     >
-      <PanelSurface className="flex items-start gap-2.5 rounded-2xl p-2.5 shadow-[0_8px_24px_var(--shadow)]" label={`A notification from agent caffeine: ${FIRST_DONE.name} finished`}>
+      <PanelSurface className="flex items-start gap-2.5 rounded-2xl p-2.5 shadow-[0_8px_24px_var(--shadow)]" label={`A notification from Agent Caffeine: ${FIRST_DONE.name} finished`}>
         <img alt="" className="size-8 shrink-0" decoding="async" height={32} src="/icon.png" width={32} />
         <span className="flex min-w-0 flex-col gap-px text-[12px] leading-4">
           <span className="font-medium">{FIRST_DONE.name} finished</span>
@@ -313,8 +313,8 @@ export function HeroScene({ cut = "a" }: { cut?: HeroSceneCut }) {
   const bob = carried * Math.sin(walked * Math.PI * 16);
   const label =
     cut === "b"
-      ? "A laptop shows the agent caffeine menu with four AI coding agents at work. The lid closes and the laptop is carried away. The agents keep working and finish one by one, and then the Mac can sleep"
-      : "A laptop shows the agent caffeine menu on its display, with four AI coding agents at work. The lid closes, and the menu stays in a dashed outline of the display: the agents keep working and finish one by one. Two minutes after the last one the menu says that the Mac can sleep";
+      ? "A laptop shows the Agent Caffeine menu with four AI coding agents at work. The lid closes and the laptop is carried away. The agents keep working and finish one by one, and then the Mac can sleep"
+      : "A laptop shows the Agent Caffeine menu on its display, with four AI coding agents at work. The lid closes, and the menu stays in a dashed outline of the display: the agents keep working and finish one by one. Two minutes after the last one the menu says that the Mac can sleep";
 
   // The dashed outline of the display comes in as the lid leaves it.
   const ghost = stretch(closed, 0.15, 0.85, easeInOut);

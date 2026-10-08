@@ -20,7 +20,7 @@ function structuredData(trial: boolean) {
     "@graph": [
       {
         "@type": "SoftwareApplication",
-        name: "agent caffeine",
+        name: "Agent Caffeine",
         operatingSystem: "macOS 13 or later",
         applicationCategory: "UtilitiesApplication",
         url: SITE_URL,
@@ -41,7 +41,7 @@ function structuredData(trial: boolean) {
         ],
         offers: PLANS.map((plan) => ({
           "@type": "Offer",
-          name: `agent caffeine for ${macs(plan)}`,
+          name: `Agent Caffeine for ${macs(plan)}`,
           price: String(plan.price),
           priceCurrency: "USD",
           url: SITE_URL,
@@ -56,7 +56,7 @@ function structuredData(trial: boolean) {
         })),
       },
       ORGANIZATION,
-      { "@type": "WebSite", name: "agent caffeine", url: SITE_URL },
+      { "@type": "WebSite", name: "Agent Caffeine", url: SITE_URL },
     ],
   };
 }

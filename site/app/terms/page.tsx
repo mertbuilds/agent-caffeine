@@ -4,7 +4,7 @@ import { CONTACT_EMAIL, TERMS_UPDATED } from "@/lib/site";
 
 export const metadata = legalMetadata(
   "Terms",
-  `The terms for agent caffeine: what a license key covers, a 7-day free trial, ${PRICE_LIST}, paid once through Polar, and what the app does and does not promise.`,
+  `The terms for Agent Caffeine: what a license key covers, a 7-day free trial, ${PRICE_LIST}, paid once through Polar, and what the app does and does not promise.`,
   "/terms"
 );
 
@@ -12,21 +12,21 @@ export default function Terms() {
   return (
     <LegalPage title="Terms" updated={TERMS_UPDATED}>
       <p>
-        These terms cover agent caffeine, a macOS app made and sold by me, Mert Duzgun, an
+        These terms cover Agent Caffeine, a macOS app made and sold by me, Mert Duzgun, an
         individual based in Antalya, Türkiye. By buying or using the app you agree to them.
       </p>
 
       <h2>What you get</h2>
       <p>
         {PLANS.length === 1
-          ? "A license key lets you use agent caffeine on one Mac at a time."
-          : "A license key lets you use agent caffeine on one Mac at a time, or on up to three Macs at a time, depending on the plan you buy."}{" "}
+          ? "A license key lets you use Agent Caffeine on one Mac at a time."
+          : "A license key lets you use Agent Caffeine on one Mac at a time, or on up to three Macs at a time, depending on the plan you buy."}{" "}
         To move it to another Mac, deactivate it on a Mac you no longer use, in the app or in your
         Polar purchases, then enter it on the new one.
       </p>
       <p>
         Your key includes lifetime updates. Lifetime updates means that updates are included for as
-        long as agent caffeine is developed. I do not promise any future features.
+        long as Agent Caffeine is developed. I do not promise any future features.
       </p>
 
       <h2>Free trial</h2>

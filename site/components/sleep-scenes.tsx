@@ -102,7 +102,7 @@ function BatteryStop() {
         className={`w-full max-w-[19rem] transition-[opacity,transform] duration-slow ease-smooth-out motion-reduce:transition-none ${low ? "translate-y-0 opacity-100" : "translate-y-2 opacity-0"}`}
         style={{ transitionDelay: low && !lessMotion ? `${DRAIN}ms` : "0ms" }}
       >
-      <PanelSurface className="flex items-start gap-2.5 rounded-2xl p-2.5 shadow-[0_8px_24px_var(--shadow)]" label="A notification from agent caffeine">
+      <PanelSurface className="flex items-start gap-2.5 rounded-2xl p-2.5 shadow-[0_8px_24px_var(--shadow)]" label="A notification from Agent Caffeine">
         <img alt="" className="size-8 shrink-0" decoding="async" height={32} loading="lazy" src="/icon.png" width={32} />
         <span className="flex min-w-0 flex-col gap-px text-[12px] leading-4">
           <span className="font-medium">agent caffeine</span>
@@ -132,10 +132,10 @@ export function SleepScenes() {
       <SectionHeading lead="It keeps your Mac awake for work, and for nothing else" title="It lets your Mac sleep at the right time" />
       <ul className="mx-auto grid w-full max-w-[36rem] gap-4 lg:max-w-none lg:grid-cols-3">
         <Scene
-          text="agent caffeine keeps your Mac awake for 5 minutes, so you can answer. After that your Mac can sleep. You can change the time"
+          text="Agent Caffeine keeps your Mac awake for 5 minutes, so you can answer. After that your Mac can sleep. You can change the time"
           title="An agent asks you something while you are away"
         >
-          <PanelSurface className="panel-still flex h-full flex-col justify-center rounded-none border-0" label="The agent caffeine menu while Claude Code waits for you">
+          <PanelSurface className="panel-still flex h-full flex-col justify-center rounded-none border-0" label="The Agent Caffeine menu while Claude Code waits for you">
             <div className="flex items-center gap-3 px-4 pb-3">
               <Robot pose="attentive" size={56} still />
               <p className="flex min-w-0 flex-col gap-0.5">
@@ -150,7 +150,7 @@ export function SleepScenes() {
           </PanelSurface>
         </Scene>
         <Scene
-          text={`Your agents keep working. On battery, macOS asks you once to allow a small helper. agent caffeine lets your Mac sleep at ${BATTERY_FLOOR}% battery and when it gets too hot. Do not put a working Mac in a closed bag`}
+          text={`Your agents keep working. On battery, macOS asks you once to allow a small helper. Agent Caffeine lets your Mac sleep at ${BATTERY_FLOOR}% battery and when it gets too hot. Do not put a working Mac in a closed bag`}
           title="The lid is closed and your Mac runs on battery"
         >
           <BatteryStop />
@@ -159,7 +159,7 @@ export function SleepScenes() {
           text="A session is one open chat with an agent. Only the one that works keeps your Mac awake"
           title="10 sessions are open and 1 is working"
         >
-          <PanelSurface className="panel-still flex h-full flex-col justify-center rounded-none border-0 px-[13px]" label="The agent caffeine menu with one working session and nine idle ones">
+          <PanelSurface className="panel-still flex h-full flex-col justify-center rounded-none border-0 px-[13px]" label="The Agent Caffeine menu with one working session and nine idle ones">
             {ONE_OF_TEN.map((group) => (
               <GroupRows key={group.agent} group={group} />
             ))}

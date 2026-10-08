@@ -28,7 +28,7 @@ export async function Footer() {
         <div className="col-span-2 flex flex-col gap-3 sm:col-span-3 md:col-span-1">
           <Link href="/" className="flex w-fit items-center gap-2 text-base font-medium no-underline">
             <Image src="/icon.png" alt="" width={28} height={28} />
-            <span>agent caffeine</span>
+            <span>Agent Caffeine</span>
           </Link>
           <p className="text-pretty text-muted">Keeps your Mac awake while your agents work</p>
         </div>

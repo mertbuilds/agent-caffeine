@@ -3,7 +3,7 @@ import Link from "next/link";
 import { Footer } from "@/components/footer";
 import { formatDate, getPosts } from "@/lib/blog";
 
-const title = "Blog · agent caffeine";
+const title = "Blog · Agent Caffeine";
 const description =
   "Guides on keeping a Mac awake: the caffeinate command, sleep settings, closed-lid use and long runs of AI coding agents.";
 

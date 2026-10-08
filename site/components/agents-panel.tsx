@@ -727,7 +727,7 @@ export function AgentsPanel({
   return (
     <PanelSurface
       className={`flex w-full flex-col shadow-[0_12px_32px_var(--shadow)] ${paused ? "panel-paused" : ""}`}
-      label="The agent caffeine menu"
+      label="The Agent Caffeine menu"
     >
       <div className="flex flex-col items-center px-4 pb-4 pt-3 text-center">
         <Robot paused={paused} pose={view.pose} />

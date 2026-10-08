@@ -26,11 +26,11 @@ export async function generateMetadata(): Promise<Metadata> {
   return {
     metadataBase: new URL("https://caffeinagent.com"),
     alternates: { canonical: "/" },
-    title: "agent caffeine · Keep your Mac awake while AI agents work",
+    title: "Agent Caffeine · Keep your Mac awake while AI agents work",
     description:
       `Agent-aware sleep prevention for macOS. Detects Claude Code, Codex, opencode and more than ${agentsMoreThan} AI coding agents. Lets the Mac sleep when they are idle or wait for you. ${offer}`,
     openGraph: {
-      title: "agent caffeine",
+      title: "Agent Caffeine",
       description:
         `Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. ${offer}`,
       type: "website",
@@ -40,13 +40,13 @@ export async function generateMetadata(): Promise<Metadata> {
           url: "/og.png",
           width: 1200,
           height: 630,
-          alt: "agent caffeine. Close your Mac, your agents keep working",
+          alt: "Agent Caffeine. Close your Mac with no worry",
         },
       ],
     },
     twitter: {
       card: "summary_large_image",
-      title: "agent caffeine",
+      title: "Agent Caffeine",
       description:
         `Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. ${offer}`,
       images: ["/og.png"],

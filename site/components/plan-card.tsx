@@ -81,7 +81,7 @@ export function PlanCard({ download = null }: { download?: ReactNode }) {
         <div className="flex flex-wrap items-center justify-center gap-3 md:justify-start">
           {download}
           <BuyButton placement="pricing" plan={plan} variant={download === null ? "brand" : "brandOutline"}>
-            Buy agent caffeine for <span className="tabular-nums">{dollars(plan)}</span>
+            Buy Agent Caffeine for <span className="tabular-nums">{dollars(plan)}</span>
           </BuyButton>
         </div>
         {/* A line may end only where a sentence ends. */}

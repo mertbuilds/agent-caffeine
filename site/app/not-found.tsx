@@ -3,7 +3,7 @@ import Link from "next/link";
 import { PILL, SIZES } from "@/components/buy-button";
 import { Footer } from "@/components/footer";
 
-export const metadata: Metadata = { title: "Page not found · agent caffeine" };
+export const metadata: Metadata = { title: "Page not found · Agent Caffeine" };
 
 export default function NotFound() {
   return (

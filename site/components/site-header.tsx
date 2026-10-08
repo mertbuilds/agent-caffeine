@@ -144,8 +144,8 @@ export function SiteHeader({ release }: { release: Release | null }) {
         />
         <Link
           href="/"
-          aria-label="agent caffeine"
-          className={`relative inline-flex min-w-0 max-w-full items-center gap-2 justify-self-start text-sm lowercase text-muted no-underline hover:text-fg ${
+          aria-label="Agent Caffeine"
+          className={`relative inline-flex min-w-0 max-w-full items-center gap-2 justify-self-start text-sm text-muted no-underline hover:text-fg ${
             pill ? "rounded-full" : ""
           }`}
         >
@@ -153,7 +153,7 @@ export function SiteHeader({ release }: { release: Release | null }) {
             <Image src="/icon.png" alt="" width={28} height={28} priority className={pill ? "size-7" : "size-6"} />
           </span>
           <span {...morphName("header-name")} className={`truncate ${pill ? "hidden" : ""}`}>
-            agent caffeine
+            Agent Caffeine
           </span>
         </Link>
         <nav aria-label="Site" className="relative hidden items-center gap-6 md:flex">

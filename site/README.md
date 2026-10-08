@@ -1,6 +1,6 @@
 # caffeinagent-site
 
-The site for agent caffeine at caffeinagent.com. Next.js, run with `bun run dev`.
+The site for Agent Caffeine at caffeinagent.com. Next.js, run with `bun run dev`.
 
 ## Downloads
 

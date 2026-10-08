@@ -17,7 +17,7 @@ const objections: FaqItem[] = [
         program quits or you stop them. They do not know if an agent works or is idle, so your Mac
         stays awake after the work is done, or sleeps in the middle of it. A command such as
         caffeinate also cannot keep your Mac awake when you close the lid on battery: macOS sleeps
-        then. agent caffeine has a small helper for that, which you allow once. It reads what your
+        then. Agent Caffeine has a small helper for that, which you allow once. It reads what your
         agents do, keeps your Mac awake while they work, and lets it sleep when they are done.
       </>
     ),
@@ -28,12 +28,12 @@ const objections: FaqItem[] = [
     answer: (
       <>
         Not in a closed bag. Do not put your Mac in a closed bag while an agent works: a Mac that
-        works gets warm, and a closed bag keeps the heat in. agent caffeine has two stops for
+        works gets warm, and a closed bag keeps the heat in. Agent Caffeine has two stops for
         safety. When your Mac gets too hot, it always lets your Mac sleep. On battery it lets your
         Mac sleep at {BATTERY_FLOOR}% and starts again at {BATTERY_FLOOR + BATTERY_RECOVERY}%, or
         when you plug in. You can change this level or turn it off in Settings. A notification
         tells you why your Mac slept. The display is off while the lid is closed. Before you put
-        your Mac in a closed bag, pause agent caffeine, and your Mac sleeps as usual.
+        your Mac in a closed bag, pause Agent Caffeine, and your Mac sleeps as usual.
       </>
     ),
   },
@@ -42,7 +42,7 @@ const objections: FaqItem[] = [
     open: true,
     answer: (
       <>
-        No. When no agent works, agent caffeine lets your Mac sleep as usual. In the default mode
+        No. When no agent works, Agent Caffeine lets your Mac sleep as usual. In the default mode
         it keeps your Mac awake while an agent works, for 2 minutes after it finishes, and for 5
         minutes when it waits for your answer. An agent that is open and idle does not keep your
         Mac awake. You can change the times in Settings.
@@ -55,9 +55,9 @@ const objections: FaqItem[] = [
     answer: (
       <>
         Only for one case: the lid is closed and your Mac runs on battery. Only the system can
-        stop macOS from sleeping then, so agent caffeine has a small helper that runs with system
+        stop macOS from sleeping then, so Agent Caffeine has a small helper that runs with system
         rights. You allow it once in System Settings &gt; General &gt; Login Items. It changes one
-        sleep setting of macOS while agent caffeine keeps your Mac awake, and changes it back
+        sleep setting of macOS while Agent Caffeine keeps your Mac awake, and changes it back
         after. You can remove it in the app&apos;s Settings. Everything else works without the
         helper, also the lid closed on the power adapter.
       </>
@@ -70,7 +70,7 @@ const trialItem: FaqItem = {
   question: "Is there a free trial?",
   answer: (
     <>
-      Yes. agent caffeine is a free download for macOS 13 or later, on Apple silicon and Intel.
+      Yes. Agent Caffeine is a free download for macOS 13 or later, on Apple silicon and Intel.
       Every feature works for 7 days from the first time you open it, with no account, no card
       and no key. After 7 days it stops keeping your Mac awake until you enter a license key, and
       your settings stay. A key costs {PRICE_LIST}, paid once.
@@ -88,7 +88,7 @@ const questions: FaqItem[] = [
         still busy keeps your Mac awake after the agent is done. For other agents it watches signs
         of work, such as a running command or a write to the session file. For Claude Code, Codex,
         Cursor, Droid, opencode and Pi you can switch on better detection in Settings. The agent then
-        tells agent caffeine its state directly, and you can switch it off again at any time.
+        tells Agent Caffeine its state directly, and you can switch it off again at any time.
       </>
     ),
   },

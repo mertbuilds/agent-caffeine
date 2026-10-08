@@ -135,7 +135,7 @@ export const PRESETS: readonly { id: PresetId; title: string; point: string }[] 
   {
     id: "low",
     title: "Battery low",
-    point: "The battery went down to 20% while an agent worked. agent caffeine stops there, so your Mac can sleep before the battery is empty",
+    point: "The battery went down to 20% while an agent worked. Agent Caffeine stops there, so your Mac can sleep before the battery is empty",
   },
 ];
 

@@ -27,16 +27,12 @@ export default function OgImage() {
       <div className="relative flex flex-col gap-10">
         <p className="flex items-center gap-4 text-[30px] leading-none text-[#a3a3a3]">
           <img alt="" className="size-11" height={44} src="/icon.png" width={44} />
-          agent caffeine
+          Agent Caffeine
         </p>
         <h1 className="text-[76px] font-medium leading-[1.06] tracking-[-0.02em]">
           Close your Mac
           <br />
-          <span className="text-[#5aa2ff]">
-            Your agents
-            <br />
-            keep working
-          </span>
+          <span className="text-[#5aa2ff]">with no worry</span>
         </h1>
         <p className="text-[34px] leading-none text-[#a3a3a3]">Free for 7 days, then {PRICE} once</p>
       </div>

@@ -4,7 +4,7 @@ export const AUTHOR = { "@type": "Person", name: "Mert Duzgun", url: "https://me
 
 export const ORGANIZATION = {
   "@type": "Organization",
-  name: "agent caffeine",
+  name: "Agent Caffeine",
   url: SITE_URL,
   logo: `${SITE_URL}/icon.png`,
 };

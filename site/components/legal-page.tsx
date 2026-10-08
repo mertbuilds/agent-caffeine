@@ -4,7 +4,7 @@ import { Footer } from "@/components/footer";
 import { formatDate } from "@/lib/blog";
 
 export function legalMetadata(title: string, description: string, path: string): Metadata {
-  const fullTitle = `${title} · agent caffeine`;
+  const fullTitle = `${title} · Agent Caffeine`;
   return {
     title: fullTitle,
     description,

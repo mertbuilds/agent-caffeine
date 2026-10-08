@@ -2,7 +2,7 @@ import type { AgentIconName } from "@/components/agent-icons";
 
 type Agent = { name: string; icon?: AgentIconName };
 
-/** Every agent agent caffeine knows, those with a mark first. */
+/** Every agent Agent Caffeine knows, those with a mark first. */
 export const agents: readonly Agent[] = [
   { name: "Claude Code", icon: "claudecode" },
   { name: "Codex", icon: "codex" },

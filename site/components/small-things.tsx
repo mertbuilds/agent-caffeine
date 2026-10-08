@@ -129,7 +129,7 @@ export function SmallThings() {
           text="Your Mac stays awake for 1, 2 or 4 hours, so a message from your phone reaches your agent"
           title="Stay reachable from your phone"
         >
-          <PanelSurface className="panel-still w-full max-w-[19rem]" label="The agent caffeine menu while your Mac stays reachable until 11:41">
+          <PanelSurface className="panel-still w-full max-w-[19rem]" label="The Agent Caffeine menu while your Mac stays reachable until 11:41">
             <div className="flex items-center gap-3 px-4 py-2.5">
               <Robot pose="reachable" size={40} still />
               <p className="flex min-w-0 flex-col gap-0.5">
@@ -147,7 +147,7 @@ export function SmallThings() {
             </div>
           </PanelSurface>
         </Thing>
-        <Thing text="Pause for 30 minutes, 1 hour or until tomorrow. agent caffeine starts again by itself" title="Pause it for a while">
+        <Thing text="Pause for 30 minutes, 1 hour or until tomorrow. Agent Caffeine starts again by itself" title="Pause it for a while">
           <PanelSurface className="rounded-[10px] p-[5px] shadow-[0_8px_24px_var(--shadow)]" label="The timer menu: pause for 30 minutes, for 1 hour or until tomorrow">
             <ul aria-hidden="true">
               <TimerChoices active={1} bar={{ reachable: false, reachableCost: null }} />
@@ -160,7 +160,7 @@ export function SmallThings() {
         >
           <PanelSurface
             className="flex w-full max-w-[19rem] items-start gap-2.5 rounded-2xl p-2.5 shadow-[0_8px_24px_var(--shadow)]"
-            label="A notification from agent caffeine: Claude Code is waiting for you"
+            label="A notification from Agent Caffeine: Claude Code is waiting for you"
           >
             <img alt="" className="size-8 shrink-0" decoding="async" height={32} loading="lazy" src="/icon.png" width={32} />
             <span className="flex min-w-0 flex-col gap-px text-[12px] leading-4">
@@ -170,12 +170,12 @@ export function SmallThings() {
             </span>
           </PanelSurface>
         </Thing>
-        <Thing text="On battery the menu shows the charge, and the level where agent caffeine lets your Mac sleep" title="You see how much battery is left">
-          <PanelSurface className="flex w-full max-w-[19rem] justify-center px-4 py-3.5" label="The line of the battery in the agent caffeine menu">
+        <Thing text="On battery the menu shows the charge, and the level where Agent Caffeine lets your Mac sleep" title="You see how much battery is left">
+          <PanelSurface className="flex w-full max-w-[19rem] justify-center px-4 py-3.5" label="The line of the battery in the Agent Caffeine menu">
             <BatteryLine battery={NEAR_FLOOR} />
           </PanelSurface>
         </Thing>
-        <Thing text="Turn agent caffeine on or off, or pause it for 1 hour, from any app. You can change the keys" title="Keyboard shortcuts">
+        <Thing text="Turn Agent Caffeine on or off, or pause it for 1 hour, from any app. You can change the keys" title="Keyboard shortcuts">
           <Rows label="The keyboard shortcuts in Settings">
             {SHORTCUTS.map((shortcut, index) => (
               <div key={shortcut.title}>
