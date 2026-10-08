@@ -1,4 +1,5 @@
 import { AgentsSection } from "@/components/agents-section";
+import { CommandLine } from "@/components/command-line";
 import { Compare } from "@/components/compare";
 import { Faq } from "@/components/faq";
 import { Footer } from "@/components/footer";
@@ -38,6 +39,7 @@ function structuredData(trial: boolean) {
           "Stay reachable for 1, 2 or 4 hours, so a message from your phone reaches your agent",
           "Notifications when an agent waits for your answer or finishes",
           "Battery bar in the menu, and sleep at a battery level you set",
+          "Command line tool and MCP server: a script, a long job or an agent can ask for the Mac to stay awake (from version 1.0.1)",
           "Keyboard shortcuts that work in every app",
           "The menu bar icon can be hidden",
         ],
@@ -72,6 +74,7 @@ export default async function Home() {
       <SleepScenes />
       <SmallThings />
       <AgentsSection />
+      <CommandLine />
       <Compare />
       <Pricing />
       <Faq />

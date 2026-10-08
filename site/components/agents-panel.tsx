@@ -88,13 +88,21 @@ function StateRing({ state }: { state: WorkState }) {
   );
 }
 
-function AgentMark({ icon, state }: { icon: AgentIconName; state: WorkState }) {
+/** An agent's mark in its box. With no mark it is the plain terminal glyph of `AgentLogoView.swift`, as for a hold from the command line. */
+export function AgentMark({ icon, state }: { icon: AgentIconName | null; state: WorkState }) {
   return (
     <span className="relative flex size-[34px] shrink-0 items-center justify-center">
       <span
         className={`flex size-7 items-center justify-center rounded-lg bg-[color-mix(in_srgb,var(--panel-fg)_8%,transparent)] transition-opacity duration-fast motion-reduce:transition-none ${state === "idle" ? "opacity-55" : ""}`}
       >
-        <AgentIcon className="size-[18px]" name={icon} />
+        {icon === null ? (
+          <svg aria-hidden="true" className={`size-3.5 ${MUTED}`} fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.4" viewBox="0 0 16 16">
+            <rect height="11" rx="2.5" width="13" x="1.5" y="2.5" />
+            <path d="m4.5 6 2.25 2L4.5 10M8.5 10.25h3" />
+          </svg>
+        ) : (
+          <AgentIcon className="size-[18px]" name={icon} />
+        )}
       </span>
       <StateRing state={state} />
     </span>
