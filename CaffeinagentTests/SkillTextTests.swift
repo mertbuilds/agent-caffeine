@@ -225,6 +225,13 @@ final class SkillTextTests: XCTestCase {
         let none = model([])
         XCTAssertEqual(none.summary, "Links the command agent-caffeine. No agent that reads skills was found on this Mac.")
         XCTAssertFalse(none.isOffered, "The setup window has no step for a Mac without an agent that reads skills")
+        let foreign = model([("claude", .foreign(place: ".claude/skills")), ("droid", .foreign(place: ".factory/skills"))])
+        XCTAssertEqual(
+            foreign.summary, "Links the command agent-caffeine. A skill named agent-caffeine that Agent Caffeine did not make is already there.",
+            "The agents were found"
+        )
+        XCTAssertEqual(PanelText.agentSetupSummary(agents: [], links: true, found: true), "Links the command agent-caffeine.")
+        XCTAssertNil(model([("claude", .foreign(place: ".claude/skills"))], link: .foreign).summary)
         XCTAssertNil(model([("claude", .installed(place: ".claude/skills"))], link: .ours(target: "/x")).summary)
         XCTAssertEqual(PanelText.list([]), "")
         XCTAssertEqual(PanelText.list(["Pi"]), "Pi")
@@ -307,7 +314,9 @@ final class SkillTextTests: XCTestCase {
             PanelText.agentSetupByHand, PanelText.agentSetupUnavailable, PanelText.commandLinkTitle, PanelText.skillNotInstalled,
             PanelText.commandLinked, PanelText.commandNotLinked, PanelText.commandLinkNeedsApplications, PanelText.localBinNotOnPath(file: "~/.zshrc"),
             PanelText.skillInstalled(in: "x"), PanelText.skillOutdated(in: "x"), PanelText.skillForeign("x"),
-            PanelText.agentSetupSummary(agents: ["Pi"], links: true) ?? "",
+            PanelText.agentSetupSummary(agents: ["Pi"], links: true, found: true) ?? "",
+            PanelText.agentSetupSummary(agents: [], links: true, found: false) ?? "",
+            PanelText.agentSetupSummary(agents: [], links: true, found: true, foreign: true) ?? "",
         ]
         for error in [SkillInstallError.notOurs, .linkedOutside, .notAFolder, .writeFailed, .noTool, .linkNotOurs, .notInApplications] {
             texts += [error.message(place: ".claude/skills"), error.linkMessage]

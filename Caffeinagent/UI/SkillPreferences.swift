@@ -25,6 +25,11 @@ struct AgentSetupModel: Equatable {
         return false
     }
 
+    private func isForeign(_ status: SkillAgentStatus) -> Bool {
+        if case .foreign = status { return true }
+        return false
+    }
+
     var isLinked: Bool {
         if case .ours = snapshot.link { return true }
         return false
@@ -56,7 +61,10 @@ struct AgentSetupModel: Equatable {
     var isOffered: Bool { available && !pending.isEmpty }
 
     var summary: String? {
-        PanelText.agentSetupSummary(agents: pending.map(\.displayName), links: canLink)
+        PanelText.agentSetupSummary(
+            agents: pending.map(\.displayName), links: canLink, found: !snapshot.agents.isEmpty,
+            foreign: snapshot.agents.contains { isForeign($0.status) }
+        )
     }
 
     /// What the button writes, as paths with `~`.

@@ -500,11 +500,18 @@ enum PanelText {
     /// What the button does, from what is on this Mac: "Adds a skill to
     /// Claude Code, Codex and opencode, and links the command
     /// agent-caffeine." Nil when nothing is left to do.
-    static func agentSetupSummary(agents: [String], links: Bool) -> String? {
+    /// - Parameters:
+    ///   - agents: the agents that get the skill.
+    ///   - found: an agent that reads skills is on this Mac.
+    ///   - foreign: an agent has a skill of that name that is not ours.
+    static func agentSetupSummary(agents: [String], links: Bool, found: Bool, foreign: Bool = false) -> String? {
         switch (agents.isEmpty, links) {
         case (false, true): return "Adds a skill to \(list(agents)), and links the command agent-caffeine."
         case (false, false): return "Adds a skill to \(list(agents))."
-        case (true, true): return "Links the command agent-caffeine. No agent that reads skills was found on this Mac."
+        case (true, true):
+            let linksOnly = "Links the command agent-caffeine."
+            if !found { return "\(linksOnly) No agent that reads skills was found on this Mac." }
+            return foreign ? "\(linksOnly) A skill named agent-caffeine that Agent Caffeine did not make is already there." : linksOnly
         case (true, false): return nil
         }
     }
