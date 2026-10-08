@@ -149,7 +149,7 @@ struct AgentCatalog {
 
     /// Raised when a definition changes what it matches, so a lab recording
     /// says which catalog saw its processes.
-    static let version = 8
+    static let version = 9
 
     // MARK: Data
 
@@ -334,7 +334,10 @@ struct AgentCatalog {
         // binary `hermes` of React Native is the JavaScript engine, and
         // `/Applications/Hermes.app/Contents/MacOS/Hermes-Setup` is the
         // installer: neither is matched. `hermes gateway run` is the
-        // messaging gateway: it lives all day and works in turns. The
+        // messaging gateway: it lives all day and works in turns. A
+        // `hermes gateway` with no command runs it too (in the source,
+        // `_GATEWAY_SUBCOMMANDS` gives `_cmd_run` for `None` and for
+        // `run`), and its other commands manage the service. The
         // service starts it below `hermes --run-module
         // hermes_cli.stderr_timestamp ... -- <hermes> gateway run`, which
         // only stamps its error log.
@@ -349,8 +352,9 @@ struct AgentCatalog {
             exclusions: [
                 AgentExclusion(arguments: .leading(["--run-module"])),
                 AgentExclusion(arguments: .contains(["gateway", "run"]), role: .engine),
-                AgentExclusion(arguments: .firstIsOne(of: ["gateway"])),
-            ],
+            ]
+                + hermesGatewayCommands.map { AgentExclusion(arguments: .leading(["gateway", $0])) }
+                + [AgentExclusion(arguments: .firstIsOne(of: ["gateway"]), role: .engine)],
             verified: false
         ),
         cli("iflow-cli", "iFlow CLI"),
@@ -411,6 +415,11 @@ struct AgentCatalog {
         "memory", "migrate", "model", "monitoring", "pairing", "pause", "peer", "pets", "plugins", "profile", "prompt-size",
         "secrets", "security", "sessions", "setup", "skills", "skin", "slack", "status", "tools", "uninstall", "update", "usage",
         "vault", "verify", "webhook", "whatsapp", "whatsapp-cloud", "worktree",
+    ]
+
+    /// The commands of `hermes gateway` that run no gateway.
+    private static let hermesGatewayCommands = [
+        "setup", "install", "uninstall", "start", "stop", "restart", "status", "list", "migrate", "migrate-legacy",
     ]
 
     /// The commands of OpenClaw that run no turn, from the command tree

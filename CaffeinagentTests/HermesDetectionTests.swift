@@ -280,8 +280,12 @@ final class HermesCatalogTests: XCTestCase {
             ("the gateway of the service", Hermes.python, Hermes.args(["gateway", "run", "--external-supervisor"]), .engine),
             ("what stamps the error log of the gateway", Hermes.python,
              Hermes.args(["--run-module", "hermes_cli.stderr_timestamp", "--error-log", "/Users/me/.hermes/logs/gateway.error.log", "--", "/Users/me/.hermes/hermes-agent/.hermes/bin/hermes", "gateway", "run", "--external-supervisor"]), .helper),
+            ("the gateway with no command, which runs it", Hermes.python, Hermes.args(["gateway"]), .engine),
             ("the state of the gateway", Hermes.python, Hermes.args(["gateway", "status"]), .helper),
             ("the gateway service is started", Hermes.python, Hermes.args(["gateway", "start"]), .helper),
+            ("the gateway service is set up", Hermes.python, Hermes.args(["gateway", "setup"]), .helper),
+            ("the gateways are listed", Hermes.python, Hermes.args(["gateway", "list"]), .helper),
+            ("the gateway of before is moved", Hermes.python, Hermes.args(["gateway", "migrate-legacy"]), .helper),
             ("the setup", Hermes.python, Hermes.args(["setup"]), nil),
             ("an update", Hermes.python, Hermes.args(["update"]), nil),
             ("the plugins", Hermes.python, Hermes.args(["plugins", "list"]), nil),
@@ -316,7 +320,7 @@ final class HermesCatalogTests: XCTestCase {
         XCTAssertEqual(definition?.level, .state)
         XCTAssertEqual(definition?.kind, .cli)
         XCTAssertEqual(definition?.processNames, ["hermes-agent"], "The name the old list knew, and no other")
-        XCTAssertEqual(AgentCatalog.version, 8)
+        XCTAssertEqual(AgentCatalog.version, 9)
     }
 
     /// The arguments are those after the source, so the command decides.

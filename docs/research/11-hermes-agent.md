@@ -55,7 +55,8 @@ A wait for the user (an approval, a question) is not in the files. Such a turn r
 Catalogue (`AgentCatalog`, version 8): definition `hermes-agent`, name "Hermes Agent". New matchers: `.inlineSource` (the
 source of `python -c` contains `from hermes_cli.main import main`) and `.script` (an interpreter runs a script of this
 name). `gateway run` is an engine. `--run-module ...` and the other `gateway` commands are helpers. A management command
-is no agent.
+is no agent. From version 9 a `gateway` with no command is an engine too: [SRC] `_GATEWAY_SUBCOMMANDS` gives `_cmd_run` for
+`None` and for `run`.
 
 ## 2. State with no install
 
