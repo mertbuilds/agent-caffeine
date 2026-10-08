@@ -15,6 +15,7 @@ struct AgentLogo {
         var path: String
         var fill: Fill
         var evenOdd = false
+        var opacity: CGFloat = 1
     }
 
     static let canvas: CGFloat = 24
