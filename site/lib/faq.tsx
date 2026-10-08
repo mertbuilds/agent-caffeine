@@ -1,11 +1,71 @@
 import { isValidElement } from "react";
 import type { ReactNode } from "react";
 import { PRICE_LIST } from "@/lib/pricing";
-import { BATTERY_FLOOR, BATTERY_RECOVERY, REACHABLE_COST } from "@/lib/simulator";
+import { BATTERY_FLOOR, BATTERY_RECOVERY } from "@/lib/simulator";
 
-type FaqItem = { question: string; answer: ReactNode };
+/** `open` is for an answer the page shows from the start. */
+type FaqItem = { question: string; answer: ReactNode; open?: boolean };
 
-/** The question a page with a download leads with. */
+/** What a reader asks before a download, first and open: what is new here, and what it costs in safety, battery and rights. */
+const objections: FaqItem[] = [
+  {
+    question: "Does caffeinate or Amphetamine not do this already?",
+    open: true,
+    answer: (
+      <>
+        Not for agents. caffeinate and Amphetamine keep your Mac awake for a set time, or until a
+        program quits or you stop them. They do not know if an agent works or is idle, so your Mac
+        stays awake after the work is done, or sleeps in the middle of it. A command such as
+        caffeinate also cannot keep your Mac awake when you close the lid on battery: macOS sleeps
+        then. agent caffeine has a small helper for that, which you allow once. It reads what your
+        agents do, keeps your Mac awake while they work, and lets it sleep when they are done.
+      </>
+    ),
+  },
+  {
+    question: "Is it safe in a bag?",
+    open: true,
+    answer: (
+      <>
+        Not in a closed bag. Do not put your Mac in a closed bag while an agent works: a Mac that
+        works gets warm, and a closed bag keeps the heat in. agent caffeine has two stops for
+        safety. When your Mac gets too hot, it always lets your Mac sleep. On battery it lets your
+        Mac sleep at {BATTERY_FLOOR}% and starts again at {BATTERY_FLOOR + BATTERY_RECOVERY}%, or
+        when you plug in. You can change this level or turn it off in Settings. A notification
+        tells you why your Mac slept. The display is off while the lid is closed. Before you put
+        your Mac in a closed bag, pause agent caffeine, and your Mac sleeps as usual.
+      </>
+    ),
+  },
+  {
+    question: "Does it drain my battery when nothing runs?",
+    open: true,
+    answer: (
+      <>
+        No. When no agent works, agent caffeine lets your Mac sleep as usual. In the default mode
+        it keeps your Mac awake while an agent works, for 2 minutes after it finishes, and for 5
+        minutes when it waits for your answer. An agent that is open and idle does not keep your
+        Mac awake. You can change the times in Settings.
+      </>
+    ),
+  },
+  {
+    question: "Does it need admin rights?",
+    open: true,
+    answer: (
+      <>
+        Only for one case: the lid is closed and your Mac runs on battery. Only the system can
+        stop macOS from sleeping then, so agent caffeine has a small helper that runs with system
+        rights. You allow it once in System Settings &gt; General &gt; Login Items. It changes one
+        sleep setting of macOS while agent caffeine keeps your Mac awake, and changes it back
+        after. You can remove it in the app&apos;s Settings. Everything else works without the
+        helper, also the lid closed on the power adapter.
+      </>
+    ),
+  },
+];
+
+/** The question a page with a download adds, after the objections. */
 const trialItem: FaqItem = {
   question: "Is there a free trial?",
   answer: (
@@ -39,32 +99,6 @@ const questions: FaqItem[] = [
         Your Mac stays awake for 5 minutes, so you can answer. After that it can sleep. An idle
         agent does not keep your Mac awake in the default mode. You can change the times in
         Settings.
-      </>
-    ),
-  },
-  {
-    question: "What is the helper, and when do I need it?",
-    answer: (
-      <>
-        You need it in one case: the lid is closed and your Mac runs on battery. With the lid
-        closed on the power adapter, agent caffeine works from the start. The helper is a
-        background item of agent caffeine. It changes one sleep setting of macOS while agent
-        caffeine keeps your Mac awake, and changes it back after. You allow it once in System
-        Settings, and you can remove it in the app&apos;s Settings.
-      </>
-    ),
-  },
-  {
-    question: "Is it safe for my battery and my Mac?",
-    answer: (
-      <>
-        Yes, with one rule: do not put a working Mac in a closed bag. On battery, agent caffeine
-        lets your Mac sleep at {BATTERY_FLOOR}% and starts again at{" "}
-        {BATTERY_FLOOR + BATTERY_RECOVERY}%, or when you plug in. You can change this level or
-        turn it off in Settings. When your Mac gets too hot, agent caffeine always lets it
-        sleep. A notification tells you why. The display goes dark with the lid. With the lid
-        closed and no agent at work, an awake Mac uses about {REACHABLE_COST}% of battery per
-        hour.
       </>
     ),
   },
@@ -104,7 +138,7 @@ const questions: FaqItem[] = [
 
 /** The home page questions, rendered by the FAQ and read as plain text for structured data. */
 export function faqItems(trial: boolean): FaqItem[] {
-  return trial ? [trialItem, ...questions] : questions;
+  return trial ? [...objections, trialItem, ...questions] : [...objections, ...questions];
 }
 
 /** The plain text of an answer, so the structured data says exactly what the page shows. */

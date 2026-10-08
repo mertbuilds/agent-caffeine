@@ -5,9 +5,9 @@ import type { ReactNode } from "react";
 import { faqItems } from "@/lib/faq";
 import { track } from "@/lib/track";
 
-function Question({ question, answer, index }: { question: string; answer: ReactNode; index: number }) {
+function Question({ question, answer, index, initiallyOpen }: { question: string; answer: ReactNode; index: number; initiallyOpen: boolean }) {
   const id = useId();
-  const [open, setOpen] = useState(index === 0);
+  const [open, setOpen] = useState(initiallyOpen);
   const questionId = `${id}-question`;
   const answerId = `${id}-answer`;
 
@@ -72,7 +72,7 @@ export function Faq({ trial }: { trial: boolean }) {
       </h2>
       <div>
         {faqItems(trial).map((item, index) => (
-          <Question key={item.question} question={item.question} answer={item.answer} index={index} />
+          <Question key={item.question} question={item.question} answer={item.answer} index={index} initiallyOpen={item.open === true} />
         ))}
       </div>
     </section>
