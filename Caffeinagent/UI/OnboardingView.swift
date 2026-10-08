@@ -20,12 +20,16 @@ struct OnboardingView: View {
     var setOpenAtLogin: (Bool) -> Void = { _ in }
     /// True when every agent was changed.
     let turnOnHooks: ([HookCatalogEntry]) -> Bool
+    var agentSetup = AgentSetupModel()
+    /// True when nothing went wrong.
+    var setUpForAgents: () -> Bool = { true }
     let setUpHelper: () -> Void
     let openLoginItems: () -> Void
     let finish: () -> Void
     @State var index = 0
     @State private var unchecked: Set<String> = []
     @State private var askedForHelper = false
+    @State private var askedForAgentSetup = false
     @State private var opensAtLogin = true
 
     private var step: OnboardingStep { steps.indices.contains(index) ? steps[index] : .done }
@@ -35,6 +39,7 @@ struct OnboardingView: View {
             switch step {
             case .welcome: welcome
             case .hooks: hooks
+            case .agentSetup: agentSetupPage
             case .lidClosed: lidClosed
             case .done: done
             }
@@ -144,6 +149,45 @@ struct OnboardingView: View {
         }
     }
 
+    /// Optional like every step: "Skip" goes on, and after the button the
+    /// page goes on by itself, or says what went wrong and goes on with
+    /// "Continue".
+    @ViewBuilder
+    private var agentSetupPage: some View {
+        title("Let your agents keep your Mac awake for a long job")
+        paragraph("\(PanelText.commandLineExplained) \(PanelText.agentSetupExplained)")
+        paragraph(PanelText.agentSetupOptional)
+        if askedForAgentSetup {
+            VStack(alignment: .leading, spacing: 6) {
+                ForEach(agentSetup.errors.sorted { $0.key < $1.key }, id: \.key) { error in
+                    Text(error.value)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        } else {
+            AgentSetupOffer(model: agentSetup)
+        }
+        paragraph("You can remove it in Settings > Agents > Command line. That takes out the skill and the link again.")
+        buttons {
+            EmptyView()
+        } trailing: {
+            if askedForAgentSetup {
+                Button("Continue", action: next)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+            } else {
+                Button("Skip", action: next)
+                Button(PanelText.agentSetupButton) {
+                    if setUpForAgents() { next() } else { askedForAgentSetup = true }
+                }
+                .buttonStyle(.borderedProminent)
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+    }
+
     @ViewBuilder
     private var lidClosed: some View {
         title("Keep working with the lid closed")
@@ -245,6 +289,8 @@ private struct OnboardingContainer: View {
                 entries.forEach { aggregator.setHooks($0, on: true) }
                 return entries.allSatisfy { aggregator.hookErrors[$0.id] == nil }
             },
+            agentSetup: aggregator.agentSetup,
+            setUpForAgents: aggregator.setUpForAgents,
             setUpHelper: aggregator.setUpHelper,
             openLoginItems: aggregator.sleepFlag.openLoginItemsSettings,
             finish: finish
@@ -273,9 +319,10 @@ enum OnboardingWindow {
         }
         aggregator.refreshHookStatuses()
         aggregator.refreshHelperStatus()
+        aggregator.refreshAgentSetup(errors: [:])
         let rows = HookRowModel.rows(statuses: aggregator.hookStatuses).filter { $0.status == .notInstalled || $0.status == .outdated }
         let steps = Onboarding.steps(
-            hookStatuses: rows.map(\.status), hooksAvailable: aggregator.hooksAvailable,
+            hookStatuses: rows.map(\.status), hooksAvailable: aggregator.hooksAvailable, agentSetupOffered: aggregator.agentSetup.isOffered,
             canSetUpHelper: aggregator.canSetUpHelper, hasBattery: aggregator.hasBattery,
             helperEnabled: aggregator.sleepFlag.helperStatus == .enabled
         )
@@ -310,17 +357,23 @@ private struct OnboardingPreview: View {
 
     var body: some View {
         OnboardingView(
-            steps: [.welcome, .hooks, .lidClosed, .done], foundAgents: ["Claude Code", "Codex"], hookRows: rows,
+            steps: [.welcome, .hooks, .agentSetup, .lidClosed, .done], foundAgents: ["Claude Code", "Codex"], hookRows: rows,
             safetyNote: SafetyText.stillSleeps(DetectionSettings()), helper: helper, helperError: nil,
             trialNote: PanelText.trialIntro, openAtLogin: true,
-            turnOnHooks: { _ in true }, setUpHelper: {}, openLoginItems: {}, finish: {}, index: index
+            turnOnHooks: { _ in true },
+            agentSetup: AgentSetupModel(snapshot: SkillSnapshot(
+                agents: SkillCatalog.entries.prefix(3).map { SkillSnapshot.Agent(entry: $0, status: .notInstalled) },
+                planned: [".claude/skills", ".agents/skills"]
+            )),
+            setUpHelper: {}, openLoginItems: {}, finish: {}, index: index
         )
     }
 }
 
 #Preview("Welcome") { OnboardingPreview() }
 #Preview("Hooks") { OnboardingPreview(index: 1) }
-#Preview("Lid closed") { OnboardingPreview(index: 2) }
-#Preview("Lid closed, waits for approval") { OnboardingPreview(index: 2, helper: .requiresApproval) }
-#Preview("Done") { OnboardingPreview(index: 3) }
+#Preview("Set up for agents") { OnboardingPreview(index: 2) }
+#Preview("Lid closed") { OnboardingPreview(index: 3) }
+#Preview("Lid closed, waits for approval") { OnboardingPreview(index: 3, helper: .requiresApproval) }
+#Preview("Done") { OnboardingPreview(index: 4) }
 #endif

@@ -1,41 +1,36 @@
-import AppKit
 import SwiftUI
 
-/// The "Command line" section of Settings > Agents.
+/// The "Command line" section of Settings > Agents: "Set up for agents"
+/// first, and below it the lines to copy for a setup by hand.
 struct CommandLinePreferencesSection: View {
     let setup: CommandLineSetup
+    var agentSetup = AgentSetupModel()
+    var setUpForAgents: () -> Void = {}
+    var installSkill: (SkillCatalogEntry) -> Void = { _ in }
+    var linkTool: () -> Void = {}
+    var removeAgentSetup: () -> Void = {}
 
     var body: some View {
         Section("Command line") {
-            Text(PanelText.commandLineExplained)
+            Text("\(PanelText.commandLineExplained) \(PanelText.agentSetupExplained)")
                 .font(.callout)
                 .foregroundStyle(.secondary)
-            line(setup.toolPath, copy: "Copy path")
+            AgentSetupRows(model: agentSetup, setUp: setUpForAgents, install: installSkill, link: linkTool, remove: removeAgentSetup)
+            Text(PanelText.agentSetupByHand)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+            CopyLine(text: setup.toolPath, title: "Copy path")
             VStack(alignment: .leading, spacing: 6) {
                 Text(PanelText.commandLineInstallExplained)
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                line(setup.installCommand, copy: "Copy install command")
+                CopyLine(text: setup.installCommand, title: "Copy install command")
             }
             VStack(alignment: .leading, spacing: 6) {
                 Text(PanelText.commandLineMCPExplained)
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                line(setup.mcpConfig, copy: "Copy MCP entry")
-            }
-        }
-    }
-
-    private func line(_ text: String, copy title: String) -> some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(text)
-                .font(.system(.caption, design: .monospaced))
-                .textSelection(.enabled)
-                .fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 8)
-            Button(title) {
-                NSPasteboard.general.clearContents()
-                NSPasteboard.general.setString(text, forType: .string)
+                CopyLine(text: setup.mcpConfig, title: "Copy MCP entry")
             }
         }
     }

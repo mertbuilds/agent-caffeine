@@ -29,6 +29,7 @@ enum HoldInvocation: Equatable {
     case release(Release)
     case status(json: Bool)
     case mcp
+    case skill
     case help
 }
 
@@ -56,6 +57,7 @@ enum HoldArguments {
       agent-caffeine release [<id> | --all]               End a hold.
       agent-caffeine status [--json]                      Show the holds, and whether the Mac can sleep.
       agent-caffeine mcp                                  Run as an MCP server on stdin and stdout.
+      agent-caffeine skill                                Print the skill that tells an agent how to use this tool.
 
     The battery limit, a pause and the switch of Agent Caffeine still let the Mac sleep.
     """
@@ -69,6 +71,7 @@ enum HoldArguments {
         case "release": return release(rest)
         case "status": return flags(rest, allowed: ["--json"]).map { .status(json: $0.contains("--json")) }
         case "mcp": return flags(rest, allowed: []).map { _ in .mcp }
+        case "skill": return flags(rest, allowed: []).map { _ in .skill }
         case "help", "--help", "-h": return .success(.help)
         default: return .failure(HoldUsageError(message: "Unknown command \(verb)."))
         }
@@ -238,6 +241,21 @@ enum HoldCommands {
         }
         let listed = holds.isEmpty ? ["No holds."] : holds.map { HoldText.listed($0, tools: tools) }
         return HoldOutcome(out: listed + [line])
+    }
+
+    // MARK: Skill
+
+    /// From `Contents/MacOS`, where the tool is, to the skill in the app.
+    static let skillFromTool = "../Resources/skills/agent-caffeine/SKILL.md"
+
+    /// The skill in the app the tool is in, as it is in the repo. The
+    /// tool installs nothing: Settings > Agents does.
+    /// - Parameter executable: the tool itself. A link to it is followed.
+    static func skill(executable: URL?) -> HoldOutcome {
+        let missing = HoldOutcome(code: HoldOutcome.failed, err: ["The skill is not next to this tool. It is in Agent Caffeine, at Contents/Resources/skills/agent-caffeine/SKILL.md."])
+        guard let folder = executable?.resolvingSymlinksInPath().deletingLastPathComponent(),
+              let text = try? String(contentsOf: folder.appendingPathComponent(skillFromTool), encoding: .utf8) else { return missing }
+        return HoldOutcome(out: [text.hasSuffix("\n") ? String(text.dropLast()) : text])
     }
 
     /// The one line that says whether the Mac can sleep. Only the app

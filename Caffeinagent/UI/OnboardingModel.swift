@@ -3,6 +3,7 @@ import Foundation
 enum OnboardingStep: Equatable {
     case welcome
     case hooks
+    case agentSetup
     case lidClosed
     case done
 }
@@ -38,10 +39,14 @@ enum Onboarding {
     /// The steps for this Mac. The hooks step needs an agent whose hooks
     /// are off or out of date, and the hook command in the Applications
     /// folder. The lid step needs a battery and the app in the Applications
-    /// folder, and is left out when the helper is set up already.
-    static func steps(hookStatuses: [HookStatus], hooksAvailable: Bool, canSetUpHelper: Bool, hasBattery: Bool, helperEnabled: Bool) -> [OnboardingStep] {
+    /// folder, and is left out when the helper is set up already. The
+    /// step for the skill needs an agent that reads skills and has none.
+    static func steps(
+        hookStatuses: [HookStatus], hooksAvailable: Bool, agentSetupOffered: Bool, canSetUpHelper: Bool, hasBattery: Bool, helperEnabled: Bool
+    ) -> [OnboardingStep] {
         var steps: [OnboardingStep] = [.welcome]
         if hooksAvailable, hookStatuses.contains(where: { $0 == .notInstalled || $0 == .outdated }) { steps.append(.hooks) }
+        if agentSetupOffered { steps.append(.agentSetup) }
         if canSetUpHelper, hasBattery, !helperEnabled { steps.append(.lidClosed) }
         steps.append(.done)
         return steps

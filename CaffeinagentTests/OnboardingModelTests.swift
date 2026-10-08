@@ -15,10 +15,21 @@ final class OnboardingModelTests: XCTestCase {
         ]
         for c in cases {
             XCTAssertEqual(
-                Onboarding.steps(hookStatuses: c.hooks, hooksAvailable: c.hooksAvailable, canSetUpHelper: c.canSetUp, hasBattery: c.battery, helperEnabled: c.helperEnabled),
+                Onboarding.steps(
+                    hookStatuses: c.hooks, hooksAvailable: c.hooksAvailable, agentSetupOffered: false,
+                    canSetUpHelper: c.canSetUp, hasBattery: c.battery, helperEnabled: c.helperEnabled
+                ),
                 c.expected, c.name
             )
         }
+        XCTAssertEqual(
+            Onboarding.steps(hookStatuses: [.notInstalled], hooksAvailable: true, agentSetupOffered: true, canSetUpHelper: true, hasBattery: true, helperEnabled: false),
+            [.welcome, .hooks, .agentSetup, .lidClosed, .done]
+        )
+        XCTAssertEqual(
+            Onboarding.steps(hookStatuses: [], hooksAvailable: false, agentSetupOffered: true, canSetUpHelper: false, hasBattery: false, helperEnabled: false),
+            [.welcome, .agentSetup, .done], "The skill needs neither the hooks nor the Applications folder"
+        )
     }
 
     /// Outside the Applications folder the hooks cannot be turned on. Off

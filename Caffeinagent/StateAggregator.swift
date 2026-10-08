@@ -196,6 +196,11 @@ final class StateAggregator: ObservableObject {
     /// ours: see `updateOwnHookFiles`.
     @PublishedOnChange private(set) var hookStatuses: [String: HookStatus] = [:]
     @PublishedOnChange private(set) var hookErrors: [String: String] = [:]
+    /// "Set up for agents": the skill per agent and the link to the tool.
+    /// Read at launch and when Preferences opens, and never changed
+    /// without the user's word, but for what is ours already: see
+    /// `updateOwnSkill`.
+    @PublishedOnChange private(set) var agentSetup = AgentSetupModel()
 
     let license: LicenseManager
     let sleepFlag: SleepFlagController
@@ -204,6 +209,12 @@ final class StateAggregator: ObservableObject {
     /// follow the lid.
     var hasLidAngleSensor: Bool { display?.hasLidAngleSensor ?? false }
     private let hookInstaller = HookInstaller()
+    /// Nil when the skill is not in the bundle.
+    private let skillInstaller: SkillInstaller? = {
+        let appPath = Bundle.main.bundleURL.standardizedFileURL.path
+        return SkillCatalog.bundledSkill(appPath: appPath).map { SkillInstaller(skill: $0, toolPath: CommandLineSetup(appPath: appPath).toolPath) }
+    }()
+    private var askedForShellPath = false
     private let engine: DetectionEngine
     /// How many samples the engine gave. For the smoke test.
     private(set) var samples = 0
@@ -396,6 +407,8 @@ final class StateAggregator: ObservableObject {
         engine.start()
         updateOwnHookFiles()
         refreshHookStatuses()
+        updateOwnSkill()
+        refreshAgentSetup()
         refreshLoginItem()
         syncSleepFlag()
         registerShortcuts()
@@ -1050,6 +1063,90 @@ final class StateAggregator: ObservableObject {
             hookErrors[entry.id] = known.message(file: hookInstaller.displayPath(for: entry))
         }
         refreshHookStatuses()
+    }
+
+    // MARK: Set up for agents
+
+    /// At launch: see `SkillInstaller.updateOwn`. Only the copy in the
+    /// Applications folder does it, so a build that runs from another
+    /// folder never moves the link, and never the smoke test.
+    private func updateOwnSkill() {
+        guard !SmokeTest.isActive, Bundle.main.bundleURL.standardizedFileURL.path == HookCatalog.stableAppPath else { return }
+        skillInstaller?.updateOwn()
+    }
+
+    /// Only reads. `errors` nil keeps the ones that are shown.
+    func refreshAgentSetup(errors: [String: String]? = nil) {
+        guard let skillInstaller else {
+            agentSetup = AgentSetupModel(available: false)
+            return
+        }
+        var next = agentSetup
+        next.snapshot = skillInstaller.snapshot()
+        next.errors = errors ?? next.errors
+        agentSetup = next
+        checkShellPath()
+    }
+
+    /// Once per launch, when the link is there, and off the main thread:
+    /// it asks the login shell. See `ShellPath`.
+    private func checkShellPath() {
+        guard agentSetup.isLinked, !askedForShellPath, !SmokeTest.isActive else { return }
+        askedForShellPath = true
+        DispatchQueue.global(qos: .utility).async { [weak self] in
+            let shell = ShellPath.loginShell()
+            let onPath = ShellPath.localBinIsOnPath()
+            DispatchQueue.main.async {
+                guard let self else { return }
+                var next = self.agentSetup
+                next.localBinOnPath = onPath
+                next.startupFile = shell.flatMap(ShellPath.startupFile)
+                self.agentSetup = next
+            }
+        }
+    }
+
+    /// True when nothing went wrong.
+    @discardableResult
+    func setUpForAgents() -> Bool {
+        guard let skillInstaller else { return false }
+        let errors = skillInstaller.setUp()
+        refreshAgentSetup(errors: errors)
+        return errors.isEmpty
+    }
+
+    func installSkill(for entry: SkillCatalogEntry) {
+        guard let skillInstaller else { return }
+        var errors = agentSetup.errors
+        do {
+            try skillInstaller.install(for: entry)
+            errors[entry.id] = nil
+        } catch {
+            var place = entry.places[0]
+            switch agentSetup.snapshot.agents.first(where: { $0.id == entry.id })?.status {
+            case .outdated(let known), .foreign(let known): place = known
+            case .installed, .notInstalled, nil: break
+            }
+            errors[entry.id] = (error as? SkillInstallError ?? .writeFailed).message(place: place)
+        }
+        refreshAgentSetup(errors: errors)
+    }
+
+    func linkTool() {
+        guard let skillInstaller else { return }
+        var errors = agentSetup.errors
+        do {
+            try skillInstaller.link()
+            errors[SkillInstaller.linkKey] = nil
+        } catch {
+            errors[SkillInstaller.linkKey] = (error as? SkillInstallError ?? .writeFailed).linkMessage
+        }
+        refreshAgentSetup(errors: errors)
+    }
+
+    func removeAgentSetup() {
+        guard let skillInstaller else { return }
+        refreshAgentSetup(errors: skillInstaller.removeAll())
     }
 
     // MARK: Quit

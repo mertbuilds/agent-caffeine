@@ -1,9 +1,9 @@
 import Foundation
 
-/// What Settings shows about the command line tool: where it is, the
-/// command that puts it on the PATH, and the entry for an agent's MCP
-/// servers. The app only shows these. It writes nothing outside its own
-/// folders, so the user runs the command.
+/// What Settings shows about the command line tool for a setup by hand:
+/// where it is, the command that puts it on the PATH, and the entry for
+/// an agent's MCP servers. The app only shows these, and the user runs
+/// the command. "Set up for agents" is `SkillInstaller`.
 struct CommandLineSetup: Equatable {
     static let toolName = "agent-caffeine"
     /// Next to the app's own binary and the hook command.

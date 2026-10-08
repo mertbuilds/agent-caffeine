@@ -481,6 +481,54 @@ enum PanelText {
     static let commandLineInstallExplained = "This command makes a link to the tool in ~/.local/bin. Run it in Terminal."
     static let commandLineMCPExplained = "Add this to the MCP servers of your agent."
 
+    // MARK: Settings, set up for agents
+
+    static let agentSetupButton = "Set up for agents"
+    static let agentSetupExplained = "A skill is a short text that tells an agent when to ask Agent Caffeine to keep your Mac awake, for example before a long build, and how."
+    static let agentSetupOptional = "If you skip this, Agent Caffeine still works."
+    static let agentSetupRemoveExplained = "Remove takes out the skill and the link, and nothing else."
+    static let agentSetupByHand = "To set it up by hand, use the lines below."
+    static let agentSetupUnavailable = "The skill is not in this copy of Agent Caffeine."
+    static let commandLinkTitle = "The command agent-caffeine"
+
+    /// "Claude Code, Codex and opencode".
+    static func list(_ names: [String]) -> String {
+        guard let last = names.last, names.count > 1 else { return names.first ?? "" }
+        return "\(names.dropLast().joined(separator: ", ")) and \(last)"
+    }
+
+    /// What the button does, from what is on this Mac: "Adds a skill to
+    /// Claude Code, Codex and opencode, and links the command
+    /// agent-caffeine." Nil when nothing is left to do.
+    static func agentSetupSummary(agents: [String], links: Bool) -> String? {
+        switch (agents.isEmpty, links) {
+        case (false, true): return "Adds a skill to \(list(agents)), and links the command agent-caffeine."
+        case (false, false): return "Adds a skill to \(list(agents))."
+        case (true, true): return "Links the command agent-caffeine. No agent that reads skills was found on this Mac."
+        case (true, false): return nil
+        }
+    }
+
+    static func skillInstalled(in folder: String) -> String {
+        "The skill is in \(folder)"
+    }
+
+    static func skillOutdated(in folder: String) -> String {
+        "The skill in \(folder) is from another version of Agent Caffeine."
+    }
+
+    static func skillForeign(_ folder: String) -> String {
+        "\(folder) was not made by Agent Caffeine, so it is left as it is."
+    }
+
+    static let skillNotInstalled = "No skill yet"
+    static let commandLinked = "Linked in ~/.local/bin"
+    static let commandNotLinked = "Not linked"
+
+    static func localBinNotOnPath(file: String) -> String {
+        "~/.local/bin does not seem to be on your PATH. If your shell does not find agent-caffeine, add this line to \(file)."
+    }
+
     /// What tells a session apart when nothing else does: "since 14:05",
     /// or "since 2:05 PM" for a user who set the 12-hour clock.
     static func started(_ date: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {

@@ -46,6 +46,12 @@ targets:
         type: folder
       - path: THIRD_PARTY_NOTICES.md
         buildPhase: resources
+      # The skill that tells an agent how to use the command line tool, as
+      # Contents/Resources/skills/agent-caffeine/SKILL.md. "Set up for
+      # agents" writes it into the skills folders of the agents, and
+      # `agent-caffeine skill` prints it.
+      - path: skills
+        type: folder
       # The launchd plist of the root helper. SMAppService.daemon(plistName:)
       # looks for it in Contents/Library/LaunchDaemons.
       - path: CaffeinagentHelper/com.caffeinagent.app.helper.plist
@@ -130,7 +136,7 @@ targets:
         copy:
           destination: executables
       # The command line tool, agent-caffeine. Settings shows its path in
-      # Contents/MacOS, and the user links it into a folder on the PATH.
+      # Contents/MacOS, and "Set up for agents" links it into ~/.local/bin.
       - target: CaffeinagentCLI
         embed: true
         codeSign: true
@@ -186,8 +192,8 @@ targets:
         CODE_SIGN_ENTITLEMENTS: CaffeinagentHelper/CaffeinagentHelper.entitlements
         SKIP_INSTALL: YES
 
-  # The command line tool: `agent-caffeine hold`, `release`, `status` and
-  # `mcp`. Like the hook command it is a tool of its own that writes small
+  # The command line tool: `agent-caffeine hold`, `release`, `status`,
+  # `mcp` and `skill`. Like the hook command it is a tool of its own that writes small
   # files for the app to read, and it shares the format of those files and
   # the process table with the app.
   CaffeinagentCLI:
@@ -247,6 +253,7 @@ targets:
       - Caffeinagent/UI/MenuBarIcon.swift
       - Caffeinagent/UI/OnboardingModel.swift
       - Caffeinagent/UI/HookPreferences.swift
+      - Caffeinagent/UI/SkillPreferences.swift
       # The shortcut as a value and its rules, and the reader of a keyboard
       # layout. Without the hot key itself.
       - Caffeinagent/Shortcut/Shortcut.swift

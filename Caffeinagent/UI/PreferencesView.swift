@@ -47,7 +47,12 @@ struct PreferencesView: View {
                 hookRows: HookRowModel.rows(statuses: aggregator.hookStatuses, errors: aggregator.hookErrors),
                 hooksAvailable: aggregator.hooksAvailable,
                 setHooks: aggregator.setHooks,
-                showsOtherTools: $aggregator.showsOtherTools
+                showsOtherTools: $aggregator.showsOtherTools,
+                agentSetup: aggregator.agentSetup,
+                setUpForAgents: { aggregator.setUpForAgents() },
+                installSkill: aggregator.installSkill,
+                linkTool: aggregator.linkTool,
+                removeAgentSetup: aggregator.removeAgentSetup
             )
             .tabItem { Label("Agents", systemImage: "terminal") }
             .tag(PreferencesTab.agents)
@@ -78,12 +83,14 @@ struct PreferencesView: View {
                 canCheckForUpdates: updater.canCheckForUpdates,
                 hooksOn: HookRowModel.rows(statuses: aggregator.hookStatuses).filter(\.isOn).map(\.entry),
                 helperRegistered: aggregator.sleepFlag.helperStatus != .notRegistered,
+                agentSetupOn: aggregator.agentSetup.isSetUp,
                 licensed: aggregator.entitlement == .licensed && license.record.activationID != nil,
                 busy: license.busy,
                 checkForUpdates: updater.checkForUpdates,
                 showSetup: { OnboardingWindow.show(aggregator: aggregator) },
                 turnOffHooks: { $0.forEach { aggregator.setHooks($0, on: false) } },
                 removeHelper: aggregator.removeHelper,
+                removeAgentSetup: aggregator.removeAgentSetup,
                 deactivate: { confirmingDeactivate = true },
                 showInFinder: { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) },
                 quit: { NSApp.terminate(nil) }
@@ -104,6 +111,7 @@ struct PreferencesView: View {
         .onAppear {
             aggregator.refreshHelperStatus()
             aggregator.refreshHookStatuses()
+            aggregator.refreshAgentSetup()
             aggregator.refreshNotificationPermission()
             aggregator.refreshLoginItem()
         }
@@ -230,6 +238,8 @@ struct AboutPreferences: View {
     /// The agents whose better detection is on.
     var hooksOn: [HookCatalogEntry] = []
     var helperRegistered = false
+    /// The skill or the link to the command line tool is on this Mac.
+    var agentSetupOn = false
     /// This Mac holds an activation of a key.
     var licensed = false
     var busy = false
@@ -237,6 +247,7 @@ struct AboutPreferences: View {
     var showSetup: () -> Void = {}
     var turnOffHooks: ([HookCatalogEntry]) -> Void = { _ in }
     var removeHelper: () -> Void = {}
+    var removeAgentSetup: () -> Void = {}
     var deactivate: () -> Void = {}
     var showInFinder: () -> Void = {}
     var quit: () -> Void = {}
@@ -288,6 +299,11 @@ struct AboutPreferences: View {
                     help: "This removes the background item for a closed lid on battery.",
                     done: !helperRegistered
                 ) { Button("Remove", action: removeHelper) }
+                step(
+                    agentSetupOn ? "Remove the skill and the command agent-caffeine" : "No skill and no command are set up",
+                    help: "This removes the skill from the skills folders of your agents, and the link in ~/.local/bin.",
+                    done: !agentSetupOn
+                ) { Button("Remove", action: removeAgentSetup) }
                 step(
                     licensed ? "Deactivate this Mac" : "No license key is active on this Mac",
                     help: "This frees your license key for another Mac.",
@@ -554,6 +570,11 @@ struct AgentPreferences: View {
     var showsOtherTools: Binding<Bool> = .constant(false)
     /// The tool in the copy of the app that runs.
     var commandLine = CommandLineSetup(appPath: Bundle.main.bundleURL.standardizedFileURL.path)
+    var agentSetup = AgentSetupModel()
+    var setUpForAgents: () -> Void = {}
+    var installSkill: (SkillCatalogEntry) -> Void = { _ in }
+    var linkTool: () -> Void = {}
+    var removeAgentSetup: () -> Void = {}
     @State private var newName = ""
 
     private static let otherToolsID = "otherTools"
@@ -622,7 +643,10 @@ struct AgentPreferences: View {
                         .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            CommandLinePreferencesSection(setup: commandLine)
+            CommandLinePreferencesSection(
+                setup: commandLine, agentSetup: agentSetup, setUpForAgents: setUpForAgents, installSkill: installSkill,
+                linkTool: linkTool, removeAgentSetup: removeAgentSetup
+            )
         }
         .formStyle(.grouped)
     }
@@ -859,7 +883,11 @@ private struct PreferencesPreview: View {
                 .tabItem { Label("Shortcuts", systemImage: "keyboard") }
             AgentPreferences(
                 settings: $settings, foundIDs: ["claude", "codex-desktop"],
-                hookRows: HookRowModel.rows(statuses: ["claude": .installed(version: 1), "codex": .outdated, "droid": .notInstalled])
+                hookRows: HookRowModel.rows(statuses: ["claude": .installed(version: 1), "codex": .outdated, "droid": .notInstalled]),
+                agentSetup: AgentSetupModel(snapshot: SkillSnapshot(
+                    agents: SkillCatalog.entries.prefix(3).map { SkillSnapshot.Agent(entry: $0, status: .notInstalled) },
+                    planned: [".claude/skills", ".agents/skills"]
+                ))
             )
                 .tabItem { Label("Agents", systemImage: "terminal") }
             LidClosedPreferences(

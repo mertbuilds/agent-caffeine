@@ -8,6 +8,7 @@ import Foundation
 //     agent-caffeine release [<id> | --all]
 //     agent-caffeine status [--json]
 //     agent-caffeine mcp
+//     agent-caffeine skill
 //
 // It writes one small file per hold for the app to read, as the hook
 // command does for an agent's state. It holds nothing awake itself.
@@ -36,6 +37,8 @@ case .success(.release(let target)):
     finish(HoldCommands.release(target, tools: tools))
 case .success(.status(let json)):
     finish(HoldCommands.status(json: json, tools: tools))
+case .success(.skill):
+    finish(HoldCommands.skill(executable: Bundle.main.executableURL))
 case .success(.mcp):
     let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0"
     let server = MCPServer(tools: tools, version: version)
