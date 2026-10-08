@@ -501,7 +501,7 @@ export function MenuBarSimulator() {
               {shown.clock}
             </span>
           </div>
-          <div className="min-h-[25.5rem] w-full sm:mr-[3.875rem] sm:w-[320px]">
+          <div className="min-h-[20.5rem] w-full sm:mr-[3.875rem] sm:w-[320px]">
             <AgentsPanel
               enabled={sim.enabled}
               mode={sim.mode}

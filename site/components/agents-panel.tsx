@@ -25,7 +25,7 @@ import { useLessMotion } from "@/lib/use-less-motion";
 
 /**
  * The app's menu, with the measures of `UI/Panel/PanelMetrics.swift`: 320
- * points wide, a 16 point gutter, a 28 point box for an agent's mark in a 34
+ * points wide, a 16 point gutter, a 56 point tile for the robot, a 28 point box for an agent's mark in a 34
  * point slot for its ring, and the system's text sizes (17, 13 and 12).
  */
 
@@ -596,7 +596,7 @@ function AttentionLine({ attention, onHelper, onDismiss }: { attention: Attentio
   const safety = attention.kind === "safetyStop";
   return (
     <div
-      className={`flex flex-wrap items-center justify-center gap-x-2 gap-y-1 rounded-lg px-2.5 py-1.5 text-center text-[12px] leading-4 ${safety ? "bg-[color-mix(in_srgb,#ff9500_12%,transparent)]" : "bg-[color-mix(in_srgb,var(--panel-fg)_7%,transparent)]"}`}
+      className={`flex flex-wrap items-center justify-between gap-x-2 gap-y-1 rounded-lg px-2.5 py-1.5 text-left text-[12px] leading-4 ${safety ? "bg-[color-mix(in_srgb,#ff9500_12%,transparent)]" : "bg-[color-mix(in_srgb,var(--panel-fg)_7%,transparent)]"}`}
     >
       <span className="flex items-start gap-1.5">
         <span aria-hidden="true" className="flex h-4 items-center">
@@ -729,32 +729,38 @@ export function AgentsPanel({
       className={`flex w-full flex-col shadow-[0_12px_32px_var(--shadow)] ${paused ? "panel-paused" : ""}`}
       label="The Agent Caffeine menu"
     >
-      <div className="flex flex-col items-center px-4 pb-4 pt-3 text-center">
-        <Robot paused={paused} pose={view.pose} />
-        <p className="mt-2 text-[17px] leading-[22px]">
-          <Fade id={view.title} lessMotion={lessMotion}>
-            {view.title}
-          </Fade>
-        </p>
-        <p className={`mt-0.5 text-pretty ${MUTED}`}>
-          <Fade id={shape(view.subtitle)} lessMotion={lessMotion}>
-            <Flow>{view.subtitle}</Flow>
-          </Fade>
-        </p>
-        <div className="w-full">
-          <AutoHeight lessMotion={lessMotion}>
-            {view.battery !== null && (
-              <div className="flex justify-center pt-1">
-                <BatteryLine battery={view.battery} />
-              </div>
-            )}
-            {view.attention !== null && (
-              <div className="pt-3">
-                <AttentionLine attention={view.attention} onDismiss={onDismiss} onHelper={onHelper} />
-              </div>
-            )}
-          </AutoHeight>
+      {/* `HeroView.swift` and `PanelView.swift`: the robot on its 56 point tile, 12 points, then the headline and its reason, with the battery below them. What needs the reader is a line of the whole width under that row. */}
+      <div className="flex flex-col p-4">
+        <div className="flex items-center gap-3">
+          <Robot paused={paused} pose={view.pose} size={56} />
+          <div className="flex min-w-0 flex-1 flex-col">
+            <p className="text-[17px] leading-[22px]">
+              <Fade id={view.title} lessMotion={lessMotion}>
+                {view.title}
+              </Fade>
+            </p>
+            {/* A reason is never cut short: it goes on to a second line. */}
+            <p className={`mt-0.5 text-pretty ${MUTED}`}>
+              <Fade id={shape(view.subtitle)} lessMotion={lessMotion}>
+                <Flow>{view.subtitle}</Flow>
+              </Fade>
+            </p>
+            <AutoHeight lessMotion={lessMotion}>
+              {view.battery !== null && (
+                <div className="flex pt-1">
+                  <BatteryLine battery={view.battery} />
+                </div>
+              )}
+            </AutoHeight>
+          </div>
         </div>
+        <AutoHeight lessMotion={lessMotion}>
+          {view.attention !== null && (
+            <div className="pt-3">
+              <AttentionLine attention={view.attention} onDismiss={onDismiss} onHelper={onHelper} />
+            </div>
+          )}
+        </AutoHeight>
       </div>
       <div className="h-px bg-[var(--panel-line)]" />
       <AutoHeight lessMotion={lessMotion}>
