@@ -51,20 +51,32 @@ Some agents can run a command when their state changes. With hooks on, an agent 
 
 ## Command line and MCP
 
-A script, a long job or an agent that Agent Caffeine does not know can ask for the Mac to stay awake, and let it go again. The tool is `agent-caffeine`, inside the app at `Contents/MacOS/agent-caffeine`. Settings > Agents > Command line shows its path, the command that links it into `~/.local/bin`, and the entry for an agent's MCP servers. The app writes nothing outside its own folders, so you run that command yourself.
+A script, a long job or an agent that Agent Caffeine does not know can ask for the Mac to stay awake, and let it go again. The tool is `agent-caffeine`, inside the app at `Contents/MacOS/agent-caffeine`. Settings > Agents > Command line has "Set up for agents" (see below), and for a setup by hand it shows the path of the tool, the command that links it into `~/.local/bin`, and the entry for an agent's MCP servers.
 
 - `agent-caffeine hold --for 30m [--reason "text"]` keeps the Mac awake for a time: `90s`, `30m`, `2h`. One hour with no `--for`, 12 hours at most.
 - `agent-caffeine hold [--reason "text"] -- <command> [args...]` runs the command, keeps the Mac awake while it runs, and ends with the exit code of the command. A signal sent to the tool is passed on to the command. The hold ends after 24 hours at the latest, and the command runs on.
 - `agent-caffeine release [<id> | --all]` ends a hold. `agent-caffeine status [--json]` lists the holds and says whether the Mac can sleep.
+- `agent-caffeine skill` prints the skill of the app (`skills/agent-caffeine/SKILL.md` of this repo), so any agent can read it. The tool installs nothing.
 - `agent-caffeine mcp` is an MCP server on stdin and stdout with three tools: `hold_awake` (`minutes` from 1 to 720, `reason`), `release` (`id`, or the holds of the session) and `status`. A hold ends when its session ends: when the agent closes the server's input or its output, or ends the tool with a signal, the holds that session made are released.
 - A hold is one small file in `~/Library/Application Support/com.caffeinagent.app/holds/`, which the app reads with every sample and watches. No daemon and no socket. A timed hold is dead at its time. A command hold is dead when the tool that holds it is gone, checked by pid and start time, so a pid that is used again keeps nothing awake. A dead hold is removed. While the tool is stopped (`kill -STOP`, Ctrl-Z) its hold keeps nothing awake, and it counts again when the tool is continued.
 - A hold is a reason to stay awake like an agent at work, and goes through the same decision. The battery limit, heat, a pause, the switch and a trial that ended still let the Mac sleep. In the menu each hold has a line with "Stop".
 - `hold --for` is refused while the app does not run. `hold -- <command>` runs the command all the same and says so on stderr.
 - `AGENT_CAFFEINE_HOME` names another folder in place of the app's own. It is for tests and development.
 
+### Set up for agents
+
+An agent uses the tool when a skill tells it to. "Set up for agents" in Settings > Agents > Command line, and in the setup window, does that with one click:
+
+- It writes the skill as `<skills folder>/agent-caffeine/SKILL.md` for each agent whose folder is on the Mac: Claude Code (`~/.claude/skills`), Codex and Pi (`~/.agents/skills`), opencode, Cursor, Gemini CLI, Droid, Grok Build, Amp, goose and OpenClaw. An agent that reads a folder the skill is already in gets no second copy, so with Claude Code and Codex on the Mac the skill is in two folders and every agent of the list reads one of them. `Caffeinagent/Detection/Skills/SkillCatalog.swift` holds the folders, what each was confirmed by and the agents that are left out, and `docs/research/13-agent-skills.md` the research.
+- It links the tool as `~/.local/bin/agent-caffeine`. When `~/.local/bin` does not seem to be on the PATH of your login shell, Settings shows the line to add. The skill also names the full path of the tool, so it works without the link.
+- It writes its own folder `agent-caffeine` and that one link, and nothing else. A folder, a file or a link of that name that Agent Caffeine did not make is left as it is, and Settings says so. A skills folder that is a link to a place outside the agent's folder is not written to. The file it writes has the line `<!-- agent-caffeine-skill v=1 -->` after the frontmatter, which is how the app knows its own.
+- Settings then lists each agent with its state, with "Install" next to an agent that came to the Mac later and "Update" next to a skill of an older version. At launch the app replaces a skill of its own from an older version, only while nobody edited it, and points its own link at the copy in `/Applications`. It installs nothing new by itself.
+- "Remove" takes out the files, the link and the folders the app made, each folder only when it is empty. What it made is recorded in `~/Library/Application Support/com.caffeinagent.app/skill-installs/record.json`.
+- A change of the text of the skill needs a new `SkillCatalog.version` and its digest in `CaffeinagentTests/SkillTextTests.swift`.
+
 ## Setup window
 
-The first launch opens a setup window once. It names the agents it found, offers the hooks of the agents that have them, and offers the lid closed helper on a Mac with a battery. Every step can be skipped, and the app works the same while the window is open. Everything in it is also in Settings.
+The first launch opens a setup window once. It names the agents it found, offers the hooks of the agents that have them, offers "Set up for agents" when an agent that reads skills is on the Mac, and offers the lid closed helper on a Mac with a battery. Every step can be skipped, and the app works the same while the window is open. Everything in it is also in Settings.
 
 ## Phone access
 

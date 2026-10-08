@@ -409,6 +409,24 @@ if [ "$CLI_CODE" != 141 ]; then
 fi
 echo "    $CLI_ID: $CLI_ARCHS, hardened runtime, answers, runs a command"
 
+# The skill that "Set up for agents" writes into the skills folders of the
+# agents. It is in the app, it is the one of the repo, and the tool prints it.
+echo "==> verify the bundled skill"
+SKILL="$APP/Contents/Resources/skills/agent-caffeine/SKILL.md"
+if [ ! -s "$SKILL" ]; then
+  echo "error: the skill is missing from the app: $SKILL" >&2
+  exit 1
+fi
+if ! cmp -s "$SKILL" skills/agent-caffeine/SKILL.md; then
+  echo "error: the skill in the app is not skills/agent-caffeine/SKILL.md." >&2
+  exit 1
+fi
+if ! AGENT_CAFFEINE_HOME="$CLI_HOME" "$CLI" skill | cmp -s - "$SKILL"; then
+  echo "error: agent-caffeine skill does not print the bundled skill." >&2
+  exit 1
+fi
+echo "    skills/agent-caffeine/SKILL.md: in the app, printed by the tool"
+
 # The unit tests never start the app. This starts the signed app for a few
 # seconds, next to a copy that is installed, and stops the release when its
 # main thread hangs, it burns a core, it shows no icon, it takes no sample or
