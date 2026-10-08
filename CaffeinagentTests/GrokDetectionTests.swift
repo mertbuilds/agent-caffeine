@@ -648,6 +648,33 @@ final class GrokTimelineTests: XCTestCase {
         XCTAssertEqual(run(10...15).reading?.verdict.state, .working)
     }
 
+    /// Two sessions ran in one folder and one was killed in a turn. Its
+    /// log is newer than the start of the other and its turn never ends.
+    func testTheTurnOfAKilledSessionCountsOnlyWhileItsLogIsWritten() throws {
+        try write([Event.started(at: at(1))], session: sessionA, at: 1)
+        try write([Event.started(at: at(1)), Event.ended(at: at(2))], session: sessionB, at: 2)
+        let limit = Int(VerdictRules.hookWorkingLimit)
+        run(0...limit) { step, second in XCTAssertEqual(step.reading?.verdict.state, .working, "\(second)") }
+        let quiet = step(TimeInterval(limit + 1))
+        XCTAssertEqual(quiet.evidence?.level, .activity, "Not written for the limit: the signs of activity decide")
+        XCTAssertNil(quiet.evidence?.reported)
+        XCTAssertTrue(quiet.watched.contains { $0.hasSuffix("/\(sessionA)/events.jsonl") }, "A write to the log still brings a sample")
+        // With no sign of activity the work ends as for any agent with no state.
+        let released = limit + Int(settings.releaseAfterActivity) + 1
+        run((limit + 2)...released)
+        run(released...(released + 60)) { step, second in
+            XCTAssertEqual(step.reading?.verdict.state, .idle, "\(second)")
+            XCTAssertNil(step.evidence?.reported, "\(second)")
+        }
+
+        // The session is resumed and its log is written again.
+        let resumed = TimeInterval(released + 61)
+        try write([Event.started(at: at(1)), Event.phase("streaming_text", at: at(resumed))], session: sessionA, at: resumed)
+        let again = step(resumed)
+        XCTAssertEqual(again.evidence?.level, .state)
+        XCTAssertEqual(again.reading?.verdict.state, .working)
+    }
+
     /// The hooks off and no log, as for a Grok Build with another home
     /// folder: the processor decides, as before.
     func testWithNoLogAndNoHooksTheProcessorDecides() {

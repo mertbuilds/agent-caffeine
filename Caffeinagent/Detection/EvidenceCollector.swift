@@ -757,6 +757,11 @@ final class EvidenceCollector: EvidenceCollecting {
     /// had no prompt yet. Both are judged by the signs of activity and by
     /// the hooks, as an agent with no state of its own. The log of a new
     /// session is found by the next listing, up to `listingAge` late.
+    ///
+    /// A session that was killed in a turn leaves a log whose turn never
+    /// ends, and a second session in its folder would read as working
+    /// until it quits. So a turn whose log was not written for
+    /// `VerdictRules.hookWorkingLimit` says nothing any more.
     private func fillGrok(_ evidence: inout AgentEvidence, instance: AgentInstance, now: Date, watched: inout Set<String>) {
         evidence.level = .activity
         guard let directory = grokDirectories[instance.identity],
@@ -774,7 +779,11 @@ final class EvidenceCollector: EvidenceCollecting {
             guard let hit = grokLogs.value(at: url.path, read: { GrokEventsReader.parseTail(of: url) }),
                   hit.signature.modifiedAt >= started else { continue }
             watched.insert(url.path)
-            readings.append(hit.value ?? GrokTurnState())
+            var reading = hit.value ?? GrokTurnState()
+            if case .running = reading.turn, now.timeIntervalSince(hit.signature.modifiedAt) >= VerdictRules.hookWorkingLimit {
+                reading = GrokTurnState()
+            }
+            readings.append(reading)
             newestWrite = max(newestWrite ?? hit.signature.modifiedAt, hit.signature.modifiedAt)
         }
         guard let report = GrokSummary.report(of: readings, now: now) else { return }
