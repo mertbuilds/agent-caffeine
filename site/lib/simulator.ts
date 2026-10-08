@@ -47,7 +47,7 @@ export type SimState = {
   battery: number;
   /** `SafetyMonitor.batteryStopped`: a battery stop lasts until the level is back above the floor. */
   batteryStopped: boolean;
-  /** `Pause.until`: agent caffeine acts as if it were off until then. Null when not paused. */
+  /** `Pause.until`: Agent Caffeine acts as if it were off until then. Null when not paused. */
   pausedUntil: number | null;
   /** `Reachable.until`: the Mac stays awake until then, also when no agent works. Null when not on. */
   reachableUntil: number | null;
@@ -558,7 +558,7 @@ export function sleepOutlook(state: SimState): SleepOutlook {
   const ends = waitingEnds(state);
   if (ends === null || ends - state.now <= 0) return { kind: "silent" };
   const after = ends - state.now;
-  // With the lid closed on battery only the helper keeps the Mac awake, so it sleeps when agent caffeine lets go.
+  // With the lid closed on battery only the helper keeps the Mac awake, so it sleeps when Agent Caffeine lets go.
   return state.lid === "closed" && state.power === "battery" && state.helper ? { kind: "sleeps", after } : { kind: "letsGo", after };
 }
 
@@ -635,7 +635,7 @@ function moreTime(seconds: number): string {
 /**
  * `PanelText.sleepOutlook`: the body of a notification about an agent that
  * waits. Null when something else keeps the Mac awake. With the lid open it
- * says what agent caffeine does, never when the Mac sleeps.
+ * says what Agent Caffeine does, never when the Mac sleeps.
  */
 export function sleepOutlookText(outlook: SleepOutlook): string | null {
   switch (outlook.kind) {
@@ -644,7 +644,7 @@ export function sleepOutlookText(outlook: SleepOutlook): string | null {
     case "sleeps":
       return `Your Mac sleeps in ${timeLeft(outlook.after)}`;
     case "letsGo":
-      return `agent caffeine keeps your Mac awake for ${moreTime(outlook.after)}`;
+      return `Agent Caffeine keeps your Mac awake for ${moreTime(outlook.after)}`;
   }
 }
 
@@ -685,13 +685,13 @@ export function headlineText(line: Headline, outlook: SleepOutlook = { kind: "si
     case "noAgents":
       return { title: canSleep, subtitle: "No agent is open" };
     case "safetyStop":
-      return { title: "agent caffeine has stopped", subtitle: `The battery is at ${percent(line.percent)}` };
+      return { title: "Agent Caffeine has stopped", subtitle: `The battery is at ${percent(line.percent)}` };
     case "switchedOff":
-      return { title: "agent caffeine is off", subtitle: "Your Mac sleeps as usual" };
+      return { title: "Agent Caffeine is off", subtitle: "Your Mac sleeps as usual" };
     case "paused": {
       // `PanelText.startsAgain`: a pause never ends later than tomorrow.
       const today = timeOfDay(now) + (line.until - now) < 86400;
-      return { title: "agent caffeine is paused", subtitle: `Starts again ${today ? "" : "tomorrow "}at ${clockTime(line.until)}` };
+      return { title: "Agent Caffeine is paused", subtitle: `Starts again ${today ? "" : "tomorrow "}at ${clockTime(line.until)}` };
     }
     case "reachable":
       return { title: awake, subtitle: `Reachable until ${clockTime(line.until)}` };
@@ -836,7 +836,7 @@ export function pose(line: Headline): Pose {
   }
 }
 
-/** How much of itself the icon in the menu bar shows while agent caffeine keeps nothing awake: off, paused, or all agents done. */
+/** How much of itself the icon in the menu bar shows while Agent Caffeine keeps nothing awake: off, paused, or all agents done. */
 export const ICON_AT_REST = 0.45;
 
 /** `MenuBarLook`: what the robot in the menu bar is drawn from, and the pose it stands for. */
@@ -849,7 +849,7 @@ export function iconLook(of: Pose): IconLook {
       return { eyes: "happy", opacity: 1, pose: of };
     case "attentive":
       return { eyes: "open", opacity: 1, pose: of };
-    // From version 1.0.1 of the app the icon is as pale while the Mac can sleep as while agent caffeine is off or paused.
+    // From version 1.0.1 of the app the icon is as pale while the Mac can sleep as while Agent Caffeine is off or paused.
     case "asleep":
     case "paused":
     case "off":
@@ -864,17 +864,17 @@ export function iconLabel(look: IconLook, reachable: number | null = null): stri
   switch (look.pose) {
     case "awake":
     case "reachable":
-      return reachable === null ? "agent caffeine: your Mac stays awake" : `agent caffeine: reachable until ${clockTime(reachable)}`;
+      return reachable === null ? "Agent Caffeine: your Mac stays awake" : `Agent Caffeine: reachable until ${clockTime(reachable)}`;
     case "attentive":
-      return "agent caffeine: an agent is waiting for you";
+      return "Agent Caffeine: an agent is waiting for you";
     case "paused":
-      return "agent caffeine: paused";
+      return "Agent Caffeine: paused";
     case "off":
-      return "agent caffeine: off";
+      return "Agent Caffeine: off";
     case "asleep":
-      return "agent caffeine: your Mac can sleep";
+      return "Agent Caffeine: your Mac can sleep";
     case "trouble":
-      return "agent caffeine: needs attention";
+      return "Agent Caffeine: needs attention";
   }
 }
 
@@ -883,7 +883,7 @@ export function iconLabel(look: IconLook, reachable: number | null = null): stri
 /** `PanelAttention`: the one line below the headline that needs the reader. */
 export type Attention = { kind: "safetyStop" | "reachableNeedsLidClosed" | "lidClosedNotSetUp"; text: string };
 
-/** `PanelBattery`: the charge and the level where agent caffeine lets the Mac sleep, on one line below the headline. */
+/** `PanelBattery`: the charge and the level where Agent Caffeine lets the Mac sleep, on one line below the headline. */
 export type Battery = {
   percent: number;
   floor: number;
@@ -920,7 +920,7 @@ export type View = {
   /** What a screen reader says for the icon in the menu bar. */
   iconLabel: string;
   attention: Attention | null;
-  /** Null on power, and while agent caffeine is off or paused. */
+  /** Null on power, and while Agent Caffeine is off or paused. */
   battery: Battery | null;
   bar: Bar;
   /** The time on the menu bar's clock, as "9:41". */
@@ -934,7 +934,7 @@ export type View = {
 function attention(state: SimState, line: Headline): Attention | null {
   // The line of the battery says when it starts again. Once is enough.
   if (line.kind === "safetyStop" && battery(state, line) === null) {
-    return { kind: "safetyStop", text: `agent caffeine starts again at ${percent(BATTERY_FLOOR + BATTERY_RECOVERY)}` };
+    return { kind: "safetyStop", text: `Agent Caffeine starts again at ${percent(BATTERY_FLOOR + BATTERY_RECOVERY)}` };
   }
   if (reachableUntil(state) !== null && line.kind !== "paused" && line.kind !== "switchedOff" && state.power === "battery" && !state.helper) {
     return { kind: "reachableNeedsLidClosed", text: "Close the lid and your Mac still sleeps. Set up the helper to stay reachable." };
@@ -945,7 +945,7 @@ function attention(state: SimState, line: Headline): Attention | null {
   return null;
 }
 
-/** `MenuModel.battery`: only on battery, and while agent caffeine could keep the Mac awake. */
+/** `MenuModel.battery`: only on battery, and while Agent Caffeine could keep the Mac awake. */
 function battery(state: SimState, line: Headline): Battery | null {
   if (state.power !== "battery" || line.kind === "switchedOff" || line.kind === "paused") return null;
   const shown = Math.min(Math.max(state.battery, 0), 100);
@@ -956,12 +956,12 @@ function battery(state: SimState, line: Headline): Battery | null {
     floor: BATTERY_FLOOR,
     level,
     charge: level === "stopped" ? null : percent(shown),
-    // The app stops at the floor, and its line is changing from "sleeps below" to "sleeps at".
+    // `PanelText.batterySleepsAt` and `batteryStartsAgain`.
     consequence: level === "stopped" ? `starts again at ${percent(recovery)}` : `sleeps at ${percent(BATTERY_FLOOR)}`,
     spoken:
       level === "stopped"
-        ? `Battery ${shown} percent, agent caffeine starts again at ${recovery} percent`
-        : `Battery ${shown} percent, agent caffeine lets your Mac sleep at ${BATTERY_FLOOR} percent`,
+        ? `Battery ${shown} percent, Agent Caffeine starts again at ${recovery} percent`
+        : `Battery ${shown} percent, Agent Caffeine lets your Mac sleep at ${BATTERY_FLOOR} percent`,
   };
 }
 
@@ -998,7 +998,7 @@ export function view(state: SimState): View {
     emptyText: !empty
       ? null
       : line.kind === "noAgents"
-        ? "Start an agent and agent caffeine keeps your Mac awake while it works"
+        ? "Start an agent and Agent Caffeine keeps your Mac awake while it works"
         : "No agent is open",
   };
 }

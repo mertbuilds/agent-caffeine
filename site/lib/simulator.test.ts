@@ -88,10 +88,10 @@ test("an agent that waits holds for 5 minutes, then the Mac can sleep", () => {
   assert.equal(released.groups[0].detail, "Waiting for your answer for 5 minutes");
 });
 
-test("the menu says what agent caffeine does, and when the Mac sleeps only with the lid closed on battery", () => {
+test("the menu says what Agent Caffeine does, and when the Mac sleeps only with the lid closed on battery", () => {
   const asked = preset(INITIAL, "waiting");
   assert.deepEqual(sleepOutlook(asked), { kind: "letsGo", after: WAITING_HOLD });
-  assert.equal(sleepOutlookText(sleepOutlook(asked)), "agent caffeine keeps your Mac awake for 5 more minutes");
+  assert.equal(sleepOutlookText(sleepOutlook(asked)), "Agent Caffeine keeps your Mac awake for 5 more minutes");
   // Only the helper keeps the Mac awake with the lid closed on battery.
   const closed = setLid(allowHelper(setPower(asked, "battery")), "closed");
   assert.equal(view(closed).subtitle, "Claude Code is waiting for you, your Mac sleeps in 5 minutes");
@@ -142,7 +142,7 @@ test("always holds with no agent, and the switch ends every hold", () => {
   assert.equal(view(startPause(setMode(always, "agentWorking"), "oneHour")).emptyText, "No agent is open");
   assert.equal(
     view(setMode(always, "agentWorking")).emptyText,
-    "Start an agent and agent caffeine keeps your Mac awake while it works",
+    "Start an agent and Agent Caffeine keeps your Mac awake while it works",
   );
 });
 
@@ -150,9 +150,9 @@ test("the safety stop wins over every mode and ends above the floor", () => {
   const low = preset(INITIAL, "low");
   assert.equal(view(low).held, false);
   assert.equal(view(low).pose, "trouble");
-  assert.equal(view(low).title, "agent caffeine has stopped");
+  assert.equal(view(low).title, "Agent Caffeine has stopped");
   assert.equal(view(low).subtitle, `The battery is at ${BATTERY_FLOOR}%`);
-  assert.equal(view(low).iconLabel, "agent caffeine: needs attention");
+  assert.equal(view(low).iconLabel, "Agent Caffeine: needs attention");
   // The line of the battery says when it starts again, so no attention line says it a second time.
   assert.equal(view(low).attention, null);
   assert.equal(view(setMode(low, "always")).held, false);
@@ -189,11 +189,11 @@ test("a pause holds nothing, names its end and starts again by itself", () => {
   const shown = view(paused);
   assert.equal(shown.held, false);
   assert.equal(shown.pose, "paused");
-  assert.equal(shown.title, "agent caffeine is paused");
+  assert.equal(shown.title, "Agent Caffeine is paused");
   assert.equal(shown.subtitle, "Starts again at 10:41");
   assert.equal(shown.bar.pausedLabel, "Paused until 10:41");
   assert.equal(shown.bar.timer, false);
-  assert.equal(shown.iconLabel, "agent caffeine: paused");
+  assert.equal(shown.iconLabel, "Agent Caffeine: paused");
   // The rows keep their states.
   assert.equal(shown.groups[0].detail, "1 working");
   assert.equal(view(startPause(working, "thirtyMinutes")).subtitle, "Starts again at 10:11");
@@ -223,7 +223,7 @@ test("stay reachable keeps the Mac awake with no agent at work, until its time",
   assert.equal(shown.subtitle, "Reachable until 11:41");
   assert.equal(shown.bar.reachableLabel, "Reachable until 11:41");
   assert.equal(shown.bar.timer, false);
-  assert.equal(shown.iconLabel, "agent caffeine: reachable until 11:41");
+  assert.equal(shown.iconLabel, "Agent Caffeine: reachable until 11:41");
   assert.equal(shown.groups[1].detail, "Idle for 1 hour 22 minutes");
   assert.equal(view(later(reachable, 2 * 3600)).held, false);
   assert.equal(view(stopReachable(reachable)).held, false);
@@ -268,7 +268,7 @@ test("the battery line shows on battery, amber near the floor and red when stopp
   assert.equal(view(setBattery(onBattery, 30)).battery?.level, "nearFloor");
   const stopped = view(setBattery(onBattery, BATTERY_FLOOR)).battery;
   assert.deepEqual([stopped?.level, stopped?.charge, stopped?.consequence], ["stopped", null, "starts again at 25%"]);
-  assert.equal(stopped?.spoken, "Battery 20 percent, agent caffeine starts again at 25 percent");
+  assert.equal(stopped?.spoken, "Battery 20 percent, Agent Caffeine starts again at 25 percent");
   assert.equal(view(startPause(onBattery, "oneHour")).battery, null);
   assert.equal(view(setEnabled(onBattery, false)).battery, null);
 });
@@ -294,9 +294,9 @@ test("the icon in the menu bar is pale while the Mac can sleep, as when off or p
   for (const rest of ["asleep", "off", "paused"] as const) {
     assert.deepEqual({ eyes: iconLook(rest).eyes, opacity: iconLook(rest).opacity }, { eyes: "closed", opacity: 0.45 });
   }
-  assert.equal(iconLabel(iconLook("asleep")), "agent caffeine: your Mac can sleep");
-  assert.equal(iconLabel(iconLook("off")), "agent caffeine: off");
-  assert.equal(iconLabel(iconLook("paused")), "agent caffeine: paused");
+  assert.equal(iconLabel(iconLook("asleep")), "Agent Caffeine: your Mac can sleep");
+  assert.equal(iconLabel(iconLook("off")), "Agent Caffeine: off");
+  assert.equal(iconLabel(iconLook("paused")), "Agent Caffeine: paused");
   assert.equal(iconLook("awake").opacity, 1);
-  assert.equal(view(preset(INITIAL, "idle")).iconLabel, "agent caffeine: your Mac can sleep");
+  assert.equal(view(preset(INITIAL, "idle")).iconLabel, "Agent Caffeine: your Mac can sleep");
 });

@@ -577,7 +577,7 @@ function Switch({ on, onChange }: { on: boolean; onChange: (on: boolean) => void
   return (
     <button
       aria-checked={on}
-      aria-label="agent caffeine"
+      aria-label="Agent Caffeine"
       className={`flex h-5 w-11 shrink-0 items-center rounded-full p-0.5 transition-colors duration-fast ease-smooth-out motion-reduce:transition-none ${on ? "bg-[var(--app-blue)]" : "bg-[color-mix(in_srgb,var(--panel-fg)_20%,transparent)]"}`}
       data-demo="switch"
       onClick={() => onChange(!on)}

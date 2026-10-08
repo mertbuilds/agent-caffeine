@@ -14,12 +14,12 @@ const NEAR_FLOOR: Battery = {
   level: "nearFloor",
   charge: "27%",
   consequence: `sleeps at ${BATTERY_FLOOR}%`,
-  spoken: `Battery 27 percent, agent caffeine lets your Mac sleep at ${BATTERY_FLOOR} percent`,
+  spoken: `Battery 27 percent, Agent Caffeine lets your Mac sleep at ${BATTERY_FLOOR} percent`,
 };
 
 /** The two shortcuts of Settings > Shortcuts (`ShortcutAction.title`) with their default keys. */
 const SHORTCUTS = [
-  { title: "Turn agent caffeine on or off", keys: "⌃⌥⌘C" },
+  { title: "Turn Agent Caffeine on or off", keys: "⌃⌥⌘C" },
   { title: "Pause for 1 hour", keys: "⌃⌥⌘P" },
 ];
 
@@ -166,7 +166,7 @@ export function SmallThings() {
             <span className="flex min-w-0 flex-col gap-px text-[12px] leading-4">
               <span className="font-medium">Claude Code is waiting for you</span>
               <span className="font-medium">wiki</span>
-              <span>agent caffeine keeps your Mac awake for 5 more minutes</span>
+              <span>Agent Caffeine keeps your Mac awake for 5 more minutes</span>
             </span>
           </PanelSurface>
         </Thing>
