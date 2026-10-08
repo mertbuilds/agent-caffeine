@@ -112,7 +112,9 @@ struct HoldStore {
                 continue
             }
             guard hold.isTimely(now: now) else {
-                if removeDead { unlink(path) }
+                // Past its end it is over for good. Any other one may only
+                // look wrong to a reader whose time is a moment behind.
+                if removeDead, now.timeIntervalSince1970 >= hold.end || old { unlink(path) }
                 continue
             }
             guard hold.holderIsAlive(startTime: startTime) else {

@@ -164,6 +164,23 @@ final class ManualHoldTests: XCTestCase {
         XCTAssertEqual(files(), [])
     }
 
+    /// The collector takes its time before it reads the folder.
+    func testAHoldOfTheFullCapThatIsWrittenWhileASampleRunsStays() {
+        let holds = [timed(length: ManualHold.timedCap), command()]
+        for hold in holds { store.write(hold) }
+        XCTAssertEqual(store.live(now: at(-0.02), startTime: { _ in 1_791_199_000 }), holds)
+        XCTAssertEqual(files(), ["aaaa0001.json", "bbbb0001.json"])
+    }
+
+    func testAHoldThatIsNotOverAndDoesNotCountIsRemovedOnlyOnceItIsOld() throws {
+        store.write(timed(length: 1800, from: 3600))
+        XCTAssertEqual(store.live(now: at(0), startTime: { _ in nil }), [], "It starts an hour ahead of the clock")
+        try setModified("aaaa0001", to: at(0))
+        XCTAssertEqual(files(), ["aaaa0001.json"], "A young file stays")
+        XCTAssertEqual(store.live(now: at(HoldStore.removalAge), startTime: { _ in nil }), [])
+        XCTAssertEqual(files(), [])
+    }
+
     func testAHoldWhoseHolderIsGoneNeverCountsAndIsRemoved() throws {
         store.write(command())
         XCTAssertEqual(store.live(now: at(5), startTime: { _ in nil }), [], "Dead at once")

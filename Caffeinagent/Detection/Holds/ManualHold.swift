@@ -76,11 +76,13 @@ struct ManualHold: Codable, Equatable, Identifiable {
 
     /// The time alone: the hold has not ended, and neither its length nor
     /// what is left of it is above the cap. An end that is further away
-    /// means the clock was set back, and the hold is over.
+    /// means the clock was set back, and the hold is over. A reader that
+    /// took its time just before the hold was written sees a hold of the
+    /// full cap end a moment further away, so the same tolerance counts.
     func isTimely(now: Date) -> Bool {
         let time = now.timeIntervalSince1970
         guard v == Self.currentVersion, start.isFinite, end.isFinite, Self.isValidID(id) else { return false }
-        return time < end && end - time <= cap && end - start <= cap && start - time <= Self.clockTolerance
+        return time < end && end - time <= cap + Self.clockTolerance && end - start <= cap && start - time <= Self.clockTolerance
     }
 
     /// True for a timed hold, which no process holds. A command hold
