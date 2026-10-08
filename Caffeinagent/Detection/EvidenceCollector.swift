@@ -85,6 +85,7 @@ final class EvidenceCollector: EvidenceCollecting {
         var claudeProjects = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude/projects")
         var codexRollouts = CodexRolloutReader()
         var cursorTranscripts = CursorTranscriptReader()
+        var grokEvents = GrokEventsReader()
         /// Bytes of a rollout that one sample searches for a turn marker.
         var rolloutSearchBudget = CodexRolloutTracker.defaultSearchBudget
         /// Session stores of the agents that are judged by activity, by
@@ -181,6 +182,11 @@ final class EvidenceCollector: EvidenceCollecting {
     /// When the turn of each Cursor conversation ended, by the key of its
     /// hook session, for the sample that is being collected.
     private var cursorEnds: [String: Date] = [:]
+    private var grokLogs = FileCache<GrokTurnState>()
+    private var grokListings: [ProcessIdentity: (at: Date, directory: String, logs: [GrokSessionLog])] = [:]
+    /// The working directory of each Grok Build session of the sample
+    /// that is being collected.
+    private var grokDirectories: [ProcessIdentity: String] = [:]
     /// The hook states of the sample that is being collected, by pid.
     private var sampleHookStates: [Int32: HookStateReader.State] = [:]
     private var transcriptChoices: [ProcessIdentity: (at: Date, path: String?)] = [:]
@@ -233,6 +239,7 @@ final class EvidenceCollector: EvidenceCollecting {
         // A new state file is a new entry in the folder.
         if let hookReader { sample.watchedFiles.insert(hookReader.directory.path) }
         sessionRollouts = codexSessionRollouts(of: instances, matches: matches, now: now)
+        grokDirectories = grokSessionDirectories(of: instances)
         var activities: [String: FileActivity] = [:]
         var rows: [ProcessIdentity: ProcessInfoRow] = [:]
         var liveUnits: Set<ProcessIdentity> = []
@@ -283,6 +290,7 @@ final class EvidenceCollector: EvidenceCollecting {
         childWindows = childWindows.filter { liveUnits.contains($0.key) }
         activityReaders = activityReaders.filter { activities[$0.key] != nil }
         transcriptChoices = transcriptChoices.filter { sample.roots.contains($0.key) }
+        grokListings = grokListings.filter { sample.roots.contains($0.key) }
         claudeAppSessions.formIntersection(sample.roots)
         let apps = Set(claudeApps.map(\.identity))
         claudeAppHoldSince = claudeAppHoldSince.filter { apps.contains($0.key) }
@@ -292,6 +300,7 @@ final class EvidenceCollector: EvidenceCollecting {
         transcripts.endSample()
         rolloutTails.endSample()
         cursorTails.endSample()
+        grokLogs.endSample()
         claudeSettingsFiles.endSample()
         sample.cost = TimeInterval(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
         lastSample = sample
@@ -375,6 +384,9 @@ final class EvidenceCollector: EvidenceCollecting {
         }
         own.forEach { watched.insert($0.path) }
         guard let newest = own.max(by: { $0.at < $1.at }) else { return }
+        // Grok Build's log has the time of each change, and an interrupt
+        // sends no hook event: the newer of the two counts.
+        if instance.definition.id == AgentCatalog.grokID, let since = evidence.reported?.since, since > newest.at, since <= now { return }
         evidence.hookState = newest.state
         evidence.hookStateAt = newest.at
         evidence.hookStateBySession = bySession
@@ -431,6 +443,8 @@ final class EvidenceCollector: EvidenceCollecting {
             fillCodex(&evidence, instance: instance, matches: matches, now: now, watched: &watched)
         } else if definition.id == AgentCatalog.cursorDesktopID {
             fillCursor(&evidence, instance: instance, now: now, watched: &watched)
+        } else if definition.id == AgentCatalog.grokID {
+            fillGrok(&evidence, instance: instance, now: now, watched: &watched)
         } else if let target = sources.fileActivityTargets[definition.id] {
             let activity = activities[definition.id] ?? pollActivity(definition.id, target: target)
             activities[definition.id] = activity
@@ -705,6 +719,50 @@ final class EvidenceCollector: EvidenceCollecting {
         evidence.fileActivityAt = summary.newestWrite
         evidence.hasLiveSession = summary.working || isRecent(summary.newestWrite, now: now)
         sessionNames[instance.identity] = summary.projectSlug.flatMap(CursorTranscriptReader.label(forSlug:))
+    }
+
+    // MARK: Grok Build
+
+    /// The working directory of each Grok Build session. The event logs
+    /// carry no pid, so a log is tied to a session by that directory.
+    private func grokSessionDirectories(of instances: [AgentInstance]) -> [ProcessIdentity: String] {
+        var found: [ProcessIdentity: String] = [:]
+        for instance in instances where instance.definition.id == AgentCatalog.grokID {
+            found[instance.identity] = sources.openFiles.workingDirectory(of: instance.rootPID).map(GrokEventsReader.resolved)
+        }
+        return found
+    }
+
+    /// The logs of the session's working directory that were written
+    /// since the process started. With two sessions in one directory
+    /// nobody can say which log is whose, and with no log the session has
+    /// had no prompt yet. Both are judged by the signs of activity and by
+    /// the hooks, as an agent with no state of its own. The log of a new
+    /// session is found by the next listing, up to `listingAge` late.
+    private func fillGrok(_ evidence: inout AgentEvidence, instance: AgentInstance, now: Date, watched: inout Set<String>) {
+        evidence.level = .activity
+        guard let directory = grokDirectories[instance.identity],
+              grokDirectories.values.filter({ $0 == directory }).count == 1 else { return }
+        var listing = grokListings[instance.identity]
+        if listing.map({ $0.directory != directory || now.timeIntervalSince($0.at) >= Self.listingAge || $0.at > now }) ?? true {
+            listing = (now, directory, sources.grokEvents.logs(forDirectory: directory))
+            grokListings[instance.identity] = listing
+        }
+        let started = Date(timeIntervalSince1970: instance.rootStartTime)
+        var readings: [GrokTurnState] = []
+        var newestWrite: Date?
+        for log in listing?.logs ?? [] {
+            let url = log.url
+            guard let hit = grokLogs.value(at: url.path, read: { GrokEventsReader.parseTail(of: url) }),
+                  hit.signature.modifiedAt >= started else { continue }
+            watched.insert(url.path)
+            readings.append(hit.value ?? GrokTurnState())
+            newestWrite = max(newestWrite ?? hit.signature.modifiedAt, hit.signature.modifiedAt)
+        }
+        guard let report = GrokSummary.report(of: readings, now: now) else { return }
+        evidence.level = .state
+        evidence.reported = report
+        evidence.fileActivityAt = newestWrite
     }
 
     // MARK: Process use

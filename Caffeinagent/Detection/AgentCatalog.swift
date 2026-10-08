@@ -139,12 +139,13 @@ struct AgentCatalog {
 
     /// Raised when a definition changes what it matches, so a lab recording
     /// says which catalog saw its processes.
-    static let version = 6
+    static let version = 7
 
     // MARK: Data
 
     static let cursorDesktopID = "cursor-desktop"
     static let claudeDesktopID = "claude-desktop"
+    static let grokID = "grok"
     /// `entrypoint` in the session file of a Claude Code that the Claude
     /// app started.
     static let claudeDesktopEntrypoint = "claude-desktop"
@@ -298,7 +299,20 @@ struct AgentCatalog {
             ]),
             .contains(["-dir"]),
         ]),
-        cli("grok", "Grok", verified: true),
+        // Seen 2026-10-08, Grok Build 0.2.111 (docs/research/10-grok-build.md).
+        // `~/.grok/bin/grok` and `~/.grok/bin/agent` are links to one
+        // binary in `~/.grok/downloads`, and one process is the session.
+        // The same binary runs its management commands (`grok --help`),
+        // and those are no session.
+        AgentDefinition(
+            id: grokID, displayName: "Grok Build", level: .state, kind: .cli,
+            matchers: [
+                AgentMatcher(.name("grok"), unless: [.firstIsOne(of: grokCommands)]),
+                AgentMatcher(.executableContains("/.grok/downloads/grok-"), unless: [.firstIsOne(of: grokCommands)]),
+            ],
+            exclusions: [],
+            verified: true
+        ),
         cli("hermes-agent", "Hermes Agent"),
         cli("iflow-cli", "iFlow CLI"),
         cli("junie", "Junie"),
@@ -322,6 +336,14 @@ struct AgentCatalog {
         cli("trae", "Trae", names: ["trae", "trae-cn"]),
         cli("windsurf", "Windsurf"),
         cli("zencoder", "Zencoder"),
+    ]
+
+    /// The commands of `grok --help` that start no session. `agent` (a
+    /// headless run) and `dashboard` are sessions. What a `leader`
+    /// process runs as is not measured, so it is left a session.
+    private static let grokCommands: Set<String> = [
+        "completions", "doctor", "export", "help", "inspect", "login", "logout", "mcp", "memory", "models", "plugin",
+        "sessions", "setup", "trace", "update", "version", "v", "worktree", "wrap",
     ]
 
     private static let textFileExtensions: Set<String> = [

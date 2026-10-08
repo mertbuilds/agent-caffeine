@@ -70,6 +70,10 @@ enum HookCatalog {
     static let stableAppPath = "/Applications/agent caffeine.app"
     static let timeoutSeconds = 5
     static let pluginFileName = "agent-caffeine.js"
+    /// Grok Build reads every `*.json` of its hooks folder, so our
+    /// entries have a file of their own and no file of another tool is
+    /// changed.
+    static let grokHooksFileName = "agent-caffeine.json"
 
     static let entries: [HookCatalogEntry] = [
         HookCatalogEntry(
@@ -120,13 +124,21 @@ enum HookCatalog {
             afterInstall: nil,
             confirmedBy: "cursor.com/docs/hooks for the form and the events, and the file on the test Mac. Our entries were not run live."
         ),
+        HookCatalogEntry(
+            id: AgentCatalog.grokID, displayName: "Grok Build", configPath: ".grok/hooks/\(grokHooksFileName)",
+            format: .jsonHookGroups(keyPath: ["hooks"]),
+            adds: [],
+            benefit: "Lets Agent Caffeine see at once when Grok Build starts and stops working",
+            afterInstall: "Grok Build loads the hooks the next time it starts, or when you type /hooks in Grok Build and press r.",
+            confirmedBy: "Grok Build 0.2.111 on the test Mac: ~/.grok/docs/user-guide/10-hooks.md for the folder, the form, the event names and the input. `grok inspect --json` listed our entries from the file in a home folder of its own. No event was run live: Grok Build does not start a session without an account."
+        ),
     ]
 
     /// Known hook systems that are left out, and why.
     static let notConfirmed: [(agent: String, reason: String)] = [
         ("Cursor CLI", "It is not known which hooks.json events fire in cursor-agent, or what an empty answer does to beforeSubmitPrompt."),
         ("Gemini CLI", "The settings.json hook format is known from source only, and no Gemini config exists on the test Mac."),
-        ("Grok, Amp, Antigravity, Copilot", "Known from another project's catalogue only."),
+        ("Amp, Antigravity, Copilot", "Known from another project's catalogue only."),
     ]
 
     static func entry(id: String) -> HookCatalogEntry? {

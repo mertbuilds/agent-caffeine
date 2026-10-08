@@ -106,6 +106,19 @@ enum HookEvents {
             Rule(event: "stop", action: .set(.idle)),
             Rule(event: "sessionEnd", action: .end),
         ],
+        // Grok Build's own names (docs/research/10-grok-build.md). An
+        // empty answer changes nothing for each of them: `Stop` lets
+        // the turn end on it. `PreToolUse` can deny a tool and is never
+        // registered. An interrupt sends no event: the event log of the
+        // session says that the turn ended (`GrokEventsReader`).
+        "grok": [
+            Rule(event: "UserPromptSubmit", action: .set(.working)),
+            Rule(event: "PostToolUse", action: .set(.working)),
+            Rule(event: "PostToolUseFailure", action: .set(.working)),
+            Rule(event: "Stop", action: .set(.idle)),
+            Rule(event: "StopFailure", action: .set(.idle)),
+            Rule(event: "SessionEnd", action: .end),
+        ],
     ]
 
     /// The agents whose hook input holds a `HookStamp`. The `ts` or `seq`
@@ -122,6 +135,7 @@ enum HookEvents {
         "opencode": ["opencode"],
         "pi": ["pi"],
         "cursor": [AgentCatalog.cursorDesktopID],
+        "grok": [AgentCatalog.grokID],
     ]
 
     static func hookAgent(forDefinition id: String) -> String? {
