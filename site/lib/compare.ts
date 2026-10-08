@@ -219,6 +219,30 @@ export const ROWS: readonly Row[] = [
     },
   },
   {
+    id: "cli",
+    label: "Command line tool",
+    cells: {
+      ours: yes("From version 1.0.1"),
+      adrafinil: yes(),
+      holdmylid: unstated(),
+      lidrun: yes("An agent can drive it from the terminal"),
+      clamshell: partly("A URL scheme for scripts"),
+      amphetamine: partly("AppleScript"),
+    },
+  },
+  {
+    id: "mcp",
+    label: "MCP server",
+    cells: {
+      ours: yes("From version 1.0.1"),
+      adrafinil: yes(),
+      holdmylid: unstated(),
+      lidrun: unstated(),
+      clamshell: unstated(),
+      amphetamine: unstated(),
+    },
+  },
+  {
     id: "intel",
     label: "Runs on Intel Macs",
     cells: {
