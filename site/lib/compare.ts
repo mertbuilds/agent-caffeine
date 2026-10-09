@@ -283,9 +283,9 @@ export const ROWS: readonly Row[] = [
     label: "Also has",
     cells: {
       ours: text("Stay reachable from your phone"),
-      adrafinil: text("MCP tool and command for agents"),
+      adrafinil: text("Lines for your own agent, a Keep awake button"),
       holdmylid: text("Plugged-in only mode"),
-      lidrun: text("Webhooks, command runner"),
+      lidrun: text("Webhooks, activity log"),
       clamshell: text("Shortcuts, lock at lid open"),
       amphetamine: text("Many triggers"),
     },
