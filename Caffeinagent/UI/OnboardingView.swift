@@ -169,7 +169,7 @@ struct OnboardingView: View {
         } else {
             AgentSetupOffer(model: agentSetup)
         }
-        paragraph("You can remove it in Settings > Agents > Command line. That takes out the skill and the link again.")
+        paragraph("You can remove it in Settings > Agents. That takes out the skill and the link again.")
         buttons {
             EmptyView()
         } trailing: {

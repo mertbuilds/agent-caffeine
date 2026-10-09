@@ -288,6 +288,44 @@ final class SkillTextTests: XCTestCase {
         XCTAssertEqual(model([], link: .foreign).linkDetail, "~/.local/bin/agent-caffeine was not made by Agent Caffeine, so it is left as it is.")
     }
 
+    func testTheOneLineAfterTheSetup() {
+        let names = ["Claude Code", "Codex", "opencode", "Cursor", "Gemini CLI", "Droid"]
+        XCTAssertEqual(PanelText.agentSetupDone(agents: names, linked: true), "Set up for Claude Code, Codex and 4 more. The command agent-caffeine is linked.")
+        XCTAssertEqual(PanelText.agentSetupDone(agents: Array(names.prefix(4)), linked: false), "Set up for Claude Code, Codex and 2 more.")
+        XCTAssertEqual(PanelText.agentSetupDone(agents: Array(names.prefix(3)), linked: false), "Set up for Claude Code, Codex and opencode.", "Three names fit")
+        XCTAssertEqual(PanelText.agentSetupDone(agents: ["Pi"], linked: true), "Set up for Pi. The command agent-caffeine is linked.")
+        XCTAssertEqual(PanelText.agentSetupDone(agents: [], linked: true), "The command agent-caffeine is linked.")
+        XCTAssertNil(PanelText.agentSetupDone(agents: [], linked: false))
+        let done = model(
+            [("claude", .installed(place: ".claude/skills")), ("codex", .outdated(place: ".agents/skills")), ("gemini", .notInstalled), ("droid", .foreign(place: ".factory/skills"))],
+            link: .ours(target: "/x")
+        )
+        XCTAssertEqual(done.installed.map(\.id), ["claude", "codex"], "An old skill of ours is a skill")
+        XCTAssertEqual(done.doneSummary, "Set up for Claude Code and Codex. The command agent-caffeine is linked.")
+        XCTAssertEqual(model([("claude", .installed(place: ".claude/skills"))], link: .foreign).doneSummary, "Set up for Claude Code.")
+        XCTAssertNil(model([("claude", .notInstalled)]).doneSummary)
+    }
+
+    func testDetailsAreOpenWhenSomethingIsLeftToDo() {
+        let claude = ("claude", SkillAgentStatus.installed(place: ".claude/skills"))
+        var quiet = model([claude, ("droid", .foreign(place: ".factory/skills"))], link: .ours(target: "/x"))
+        XCTAssertFalse(quiet.needsAttention, "A skill of another maker is left as it is, and nothing is to do")
+        XCTAssertFalse(model([claude], link: .foreign).needsAttention)
+        XCTAssertTrue(model([claude, ("gemini", .notInstalled)], link: .ours(target: "/x")).needsAttention, "An agent that came later")
+        XCTAssertTrue(model([("codex", .outdated(place: ".agents/skills"))], link: .ours(target: "/x")).needsAttention, "An update")
+        XCTAssertTrue(model([claude], link: .dead).needsAttention, "A link to a copy that is gone")
+        XCTAssertTrue(model([claude], link: .none).needsAttention, "No link yet")
+        XCTAssertTrue(model([claude], link: .dead, linkAllowed: false).needsAttention, "The line about the Applications folder")
+        XCTAssertFalse(model([claude], link: .ours(target: "/x"), linkAllowed: false).needsAttention)
+        quiet.errors = ["droid": "a"]
+        XCTAssertTrue(quiet.needsAttention, "A folder that was refused")
+        var fresh = model([("claude", .notInstalled)])
+        XCTAssertFalse(fresh.needsAttention, "Before the setup the button is the thing to do")
+        fresh.errors = [".claude/skills": "An edited skill that Remove left"]
+        XCTAssertTrue(fresh.needsAttention)
+        XCTAssertEqual(fresh.otherErrors, ["An edited skill that Remove left"], "It is shown outside the rows")
+    }
+
     func testALinkToACopyThatIsGoneIsNotLinked() {
         let dead = model([("claude", .installed(place: ".claude/skills"))], link: .dead)
         XCTAssertFalse(dead.isLinked)
@@ -340,7 +378,8 @@ final class SkillTextTests: XCTestCase {
     func testTheTextsFollowTheHouseStyle() {
         var texts = [
             PanelText.agentSetupButton, PanelText.agentSetupExplained, PanelText.agentSetupOptional, PanelText.agentSetupRemoveExplained,
-            PanelText.agentSetupByHand, PanelText.agentSetupUnavailable, PanelText.commandLinkTitle, PanelText.skillNotInstalled,
+            PanelText.agentSetupByHand, PanelText.agentSetupTitle, PanelText.agentSetupDetails, PanelText.agentSetupUnavailable,
+            PanelText.agentSetupDone(agents: ["Pi", "Amp", "goose", "Codex"], linked: true) ?? "", PanelText.commandLinkTitle, PanelText.skillNotInstalled,
             PanelText.commandLinked, PanelText.commandNotLinked, PanelText.commandLinkNeedsApplications, PanelText.localBinNotOnPath(file: "~/.zshrc"),
             PanelText.skillInstalled(in: "x"), PanelText.skillOutdated(in: "x"), PanelText.skillForeign("x"),
             PanelText.agentSetupSummary(agents: ["Pi"], links: true, found: true) ?? "",
@@ -357,5 +396,6 @@ final class SkillTextTests: XCTestCase {
             XCTAssertFalse(text.contains("\u{2014}"), text)
         }
         XCTAssertEqual(PanelText.agentSetupButton, "Set up for agents")
+        XCTAssertEqual(PanelText.agentSetupByHand, "Set up by hand")
     }
 }

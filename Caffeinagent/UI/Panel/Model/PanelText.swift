@@ -487,7 +487,9 @@ enum PanelText {
     static let agentSetupExplained = "A skill is a short text that tells an agent when to ask Agent Caffeine to keep your Mac awake, for example before a long build, and how."
     static let agentSetupOptional = "If you skip this, Agent Caffeine still works."
     static let agentSetupRemoveExplained = "Remove takes out the skill and the link, and nothing else."
-    static let agentSetupByHand = "To set it up by hand, use the lines below."
+    static let agentSetupTitle = "Let your agents keep your Mac awake"
+    static let agentSetupDetails = "Details"
+    static let agentSetupByHand = "Set up by hand"
     static let agentSetupUnavailable = "The skill is not in this copy of Agent Caffeine."
     static let commandLinkTitle = "The command agent-caffeine"
 
@@ -514,6 +516,19 @@ enum PanelText {
             return foreign ? "\(linksOnly) A skill named agent-caffeine that Agent Caffeine did not make is already there." : linksOnly
         case (true, false): return nil
         }
+    }
+
+    /// The one line after the setup: "Set up for Claude Code, Codex and 4
+    /// more. The command agent-caffeine is linked." Nil when nothing of
+    /// ours is there.
+    /// - Parameter agents: the agents that have the skill.
+    static func agentSetupDone(agents: [String], linked: Bool) -> String? {
+        let named = agents.count > 3 ? Array(agents.prefix(2)) + ["\(agents.count - 2) more"] : agents
+        let lines = [
+            agents.isEmpty ? nil : "Set up for \(list(named)).",
+            linked ? "The command agent-caffeine is linked." : nil,
+        ]
+        return lines.contains { $0 != nil } ? lines.compactMap { $0 }.joined(separator: " ") : nil
     }
 
     static func skillInstalled(in folder: String) -> String {

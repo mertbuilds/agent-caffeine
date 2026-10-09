@@ -601,6 +601,10 @@ struct AgentPreferences: View {
 
     private var form: some View {
         Form {
+            AgentSetupSection(
+                model: agentSetup, commandLine: commandLine, setUp: setUpForAgents, install: installSkill,
+                link: linkTool, remove: removeAgentSetup
+            )
             Section("Open on this Mac now") {
                 let found = Self.definitions.filter { foundIDs.contains($0.id) }
                 if found.isEmpty {
@@ -643,10 +647,6 @@ struct AgentPreferences: View {
                         .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
-            CommandLinePreferencesSection(
-                setup: commandLine, agentSetup: agentSetup, setUpForAgents: setUpForAgents, installSkill: installSkill,
-                linkTool: linkTool, removeAgentSetup: removeAgentSetup
-            )
         }
         .formStyle(.grouped)
     }
