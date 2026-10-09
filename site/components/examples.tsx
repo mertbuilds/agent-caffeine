@@ -174,7 +174,6 @@ export function Examples() {
           </p>
         </Fact>
       </ul>
-      <p className="text-pretty text-center text-sm text-muted">A low battery, heat and a pause still let your Mac sleep</p>
     </section>
   );
 }
