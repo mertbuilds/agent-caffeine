@@ -38,7 +38,7 @@ const TEXT = `# Agent Caffeine
 
 ## Links
 
-- [Home](${SITE_URL}/): product, examples, a demo, price, questions
+- [Home](${SITE_URL}/): examples of long jobs, the agents it finds, features, a demo, price, questions
 - [Compare](${SITE_URL}/compare): Agent Caffeine next to Adrafinil, Hold My Lid, LidRun, Clamshell and Amphetamine, with the price first and a source for each tool
 - [Privacy](${SITE_URL}/privacy): what the app, a purchase and the website collect
 - [Terms](${SITE_URL}/terms): license, trial, payment, refunds and liability

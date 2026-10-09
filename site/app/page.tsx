@@ -70,8 +70,8 @@ export default async function Home() {
   return (
     <main id="main" className="relative isolate flex min-h-screen flex-col gap-24 overflow-x-clip px-4 pt-14 md:px-6">
       <Hero />
-      <AgentsSection />
       <Examples />
+      <AgentsSection />
       <SleepScenes />
       <SmallThings />
       <Demo />

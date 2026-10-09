@@ -34,6 +34,16 @@ export async function Footer() {
         </div>
         <Column title="Product">
           <li>
+            <Link href="/#examples" className={LINK}>
+              Examples
+            </Link>
+          </li>
+          <li>
+            <Link href="/#agents" className={LINK}>
+              Agents
+            </Link>
+          </li>
+          <li>
             <Link href="/#features" className={LINK}>
               Features
             </Link>

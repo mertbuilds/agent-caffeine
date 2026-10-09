@@ -143,7 +143,7 @@ export function Examples() {
   return (
     <section id="examples" className="mx-auto flex w-full max-w-[1120px] scroll-mt-20 flex-col gap-10">
       <SectionHeading
-        lead="The skill, the command line tool and the MCP server let any agent or script keep your Mac awake for a long job, then let it sleep"
+        lead="Your Mac stays awake until the job ends, also with the lid closed. Then it sleeps"
         title="Ask your agent to run any long job"
       />
       <ul className="mx-auto grid w-full max-w-[36rem] gap-x-4 gap-y-4 lg:max-w-none lg:grid-cols-2">

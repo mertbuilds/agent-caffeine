@@ -22,7 +22,8 @@ const OPEN_FROM = 16;
 
 /** The home page's sections in the order they stand. `ids` are the sections a link stands for. */
 const SECTIONS = [
-  { hash: "#agents", ids: ["agents", "examples"], label: "Agents", name: "header-agents" },
+  { hash: "#examples", ids: ["examples"], label: "Examples", name: "header-examples" },
+  { hash: "#agents", ids: ["agents"], label: "Agents", name: "header-agents" },
   { hash: "#features", ids: ["features", "small-things"], label: "Features", name: "header-features" },
   { hash: "#demo", ids: ["demo"], label: "Demo", name: "header-demo" },
   { hash: "#pricing", ids: ["pricing"], label: "Pricing", name: "header-pricing" },

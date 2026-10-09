@@ -28,7 +28,7 @@ export function AgentsSection() {
   return (
     <section id="agents" className="flex scroll-mt-20 flex-col gap-10">
       <SectionHeading
-        lead={`More than ${agentsMoreThan} agents, and you can add your own`}
+        lead={`It finds more than ${agentsMoreThan} agents by itself, with no setup. You can add your own`}
         title="It knows your agents"
       />
       <div ref={ref} className={`agent-marquee -mx-4 md:-mx-6 ${seen ? "" : "agent-marquee-paused"}`}>
