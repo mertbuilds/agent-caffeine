@@ -2,8 +2,10 @@
 
 > The brand is `Agent Caffeine`, with both words capitalised. Every
 > user-visible string uses it: the app, the dmg and the site. The app
-> bundle stays `agent caffeine.app`, because the hooks of installed users
-> point to that path. `caffeinagent` is the name of the repo, the binary, the bundle id
+> bundle is `Agent Caffeine.app` from 1.0.2. It was `agent caffeine.app`
+> in 1.0.0 and 1.0.1, and an update keeps the name of the bundle it
+> replaces, so both names are installed and both are supported for good:
+> see `AppInstall`. `caffeinagent` is the name of the repo, the binary, the bundle id
 > and the domain (caffeinagent.com), and the Xcode target and source
 > folder are `Caffeinagent`. Users never see those names as the brand.
 
@@ -47,7 +49,7 @@ Some agents can run a command when their state changes. With hooks on, an agent 
 - Supported: Claude Code and Codex (adds "waiting for your permission"), Droid, opencode and Pi (adds working, waiting and done). Pi has no permission step of its own, so it waits only when one of its extensions asks you something. `Caffeinagent/Detection/Hooks/HookCatalog.swift` holds the list, what each entry was confirmed by, and the agents that are left out and why.
 - Switching hooks on adds a few lines to the agent's own config file (`~/.claude/settings.json`, `~/.codex/hooks.json`, `~/.factory/settings.json`), or writes one file of its own for opencode (`~/.config/opencode/plugins/agent-caffeine.js`) and for Pi (`~/.pi/agent/extensions/agent-caffeine.js`). The rest of the file stays as it is, a backup is kept next to it, and switching hooks off removes exactly those lines again.
 - The lines run `CaffeinagentHook`, a small command inside the app in `/Applications`, never the app itself. It reads the event, writes one small state file per agent process to `~/Library/Application Support/com.caffeinagent.app/hooks/`, prints nothing and always exits 0. It keeps the state and the name of the event, and nothing you or the agent typed. The app does not have to run, and the lines do nothing when the app is gone.
-- Hooks need the app in `/Applications`, because the lines point there.
+- Hooks need the app in `/Applications`, because the lines point there. They hold the path with the name the bundle has on disk: `Agent Caffeine.app` for an install of 1.0.2 or later, `agent caffeine.app` for one that was updated from 1.0.0 or 1.0.1. Lines with the other name of the same bundle count as current and are not rewritten. On a volume that tells names apart by case, lines with a name that is not on disk read as from another version, and "Update" rewrites them. The plugin files of opencode and Pi are rewritten at launch, only while nobody edited them.
 
 ## Command line and MCP
 
@@ -128,6 +130,8 @@ xcodegen generate              # regenerate Xcode project from project.yml
 xcodebuild -project Caffeinagent.xcodeproj -scheme Caffeinagent -configuration Debug -derivedDataPath build
 open build/Build/Products/Debug/caffeinagent.app
 ```
+
+Xcode names the build product `caffeinagent.app`. `scripts/release.sh` copies it to `Agent Caffeine.app` for the disk image, and that is the name of a new install.
 
 Run the unit tests with `xcodebuild test -project Caffeinagent.xcodeproj -scheme Caffeinagent -destination 'platform=macOS'`.
 

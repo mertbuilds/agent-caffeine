@@ -65,9 +65,12 @@ enum HookCatalog {
     static let pluginRepeatMilliseconds = 1000
     /// Every entry we write holds this, and nothing else in a config does.
     static let marker = "/Contents/MacOS/CaffeinagentHook"
-    /// The hook command points here and nowhere else, so it stays valid
-    /// when the app updates and when a copy runs from another folder.
-    static let stableAppPath = "/Applications/agent caffeine.app"
+    /// The hook command of a new install is here. The app writes
+    /// `AppInstall.running.stablePath`, which is this path or the one with
+    /// the name of 1.0.0 and 1.0.1, as the bundle is named on disk. So the
+    /// command stays valid when the app updates and when a copy runs from
+    /// another folder.
+    static let stableAppPath = AppInstall.defaultPath
     static let timeoutSeconds = 5
     static let pluginFileName = "agent-caffeine.js"
     /// Grok Build reads every `*.json` of its hooks folder, so our

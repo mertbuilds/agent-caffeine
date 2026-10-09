@@ -469,11 +469,21 @@ echo "==> create release zip"
 
 # PRODUCT_NAME stays "caffeinagent" so the binary path + bundle id are
 # stable for signing/updates, but the user-facing bundle inside the dmg
-# needs to read "agent caffeine.app". Copy preserves the stapled ticket
-# and code signature (bundle name isn't part of either).
-DIST_APP="$BUILD_DIR/Build/Products/$CONFIG/agent caffeine.app"
+# is "Agent Caffeine.app" from 1.0.2 (1.0.0 and 1.0.1: "agent caffeine.app").
+# Copy preserves the stapled ticket and code signature (bundle name isn't
+# part of either). An update keeps the name of the bundle it replaces, and
+# the app supports both names: see AppInstall.swift.
+DIST_NAME="Agent Caffeine.app"
+DIST_APP="$BUILD_DIR/Build/Products/$CONFIG/$DIST_NAME"
 rm -rf "$DIST_APP"
 cp -R "$APP" "$DIST_APP"
+# The build folder is on a volume that may not tell names apart by case, so
+# the name on disk is read back.
+if [ "$(cd "$BUILD_DIR/Build/Products/$CONFIG" && ls -d *affeine.app)" != "$DIST_NAME" ]; then
+  echo "error: the bundle for the dmg is not named $DIST_NAME" >&2
+  exit 1
+fi
+codesign --verify --deep --strict "$DIST_APP"
 
 echo "==> build dmg (drag-to-applications)"
 # dmgbuild writes the .DS_Store directly (no Finder/AppleScript dance), so

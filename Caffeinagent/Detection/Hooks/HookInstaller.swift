@@ -4,7 +4,8 @@ import os
 enum HookStatus: Equatable {
     case notInstalled
     case installed(version: Int)
-    /// Our entries are there, from an older build or with another app path.
+    /// Our entries are there, from an older build or with the path of
+    /// another bundle. The other name of the same bundle is no other path.
     case outdated
     /// The agent's config folder is not there: the agent is not set up.
     case configMissing
@@ -50,20 +51,25 @@ enum HookConfigEditor {
 
     // MARK: Status
 
-    static func status(text: [UInt8], entry: HookCatalogEntry, appPath: String) -> HookStatus {
+    /// - Parameter same: other paths of the bundle at `appPath`
+    ///   (`AppPathSpellings.same`). Entries with one of them are current.
+    static func status(text: [UInt8], entry: HookCatalogEntry, appPath: String, same: [String] = []) -> HookStatus {
+        let paths = [appPath] + same
         switch entry.format {
         case .pluginFile:
             let source = String(decoding: text, as: UTF8.self)
-            if source == HookCatalog.pluginSource(for: entry, appPath: appPath) { return .installed(version: HookCatalog.pluginVersion(for: entry)) }
+            if paths.contains(where: { source == HookCatalog.pluginSource(for: entry, appPath: $0) }) { return .installed(version: HookCatalog.pluginVersion(for: entry)) }
             return source.contains(HookCatalog.pluginMarker) ? .outdated : .unreadable
         case .jsonHookGroups, .jsonFlatHooks:
             guard let (keyPath, flat) = entry.format.jsonLayout else { return .unreadable }
             if isBlank(text) { return .notInstalled }
             guard let root = try? validated(text), let found = try? ourHandlers(in: root, keyPath: keyPath, flat: flat) else { return .unreadable }
             if found.isEmpty { return .notInstalled }
-            let expected = expectedHandlers(for: entry, appPath: appPath)
-            let same = found.count == expected.count && expected.allSatisfy(found.contains)
-            return same ? .installed(version: HookCatalog.version) : .outdated
+            let current = paths.contains { path in
+                let expected = expectedHandlers(for: entry, appPath: path)
+                return found.count == expected.count && expected.allSatisfy(found.contains)
+            }
+            return current ? .installed(version: HookCatalog.version) : .outdated
         }
     }
 
@@ -72,10 +78,15 @@ enum HookConfigEditor {
     /// The text with our entries, each at the end of its event's list, so
     /// the position of every other entry stays the same. Codex stores its
     /// trust of a hook by that position. `keeping` is for the entries of an
-    /// older build that are taken out first: see `uninstalling`.
-    static func installing(into text: [UInt8], entry: HookCatalogEntry, appPath: String, keeping: Set<[String]> = []) throws -> [UInt8] {
-        guard let (keyPath, flat) = entry.format.jsonLayout else { return Array(HookCatalog.pluginSource(for: entry, appPath: appPath).utf8) }
-        if status(text: text, entry: entry, appPath: appPath) == .installed(version: HookCatalog.version) { return text }
+    /// older build that are taken out first: see `uninstalling`. Entries
+    /// that are current under another path of the same bundle (`same`) stay
+    /// as they are.
+    static func installing(into text: [UInt8], entry: HookCatalogEntry, appPath: String, same: [String] = [], keeping: Set<[String]> = []) throws -> [UInt8] {
+        guard let (keyPath, flat) = entry.format.jsonLayout else {
+            if status(text: text, entry: entry, appPath: appPath, same: same) == .installed(version: HookCatalog.pluginVersion(for: entry)) { return text }
+            return Array(HookCatalog.pluginSource(for: entry, appPath: appPath).utf8)
+        }
+        if status(text: text, entry: entry, appPath: appPath, same: same) == .installed(version: HookCatalog.version) { return text }
         let cleared = try clearedForInstall(text, entry: entry, keeping: keeping)
         var source = JSONSourceText(cleared)
         let addsVersion = try lacksVersion(cleared, entry: entry)
@@ -424,6 +435,8 @@ struct HookInstaller {
 
     var home = URL(fileURLWithPath: NSHomeDirectory(), isDirectory: true)
     var appPath = HookCatalog.stableAppPath
+    /// The other names of the bundle at `appPath`: see `AppPathSpellings`.
+    var spellings = AppPathSpellings()
     var now: () -> Date = Date.init
 
     func configURL(for entry: HookCatalogEntry) -> URL {
@@ -507,7 +520,7 @@ struct HookInstaller {
         let text: [UInt8]?
         do { text = try read(configURL(for: entry)) } catch { return .unreadable }
         guard let text else { return .notInstalled }
-        return HookConfigEditor.status(text: text, entry: entry, appPath: appPath)
+        return HookConfigEditor.status(text: text, entry: entry, appPath: appPath, same: spellings.same)
     }
 
     func install(_ entry: HookCatalogEntry) throws {
@@ -518,12 +531,12 @@ struct HookInstaller {
             throw HookInstallError.notOurFile
         }
         guard entry.format.jsonLayout != nil else {
-            let new = try HookConfigEditor.installing(into: old ?? [], entry: entry, appPath: appPath)
+            let new = try HookConfigEditor.installing(into: old ?? [], entry: entry, appPath: appPath, same: spellings.same)
             try write(new, to: url, replacing: old, backup: false)
             return
         }
         let keeping = Set(record(for: entry)?.emptyBefore ?? [])
-        let new = try HookConfigEditor.installing(into: old ?? [], entry: entry, appPath: appPath, keeping: keeping)
+        let new = try HookConfigEditor.installing(into: old ?? [], entry: entry, appPath: appPath, same: spellings.same, keeping: keeping)
         // Already there: the record of the first time stands.
         guard new != old else { return }
         let cleared = try HookConfigEditor.clearedForInstall(old ?? [], entry: entry, keeping: keeping)
@@ -532,7 +545,7 @@ struct HookInstaller {
         // The record of an earlier "on" counts only while its entries are
         // still in the file. A file that was replaced since is the user's:
         // its version and the file itself are not ours to take away.
-        let earlier = old.map { HookConfigEditor.status(text: $0, entry: entry, appPath: appPath) } == .outdated ? record(for: entry) : nil
+        let earlier = old.map { HookConfigEditor.status(text: $0, entry: entry, appPath: appPath, same: spellings.same) } == .outdated ? record(for: entry) : nil
         let created = old == nil || (earlier?.createdFile ?? false)
         let addedVersion = try HookConfigEditor.lacksVersion(cleared, entry: entry) || (earlier?.addedVersion ?? false)
         let backups = (earlier?.backups ?? []) + [backup?.lastPathComponent].compactMap { $0 }
@@ -550,26 +563,36 @@ struct HookInstaller {
     /// Replaces the plugin and extension files of ours that an older build
     /// wrote, and gives the entries it replaced. Such a file is all ours,
     /// so no word of the user is needed, but only while it is to the
-    /// letter what that build wrote (`HookPluginHistory`). A file the user
-    /// edited, one of a version this build does not know and one with
-    /// another app path stay as they are, and Preferences offers "Update"
-    /// for them. A file that is not there is not made: the user did not
-    /// turn it on. The entries in a JSON config are in the user's own
-    /// file and are never changed here.
+    /// letter what that build wrote (`HookPluginHistory`). The same goes
+    /// for a file of this build or an older one that holds the other name
+    /// of the app when nothing is at that path (`AppPathSpellings.gone`):
+    /// on a volume that tells names apart by case its hook command is not
+    /// there. A file the user edited, one of a version this build does not
+    /// know and one with the path of another copy stay as they are, and
+    /// Preferences offers "Update" for them. A file that is not there is
+    /// not made: the user did not turn it on. The entries in a JSON config
+    /// are in the user's own file and are never changed here.
     @discardableResult
     func updateOwnFiles() -> [HookCatalogEntry] {
         HookCatalog.entries.filter { entry in
             guard case .pluginFile = entry.format, agentIsSetUp(entry),
                   let old = try? read(configURL(for: entry)),
-                  HookConfigEditor.status(text: old, entry: entry, appPath: appPath) == .outdated else { return false }
+                  HookConfigEditor.status(text: old, entry: entry, appPath: appPath, same: spellings.same) == .outdated else { return false }
             let source = String(decoding: old, as: UTF8.self)
             guard let version = HookPluginHistory.version(ofSource: source),
-                  source == HookPluginHistory.source(for: entry, version: version, appPath: appPath),
+                  ([appPath] + spellings.same + spellings.gone).contains(where: { source == written(for: entry, version: version, appPath: $0) }),
                   (try? install(entry)) != nil else { return false }
             let name = configURL(for: entry).lastPathComponent, current = HookCatalog.pluginVersion(for: entry)
             Self.log.notice("updated \(name, privacy: .public) of \(entry.id, privacy: .public) from v=\(version) to v=\(current)")
             return true
         }
+    }
+
+    /// The file a build wrote for a version: this build, or one before it.
+    private func written(for entry: HookCatalogEntry, version: Int, appPath: String) -> String? {
+        version == HookCatalog.pluginVersion(for: entry)
+            ? HookCatalog.pluginSource(for: entry, appPath: appPath)
+            : HookPluginHistory.source(for: entry, version: version, appPath: appPath)
     }
 
     /// The states go only when the hooks are off for sure: after a change

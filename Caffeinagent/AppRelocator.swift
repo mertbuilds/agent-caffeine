@@ -86,14 +86,14 @@ enum AppRelocator {
 
     private static func relocate(from sourceURL: URL) {
         let appName = sourceURL.lastPathComponent
-        let destURL = URL(fileURLWithPath: "/Applications").appendingPathComponent(appName)
+        let destURL = URL(fileURLWithPath: AppInstall.live.relocationPath(for: appName))
         let fm = FileManager.default
 
         do {
             // Copy next to the destination first so an existing install is
             // only replaced once the new copy is complete.
             let tempDir = try fm.url(for: .itemReplacementDirectory, in: .userDomainMask, appropriateFor: destURL, create: true)
-            let tempURL = tempDir.appendingPathComponent(appName)
+            let tempURL = tempDir.appendingPathComponent(destURL.lastPathComponent)
             defer { try? fm.removeItem(at: tempDir) }
             try fm.copyItem(at: sourceURL, to: tempURL)
             if fm.fileExists(atPath: destURL.path) {

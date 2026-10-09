@@ -129,6 +129,8 @@ struct SkillInstaller {
     /// The tool in the copy in the Applications folder, where the link
     /// belongs.
     var stableToolPath = CommandLineSetup(appPath: HookCatalog.stableAppPath).toolPath
+    /// Says when two paths are one file: see `AppInstall`.
+    var install = AppInstall.live
 
     private static let log = Logger(subsystem: "com.caffeinagent.app", category: "Skills")
 
@@ -153,7 +155,7 @@ struct SkillInstaller {
 
     /// A debug build, a copy in Downloads and a disk image move away or
     /// go, so the link is offered only from the Applications folder.
-    var isInApplications: Bool { toolPath == stableToolPath }
+    var isInApplications: Bool { install.isSameItem(toolPath, stableToolPath) }
 
     // MARK: What is there
 
@@ -391,16 +393,17 @@ struct SkillInstaller {
     /// Makes `~/.local/bin/agent-caffeine` a link to the tool. A link of
     /// ours to a copy that is gone is replaced. A link of ours to another
     /// copy that is there is moved only by the copy in the Applications
-    /// folder. A file, a folder and a link to something else are refused.
+    /// folder. A link to this copy under its other name stays as it is. A
+    /// file, a folder and a link to something else are refused.
     func link() throws {
         guard FileManager.default.isExecutableFile(atPath: toolPath) else { throw SkillInstallError.noTool }
         var record = record()
         var made: [String] = []
         switch linkState() {
         case .foreign: throw SkillInstallError.linkNotOurs
-        case .ours(let target) where target == toolPath:
+        case .ours(let target) where install.isSameItem(target, toolPath):
             if record.link == nil {
-                record.link = SkillInstallRecord.Link(target: toolPath)
+                record.link = SkillInstallRecord.Link(target: target)
                 save(record)
             }
             return
@@ -530,7 +533,7 @@ struct SkillInstaller {
         }
         let moves: Bool
         switch linkState() {
-        case .ours(let target): moves = target != toolPath && record().link != nil
+        case .ours(let target): moves = !install.isSameItem(target, toolPath) && record().link != nil
         case .dead: moves = true
         case .none, .foreign: moves = false
         }

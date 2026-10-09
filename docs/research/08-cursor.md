@@ -199,7 +199,7 @@ Order of work: matcher and helpers first (this alone gives "open", the assertion
 ## B. Measurement still needed (owner, about 10 minutes)
 Tool: `cursor-watch.sh` in this folder. It is read-only. It prints once per second: the Cursor assertion, the commands below each extension host, the last line TYPE of each recent transcript, and the last two wake lock log lines. It prints no chat text.
 
-The built-in recorder (`"/Applications/agent caffeine.app/Contents/MacOS/caffeinagent" --lab-record cursor`) is safe next to the running app: `LabCommand` runs before the app starts, is headless, takes no assertion, checks no license, and only writes `~/Library/Application Support/com.caffeinagent.app/lab/`. The shipped 0.2.3 binary has the lab arguments. But 0.2.3 has no Cursor matcher, so it records "no agents" for Cursor. Use it after a build with the matcher exists.
+The built-in recorder (`/Applications/[Aa]gent\ [Cc]affeine.app/Contents/MacOS/caffeinagent --lab-record cursor`, for both names of the app) is safe next to the running app: `LabCommand` runs before the app starts, is headless, takes no assertion, checks no license, and only writes `~/Library/Application Support/com.caffeinagent.app/lab/`. The shipped 0.2.3 binary has the lab arguments. But 0.2.3 has no Cursor matcher, so it records "no agents" for Cursor. Use it after a build with the matcher exists.
 
 Steps are in the final message of this research and repeated here:
 1. Terminal: `"${TMPDIR%/}/agent-caffeine-research/cursor-watch.sh" 900 | tee ~/Desktop/cursor-watch.txt`

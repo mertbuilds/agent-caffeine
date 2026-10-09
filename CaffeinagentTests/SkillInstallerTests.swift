@@ -409,6 +409,29 @@ final class SkillInstallerTests: XCTestCase {
         XCTAssertEqual(installer.record().link?.target, applications)
     }
 
+    /// The link an install of 1.0.1 made holds the earlier name of the
+    /// bundle. Where that is the same bundle, the link is current. A link
+    /// to a folder stands in for the second name of one bundle here.
+    func testALinkToThisCopyUnderItsOtherNameStays() throws {
+        let app = url("Apps/agent caffeine.app")
+        try make("Renamed", ".local/bin")
+        try manager.createSymbolicLink(at: url("Renamed/Agent Caffeine.app"), withDestinationURL: app)
+        let otherName = url("Renamed/Agent Caffeine.app").path + CommandLineSetup.pathInApp
+        try manager.createSymbolicLink(atPath: url(link).path, withDestinationPath: otherName)
+        XCTAssertEqual(installer.linkState(), .ours(target: otherName))
+        try installer.link()
+        XCTAssertEqual(destination(link), otherName, "Not rewritten for the name alone")
+        XCTAssertEqual(installer.record().link?.target, otherName)
+        XCTAssertEqual(installer.updateOwn(), [])
+        XCTAssertEqual(destination(link), otherName)
+        // The name counts where the volume says the two are not one file.
+        installer.install = AppInstall(identity: { _ in nil }, caseSensitive: { _ in true }, names: { _ in [] })
+        XCTAssertEqual(installer.updateOwn(), [link])
+        XCTAssertEqual(destination(link), installer.toolPath)
+        XCTAssertEqual(installer.removeAll(), [:])
+        XCTAssertFalse(exists(link))
+    }
+
     // MARK: Remove
 
     func testRemoveTakesEverythingWeMade() throws {

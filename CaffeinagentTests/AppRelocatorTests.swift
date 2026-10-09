@@ -4,9 +4,11 @@ final class AppRelocatorTests: XCTestCase {
     func testWhereTheAppRunsFrom() {
         let home = "/Users/me"
         let cases: [(path: String, readOnly: Bool, want: AppRelocator.Location)] = [
+            ("/Applications/Agent Caffeine.app", false, .installed),
             ("/Applications/agent caffeine.app", false, .installed),
             ("/Users/me/Applications/agent caffeine.app", false, .installed),
             // The mounted disk image.
+            ("/Volumes/Agent Caffeine/Agent Caffeine.app", true, .cannotMove),
             ("/Volumes/Agent Caffeine/agent caffeine.app", true, .cannotMove),
             // A copy that is kept on an external drive: the alert of the
             // disk image came at every launch.

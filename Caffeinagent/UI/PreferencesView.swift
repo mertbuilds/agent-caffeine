@@ -569,7 +569,7 @@ struct AgentPreferences: View {
     /// The menu asked for "Other tools": the tab scrolls there once.
     var showsOtherTools: Binding<Bool> = .constant(false)
     /// The tool in the copy of the app that runs.
-    var commandLine = CommandLineSetup(appPath: Bundle.main.bundleURL.standardizedFileURL.path)
+    var commandLine = CommandLineSetup(appPath: AppInstall.running.path)
     var agentSetup = AgentSetupModel()
     var setUpForAgents: () -> Void = {}
     var installSkill: (SkillCatalogEntry) -> Void = { _ in }

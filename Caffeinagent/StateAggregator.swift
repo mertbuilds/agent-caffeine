@@ -208,11 +208,18 @@ final class StateAggregator: ObservableObject {
     /// False on a Mac without a lid angle sensor, where the display cannot
     /// follow the lid.
     var hasLidAngleSensor: Bool { display?.hasLidAngleSensor ?? false }
-    private let hookInstaller = HookInstaller()
+    /// The hooks are written with the path of the install as it is named
+    /// on disk: see `AppInstall`.
+    private let hookInstaller = HookInstaller(appPath: AppInstall.running.stablePath, spellings: AppInstall.running.spellings)
     /// Nil when the skill is not in the bundle.
     private let skillInstaller: SkillInstaller? = {
-        let appPath = Bundle.main.bundleURL.standardizedFileURL.path
-        return SkillCatalog.bundledSkill(appPath: appPath).map { SkillInstaller(skill: $0, toolPath: CommandLineSetup(appPath: appPath).toolPath) }
+        let running = AppInstall.running
+        return SkillCatalog.bundledSkill(appPath: running.path).map {
+            SkillInstaller(
+                skill: $0, toolPath: CommandLineSetup(appPath: running.path).toolPath,
+                stableToolPath: CommandLineSetup(appPath: running.stablePath).toolPath
+            )
+        }
     }()
     private var askedForShellPath = false
     private let engine: DetectionEngine
@@ -1032,14 +1039,14 @@ final class StateAggregator: ObservableObject {
     /// The hook entries point at the copy in the Applications folder, so
     /// they are offered only when the hook command is there.
     var hooksAvailable: Bool {
-        FileManager.default.isExecutableFile(atPath: HookCatalog.executablePath())
+        FileManager.default.isExecutableFile(atPath: HookCatalog.executablePath(appPath: AppInstall.running.stablePath))
     }
 
     /// At launch: see `HookInstaller.updateOwnFiles`. Only the copy in the
     /// Applications folder does it, because the files point at its hook
     /// command, and never the smoke test.
     private func updateOwnHookFiles() {
-        guard !SmokeTest.isActive, Bundle.main.bundleURL.standardizedFileURL.path == HookCatalog.stableAppPath else { return }
+        guard !SmokeTest.isActive, AppInstall.running.isStableInstall else { return }
         hookInstaller.updateOwnFiles()
     }
 
@@ -1071,7 +1078,7 @@ final class StateAggregator: ObservableObject {
     /// Applications folder does it, so a build that runs from another
     /// folder never moves the link, and never the smoke test.
     private func updateOwnSkill() {
-        guard !SmokeTest.isActive, Bundle.main.bundleURL.standardizedFileURL.path == HookCatalog.stableAppPath else { return }
+        guard !SmokeTest.isActive, AppInstall.running.isStableInstall else { return }
         skillInstaller?.updateOwn()
     }
 

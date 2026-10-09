@@ -513,12 +513,14 @@ final class ManualHoldTests: XCTestCase {
 
     func testWhatSettingsShowsOfTheCommandLineTool() {
         let setup = CommandLineSetup(appPath: HookCatalog.stableAppPath)
-        XCTAssertEqual(setup.toolPath, "/Applications/agent caffeine.app/Contents/MacOS/agent-caffeine")
+        XCTAssertEqual(setup.toolPath, "/Applications/Agent Caffeine.app/Contents/MacOS/agent-caffeine")
         XCTAssertEqual(
             setup.installCommand,
-            "mkdir -p ~/.local/bin && ln -sf '/Applications/agent caffeine.app/Contents/MacOS/agent-caffeine' ~/.local/bin/agent-caffeine"
+            "mkdir -p ~/.local/bin && ln -sf '/Applications/Agent Caffeine.app/Contents/MacOS/agent-caffeine' ~/.local/bin/agent-caffeine"
         )
-        XCTAssertEqual(setup.mcpConfig, #"{"command": "/Applications/agent caffeine.app/Contents/MacOS/agent-caffeine", "args": ["mcp"]}"#)
+        XCTAssertEqual(setup.mcpConfig, #"{"command": "/Applications/Agent Caffeine.app/Contents/MacOS/agent-caffeine", "args": ["mcp"]}"#)
+        // An install that was updated from 1.0.1 shows the name it has on disk.
+        XCTAssertEqual(CommandLineSetup(appPath: AppInstall.knownPaths[1]).toolPath, "/Applications/agent caffeine.app/Contents/MacOS/agent-caffeine")
         let odd = CommandLineSetup(appPath: #"/Users/o'neil/"x".app"#)
         XCTAssertTrue(odd.installCommand.contains(#"'/Users/o'\''neil/"x".app/Contents/MacOS/agent-caffeine'"#))
         let config = try? JSONSerialization.jsonObject(with: Data(odd.mcpConfig.utf8)) as? [String: Any]

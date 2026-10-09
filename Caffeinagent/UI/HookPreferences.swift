@@ -114,7 +114,7 @@ struct HookChanges: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
                 ScrollView(.horizontal) {
-                    Text(HookConfigEditor.preview(for: entry, appPath: HookCatalog.stableAppPath))
+                    Text(HookConfigEditor.preview(for: entry, appPath: AppInstall.running.stablePath))
                         .font(.system(.caption, design: .monospaced))
                         .textSelection(.enabled)
                 }
