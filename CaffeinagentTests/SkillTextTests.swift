@@ -23,16 +23,45 @@ final class SkillTextTests: XCTestCase {
     func testTheSkillFollowsTheHouseStyle() {
         XCTAssertFalse(skill.contains("\u{2014}"))
         XCTAssertTrue(skill.contains("Agent Caffeine"))
-        // The lowercase name is the path of the app, and nothing else.
+        // The lowercase name is the bundle of 1.0.0 and 1.0.1, and nothing else.
         XCTAssertEqual(skill.components(separatedBy: "agent caffeine").count - 1, skill.components(separatedBy: "agent caffeine.app").count - 1)
-        XCTAssertTrue(skill.contains("\"\(HookCatalog.stableAppPath)\(CommandLineSetup.pathInApp)\""), "The full path, in quotes for its space")
+        XCTAssertTrue(skill.contains("`Agent Caffeine.app`") && skill.contains("`agent caffeine.app`"), "Both names of the bundle")
+    }
+
+    /// The line that finds the tool is one pattern for both names of the
+    /// bundle. It is run by `sh` here against a folder that stands in for
+    /// `/Applications`, once per name.
+    func testTheSkillFindsTheToolUnderBothNamesOfTheApp() throws {
+        let pattern = #"/Applications/[Aa]gent\ [Cc]affeine.app"# + CommandLineSetup.pathInApp
+        XCTAssertTrue(skill.contains("command -v agent-caffeine || ls \(pattern)\n"))
+        for name in AppInstall.bundleNames {
+            let folder = FileManager.default.temporaryDirectory.appendingPathComponent("skill-apps-\(UUID().uuidString)")
+            defer { try? FileManager.default.removeItem(at: folder) }
+            let tool = folder.appendingPathComponent(name + CommandLineSetup.pathInApp)
+            try FileManager.default.createDirectory(at: tool.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try Data().write(to: tool)
+            let process = Process()
+            process.executableURL = URL(fileURLWithPath: "/bin/sh")
+            process.arguments = ["-c", "ls " + pattern.replacingOccurrences(of: "/Applications", with: "."), "sh"]
+            process.currentDirectoryURL = folder
+            let pipe = Pipe()
+            process.standardOutput = pipe
+            process.standardError = FileHandle.nullDevice
+            try process.run()
+            process.waitUntilExit()
+            let printed = String(decoding: pipe.fileHandleForReading.readDataToEndOfFile(), as: UTF8.self)
+            XCTAssertEqual(printed, "./\(name)\(CommandLineSetup.pathInApp)\n", name)
+        }
     }
 
     /// A change of the text needs a new `SkillCatalog.version`, or the
     /// copies that are installed never get it. Add the digest of the new
     /// text here and keep the old lines.
     func testTheTextAndItsVersionChangeTogether() {
-        let digests = [1: "ff96577727c2073f4a708bbcc944b4a060c8e742dc892ebb456332f133467246"]
+        let digests = [
+            1: "ff96577727c2073f4a708bbcc944b4a060c8e742dc892ebb456332f133467246",
+            2: "be59ed02c040a13cb7a346e66eeed5316576a100a90e8b2ae7b13994301e730b",
+        ]
         let digest = SHA256.hash(data: Data(skill.utf8)).map { String(format: "%02x", $0) }.joined()
         XCTAssertEqual(digests[SkillCatalog.version], digest)
     }

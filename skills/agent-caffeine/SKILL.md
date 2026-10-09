@@ -10,10 +10,10 @@ Agent Caffeine is a macOS menu bar app. It keeps the Mac awake while work runs a
 ## Find the tool
 
 ```bash
-command -v agent-caffeine || ls "/Applications/agent caffeine.app/Contents/MacOS/agent-caffeine"
+command -v agent-caffeine || ls /Applications/[Aa]gent\ [Cc]affeine.app/Contents/MacOS/agent-caffeine
 ```
 
-If `agent-caffeine` is not on the PATH, use the full path in quotes. If the app is not installed, tell the user and continue the work without a hold. Do not install anything yourself.
+The app is `Agent Caffeine.app`, or `agent caffeine.app` when it was installed before version 1.0.2. If `agent-caffeine` is not on the PATH, use the full path that `ls` printed, in quotes. If the app is not installed, tell the user and continue the work without a hold. Do not install anything yourself.
 
 ## Hold while one command runs (preferred)
 

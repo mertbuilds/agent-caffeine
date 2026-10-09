@@ -20,8 +20,9 @@ struct SkillCatalogEntry: Equatable, Identifiable {
 enum SkillCatalog {
     /// Raised when the text of the skill changes, so a file of an older
     /// build reads as outdated. `SkillTextTests` holds the digest of the
-    /// text of each version.
-    static let version = 1
+    /// text of each version. 2: the tool is found under both names of the
+    /// app.
+    static let version = 2
     static let skillName = "agent-caffeine"
     static let fileName = "SKILL.md"
     /// Every file we write holds this line after the frontmatter, and the
