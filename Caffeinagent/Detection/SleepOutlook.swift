@@ -36,7 +36,7 @@ enum SleepOutlook: Equatable {
     /// The lid is closed on battery and only the sleep flag keeps the Mac
     /// awake, so it sleeps when Agent Caffeine lets go.
     case sleeps(after: TimeInterval)
-    /// Agent caffeine lets go then. What the Mac does next is its own.
+    /// Agent Caffeine lets go then. What the Mac does next is its own.
     case letsGo(after: TimeInterval, then: Afterwards)
 
     init(_ decision: HoldDecision, mac: MacSleepState, now: Date) {

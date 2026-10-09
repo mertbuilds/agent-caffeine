@@ -479,6 +479,8 @@ echo "==> build dmg (drag-to-applications)"
 # dmgbuild writes the .DS_Store directly (no Finder/AppleScript dance), so
 # the layout + background survive even when the build host hasn't granted
 # Automation permissions to whatever process is calling this script.
+# The name after the settings is the name of the volume, which Finder shows as
+# the title of the install window. Nothing reads it, so it is the brand.
 RELEASE_DMG="$BUILD_DIR/$DMG_NAME"
 DMGBUILD="${DMGBUILD:-$(command -v dmgbuild || ls "$HOME"/Library/Python/*/bin/dmgbuild 2>/dev/null | sort -V | tail -1 || true)}"
 [ -x "$DMGBUILD" ] || { echo "error: dmgbuild not found" >&2; exit 1; }
@@ -487,7 +489,7 @@ DMG_APP_PATH="$(pwd)/$DIST_APP" \
 DMG_BACKGROUND="$(pwd)/scripts/dmg-background.png" \
   "$DMGBUILD" \
   -s scripts/dmg-settings.py \
-  "agent caffeine" \
+  "Agent Caffeine" \
   "$RELEASE_DMG"
 
 echo "==> sign dmg"

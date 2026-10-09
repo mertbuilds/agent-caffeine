@@ -26,6 +26,48 @@ final class BrandTests: XCTestCase {
         }
     }
 
+    /// The names a machine reads keep the lowercase form: the path of the
+    /// app, the comment at the top of the plugins the app writes (their text
+    /// is compared with what an installed build wrote), and the label of
+    /// the Keychain item. Every other line is for people.
+    func testNoTextPeopleReadHasTheLowercaseBrand() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let folders = ["Caffeinagent", "CaffeinagentCLI", "CaffeinagentHelper", "CaffeinagentHook", "release-notes", "skills"]
+        var files = ["README.md", "THIRD_PARTY_NOTICES.md", "project.yml", "scripts/release.sh", "scripts/dmg-background.html", "scripts/dmg-settings.py"]
+            .map { root.appendingPathComponent($0) }
+        for folder in folders {
+            let found = try XCTUnwrap(FileManager.default.enumerator(at: root.appendingPathComponent(folder), includingPropertiesForKeys: nil), folder)
+            files += found.compactMap { $0 as? URL }.filter { ["swift", "plist", "md", "strings", "entitlements"].contains($0.pathExtension) }
+        }
+        XCTAssertGreaterThan(files.count, 100)
+        let machineLines = [
+            "// Written by agent caffeine. Turn it off in agent caffeine > Preferences > Agents.",
+            "// It tells agent caffeine when ",
+            "add[kSecAttrLabel as String] = \"agent caffeine license\"",
+        ]
+        for file in files {
+            let source = try String(contentsOf: file, encoding: .utf8)
+            for (index, line) in source.components(separatedBy: "\n").enumerated() {
+                let trimmed = line.trimmingCharacters(in: .whitespaces)
+                if machineLines.contains(where: { trimmed.hasPrefix($0) }) { continue }
+                let rest = line.replacingOccurrences(of: "agent caffeine.app", with: "").replacingOccurrences(of: "Agent Caffeine", with: "")
+                if rest.range(of: "agent caffeine", options: .caseInsensitive) != nil {
+                    XCTFail("\(file.lastPathComponent) line \(index + 1) does not write the brand as Agent Caffeine: \(trimmed)")
+                }
+            }
+        }
+    }
+
+    /// The name of the volume is the title of the install window.
+    func testTheDiskImageIsNamedAfterTheBrand() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let release = try String(contentsOf: root.appendingPathComponent("scripts/release.sh"), encoding: .utf8)
+        XCTAssertTrue(release.contains("-s scripts/dmg-settings.py \\\n  \"Agent Caffeine\" \\\n"))
+        let art = try String(contentsOf: root.appendingPathComponent("scripts/dmg-background.html"), encoding: .utf8)
+        XCTAssertTrue(art.contains("<div class=\"wm\">Agent Caffeine</div>"))
+        XCTAssertTrue(art.contains("drag <b>Agent Caffeine</b> to"))
+    }
+
     /// A change here marks the files of every installed user as outdated
     /// or edited, and their hooks point to this path.
     func testThePathOfTheAppAndTheWrittenFilesDoNotChange() throws {
