@@ -7,7 +7,11 @@ const ROOT = join(import.meta.dirname, "..");
 const FOLDERS = ["app", "components", "content", "lib", "public", "scripts"];
 const TEXT = /\.(tsx?|md|mdx|json|txt|xml|svg|html|css|sh|webmanifest)$/;
 
-/** The path of the app on a Mac, which keeps the lowercase name. */
+/**
+ * The bundle of the app is `Agent Caffeine.app` from 1.0.2. It was
+ * `agent caffeine.app` in 1.0.0 and 1.0.1, and an update keeps that name,
+ * so a text may still name the earlier bundle.
+ */
 const MACHINE_NAMES = ["agent caffeine.app"];
 
 function textFiles(folder: string): string[] {
@@ -31,4 +35,10 @@ test("the brand is written Agent Caffeine in every text people read", () => {
       });
   }
   assert.deepEqual(wrong, []);
+});
+
+test("both names of the bundle pass, and the lowercase brand does not", () => {
+  const rest = (line: string) => MACHINE_NAMES.reduce((text, name) => text.replaceAll(name, ""), line).replaceAll("Agent Caffeine", "");
+  assert.equal(/agent\s+caffeine/i.test(rest("ls /Applications/Agent Caffeine.app /Applications/agent caffeine.app")), false);
+  assert.equal(/agent\s+caffeine/i.test(rest("open agent caffeine from Applications")), true);
 });
