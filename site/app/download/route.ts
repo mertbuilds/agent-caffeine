@@ -14,7 +14,7 @@ async function count(event: DownloadEvent, clientId: string, clientSecret: strin
   }
 }
 
-/** Counts the download on the server, where no content blocker is in the way, and sends the browser on to the dmg. */
+/** Counts the download of a browser on a Mac on the server, where no content blocker is in the way, and sends every request on to the dmg. */
 async function download(request: Request): Promise<Response> {
   const clientId = process.env.NEXT_PUBLIC_OPENPANEL_CLIENT_ID;
   const clientSecret = process.env.OPENPANEL_CLIENT_SECRET;

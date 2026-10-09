@@ -48,6 +48,15 @@ export function isBot(userAgent: string | null): boolean {
   return !userAgent || userAgent.trim() === "" || BOT.test(userAgent);
 }
 
+/**
+ * True for a browser on a Mac, the only place the dmg runs. Link scanners that follow the link come as
+ * Android, iPhone, Windows, Linux or a bare WebKit. Safari on an iPad asks for the desktop site with the
+ * user agent of a Mac, so an iPad counts too: the user agent cannot tell the two apart.
+ */
+export function isMacBrowser(userAgent: string | null): boolean {
+  return userAgent !== null && userAgent.includes("Macintosh") && userAgent.includes("Mac OS X");
+}
+
 /** True when the browser fetches the link ahead of a click. */
 export function isPrefetch(headers: Headers): boolean {
   return ["purpose", "sec-purpose"].some((name) => headers.get(name)?.toLowerCase().includes("prefetch"));
@@ -82,7 +91,7 @@ export type DownloadDecision = { redirectTo: string; event: DownloadEvent | null
 
 /**
  * Where a request for the download goes, and the event to count, if any.
- * Every request gets a redirect. Only a person's GET on the live site, with the secret set, is counted.
+ * Every request gets a redirect. Only a person's GET from a browser on a Mac, on the live site, with the secret set, is counted.
  */
 export function decideDownload({
   host,
@@ -108,6 +117,7 @@ export function decideDownload({
     !isLiveHost(hostnameOf(host)) ||
     userAgent === null ||
     isBot(userAgent) ||
+    !isMacBrowser(userAgent) ||
     isPrefetch(headers)
   ) {
     return { redirectTo, event: null };

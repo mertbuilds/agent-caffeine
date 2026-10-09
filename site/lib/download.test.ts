@@ -7,6 +7,7 @@ import {
   downloadUtmFrom,
   hostnameOf,
   isBot,
+  isMacBrowser,
   isPrefetch,
   placementFrom,
   trackRequest,
@@ -15,6 +16,24 @@ import type { Release } from "./release";
 
 const SAFARI =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
+
+const CHROME =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36";
+const FIREFOX = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:143.0) Gecko/20100101 Firefox/143.0";
+/** Safari on an iPad asks for the desktop site, with the user agent of a Mac. */
+const IPAD_DESKTOP =
+  "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15";
+const NOT_A_MAC = [
+  "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+  "Mozilla/5.0 (iPad; CPU OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1",
+  "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Mobile Safari/537.36",
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+  "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36",
+  "Mozilla/5.0 AppleWebKit/537.36 (KHTML, like Gecko)",
+  "Homebrew/4.6.15 (Macintosh; arm64 Mac OS X 15.6.1) curl/8.7.1",
+  "curl/8.7.1",
+  "",
+];
 
 const RELEASE: Release = {
   version: "1.0.0",
@@ -148,6 +167,26 @@ test("a HEAD, a bot and a prefetch get the redirect and are not counted", () => 
   assert.deepEqual(decide({ headers: new Headers() }), expected);
   assert.deepEqual(decide({ headers: new Headers({ "user-agent": "curl/8.7.1" }) }), expected);
   assert.deepEqual(decide({ headers: new Headers({ "user-agent": SAFARI, "sec-purpose": "prefetch" }) }), expected);
+});
+
+test("only a browser on a Mac is a Mac browser", () => {
+  for (const userAgent of [SAFARI, CHROME, FIREFOX, IPAD_DESKTOP]) assert.equal(isMacBrowser(userAgent), true, userAgent);
+  for (const userAgent of NOT_A_MAC.filter((entry) => !entry.startsWith("Homebrew"))) {
+    assert.equal(isMacBrowser(userAgent), false, userAgent);
+  }
+  assert.equal(isMacBrowser(null), false);
+});
+
+test("Safari, Chrome and Firefox on a Mac are counted, and an iPad that asks for the desktop site with them", () => {
+  for (const userAgent of [SAFARI, CHROME, FIREFOX, IPAD_DESKTOP]) {
+    assert.equal(decide({ headers: new Headers({ "user-agent": userAgent }) }).event?.userAgent, userAgent, userAgent);
+  }
+});
+
+test("a phone, a tablet, Windows, Linux, a bare WebKit, Homebrew, curl and no user agent get the redirect and are not counted", () => {
+  for (const userAgent of NOT_A_MAC) {
+    assert.deepEqual(decide({ headers: new Headers({ "user-agent": userAgent }) }), { redirectTo: RELEASE.href, event: null }, userAgent);
+  }
 });
 
 test("with no release, or a release with no file, the request goes to the home page", () => {
