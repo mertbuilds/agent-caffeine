@@ -3,17 +3,14 @@ import XCTest
 final class DisplayTraceTests: XCTestCase {
     private let start = Date(timeIntervalSince1970: 1_791_200_000)
     private var defaults: UserDefaults!
-    private var suite = ""
     private var directory: URL!
 
     override func setUp() {
-        suite = "caffeinagent-tests-\(UUID().uuidString)"
-        defaults = UserDefaults(suiteName: suite)
-        directory = FileManager.default.temporaryDirectory.appendingPathComponent(suite)
+        defaults = TestDefaults()
+        directory = FileManager.default.temporaryDirectory.appendingPathComponent("caffeinagent-tests-\(UUID().uuidString)")
     }
 
     override func tearDown() {
-        defaults.removePersistentDomain(forName: suite)
         try? FileManager.default.removeItem(at: directory)
     }
 

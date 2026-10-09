@@ -9,7 +9,6 @@ final class LicenseManagerTests: XCTestCase {
     private var api: StubLicenseAPI!
     private var store: MemoryLicenseStore!
     private var defaults: UserDefaults!
-    private var suiteName: String!
     private var now: Date!
     /// Seconds on the clock that counts during sleep and ignores the wall clock.
     private var uptime: TimeInterval = 0
@@ -17,14 +16,9 @@ final class LicenseManagerTests: XCTestCase {
     override func setUp() async throws {
         api = StubLicenseAPI()
         store = MemoryLicenseStore()
-        suiteName = "LicenseManagerTests.\(UUID().uuidString)"
-        defaults = UserDefaults(suiteName: suiteName)
+        defaults = TestDefaults()
         now = t0
         uptime = 0
-    }
-
-    override func tearDown() async throws {
-        defaults.removePersistentDomain(forName: suiteName)
     }
 
     private func makeManager() -> LicenseManager {

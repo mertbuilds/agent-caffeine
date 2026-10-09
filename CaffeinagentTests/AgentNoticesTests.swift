@@ -400,9 +400,7 @@ final class AgentNoticesTests: XCTestCase {
     }
 
     func testSettingsAreSavedAndLoaded() throws {
-        let name = "AgentNoticesTests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
-        defer { defaults.removePersistentDomain(forName: name) }
+        let defaults = TestDefaults()
         XCTAssertEqual(AgentNoticeSettings.load(from: defaults), AgentNoticeSettings())
         let changed = AgentNoticeSettings(waiting: false, finished: true, onlyWhenAway: false)
         changed.save(to: defaults)

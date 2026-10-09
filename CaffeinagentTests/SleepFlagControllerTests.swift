@@ -171,18 +171,11 @@ final class SleepFlagControllerTests: XCTestCase {
     private var journal = Journal()
     /// Runs in every wait of the repair.
     private var whileWaiting: () -> Void = {}
-    private var suite = ""
     private var defaults: UserDefaults!
 
     override func setUp() {
         super.setUp()
-        suite = "SleepFlagControllerTests.\(UUID().uuidString)"
-        defaults = UserDefaults(suiteName: suite)
-    }
-
-    override func tearDown() {
-        defaults.removePersistentDomain(forName: suite)
-        super.tearDown()
+        defaults = TestDefaults()
     }
 
     private func makeController(

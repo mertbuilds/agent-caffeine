@@ -271,4 +271,6 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.tests
         GENERATE_INFOPLIST_FILE: YES
+        # Watches for settings files a test leaves in ~/Library/Preferences.
+        INFOPLIST_KEY_NSPrincipalClass: TestDefaultsGuard
         ENABLE_HARDENED_RUNTIME: NO

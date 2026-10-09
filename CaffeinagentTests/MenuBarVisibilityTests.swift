@@ -2,15 +2,9 @@ import XCTest
 
 final class MenuBarVisibilityTests: XCTestCase {
     private var defaults: UserDefaults!
-    private var suite = ""
 
     override func setUp() {
-        suite = "caffeinagent-tests-\(UUID().uuidString)"
-        defaults = UserDefaults(suiteName: suite)
-    }
-
-    override func tearDown() {
-        defaults.removePersistentDomain(forName: suite)
+        defaults = TestDefaults()
     }
 
     /// A fresh install, and the first launch after an update.

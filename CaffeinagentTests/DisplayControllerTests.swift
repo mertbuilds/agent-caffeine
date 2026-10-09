@@ -102,19 +102,13 @@ final class DisplayControllerTests: XCTestCase {
     }
 
     private var defaults: UserDefaults!
-    private var suite = ""
     private let panel = Method.Panel()
     private let reader = Reader()
     private let sleeper = Sleeper()
     private let start = Date(timeIntervalSince1970: 1_791_200_000)
 
     override func setUp() {
-        suite = "caffeinagent-tests-\(UUID().uuidString)"
-        defaults = UserDefaults(suiteName: suite)
-    }
-
-    override func tearDown() {
-        defaults.removePersistentDomain(forName: suite)
+        defaults = TestDefaults()
     }
 
     private let lid = Lid()

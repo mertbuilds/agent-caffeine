@@ -23,9 +23,7 @@ final class TrialNoticeTests: XCTestCase {
     }
 
     func testWhatWasToldLastsOverARestart() throws {
-        let name = "TrialNoticeTests.\(UUID().uuidString)"
-        let defaults = try XCTUnwrap(UserDefaults(suiteName: name))
-        defer { defaults.removePersistentDomain(forName: name) }
+        let defaults = TestDefaults()
         XCTAssertEqual(TrialNoticeStore.load(from: defaults), [])
         TrialNoticeStore.save([.endsSoon], to: defaults)
         XCTAssertEqual(TrialNoticeStore.load(from: defaults), [.endsSoon])
