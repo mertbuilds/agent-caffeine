@@ -219,6 +219,18 @@ export const ROWS: readonly Row[] = [
     },
   },
   {
+    id: "lid-sound",
+    label: "A sound when the lid closes",
+    cells: {
+      ours: yes("Only when your Mac stays awake"),
+      adrafinil: yes("When it keeps the Mac awake"),
+      holdmylid: partly("A sound when it starts to hold"),
+      lidrun: unstated(),
+      clamshell: unstated(),
+      amphetamine: partly("A sound when a session starts or ends"),
+    },
+  },
+  {
     id: "cli",
     label: "Command line tool",
     cells: {

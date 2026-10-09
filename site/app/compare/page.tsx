@@ -55,8 +55,8 @@ const RIVALS: Record<Exclude<ToolId, "ours">, ReactNode> = {
       </p>
       <p>
         If you want a free tool and your agent is on that list, Adrafinil does the job. It needs macOS 26.4 or
-        later. Its pages state a chime when the hold starts and a summary when you open the lid. They do not
-        state a notification when an agent finishes.
+        later. Its pages state a chime when you close the lid while it keeps the Mac awake, as Agent Caffeine
+        has, and a summary when you open the lid. They do not state a notification when an agent finishes.
       </p>
     </>
   ),

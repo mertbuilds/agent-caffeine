@@ -35,6 +35,7 @@ function structuredData(trial: boolean) {
           "Keeps the Mac awake while an AI coding agent works, also with the lid closed",
           "Lets the Mac sleep when agents are idle or wait for you",
           "Dims the built-in display as the lid closes and keeps it dark while the lid is closed",
+          "Plays one short sound when the lid closes and the Mac stays awake",
           "Pause for 30 minutes, 1 hour or until tomorrow",
           "Stay reachable for 1, 2 or 4 hours, so a message from your phone reaches your agent",
           "Notifications when an agent waits for your answer or finishes",

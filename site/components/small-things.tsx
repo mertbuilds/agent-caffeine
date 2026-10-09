@@ -8,6 +8,8 @@ import { BATTERY_FLOOR, type Battery } from "@/lib/simulator";
 /** Still cuts of the app, with the words of `PanelText.swift`, `AgentNotices.swift` and `PreferencesView.swift` (the Settings window). */
 const MUTED = "text-[var(--panel-muted)]";
 const LINE = "h-px bg-[var(--panel-line)]";
+/** A control of Settings with words on it: a recorded shortcut, a picker, a button. */
+const CHIP = "h-[22px] shrink-0 rounded-md bg-[color-mix(in_srgb,var(--panel-fg)_10%,transparent)] px-2 shadow-[inset_0_0_0_0.5px_var(--panel-line)]";
 
 const NEAR_FLOOR: Battery = {
   percent: 27,
@@ -103,9 +105,13 @@ function LidCut() {
   );
 }
 
-function Thing({ children, text, title }: { children: ReactNode; text: string; title: string }) {
+/** Seven cards in rows of two, three and two: `WIDE` is half a row, `NARROW` a third of one. */
+const WIDE = "lg:col-span-3";
+const NARROW = "lg:col-span-2";
+
+function Thing({ children, className, text, title }: { children: ReactNode; className: string; text: string; title: string }) {
   return (
-    <li className="flex flex-col rounded-[20px] border border-border p-2">
+    <li className={`flex flex-col rounded-[20px] border border-border p-2 ${className}`}>
       <div className="flex h-32 items-center justify-center overflow-hidden rounded-xl bg-surface px-4">{children}</div>
       <div className="flex flex-col gap-1.5 px-2 pb-2 pt-4">
         <h3 className="text-balance font-medium leading-snug">{title}</h3>
@@ -119,14 +125,39 @@ export function SmallThings() {
   return (
     <section id="small-things" className="mx-auto flex w-full max-w-[1120px] scroll-mt-20 flex-col gap-10">
       <SectionHeading lead="Each one is in the menu or in Settings" title="The details" />
-      <ul className="mx-auto grid w-full max-w-[36rem] gap-4 sm:grid-cols-2 lg:max-w-none lg:grid-cols-3">
+      <ul className="mx-auto grid w-full max-w-[36rem] gap-4 sm:grid-cols-2 lg:max-w-none lg:grid-cols-6">
         <Thing
+          className={WIDE}
           text="It dims from 45 degrees and is off with the lid closed, so it does not use battery or warm your Mac"
           title="The display dims as the lid closes"
         >
           <LidCut />
         </Thing>
         <Thing
+          className={WIDE}
+          text="Close the lid while an agent works and you hear one short sound. No sound means your Mac goes to sleep. You can pick the sound or turn it off"
+          title="A sound tells you your Mac stays awake"
+        >
+          <Rows label="The sound for a closed lid in Settings: the switch is on and the sound is Tink">
+            <div className="flex items-center justify-between gap-3 py-2">
+              <span className="text-pretty">Play a sound when you close the lid and your Mac stays awake</span>
+              <SwitchCut on />
+            </div>
+            <div className={LINE} />
+            <div className="flex h-9 items-center gap-2">
+              <span className="flex-1">Sound</span>
+              <span className={`flex items-center gap-1.5 ${CHIP}`}>
+                Tink
+                <svg aria-hidden="true" fill="none" height="10" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5" viewBox="0 0 8 10" width="8">
+                  <path d="M1.5 3.5 4 1l2.5 2.5M1.5 6.5 4 9l2.5-2.5" />
+                </svg>
+              </span>
+              <span className={`flex items-center ${CHIP}`}>Play</span>
+            </div>
+          </Rows>
+        </Thing>
+        <Thing
+          className={NARROW}
           text="Your Mac stays awake for 1, 2 or 4 hours, so a message from your phone reaches your agent"
           title="Stay reachable from your phone"
         >
@@ -148,7 +179,7 @@ export function SmallThings() {
             </div>
           </PanelSurface>
         </Thing>
-        <Thing text="Pause for 30 minutes, 1 hour or until tomorrow. Agent Caffeine starts again by itself" title="Pause it for a while">
+        <Thing className={NARROW} text="Pause for 30 minutes, 1 hour or until tomorrow. Agent Caffeine starts again by itself" title="Pause it for a while">
           <PanelSurface className="rounded-[10px] p-[5px] shadow-[0_8px_24px_var(--shadow)]" label="The timer menu: pause for 30 minutes, for 1 hour or until tomorrow">
             <ul aria-hidden="true">
               <TimerChoices active={1} bar={{ reachable: false, reachableCost: null }} />
@@ -156,6 +187,7 @@ export function SmallThings() {
           </PanelSurface>
         </Thing>
         <Thing
+          className={NARROW}
           text="A notification when an agent waits for your answer, and one when it finishes. Each has its own switch"
           title="It tells you when an agent needs you"
         >
@@ -171,19 +203,19 @@ export function SmallThings() {
             </span>
           </PanelSurface>
         </Thing>
-        <Thing text="On battery the menu shows the charge, and the level where Agent Caffeine lets your Mac sleep" title="You see how much battery is left">
+        <Thing className={WIDE} text="On battery the menu shows the charge, and the level where Agent Caffeine lets your Mac sleep" title="You see how much battery is left">
           <PanelSurface className="flex w-full max-w-[19rem] justify-center px-4 py-3.5" label="The line of the battery in the Agent Caffeine menu">
             <BatteryLine battery={NEAR_FLOOR} />
           </PanelSurface>
         </Thing>
-        <Thing text="Turn Agent Caffeine on or off, or pause it for 1 hour, from any app. You can change the keys" title="Keyboard shortcuts">
+        <Thing className={`sm:col-span-2 ${WIDE}`} text="Turn Agent Caffeine on or off, or pause it for 1 hour, from any app. You can change the keys" title="Keyboard shortcuts">
           <Rows label="The keyboard shortcuts in Settings">
             {SHORTCUTS.map((shortcut, index) => (
               <div key={shortcut.title}>
                 {index > 0 && <div className={LINE} />}
                 <div className="flex h-9 items-center justify-between gap-3">
                   <span className="truncate">{shortcut.title}</span>
-                  <span className="flex h-[22px] min-w-[68px] shrink-0 items-center justify-center rounded-md bg-[color-mix(in_srgb,var(--panel-fg)_10%,transparent)] px-2 shadow-[inset_0_0_0_0.5px_var(--panel-line)]">
+                  <span className={`flex min-w-[68px] items-center justify-center ${CHIP}`}>
                     {shortcut.keys}
                   </span>
                 </div>
