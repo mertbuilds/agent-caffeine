@@ -227,7 +227,7 @@ export const ROWS: readonly Row[] = [
       holdmylid: partly("A sound when it starts to hold"),
       lidrun: unstated(),
       clamshell: unstated(),
-      amphetamine: partly("A sound when a session starts or ends"),
+      amphetamine: unstated(),
     },
   },
   {
