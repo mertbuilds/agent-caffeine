@@ -30,8 +30,31 @@ struct HeroView: View {
                     BatteryLine(battery: battery)
                         .transition(.opacity)
                 }
+                if let wakeLine = state.wakeLine {
+                    WakeLine(text: wakeLine)
+                        .transition(.opacity)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+/// The wake alarm of "Wake for jobs" on one quiet line below the
+/// headline, like the line of the battery.
+struct WakeLine: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Image(systemName: "alarm")
+                .imageScale(.small)
+                .accessibilityHidden(true)
+            Text(text)
+        }
+        .font(.callout)
+        .monospacedDigit()
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
     }
 }

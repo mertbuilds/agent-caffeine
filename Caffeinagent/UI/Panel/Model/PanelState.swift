@@ -54,6 +54,8 @@ enum PanelAction: Equatable {
     case goToAgent(ProcessIdentity, app: String)
     /// From the line of a hold from the command line: ends that hold.
     case stopHold(id: String)
+    /// From the line of a job hold of "Wake for jobs": ends that hold.
+    case stopJobHold(id: String)
     case dismissSleepNote
     case openHelp
 
@@ -242,8 +244,8 @@ struct PanelGroup: Equatable, Identifiable {
     var idle = 0
     /// What the user set for this agent, for the menu of the row.
     var rule = AgentRule.automatic
-    /// Only on the line of a hold from the command line: the way to end
-    /// it. Such a line has no rule and no sessions.
+    /// Only on the line of a hold from the command line and of a job
+    /// hold: the way to end it. Such a line has no rule and no sessions.
     var stop: PanelAction?
 
     /// `AgentDefinition.id`: the group keeps its place when its sessions
@@ -304,6 +306,9 @@ struct PanelState: Equatable {
     /// Nil on wall power, on a Mac without a battery, and while agent
     /// caffeine is off, paused or without a license.
     var battery: PanelBattery?
+    /// "Wakes at 09:14 for backup", while a wake alarm of "Wake for
+    /// jobs" is set. Nil when none is.
+    var wakeLine: String?
     /// Always in view: the agents with a session that waits or works, and
     /// the first idle ones.
     var groups: [PanelGroup]
@@ -453,4 +458,6 @@ struct PanelInput: Equatable {
     /// Nil when the Mac did not sleep under an agent, or the user
     /// dismissed the line.
     var sleepNote: SleepNote?
+    /// The wake alarm of "Wake for jobs" that is set.
+    var wakeAlarm: JobAlarm?
 }

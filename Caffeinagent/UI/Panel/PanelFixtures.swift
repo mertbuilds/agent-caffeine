@@ -190,6 +190,34 @@ enum PanelFixtures {
         return state(input)
     }()
 
+    /// A job of "Wake for jobs" that runs after the alarm woke the Mac,
+    /// and the wake for the next one.
+    static let jobHold: PanelState = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var input = Self.input(.scheduledJob(.one("backup.sh")), [Agent(id: "claude", name: "Claude Code", minutes: 12)])
+        let alarm = now.addingTimeInterval(-180).timeIntervalSince1970
+        input.decision.jobHolds = [JobHold(
+            id: "crontab:backup@1", jobID: "crontab:backup", source: .crontab, name: "backup.sh", start: alarm, fireAt: alarm + 60,
+            startGrace: 240, cap: 1800, seenAt: alarm + 62
+        )]
+        input.wakeAlarm = JobAlarm(at: now.addingTimeInterval(6 * 3600 - 60), fireAt: now.addingTimeInterval(6 * 3600), jobID: "launchd:com.example.report", jobName: "com.example.report")
+        input.calendar = calendar
+        input.locale = Locale(identifier: "en_GB")
+        return state(input)
+    }()
+
+    /// Nothing keeps the Mac awake, and a wake is set for the night.
+    static let wakeSet: PanelState = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var input = Self.input(.idle(.one("Claude Code")), [Agent(id: "claude", name: "Claude Code", minutes: 12)])
+        input.wakeAlarm = JobAlarm(at: now.addingTimeInterval(6 * 3600 - 60), fireAt: now.addingTimeInterval(6 * 3600), jobID: "crontab:backup", jobName: "backup.sh")
+        input.calendar = calendar
+        input.locale = Locale(identifier: "en_GB")
+        return state(input)
+    }()
+
     static let safetyStop: PanelState = {
         var input = Self.input(.safetyStop(.batteryLow(percent: 20)), [
             Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 48, label: "wiki"),
@@ -284,7 +312,7 @@ enum PanelFixtures {
         ("on-battery", onBattery), ("on-battery-near-floor", onBatteryNearFloor), ("on-battery-stopped", onBatteryStopped), ("on-battery-no-limit", onBatteryNoLimit),
         ("reachable", reachable), ("reachable-no-helper", reachableNoHelper), ("lid-closed", lidClosedNotSetUp),
         ("helper-off", helperSwitchedOff), ("helper-silent", helperNotResponding), ("trial-ending", trialEnding), ("trial-over", trialOver),
-        ("slept-anyway", sleptAnyway), ("manual-holds", manualHolds),
+        ("slept-anyway", sleptAnyway), ("manual-holds", manualHolds), ("job-hold", jobHold), ("wake-set", wakeSet),
     ]
 
     /// One agent for each mark, to check the marks.

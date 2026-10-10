@@ -26,7 +26,7 @@ enum MenuModel {
         let bar = bar(input)
         // Only then a new agent is all that is missing.
         let invites = input.decision.headline == .noAgents && pose != .helperOff
-        let isEmpty = input.decision.perAgent.isEmpty && input.decision.manualHolds.isEmpty
+        let isEmpty = input.decision.perAgent.isEmpty && input.decision.manualHolds.isEmpty && input.decision.jobHolds.isEmpty
         return PanelState(
             pose: pose,
             title: title,
@@ -34,6 +34,7 @@ enum MenuModel {
             attention: attention(input),
             sleepNote: sleepNote(input),
             battery: battery(input),
+            wakeLine: wakeLine(input, now: now),
             groups: groups,
             moreIdle: moreIdle,
             emptyText: isEmpty ? PanelText.empty(invites: invites) : nil,
@@ -114,6 +115,14 @@ enum MenuModel {
             return PanelText.menuBar(PanelText.headline(input.decision.headline).subtitle)
         }
         return nil
+    }
+
+    // MARK: Wake for jobs
+
+    /// While an alarm is set and its time is ahead.
+    static func wakeLine(_ input: PanelInput, now: Date) -> String? {
+        guard let alarm = input.wakeAlarm, alarm.at > now else { return nil }
+        return PanelText.wakesAt(alarm, now: now, calendar: input.calendar, locale: input.locale)
     }
 
     // MARK: Sleep note
@@ -270,13 +279,31 @@ enum MenuModel {
         let idle = all.count - active
         // A line that only hides one agent is no shorter than the agent.
         let inView = idle <= idleGroupsInView + 1 ? idle : idleGroupsInView
-        let shown = Array(all.prefix(active)) + holdGroups(input, now: now) + Array(all.dropFirst(active).prefix(inView))
+        let shown = Array(all.prefix(active)) + jobGroups(input, now: now) + holdGroups(input, now: now)
+            + Array(all.dropFirst(active).prefix(inView))
         return (shown, Array(all.dropFirst(active + inView)))
     }
 
     /// The id of the line of a hold, in place of an `AgentDefinition.id`.
     /// No agent has a mark for it, so the line shows the terminal glyph.
     static func holdRowID(_ id: String) -> String { "hold:\(id)" }
+
+    /// The id of the line of a job hold.
+    static func jobRowID(_ id: String) -> String { "job:\(id)" }
+
+    /// A job hold has a line like a hold from the command line, with
+    /// "Stop".
+    private static func jobGroups(_ input: PanelInput, now: Date) -> [PanelGroup] {
+        let holding = input.decision.hold
+        return input.decision.jobHolds.map { hold in
+            let row = PanelRow(
+                id: jobRowID(hold.id), agentID: jobRowID(hold.id), name: hold.title, label: nil, state: holding ? .working : .idle,
+                detail: PanelText.jobHold(hold, holding: holding, now: now, calendar: input.calendar, locale: input.locale),
+                hint: PanelText.jobHoldHint
+            )
+            return PanelGroup(header: row, working: holding ? 1 : 0, stop: .stopJobHold(id: hold.id))
+        }
+    }
 
     private static func holdGroups(_ input: PanelInput, now: Date) -> [PanelGroup] {
         let holding = input.decision.hold

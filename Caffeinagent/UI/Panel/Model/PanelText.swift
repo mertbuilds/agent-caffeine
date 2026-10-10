@@ -372,7 +372,7 @@ enum PanelText {
         case .setAgentRule(_, .automatic): return "Automatic"
         case .openAgentSettings: return "Open agent settings…"
         case .goToAgent(_, let app): return "Go to \(app)"
-        case .stopHold: return "Stop"
+        case .stopHold, .stopJobHold: return "Stop"
         case .dismissSleepNote: return "Dismiss"
         case .openHelp: return help
         }

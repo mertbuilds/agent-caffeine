@@ -41,6 +41,8 @@ struct PanelPreview: View {
 #Preview("Reachable") { PanelPreview(state: PanelFixtures.reachable) }
 #Preview("Reachable, lid closed not set up") { PanelPreview(state: PanelFixtures.reachableNoHelper) }
 #Preview("Holds from the command line") { PanelPreview(state: PanelFixtures.manualHolds) }
+#Preview("A scheduled job runs") { PanelPreview(state: PanelFixtures.jobHold) }
+#Preview("A wake is set") { PanelPreview(state: PanelFixtures.wakeSet) }
 #Preview("Safety stop") { PanelPreview(state: PanelFixtures.safetyStop) }
 #Preview("Too hot") { PanelPreview(state: PanelFixtures.tooHot) }
 #Preview("On battery") { PanelPreview(state: PanelFixtures.onBattery) }

@@ -30,6 +30,11 @@ struct AggregatorParts {
     /// again when the user selects another layout. With none, the defaults
     /// stay on the keys of the American layout.
     var keyLayouts: () -> [KeyLayout] = { [] }
+    /// Nil reads no scheduled job: not the launchd agents, not the
+    /// crontab and not the jobs of Hermes Agent.
+    var jobAccess: JobSourceAccess?
+    /// Nil looks for the job of no hold among the processes.
+    var jobProbe: JobRunProbing?
 
     static func system() -> AggregatorParts {
         AggregatorParts(
@@ -50,7 +55,9 @@ struct AggregatorParts {
             sleepTimer: SystemSleepTimer(),
             assertions: SystemPowerAssertions(),
             chime: SystemLidChimePlayer(),
-            keyLayouts: SystemKeyLayout.inUse
+            keyLayouts: SystemKeyLayout.inUse,
+            jobAccess: SystemJobSourceAccess(),
+            jobProbe: SystemJobRunProbe()
         )
     }
 }
@@ -74,6 +81,7 @@ final class StateAggregator: ObservableObject {
             // Off ends a pause. See `PauseSwitch`.
             resumeNow()
             if !enabled { stopReachable() }
+            updateJobWake()
         }
     }
     /// Until when Agent Caffeine acts as if it were off. The end is saved,
@@ -88,6 +96,7 @@ final class StateAggregator: ObservableObject {
             }
             engine.pausedUntil = pause.until
             armPauseTimer()
+            updateJobWake()
         }
     }
     /// Until when the Mac stays awake with no agent at work. Saved like
@@ -201,6 +210,19 @@ final class StateAggregator: ObservableObject {
     /// without the user's word, but for what is ours already: see
     /// `updateOwnSkill`.
     @PublishedOnChange private(set) var agentSetup = AgentSetupModel()
+    /// What the user chose for "Wake for jobs". Off, and every job off,
+    /// until the user says otherwise.
+    @PublishedOnChange var jobSettings: JobSettings {
+        didSet {
+            guard jobSettings != oldValue else { return }
+            JobSettingsStore.save(jobSettings, to: defaults)
+            syncJobStore()
+            updateJobWake()
+        }
+    }
+    /// The jobs that were found, the alarm that is set and the history,
+    /// for Settings and the menu.
+    @PublishedOnChange private(set) var jobWake = JobWakeView()
 
     let license: LicenseManager
     let sleepFlag: SleepFlagController
@@ -264,6 +286,12 @@ final class StateAggregator: ObservableObject {
     /// test, which runs next to a copy that is installed.
     private var holdLock: HoldStore.AppLock?
     private lazy var holdStatus = HoldStore.StatusWriter(store: holdStore)
+    /// The loop of "Wake for jobs". See `JobWake` for its rules.
+    private let jobLoop: JobWakeLoop
+    private let jobStore: JobStore?
+    /// What the store read last. Empty while the feature is off.
+    private var jobReadings: [JobSourceReading] = []
+    private var jobTimer: Timer?
     private var cancellables = Set<AnyCancellable>()
     private var sigtermSource: DispatchSourceSignal?
     private static let enabledKey = "StateAggregator.enabled"
@@ -278,6 +306,9 @@ final class StateAggregator: ObservableObject {
     private static let sleepTimerRefreshInterval: TimeInterval = 30
     /// While a closed lid waits for the helper's answer. See `LidChime`.
     private static let lidChimeLookInterval: TimeInterval = 0.25
+    /// After the time of an alarm or the end of a hold, so the turn finds
+    /// it passed.
+    private static let jobTimerSlack: TimeInterval = 0.05
 
     init(parts: AggregatorParts) {
         let license = parts.license
@@ -325,6 +356,9 @@ final class StateAggregator: ObservableObject {
         self.lidClosedHintDismissed = defaults.bool(forKey: Self.lidClosedHintKey)
         self.showMenuBarIcon = MenuBarVisibility.isShown(in: defaults)
         self.decision = engine.decision
+        self.jobSettings = JobSettingsStore.load(from: defaults)
+        self.jobLoop = JobWakeLoop(sender: parts.sleepFlag, probe: parts.jobProbe, defaults: defaults)
+        self.jobStore = parts.jobAccess.map { JobStore(access: $0) }
         safetyMonitor.batteryFloorPercent = settings.batteryFloorPercent
         safetyMonitor.batteryFloorEnabled = settings.batteryFloorEnabled
 
@@ -351,6 +385,7 @@ final class StateAggregator: ObservableObject {
             .sink { [weak self] entitlement in
                 self?.entitlement = entitlement
                 self?.engine.entitlement = entitlement
+                self?.updateJobWake()
             }
             .store(in: &cancellables)
 
@@ -419,6 +454,9 @@ final class StateAggregator: ObservableObject {
         refreshLoginItem()
         syncSleepFlag()
         registerShortcuts()
+        jobLoop.onChange = { [weak self] in self?.jobWakeChanged() }
+        syncJobStore()
+        updateJobWake()
         DistributedNotificationCenter.default().publisher(for: SystemKeyLayout.changed)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.keyLayoutChanged() }
@@ -430,7 +468,10 @@ final class StateAggregator: ObservableObject {
             self?.engine.requestSample()
         }
         // On its own, so a helper that gives no answer holds nothing up.
-        Task { await sleepFlag.replaceHelper(ifNot: AppVersion.helperForm) }
+        // The alarm of a helper that was replaced went with it.
+        Task {
+            if await sleepFlag.replaceHelper(ifNot: AppVersion.helperForm) { jobLoop.helperReplaced() }
+        }
     }
 
     /// What the menu is worked out from.
@@ -463,7 +504,8 @@ final class StateAggregator: ObservableObject {
             onBattery: onBattery,
             macSleep: macSleep,
             batteryPercent: batteryPercent,
-            sleepNote: sleepNote
+            sleepNote: sleepNote,
+            wakeAlarm: jobWake.alarm
         )
     }
 
@@ -487,6 +529,10 @@ final class StateAggregator: ObservableObject {
         )
         display?.willSleep()
         engine.willSleep()
+        // A Mac that is awake needs no alarm for a job that is near. One
+        // that goes to sleep does, and the alarm is with the helper
+        // before macOS is told that the app is ready for the sleep.
+        jobLoop.willSleep(jobWakeInput)
     }
 
     private func macDidWake() {
@@ -501,6 +547,7 @@ final class StateAggregator: ObservableObject {
     private func wokeInFull() {
         display?.didWake()
         engine.didWake()
+        jobLoop.wokeInFull()
     }
 
     func dismissSleepNote() {
@@ -599,6 +646,12 @@ final class StateAggregator: ObservableObject {
     func stopHold(id: String) {
         holdStore.remove(id: id)
         engine.requestSample()
+    }
+
+    /// "Stop" on the line of a job hold of "Wake for jobs". The job
+    /// itself runs on.
+    func stopJobHold(id: String) {
+        jobLoop.stopHold(id: id)
     }
 
     func stopReachable() {
@@ -753,6 +806,8 @@ final class StateAggregator: ObservableObject {
             notify(NoLimitBatteryWarning.notificationText(percent: percent))
         }
         engine.safety = stop
+        // The power source, the battery and a stop move the wake alarm.
+        updateJobWake()
         sleepFlag.sampleCompleted()
         // The notification above says why. The time does not come back
         // with the power.
@@ -981,6 +1036,7 @@ final class StateAggregator: ObservableObject {
         lastHelperRefresh = Date()
         sleepFlag.refreshStatus()
         syncSleepFlag()
+        updateJobWake()
     }
 
     /// The controller's heartbeat keeps the flag alive, so the helper is
@@ -1010,8 +1066,12 @@ final class StateAggregator: ObservableObject {
         runHelperAction { try await self.sleepFlag.install() }
     }
 
+    /// No wake alarm stays behind a helper that is removed.
     func removeHelper() {
-        runHelperAction { try await self.sleepFlag.uninstall() }
+        runHelperAction {
+            self.jobLoop.cancelNow()
+            try await self.sleepFlag.uninstall()
+        }
     }
 
     func removeSudoersEntry() {
@@ -1031,7 +1091,76 @@ final class StateAggregator: ObservableObject {
                 helperError = error.localizedDescription
             }
             syncSleepFlag()
+            updateJobWake()
         }
+    }
+
+    // MARK: Wake for jobs
+
+    /// The jobs are read only while the feature is on, so nothing of the
+    /// crontab or the launchd agents is looked at before the user asks.
+    private func syncJobStore() {
+        guard let jobStore else { return }
+        if jobSettings.wakeForJobs {
+            jobStore.start { [weak self] readings in
+                MainActor.assumeIsolated {
+                    guard let self, self.jobSettings.wakeForJobs else { return }
+                    self.jobReadings = readings
+                    self.updateJobWake()
+                }
+            }
+        } else {
+            jobStore.stop()
+            jobReadings = []
+        }
+    }
+
+    /// Called when Settings opens: the crontab has no file to watch.
+    func refreshJobs() {
+        if jobSettings.wakeForJobs { jobStore?.refresh() }
+    }
+
+    /// What the loop is told. Only the copy in the Applications folder
+    /// sends an alarm: the helper takes calls from that copy alone.
+    private var jobWakeInput: JobWakeInput {
+        JobWakeInput(
+            readings: jobReadings, settings: jobSettings,
+            context: JobPlanContext(
+                enabled: enabled, pausedUntil: pause.until, entitlement: entitlement, safety: engine.safety,
+                onBattery: onBattery, batteryPercent: batteryPercent,
+                batteryFloorEnabled: settings.batteryFloorEnabled, batteryFloorPercent: settings.batteryFloorPercent
+            ),
+            inApplications: AppInstall.running.isStableInstall, helperEnabled: sleepFlag.helperStatus == .enabled
+        )
+    }
+
+    /// One turn of the loop: on every change of what it is told, and
+    /// with every sample, which also renews the lease of the alarm.
+    private func updateJobWake() {
+        jobLoop.run(jobWakeInput)
+    }
+
+    /// The job holds go to the engine, where `HoldPolicy` decides what
+    /// they are worth, and the timer is set for the next turn.
+    private func jobWakeChanged() {
+        if jobWake != jobLoop.view { jobWake = jobLoop.view }
+        engine.wakeAlarm = jobLoop.view.alarm?.at
+        engine.jobHolds = jobLoop.holds
+        armJobTimer()
+    }
+
+    /// At the time of the alarm and at the end of each hold. A timer
+    /// whose time passed while the Mac slept fires when it wakes, so the
+    /// hold opens with the wake and not with the next sample.
+    private func armJobTimer() {
+        jobTimer?.invalidate()
+        jobTimer = nil
+        guard let next = jobLoop.nextTurn else { return }
+        let timer = Timer(fire: next.addingTimeInterval(Self.jobTimerSlack), interval: 0, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated { self?.updateJobWake() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        jobTimer = timer
     }
 
     // MARK: Hooks
@@ -1165,8 +1294,12 @@ final class StateAggregator: ObservableObject {
         pauseTimer?.invalidate()
         reachableTimer?.invalidate()
         lidChimeTimer?.invalidate()
+        jobTimer?.invalidate()
+        jobStore?.stop()
         hotKeys.unregisterAll()
         display?.stop()
+        // An app that does not run wakes the Mac for nothing.
+        jobLoop.cancelNow()
         sleepFlag.clearForQuit(timeout: 2)
         power.release()
         if holdLock != nil {

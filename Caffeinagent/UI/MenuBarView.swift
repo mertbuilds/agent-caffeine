@@ -80,6 +80,8 @@ struct MenuBarView: View {
             if aggregator.goToAgent(agent) { panel.close() }
         case .stopHold(let id):
             aggregator.stopHold(id: id)
+        case .stopJobHold(let id):
+            aggregator.stopJobHold(id: id)
         case .dismissSleepNote:
             aggregator.dismissSleepNote()
         case .openHelp:

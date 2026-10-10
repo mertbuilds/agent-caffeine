@@ -255,6 +255,7 @@ targets:
       - Caffeinagent/UI/OnboardingModel.swift
       - Caffeinagent/UI/HookPreferences.swift
       - Caffeinagent/UI/SkillPreferences.swift
+      - Caffeinagent/UI/JobPreferences.swift
       # The shortcut as a value and its rules, and the reader of a keyboard
       # layout. Without the hot key itself.
       - Caffeinagent/Shortcut/Shortcut.swift

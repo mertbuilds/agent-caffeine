@@ -69,6 +69,7 @@ private struct PanelStateView: View {
         .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.attention)
         .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.sleepNote)
         .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.battery == nil)
+        .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.wakeLine == nil)
         .animation(reduceMotion ? nil : PanelMetrics.stateChange, value: state.groups.map { [$0.id] + $0.children.map(\.id) })
     }
 }
