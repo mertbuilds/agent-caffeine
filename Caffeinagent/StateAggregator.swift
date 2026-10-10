@@ -454,9 +454,9 @@ final class StateAggregator: ObservableObject {
         refreshLoginItem()
         syncSleepFlag()
         registerShortcuts()
+        // The loop takes its first turn with the first sample.
         jobLoop.onChange = { [weak self] in self?.jobWakeChanged() }
         syncJobStore()
-        updateJobWake()
         DistributedNotificationCenter.default().publisher(for: SystemKeyLayout.changed)
             .receive(on: DispatchQueue.main)
             .sink { [weak self] _ in self?.keyLayoutChanged() }
@@ -532,7 +532,7 @@ final class StateAggregator: ObservableObject {
         // A Mac that is awake needs no alarm for a job that is near. One
         // that goes to sleep does, and the alarm is with the helper
         // before macOS is told that the app is ready for the sleep.
-        jobLoop.willSleep(jobWakeInput)
+        if samples > 0 { jobLoop.willSleep(jobWakeInput) }
     }
 
     private func macDidWake() {
@@ -1135,8 +1135,11 @@ final class StateAggregator: ObservableObject {
     }
 
     /// One turn of the loop: on every change of what it is told, and
-    /// with every sample, which also renews the lease of the alarm.
+    /// with every sample, which also renews the lease of the alarm. Not
+    /// before the first sample: until then the power source and the
+    /// battery are not known, and an alarm could be set on battery.
     private func updateJobWake() {
+        guard samples > 0 else { return }
         jobLoop.run(jobWakeInput)
     }
 
