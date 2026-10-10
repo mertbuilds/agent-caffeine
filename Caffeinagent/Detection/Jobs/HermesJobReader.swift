@@ -5,8 +5,10 @@ import Foundation
 /// The file has the key `jobs` with a list. Of each job these fields are
 /// read: `id`, `name`, `enabled`, `state`, `paused_at`, `next_run_at`,
 /// `schedule` (`kind`, `expr`, `minutes`, `display`) and
-/// `schedule_display`. The prompt, the model and every other field are
-/// never taken out of the file.
+/// `schedule_display`. The model and every other field are never taken
+/// out of the file. The prompt is looked at for one check, and nothing of
+/// it is kept: a name that is the start of the prompt is not taken, and
+/// the job is shown as "Hermes job" with its id.
 ///
 /// The format is private to Hermes and has no version. So every field
 /// can be missing or of another type, fields that are not known are
@@ -50,9 +52,12 @@ struct HermesJobReader {
         if record["enabled"] as? Bool == false { return nil }
         if let paused = record["paused_at"], !(paused is NSNull) { return nil }
         if (record["state"] as? String)?.lowercased() == "paused" { return nil }
-        let id = text(record["id"]), name = text(record["name"])
-        guard let key = ManualHold.clean(id ?? name, limit: idLimit),
-              let shown = ManualHold.clean(name ?? id, limit: ScheduledJob.nameLimit) else { return nil }
+        // A job with no id is passed over: its name can be a piece of its
+        // prompt, see `isFromPrompt`, and nothing else tells it apart.
+        guard let key = ManualHold.clean(text(record["id"]), limit: idLimit) else { return nil }
+        var name = text(record["name"])
+        if let given = name, isFromPrompt(given, prompt: record["prompt"]) { name = nil }
+        guard let shown = ManualHold.clean(name ?? "Hermes job \(key)", limit: ScheduledJob.nameLimit) else { return nil }
 
         var schedule = ReportedSchedule(nextRun: date(record["next_run_at"], timeZone: timeZone))
         let details = record["schedule"] as? [String: Any]
@@ -65,6 +70,18 @@ struct HermesJobReader {
         }
         guard schedule.nextRun != nil || schedule.cron != nil || schedule.everyMinutes != nil else { return nil }
         return ScheduledJob(id: "hermes:" + key, source: .hermes, name: shown, schedule: .reported(schedule))
+    }
+
+    /// Hermes gives a job that was made with no name the start of its
+    /// prompt as its name. True for such a name, with or without dots at
+    /// its end. The prompt is compared here and goes nowhere else: it is
+    /// not kept, not logged and not returned.
+    private static func isFromPrompt(_ name: String, prompt: Any?) -> Bool {
+        guard let prompt = (prompt as? String)?.trimmingCharacters(in: .whitespacesAndNewlines) else { return false }
+        var start = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        while start.hasSuffix(".") || start.hasSuffix("\u{2026}") { start.removeLast() }
+        start = start.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !start.isEmpty && prompt.hasPrefix(start)
     }
 
     /// 360 for "every 360m", and for "every 6h".

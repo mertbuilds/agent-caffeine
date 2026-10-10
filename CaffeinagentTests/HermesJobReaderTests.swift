@@ -71,13 +71,54 @@ final class HermesJobReaderTests: XCTestCase {
         JobPrivacy.check(jobs, neverHolds: ["secret", "sk-live", "inbox", "boss", "example.com", "anthropic", "api_key", "prompt", "model", "last_status"])
     }
 
+    /// Hermes gives a job with no name the first 50 characters of its
+    /// prompt as its name. Such a name is a piece of the prompt, and it
+    /// is never shown or kept.
+    func testANameThatIsTheStartOfThePromptIsNotTaken() {
+        let prompt = "Email the Q3 revenue figures to boss@example.com using token sk-live-promptsecret and then archive the thread"
+        func record(_ id: String, name: String) -> String {
+            #"{"id":"\#(id)","name":"\#(name)","prompt":"\#(prompt)","schedule":{"expr":"0 9 * * *"}}"#
+        }
+        let cut = String(prompt.prefix(50))
+        let jobs = jobs("""
+        {"jobs":[\(record("a1", name: cut)), \(record("b2", name: cut + "...")), \(record("c3", name: "  " + String(prompt.prefix(20)))),
+        \(record("d4", name: prompt)), \(record("e5", name: "Daily digest")),
+        {"name":"\(cut)","prompt":"\(prompt)","schedule":{"expr":"0 9 * * *"}},
+        {"name":"Has no id","schedule":{"expr":"0 9 * * *"}}]}
+        """)
+        XCTAssertEqual(jobs.map(\.id), ["hermes:a1", "hermes:b2", "hermes:c3", "hermes:d4", "hermes:e5"], "A job with no id is passed over")
+        XCTAssertEqual(jobs.map(\.name), ["Hermes job a1", "Hermes job b2", "Hermes job c3", "Hermes job d4", "Daily digest"])
+        JobPrivacy.check(jobs, neverHolds: ["Email", "Q3", "revenue figures", "boss", "example.com", "token", "sk-live", "secret", "archive"])
+
+        // What is made of a job later holds its name and nothing else of it.
+        var settings = JobSettings()
+        settings.wakeForJobs = true
+        for job in jobs { settings.set(true, for: job.id) }
+        var wake = JobWake()
+        let noon = at("2026-10-10 12:00")
+        let input = JobWakeInput(readings: [JobSourceReading(source: .hermes, jobs: jobs)], settings: settings)
+        let time = wake.turn(input, now: noon, awake: 0, asleep: 0, clock: JobTime.clock())!
+        wake.answered(.set(time), for: time, now: noon, awake: 0)
+        _ = wake.turn(input, now: Date(timeIntervalSince1970: time + 2), awake: 0, asleep: 3600, clock: JobTime.clock())
+        XCTAssertEqual(wake.holds.map(\.name), ["Hermes job a1"])
+        var all = ""
+        dump(wake, to: &all)
+        all += String(data: try! JSONEncoder().encode(wake.memory), encoding: .utf8)!
+        all += PanelText.jobStatus(wake.status, settings: settings, now: noon) ?? ""
+        all += wake.holds.map { PanelText.jobHold($0, holding: true, now: noon) + $0.subject + $0.title }.joined()
+        all += wake.memory.history.events.map { PanelText.jobEvent($0) }.joined()
+        for word in ["Email", "Q3", "revenue", "boss", "example.com", "token", "sk-live", "secret", "archive"] {
+            XCTAssertFalse(all.localizedCaseInsensitiveContains(word), word)
+        }
+    }
+
     func testTheNameIsOneLineOfSixtyCharacters() {
         let long = String(repeating: "Summarise everything ", count: 10)
         let jobs = jobs(#"{"jobs":[{"id":"x\ny","name":"\#(long)\nsecond line","schedule":{"expr":"0 9 * * *"}},{"id":77,"schedule":"30 6 * * *"}]}"#)
         XCTAssertEqual(jobs.first?.name.count, 60)
         XCTAssertEqual(jobs.first?.name, String(long.prefix(60)))
         XCTAssertEqual(jobs.first?.id, "hermes:x y")
-        XCTAssertEqual(jobs.last?.name, "77", "The id when there is no name")
+        XCTAssertEqual(jobs.last?.name, "Hermes job 77", "The id when there is no name")
         XCTAssertEqual(reported(jobs.last).cron, JobTime.cron("30 6 * * *"))
     }
 
