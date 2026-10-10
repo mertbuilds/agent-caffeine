@@ -86,7 +86,7 @@ final class JobTextTests: XCTestCase {
         lines += JobEvent.Kind.allCases.map { PanelText.jobEvent(JobEvent(at: 0, kind: $0), calendar: calendar, locale: locale) }
         lines += ScheduledJob.Source.allCases.map(PanelText.jobSourceUnreadable)
         lines += [
-            PanelText.jobsTitle, PanelText.jobsSwitch, PanelText.jobsListTitle, PanelText.jobsNoneFound, PanelText.jobsPerJob, PanelText.jobsOnPowerOnly,
+            PanelText.jobsTitle, PanelText.jobsSwitch, PanelText.jobsNoneFound, PanelText.jobsPerJob, PanelText.jobsOnPowerOnly,
             PanelText.jobsOnPowerExplained, PanelText.jobsOnBatteryWarning, PanelText.jobsShowHistory, PanelText.jobsHideHistory, PanelText.jobsNoHistory,
             PanelText.jobsTooOften, PanelText.jobsNoRunKnown, PanelText.jobsNeedHelper, PanelText.jobsExplained(leadTime: 60), PanelText.jobHoldHint,
             PanelText.wakesAt(alarm("2026-10-10 20:59"), now: now, calendar: calendar, locale: locale),

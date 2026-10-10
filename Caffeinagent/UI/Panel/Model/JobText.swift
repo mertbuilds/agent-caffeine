@@ -11,7 +11,6 @@ extension PanelText {
 
     static let jobsTitle = "Wake for jobs"
     static let jobsSwitch = "Wake your Mac for scheduled jobs"
-    static let jobsListTitle = "Jobs on this Mac"
     static let jobsNoneFound = "No scheduled job was found on this Mac."
     static let jobsPerJob = "Agent Caffeine wakes your Mac only for the jobs you switch on."
     static let jobsOnPowerOnly = "Only on power"
