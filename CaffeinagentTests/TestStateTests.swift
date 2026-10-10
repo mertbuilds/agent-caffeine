@@ -85,6 +85,8 @@ final class TestStateTests: XCTestCase {
         ])
         XCTAssertEqual(state.holds, [TestState.Hold(id: "0a1b2c3d", kind: "timed", start: at(0).timeIntervalSince1970, end: at(600).timeIntervalSince1970)])
         XCTAssertEqual(state.jobs.status, "alarmSet")
+        XCTAssertEqual(state.jobs.found, 1)
+        XCTAssertEqual(state.jobs.enabled, 1)
         XCTAssertEqual(state.jobs.alarm, TestState.Alarm(at: at(600).timeIntervalSince1970, fireAt: at(660).timeIntervalSince1970, source: "launchd"))
         XCTAssertEqual(state.jobs.holds.map(\.source), ["launchd"])
         XCTAssertEqual(state.jobs.history, [TestState.Event(kind: "alarmSet", at: at(-5).timeIntervalSince1970)])
@@ -154,7 +156,7 @@ final class TestStateTests: XCTestCase {
             "power", "lid", "safety", "gate", "agents", "holds", "jobs", "notices", "chimeAt",
             "version", "build", "path", "pid", "hold", "headline", "stop", "assertion", "wanted", "helper", "setup", "set",
             "source", "percent", "charging", "closed", "angle", "id", "role", "state", "why", "level", "kind", "start", "end",
-            "status", "alarm", "fireAt", "history",
+            "status", "found", "enabled", "alarm", "fireAt", "history",
         ]
         var keys: Set<String> = []
         var strays: [String] = []

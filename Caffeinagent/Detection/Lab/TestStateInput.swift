@@ -81,6 +81,7 @@ extension TestState {
             holds: decision.manualHolds.map { Hold(id: $0.id, kind: $0.kind.rawValue, start: $0.start, end: $0.end) },
             jobs: Jobs(
                 on: input.wakeForJobs, status: input.jobs.status.code,
+                found: input.jobs.runs.count, enabled: input.jobs.runs.filter(\.job.enabled).count,
                 alarm: input.jobs.alarm.map { alarm in
                     Alarm(
                         at: alarm.at.timeIntervalSince1970, fireAt: alarm.fireAt.timeIntervalSince1970,

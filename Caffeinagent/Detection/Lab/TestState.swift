@@ -107,6 +107,10 @@ struct TestState: Codable, Equatable {
         var on: Bool
         /// The case of `JobWakeStatus`.
         var status: String
+        /// How many jobs were found, and how many of them the user
+        /// switched on.
+        var found: Int
+        var enabled: Int
         var alarm: Alarm?
         var holds: [JobHoldRow]
         /// The newest first.

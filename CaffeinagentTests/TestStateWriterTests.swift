@@ -27,7 +27,7 @@ final class TestStateWriterTests: XCTestCase {
             on: true, mode: "agentWorking", entitlement: "licensed",
             decision: TestState.Decision(hold: false, headline: "noAgents", reason: nil, stop: false, assertion: false),
             flag: TestState.Flag(wanted: false, helper: "enabled", setup: "ready", set: false), gate: "open", agents: [], holds: [],
-            jobs: TestState.Jobs(on: false, status: "off", alarm: nil, holds: [], history: []), notices: []
+            jobs: TestState.Jobs(on: false, status: "off", found: 0, enabled: 0, alarm: nil, holds: [], history: []), notices: []
         )
     }
 
