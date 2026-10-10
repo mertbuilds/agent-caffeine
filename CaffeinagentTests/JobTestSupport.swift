@@ -28,3 +28,56 @@ enum JobTime {
         return expression
     }
 }
+
+/// Files, folders and a crontab that exist only in a test.
+final class FixtureJobAccess: JobSourceAccess {
+    static let home = URL(fileURLWithPath: "/Users/fixture")
+
+    var files: [String: Data] = [:]
+    var failures: [String: String] = [:]
+    var crontabResult: JobSourceRead<String> = .missing
+    private(set) var asked: [String] = []
+
+    func add(_ path: String, _ data: Data) {
+        files[Self.home.appendingPathComponent(path).path] = data
+    }
+
+    func fail(_ path: String, _ reason: String) {
+        failures[Self.home.appendingPathComponent(path).path] = reason
+    }
+
+    func fileNames(in folder: URL) -> JobSourceRead<[String]> {
+        asked.append(folder.path)
+        if let reason = failures[folder.path] { return .failed(reason) }
+        let prefix = folder.path + "/"
+        let names = files.keys.filter { $0.hasPrefix(prefix) && !$0.dropFirst(prefix.count).contains("/") }.map { String($0.dropFirst(prefix.count)) }
+        return names.isEmpty ? .missing : .found(names)
+    }
+
+    func data(at file: URL) -> JobSourceRead<Data> {
+        asked.append(file.path)
+        if let reason = failures[file.path] { return .failed(reason) }
+        return files[file.path].map { .found($0) } ?? .missing
+    }
+
+    func crontab() -> JobSourceRead<String> { crontabResult }
+}
+
+enum JobPrivacy {
+    /// What a job holds, by the names of its fields.
+    static let fields = ["id", "source", "name", "schedule", "enabled"]
+
+    /// Fails when a job has a field more, or when any text of a job holds
+    /// one of the words.
+    static func check(_ jobs: [ScheduledJob], neverHolds words: [String], file: StaticString = #filePath, line: UInt = #line) {
+        for job in jobs {
+            XCTAssertEqual(Mirror(reflecting: job).children.map { $0.label ?? "" }, fields, file: file, line: line)
+            var all = ""
+            dump(job, to: &all)
+            all += String(reflecting: job)
+            for word in words {
+                XCTAssertFalse(all.localizedCaseInsensitiveContains(word), "\(job.name) holds \(word)", file: file, line: line)
+            }
+        }
+    }
+}
