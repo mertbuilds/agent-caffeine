@@ -97,8 +97,14 @@ def has_state_export(env):
     """True when the installed command line tool knows the switch of the
     state for tests: the build has the export."""
     app_path = getattr(env, "app", None)
-    data = env.read(app_path + "/" + config.TOOL_BINARY, limit=64 << 20) if app_path else None
-    return data is not None and config.SWITCH_KEY.encode() in data
+    if not app_path:
+        return False
+    # The key of the switch is in the app, which reads it, and not in the tool.
+    for binary in (config.TOOL_BINARY, "Contents/MacOS/caffeinagent"):
+        data = env.read(app_path + "/" + binary, limit=64 << 20)
+        if data is not None and config.SWITCH_KEY.encode() in data:
+            return True
+    return False
 
 
 def holds(env):
