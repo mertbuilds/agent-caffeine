@@ -129,7 +129,7 @@ extension PanelText {
         let alarm = event.alarmAt.map { time(Date(timeIntervalSince1970: $0), calendar: calendar, locale: locale) }
         let wake = alarm.map { "The wake at \($0)" } ?? "The wake"
         switch event.kind {
-        case .alarmSet: return ["Wake set", alarm.map { "for \($0)" }, event.job.map { "for \($0)" }].compactMap { $0 }.joined(separator: " ")
+        case .alarmSet: return ["Wake", alarm.map { "at \($0)" }, "set", event.job.map { "for \($0)" }].compactMap { $0 }.joined(separator: " ")
         case .alarmRefused:
             let reason = event.reason.flatMap(WakeAlarmRefusal.init(rawValue:)) ?? .unknown
             return "\(wake) was not set: \(refusal(reason))"
@@ -154,13 +154,13 @@ extension PanelText {
         "Wakes \(when(alarm.at, now: now, calendar: calendar, locale: locale)) for \(alarm.jobName)"
     }
 
-    /// The line below a job hold.
+    /// The line below a job hold. Short, so it fits next to "Stop".
     /// - Parameter holding: Agent Caffeine keeps the Mac awake. Not so in
     ///   a stop, where the hold is only asked for.
     static func jobHold(_ hold: JobHold, holding: Bool, now: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
-        let lead = holding ? "Keeps your Mac awake" : "Asked to keep your Mac awake"
-        if hold.seenAt != nil { return "\(lead) while the job runs" }
-        return "\(lead) for the job at \(time(Date(timeIntervalSince1970: hold.fireAt), calendar: calendar, locale: locale))"
+        guard holding else { return "Asked to stay awake for a job" }
+        if hold.seenAt != nil { return "Awake while the job runs" }
+        return "Awake for the job at \(time(Date(timeIntervalSince1970: hold.fireAt), calendar: calendar, locale: locale))"
     }
 
     /// The tooltip of such a line.

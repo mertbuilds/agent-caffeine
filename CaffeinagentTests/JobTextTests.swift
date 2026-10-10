@@ -114,7 +114,8 @@ final class JobTextTests: XCTestCase {
         func line(_ kind: JobEvent.Kind, alarm: String? = "2026-10-10 20:59", job: String? = "backup.sh", reason: Int? = nil) -> String {
             PanelText.jobEvent(JobEvent(at: 0, kind: kind, alarmAt: alarm.map { at($0).timeIntervalSince1970 }, job: job, reason: reason), calendar: calendar, locale: locale)
         }
-        XCTAssertEqual(line(.alarmSet), "Wake set for 20:59 for backup.sh")
+        XCTAssertEqual(line(.alarmSet), "Wake at 20:59 set for backup.sh")
+        XCTAssertEqual(line(.alarmSet, alarm: nil, job: nil), "Wake set")
         XCTAssertEqual(line(.alarmRefused, reason: WakeAlarmRefusal.notConfirmed.rawValue), "The wake at 20:59 was not set: macOS did not list it")
         XCTAssertEqual(line(.alarmRefused, reason: 99), "The wake at 20:59 was not set: it did not take the time")
         XCTAssertEqual(line(.helperSilent, alarm: nil, job: nil), "The helper gave no answer")
@@ -167,9 +168,12 @@ final class JobTextTests: XCTestCase {
         XCTAssertEqual(PanelText.headline(.scheduledJob(.one("backup.sh"))).title, "Your Mac stays awake")
         XCTAssertEqual(PanelText.headline(.scheduledJob(.one("backup.sh"))).subtitle, "For the job backup.sh")
         XCTAssertEqual(PanelText.headline(.scheduledJob(.many(2))).subtitle, "For 2 scheduled jobs")
-        XCTAssertEqual(PanelText.jobHold(hold(), holding: true, now: now, calendar: calendar, locale: locale), "Keeps your Mac awake for the job at 12:01")
-        XCTAssertEqual(PanelText.jobHold(hold(seen: true), holding: true, now: now, calendar: calendar, locale: locale), "Keeps your Mac awake while the job runs")
-        XCTAssertEqual(PanelText.jobHold(hold(), holding: false, now: now, calendar: calendar, locale: locale), "Asked to keep your Mac awake for the job at 12:01")
+        XCTAssertEqual(PanelText.jobHold(hold(), holding: true, now: now, calendar: calendar, locale: locale), "Awake for the job at 12:01")
+        XCTAssertEqual(PanelText.jobHold(hold(seen: true), holding: true, now: now, calendar: calendar, locale: locale), "Awake while the job runs")
+        XCTAssertEqual(PanelText.jobHold(hold(), holding: false, now: now, calendar: calendar, locale: locale), "Asked to stay awake for a job")
+        for seen in [false, true] {
+            XCTAssertLessThanOrEqual(PanelText.jobHold(hold(seen: seen), holding: true, now: now, calendar: calendar, locale: Locale(identifier: "en_US")).count, 32, "It fits next to Stop")
+        }
         XCTAssertEqual(PanelText.title(of: .stopJobHold(id: "x")), "Stop")
     }
 
@@ -182,7 +186,7 @@ final class JobTextTests: XCTestCase {
         let group = state.groups[0]
         XCTAssertEqual(group.header.name, "backup.sh")
         XCTAssertEqual(group.header.state, .working)
-        XCTAssertEqual(group.header.detail, "Keeps your Mac awake for the job at 12:01")
+        XCTAssertEqual(group.header.detail, "Awake for the job at 12:01")
         XCTAssertEqual(group.stop, .stopJobHold(id: "crontab:backup@1"))
         XCTAssertFalse(group.canToggle)
         XCTAssertEqual(group.id, MenuModel.jobRowID("crontab:backup@1"))
@@ -191,7 +195,7 @@ final class JobTextTests: XCTestCase {
     func testInAStopAJobHoldIsOnlyAskedFor() {
         let state = MenuModel.state(input(decide([hold()], pausedUntil: at("2026-10-10 13:00"))), now: now)
         XCTAssertEqual(state.groups.first?.header.state, .idle)
-        XCTAssertEqual(state.groups.first?.header.detail, "Asked to keep your Mac awake for the job at 12:01")
+        XCTAssertEqual(state.groups.first?.header.detail, "Asked to stay awake for a job")
         XCTAssertEqual(state.groups.first?.stop, .stopJobHold(id: "crontab:backup@1"))
     }
 
