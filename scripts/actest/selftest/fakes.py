@@ -1,9 +1,9 @@
 """A fake of the environment: a clock that only moves when the runner
 waits, pmset and ioreg that print what a scenario says, a state file of
 the app, and the keys of an owner who follows the script."""
-import io
 import json
 import plistlib
+import time
 
 from actestlib import config
 
@@ -53,6 +53,10 @@ class FakeEnv:
         self.log_lines = []
         self.holds = []
         self.free = 50 << 30
+        self.heartbeat_path = None
+        self.beat = 0.0
+        # True while the Mac of the scenario sleeps: no heartbeat then.
+        self.asleep = lambda t: False
 
     @property
     def t(self):
@@ -67,12 +71,20 @@ class FakeEnv:
 
     def sleep(self, seconds):
         self.clock += max(0.0, seconds)
+        while self.heartbeat_path and self.beat <= self.t:
+            if not self.asleep(self.beat):
+                with open(self.heartbeat_path, "a", encoding="utf-8") as file:
+                    file.write(f"{self.start + self.beat:.3f}\n")
+            self.beat += 2.0
 
     def key(self, timeout):
         for moment in sorted(self.keys):
             if moment <= self.t + timeout:
-                self.clock = max(self.clock, self.start + moment)
-                return self.keys.pop(moment)
+                self.sleep(max(0.0, moment - self.t))
+                key = self.keys.pop(moment)
+                if key == "interrupt":
+                    raise KeyboardInterrupt
+                return key
         self.sleep(timeout)
         return None
 
@@ -140,6 +152,9 @@ class FakeEnv:
         self.tool_calls.append(list(args))
         if args[:1] == ["release"] and len(args) == 2 and args[1] in self.holds:
             self.holds.remove(args[1])
+        if args[:1] == ["hold"]:
+            self.holds.append(f"aaaa{len(self.tool_calls):04d}")
+            return 0, json.dumps({"id": self.holds[-1]}) + "\n"
         if args == ["status", "--json"]:
             return 0, json.dumps({"appRunning": True, "holds": [{"id": hold} for hold in self.holds], "line": "x"}) + "\n"
         return self.tool_answers.get(args[0], (0, ""))
@@ -151,6 +166,7 @@ class FakeEnv:
 
     def spawn_heartbeat(self, path):
         self.heartbeat_path = path
+        self.beat = self.t
         self.spawned.append(FakeChild())
         return self.spawned[-1]
 
@@ -170,5 +186,7 @@ def state(hold=False, flag=False, wanted=None, agents=(), holds=(), on=True, hel
     }, **more)
 
 
-def output():
-    return io.StringIO()
+def log_line(env, t, kind, text="x"):
+    """One line of the power log at second t of the scenario."""
+    stamp = time.strftime("%Y-%m-%d %H:%M:%S %z", time.localtime(env.start + t))
+    env.log_lines.append(f"{stamp} {kind:<20}\t{text}")

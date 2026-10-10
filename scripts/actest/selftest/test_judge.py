@@ -42,7 +42,7 @@ class JudgeTests(unittest.TestCase):
         self.assertTrue(self.one("always from step 2 to step 3: app.hold=true")["ok"])
         result = self.one("always from step 2 to end: app.hold=true")
         self.assertFalse(result["ok"])
-        self.assertIn("false after 70 s, in 31 of 101 samples", result["measured"])
+        self.assertIn("false after 70 s, in 30 of 100 samples", result["measured"])
         self.assertTrue(self.one("never from step 2 to step 3: sleepdisabled=0")["ok"])
         self.assertFalse(self.one("never from start to end: sleepdisabled=0")["ok"])
 

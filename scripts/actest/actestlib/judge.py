@@ -12,8 +12,11 @@
     out refused contains not running
 
 A moment is `start`, `end`, `step N` (when step N ended) or `step N start`,
-with `+ 30s` or `- 5s` after it. `info ` in front makes a rule that only
-measures and never fails.
+with `+ 30s` or `- 5s` after it. `always` and `never` look at the samples
+from the first moment up to, and not at, the second one. The owner presses
+a key a moment after the thing happened, so a rule that ends at a key
+step takes some seconds off: `to step 3 - 5s`. `info ` in front makes a
+rule that only measures and never fails.
 """
 import re
 
@@ -114,11 +117,14 @@ def _judge(evidence, form, groups):
         return bool(lines) == wanted, said
     condition = rest[0]
     if form == "at":
-        after = [sample for sample in evidence.get("samples", []) if sample["t"] >= first]
+        every = evidence.get("samples", [])
+        after = [sample for sample in every if sample["t"] >= first] or every[-1:]
         if not after:
             return False, "no sample at that moment"
         return expr.holds(condition, after[0], first), expr.reading(condition, after[0], first)
     samples = _window(evidence, first, last)
+    if form in ("always", "never"):
+        samples = [sample for sample in samples if sample["t"] < last]
     if not samples:
         return False, "no sample in the window"
     hits = [sample for sample in samples if expr.holds(condition, sample, first)]
