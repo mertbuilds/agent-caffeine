@@ -87,6 +87,12 @@ final class XPCSleepFlagHelper: SleepFlagHelperConnecting {
         }
     }
 
+    func setWakeAlarm(at time: TimeInterval) async throws -> (time: Double, code: Int) {
+        try await call { proxy, done in
+            proxy.setWakeAlarm(at: time) { time, code in done((time, code)) }
+        }
+    }
+
     // The reply, the error handler, the end of the connection or the
     // timeout answers the call, whichever is first. A connection that
     // gave no answer in time is dropped, and the next call makes a new one.

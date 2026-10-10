@@ -366,6 +366,9 @@ final class HelperServiceTests: XCTestCase {
         signal(stopSignal, SIG_DFL)
     }
 
+    private let events = FakeWakeEvents()
+    private lazy var alarm = WakeAlarmCore(store: events, date: { 1_800_000_000 }, awake: { 1_000 })
+
     private func stop(_ service: HelperService, exited: XCTestExpectation) {
         service.exitOnTermination(signal: stopSignal)
         kill(getpid(), stopSignal)
@@ -379,7 +382,7 @@ final class HelperServiceTests: XCTestCase {
         XCTAssertTrue(core.setSleepDisabled(true))
         let exited = expectation(description: "exit")
         var seen: [(code: Int32, flag: Bool, marker: Bool)] = []
-        let service = HelperService(core: core) { code in
+        let service = HelperService(core: core, alarm: alarm) { code in
             seen.append((code, flag.value, marker.exists))
             exited.fulfill()
         }
@@ -400,7 +403,7 @@ final class HelperServiceTests: XCTestCase {
         XCTAssertTrue(core.setSleepDisabled(true))
         let exited = expectation(description: "exit")
         var order: [String] = []
-        let service = HelperService(core: core) { code in
+        let service = HelperService(core: core, alarm: alarm) { code in
             order.append("exit \(code), flag \(flag.value), marker \(marker.exists)")
             exited.fulfill()
         }
@@ -414,7 +417,7 @@ final class HelperServiceTests: XCTestCase {
         flag.value = true
         let core = HelperCore(flag: flag, marker: marker, timeout: 60, now: { 1_000 })
         let exited = expectation(description: "exit")
-        let service = HelperService(core: core) { _ in exited.fulfill() }
+        let service = HelperService(core: core, alarm: alarm) { _ in exited.fulfill() }
         service.retire {}
         wait(for: [exited], timeout: 5)
         XCTAssertTrue(flag.value)
@@ -426,7 +429,7 @@ final class HelperServiceTests: XCTestCase {
         flag.value = true
         let core = HelperCore(flag: flag, marker: marker, timeout: 60, now: { 1_000 })
         let exited = expectation(description: "exit")
-        let service = HelperService(core: core) { _ in exited.fulfill() }
+        let service = HelperService(core: core, alarm: alarm) { _ in exited.fulfill() }
         stop(service, exited: exited)
         XCTAssertTrue(flag.value)
         XCTAssertEqual(flag.writes, [])
@@ -438,8 +441,68 @@ final class HelperServiceTests: XCTestCase {
         XCTAssertTrue(core.setSleepDisabled(true))
         flag.setFails = true
         let exited = expectation(description: "exit")
-        let service = HelperService(core: core) { _ in exited.fulfill() }
+        let service = HelperService(core: core, alarm: alarm) { _ in exited.fulfill() }
         stop(service, exited: exited)
         XCTAssertTrue(marker.exists, "The next start tries again")
+    }
+
+    private let appleAlarm = WakeEvent(date: Date(timeIntervalSince1970: 1_800_000_500), owner: "com.apple.alarm.user-invisible", type: "wake")
+
+    private func idleService(exited: XCTestExpectation) -> HelperService {
+        let core = HelperCore(flag: FakeFlag(), marker: FakeMarker(), timeout: 60, now: { 1_000 })
+        return HelperService(core: core, alarm: alarm) { _ in exited.fulfill() }
+    }
+
+    func testTheWakeAlarmCallRepliesWithTheTimeAndTheCode() {
+        let exited = expectation(description: "exit")
+        let service = idleService(exited: exited)
+        var replies: [String] = []
+        let answered = expectation(description: "answered")
+        answered.expectedFulfillmentCount = 4
+        for time in [1_800_003_600, 1_800_000_005, 0, Double.nan] {
+            service.setWakeAlarm(at: time) { time, code in
+                replies.append("\(Int(time)) \(code)")
+                answered.fulfill()
+            }
+        }
+        wait(for: [answered], timeout: 5)
+        XCTAssertEqual(replies, ["1800003600 0", "0 2", "0 0", "0 1"])
+        XCTAssertEqual(events.scheduled, [1_800_003_600])
+        stop(service, exited: exited)
+    }
+
+    func testTerminationTakesTheWakeAlarmAwayAndExits() {
+        events.list = [appleAlarm]
+        let exited = expectation(description: "exit")
+        let service = idleService(exited: exited)
+        let answered = expectation(description: "answered")
+        service.setWakeAlarm(at: 1_800_003_600) { _, _ in answered.fulfill() }
+        wait(for: [answered], timeout: 5)
+        XCTAssertEqual(events.oursListed, [1_800_003_600])
+        stop(service, exited: exited)
+        XCTAssertEqual(events.list, [appleAlarm])
+    }
+
+    func testRetireTakesTheWakeAlarmAwayAndExits() {
+        events.list = [appleAlarm]
+        let exited = expectation(description: "exit")
+        let service = idleService(exited: exited)
+        let answered = expectation(description: "answered")
+        service.setWakeAlarm(at: 1_800_003_600) { _, _ in answered.fulfill() }
+        wait(for: [answered], timeout: 5)
+        var listedAtReply: [TimeInterval]?
+        service.retire { listedAtReply = self.events.oursListed }
+        wait(for: [exited], timeout: 5)
+        XCTAssertEqual(listedAtReply, [])
+        XCTAssertEqual(events.list, [appleAlarm])
+    }
+
+    func testTheStartTakesAwayAnAlarmOfAnEarlierRun() {
+        events.list = [appleAlarm, FakeWakeEvents.ours(1_800_003_600)]
+        let exited = expectation(description: "exit")
+        let service = idleService(exited: exited)
+        service.start()
+        XCTAssertEqual(events.list, [appleAlarm])
+        stop(service, exited: exited)
     }
 }

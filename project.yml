@@ -146,7 +146,8 @@ targets:
       testTargets:
         - CaffeinagentTests
 
-  # Root daemon that sets and clears SleepDisabled. The app registers it
+  # Root daemon that sets and clears SleepDisabled and keeps one wake alarm:
+  # two booleans and one wake time, nothing else. The app registers it
   # through SMAppService and talks to it over XPC. The Info.plist goes into
   # the binary, so the signature carries the bundle id the app requires. The
   # empty entitlements file stops Xcode from adding an application identifier
@@ -263,6 +264,7 @@ targets:
       - CaffeinagentHelper/HelperCore.swift
       - CaffeinagentHelper/HelperService.swift
       - CaffeinagentHelper/SleepFlagWatchdog.swift
+      - CaffeinagentHelper/WakeAlarmCore.swift
       # The commands and the MCP server of the command line tool, without
       # the part that starts a process.
       - CaffeinagentCLI/HoldCommand.swift
