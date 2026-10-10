@@ -48,6 +48,19 @@ extension PanelText {
         return "Wakes your Mac \(lead) before a job, keeps it awake while the job runs, for \(cap) at most, then lets it sleep."
     }
 
+    /// The quiet line below a job that an agent runs, nil for any other
+    /// job. Such a job is not watched while it runs: its hold ends
+    /// `JobSettings.agentStartGrace` after its time, and from then on
+    /// the Mac stays awake only while the agent is seen at work. With
+    /// the lid closed it is not seen in this version (`JobHold`). So
+    /// "while the job runs, for 30 minutes at most" is not true of it.
+    static func jobAgentNote(_ source: ScheduledJob.Source) -> String? {
+        guard source == .hermes else { return nil }
+        let grace = JobSettings.agentStartGrace
+        let bridge = HumaneDuration.length(seconds: grace) ?? HumaneDuration.counted(Int(grace), "second")
+        return "Kept awake for \(bridge) after its time, then \(jobSource(source)) has to be seen working"
+    }
+
     static func jobSource(_ source: ScheduledJob.Source) -> String {
         switch source {
         case .launchd: return "launchd agent"

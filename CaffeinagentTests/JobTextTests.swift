@@ -98,9 +98,25 @@ final class JobTextTests: XCTestCase {
             PanelText.jobsOnPowerExplained, PanelText.jobsOnBatteryWarning, PanelText.jobsShowHistory, PanelText.jobsHideHistory, PanelText.jobsNoHistory,
             PanelText.jobsTooOften, PanelText.jobsNoRunKnown, PanelText.jobsNeedHelper, PanelText.jobsExplained(leadTime: 60, holdCap: 1800), PanelText.jobHoldHint,
             PanelText.jobNoSwitch(.sameLines), PanelText.jobNoSwitch(.noPlainName), PanelText.jobSwitchLost("backup.sh"), PanelText.jobsCloseNotice,
+            PanelText.jobAgentNote(.hermes) ?? "",
             PanelText.wakesAt(alarm("2026-10-10 20:59"), now: now, calendar: calendar, locale: locale),
         ]
         return lines
+    }
+
+    /// "While the job runs, for 30 minutes at most" is not true of a job
+    /// that an agent runs: its hold is the bridge. The line below such
+    /// a job says what it gets, with the number of the rule.
+    func testAJobOfAnAgentSaysHowLongItIsKeptAwake() throws {
+        XCTAssertEqual(PanelText.jobAgentNote(.hermes), "Kept awake for 5 minutes after its time, then Hermes Agent has to be seen working")
+        XCTAssertNil(PanelText.jobAgentNote(.crontab))
+        XCTAssertNil(PanelText.jobAgentNote(.launchd))
+        let fire = at("2026-10-10 21:00")
+        let job = ScheduledJob(id: "hermes:a1", source: .hermes, name: "Hermes job a1", schedule: .cron(JobTime.cron("0 21 * * *")), enabled: true)
+        let hold = try XCTUnwrap(JobHold.open(job: job, fireAt: fire, settings: JobSettings()))
+        XCTAssertEqual(hold.endsAt.timeIntervalSince(fire), 5 * 60, "What the line says is what the hold does")
+        XCTAssertEqual(JobSettings.agentStartGrace, 5 * 60)
+        XCTAssertFalse(hold.isWatched)
     }
 
     func testTheStyleOfEveryLine() {

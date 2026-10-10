@@ -66,7 +66,7 @@ struct WakeForJobsSection: View {
                 Toggle(isOn: isOn(run)) {
                     Text(run.job.name)
                         .foregroundStyle(hasSwitch(run) ? .primary : .secondary)
-                    Text(PanelText.jobDetail(run, now: now, calendar: calendar, locale: locale))
+                    Text(detail(run))
                         .monospacedDigit()
                 }
                 .disabled(!hasSwitch(run))
@@ -138,6 +138,14 @@ struct WakeForJobsSection: View {
                 .monospacedDigit()
             }
         }
+    }
+
+    /// The line below the name of a job, and for a job of an agent a
+    /// second line that says how long it is kept awake.
+    private func detail(_ run: JobRun) -> String {
+        let line = PanelText.jobDetail(run, now: now, calendar: calendar, locale: locale)
+        guard hasSwitch(run), let note = PanelText.jobAgentNote(run.job.source) else { return line }
+        return line + "\n" + note
     }
 
     private func isUnreadable(_ source: ScheduledJob.Source) -> Bool {
