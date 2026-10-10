@@ -549,7 +549,9 @@ final class StateAggregator: ObservableObject {
     private func wokeInFull() {
         display?.didWake()
         engine.didWake()
-        jobLoop.wokeInFull()
+        // The power source is read now, as at "will sleep": the Mac may
+        // have been unplugged while it slept, and a hold can open here.
+        jobLoop.wokeInFull(samples > 0 ? jobWakeInput.withPower(of: powerContext.context()) : nil)
     }
 
     func dismissSleepNote() {

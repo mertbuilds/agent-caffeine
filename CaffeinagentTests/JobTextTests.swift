@@ -143,6 +143,11 @@ final class JobTextTests: XCTestCase {
         XCTAssertEqual(line(.alarmSet, alarm: nil, job: nil), "Wake set")
         XCTAssertEqual(line(.alarmRefused, reason: WakeAlarmRefusal.notConfirmed.rawValue), "The wake at 20:59 was not set: macOS did not list it")
         XCTAssertEqual(line(.alarmRefused, reason: 99), "The wake at 20:59 was not set: it did not take the time")
+        XCTAssertEqual(
+            line(.renewalRefused, reason: WakeAlarmRefusal.notCancelled.rawValue),
+            "The wake at 20:59 could not be renewed: macOS did not take the old one away"
+        )
+        XCTAssertEqual(line(.renewalRefused, alarm: nil, job: nil), "The wake could not be renewed: it did not take the time")
         XCTAssertEqual(line(.helperSilent, alarm: nil, job: nil), "The helper gave no answer")
         XCTAssertEqual(line(.switchLost, alarm: nil), "backup.sh was switched off: two lines of the crontab look the same now")
         XCTAssertEqual(line(.switchLost, alarm: nil, job: nil), "A job was switched off: two lines of the crontab look the same now")

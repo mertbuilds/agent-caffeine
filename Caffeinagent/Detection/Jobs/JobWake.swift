@@ -55,6 +55,10 @@ enum JobWakeStatus: Equatable {
 /// - A time the helper did not take, new or the same again, waits
 ///   `retryAfter` before it goes again.
 /// - 0 goes when no alarm is wanted and one can still be set.
+/// - An alarm that could not be renewed for the time of the lease is
+///   gone: the helper took it away.
+/// - At "will sleep" nothing waits: 0 goes again while an alarm that is
+///   not wanted can still be set, and else a time that failed goes again.
 /// - After macOS said the Mac goes to sleep, the plan is made for a Mac
 ///   that sleeps, until the Mac woke in full.
 /// - When the time of an alarm that is set has come, a job hold opens.
@@ -178,12 +182,14 @@ struct JobWake: Equatable {
                 // The helper refuses a time that is this close, also the
                 // one it has. The lease is longer than that.
                 guard time - now.timeIntervalSince1970 >= JobSettings.minimumAhead else { return nil }
-            } else if failedTime == time, awake < retryAt {
+            } else if failedTime == time, awake < retryAt, !willSleep || (refusal != nil && mayBeSet) {
                 // The helper refused the new time and kept the alarm it
                 // had. That alarm is not wanted any more, and it can be
                 // for a job that is off: it goes, once for each try of
-                // the new time.
-                guard refusal != nil, clearedFor != time, alarm != nil || memory.owedAlarm != nil else { return nil }
+                // the new time. Before sleep it goes in any case: the
+                // answer to the 0 before can be lost, and the Mac must
+                // not wake for a job that is off.
+                guard refusal != nil, mayBeSet, willSleep || clearedFor != time else { return nil }
                 clearedFor = time
                 clearing = true
                 askedTime = 0
@@ -192,7 +198,7 @@ struct JobWake: Equatable {
             }
         } else {
             guard owesCancel else { return nil }
-            if failedTime == 0, awake < retryAt { return nil }
+            if failedTime == 0, awake < retryAt, !willSleep { return nil }
         }
         clearing = false
         askedTime = time
@@ -204,6 +210,10 @@ struct JobWake: Equatable {
     mutating func wokeInFull() {
         sleepAnnounced = false
     }
+
+    /// An alarm can still be in the list of macOS: the helper confirmed
+    /// one, or one is left from before.
+    private var mayBeSet: Bool { alarm != nil || memory.owedAlarm != nil }
 
     /// The time of the alarm has come: the Mac woke for it, or was awake.
     private mutating func ring(jobs: [ScheduledJob], slept: Bool, now: Date) {
@@ -276,16 +286,25 @@ struct JobWake: Equatable {
             // the alarm that was set stays (too soon, too far, too
             // often, the same time behind a list that cannot be read),
             // or it is taken away with the new one (not scheduled, not
-            // confirmed). So the alarm here stays as it was known. 0
-            // goes after a refused new time, and the lease ends the rest.
+            // confirmed). So the alarm here stays as it was known for
+            // the time of the lease. 0 goes after a refused new time.
             silent = false
             // The cancel after a refused time failed too. The refusal of
             // the time and its retry stay as they are, and the cancel is
             // tried again with the time.
             if clearing { return }
             if time > 0 { clearedFor = nil }
-            if failedTime != time || refusal != reason {
-                memory.history.note(.alarmRefused, at: now, alarmAt: time > 0 ? time : nil, job: wanted?.jobName, reason: reason.rawValue)
+            // No refusal makes the lease longer. A renewal that is
+            // refused until the lease is over leaves no alarm: the
+            // helper took it away, and the time goes again as a new one.
+            let renewal = alarm.map { isSame($0.at.timeIntervalSince1970, time) } ?? false
+            endLease(awake: awake)
+            let lost = renewal && alarm == nil
+            if failedTime != time || refusal != reason || lost {
+                // Inside the lease the alarm is still set, so the line
+                // does not say that it was not.
+                let kind: JobEvent.Kind = renewal && !lost ? .renewalRefused : .alarmRefused
+                memory.history.note(kind, at: now, alarmAt: time > 0 ? time : nil, job: wanted?.jobName, reason: reason.rawValue)
             }
             failedTime = time
             refusal = reason
@@ -301,14 +320,17 @@ struct JobWake: Equatable {
                 refusal = nil
                 retryAt = awake + Self.retryAfter
             }
-            // The helper takes an alarm away that nobody asked for in
-            // the time of the lease, and a helper that stopped took it
-            // away at once.
-            if awake - (confirmedAwake ?? -.infinity) >= WakeAlarmLimits.lease {
-                alarm = nil
-                memory.owedAlarm = nil
-            }
+            // A helper that stopped took the alarm away at once.
+            endLease(awake: awake)
         }
+    }
+
+    /// The helper takes an alarm away that it did not confirm again in
+    /// the time of the lease.
+    private mutating func endLease(awake: TimeInterval) {
+        guard awake - (confirmedAwake ?? -.infinity) >= WakeAlarmLimits.lease else { return }
+        alarm = nil
+        memory.owedAlarm = nil
     }
 
     /// The helper was stopped and started again, as after an update of

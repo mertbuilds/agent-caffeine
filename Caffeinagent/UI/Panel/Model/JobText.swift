@@ -167,6 +167,9 @@ extension PanelText {
         case .alarmRefused:
             let reason = event.reason.flatMap(WakeAlarmRefusal.init(rawValue:)) ?? .unknown
             return "\(wake) was not set: \(refusal(reason))"
+        case .renewalRefused:
+            let reason = event.reason.flatMap(WakeAlarmRefusal.init(rawValue:)) ?? .unknown
+            return "\(wake) could not be renewed: \(refusal(reason))"
         case .helperSilent: return "The helper gave no answer"
         case .alarmCancelled: return "\(wake) was taken away"
         case .wokeAtAlarm: return "Your Mac woke for \(job)"

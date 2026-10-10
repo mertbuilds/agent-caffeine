@@ -112,9 +112,10 @@ final class JobWakeLoop: ObservableObject {
         turn(willSleep: true)
     }
 
-    func wokeInFull() {
+    /// - Parameter next: what the app knows now. Nil keeps the input.
+    func wokeInFull(_ next: JobWakeInput? = nil) {
         core.wokeInFull()
-        run()
+        run(next)
     }
 
     /// "Stop" on the line of a job hold.

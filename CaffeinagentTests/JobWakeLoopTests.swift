@@ -197,6 +197,15 @@ final class JobWakeLoopTests: XCTestCase {
         loop.wokeInFull()
         await settle()
         XCTAssertEqual(sender.asked.count, 2, "Awake in full again, and the alarm that is set stays")
+        // The Mac was unplugged while it slept: the turn at the full
+        // wake takes the power source that it is given.
+        var unplugged = input
+        unplugged.context.onBattery = true
+        loop.wokeInFull(unplugged)
+        await settle()
+        XCTAssertEqual(loop.input, unplugged)
+        XCTAssertEqual(sender.asked.last, "0")
+        XCTAssertEqual(loop.view.status, .noAlarm(.onBattery))
     }
 
     func testAHoldOpensAtTheAlarmAndEndsWhenTheJobIsGone() async {

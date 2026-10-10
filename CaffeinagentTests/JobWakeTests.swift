@@ -110,6 +110,47 @@ final class JobWakeTests: XCTestCase {
         }
     }
 
+    /// The helper makes the lease no longer for a renewal it refuses,
+    /// and takes the alarm away at the end of the lease. The app shows
+    /// no alarm then, and the time goes again as a new one.
+    func testARenewalThatIsRefusedForTheTimeOfTheLeaseLeavesNoAlarm() {
+        set(input(), noon)
+        let time = seconds("2026-10-10 20:59")
+        awake += JobWake.renewEvery
+        XCTAssertEqual(turn(input(), noon), time)
+        wake.answered(.refused(.notCancelled), for: time, now: noon, awake: awake)
+        XCTAssertEqual(wake.status, .alarmSet(wake.alarm!), "Inside the lease the alarm is still there")
+        XCTAssertEqual(kinds, [.alarmSet, .renewalRefused])
+        awake += JobWake.retryAfter
+        XCTAssertEqual(turn(input(), noon), time)
+        wake.answered(.refused(.notCancelled), for: time, now: noon, awake: awake)
+        XCTAssertNotNil(wake.alarm)
+        XCTAssertEqual(kinds, [.alarmSet, .renewalRefused], "The same refusal is one line")
+
+        awake += WakeAlarmLimits.lease
+        XCTAssertEqual(turn(input(), noon), time)
+        wake.answered(.refused(.notCancelled), for: time, now: noon, awake: awake)
+        XCTAssertNil(wake.alarm)
+        XCTAssertNil(wake.memory.owedAlarm)
+        XCTAssertFalse(wake.owesCancel)
+        XCTAssertEqual(wake.status, .refused(.notCancelled))
+        XCTAssertEqual(kinds, [.alarmSet, .renewalRefused, .alarmRefused], "The alarm is gone, and the history says so")
+        XCTAssertEqual(wake.memory.history.events.last?.alarmAt, time)
+        XCTAssertEqual(wake.memory.history.events.last?.job, "backup")
+
+        // The time is a new one now: it waits for its retry, and no 0
+        // goes for an alarm that is not there.
+        XCTAssertNil(turn(input(), noon))
+        awake += JobWake.retryAfter
+        XCTAssertEqual(turn(input(), noon), time)
+        wake.answered(.refused(.notCancelled), for: time, now: noon, awake: awake)
+        XCTAssertEqual(kinds, [.alarmSet, .renewalRefused, .alarmRefused], "The same refusal is one line")
+        awake += JobWake.retryAfter
+        set(input(), noon)
+        XCTAssertEqual(wake.status, .alarmSet(wake.alarm!))
+        XCTAssertEqual(kinds, [.alarmSet, .renewalRefused, .alarmRefused, .alarmSet])
+    }
+
     func testTimeAsleepDoesNotCountForTheRenewal() {
         set(input(), noon)
         sleep(for: 3600)
@@ -271,6 +312,9 @@ final class JobWakeTests: XCTestCase {
         let body = source[timer.upperBound...].prefix(600)
         XCTAssertTrue(body.contains("self?.updateJobWake(powerNow: true)"))
         XCTAssertTrue(source.contains("jobLoop.run(powerNow ? jobWakeInput.withPower(of: powerContext.context()) : jobWakeInput)"))
+        // At a full wake a hold can open too.
+        XCTAssertTrue(source.contains("jobLoop.wokeInFull(samples > 0 ? jobWakeInput.withPower(of: powerContext.context()) : nil)"))
+        XCTAssertFalse(source.contains("jobLoop.wokeInFull()"))
     }
 
     func testWillSleepRenewsAnAlarmThatIsSet() {
@@ -445,6 +489,44 @@ final class JobWakeTests: XCTestCase {
         wake.answered(.helperNotAvailable, for: 0, now: noon, awake: awake)
         XCTAssertNil(wake.alarm, "The helper took it away itself, or is gone with it")
         XCTAssertFalse(wake.owesCancel)
+    }
+
+    /// The answer to the 0 after a refused time is lost, and the Mac
+    /// goes to sleep before the refused time is tried again. The old
+    /// alarm can be for a job that is off, so 0 goes once more.
+    func testAtWillSleepTheCancelAfterARefusalGoesAgain() {
+        let both = [job("backup", "0 21 * * *"), job("report", "0 3 * * *")]
+        set(input(both, on: ["backup", "report"]), noon)
+        let reportOnly = input(both, on: ["report"])
+        let time = turn(reportOnly, noon)!
+        wake.answered(.refused(.tooOften), for: time, now: noon, awake: awake)
+        XCTAssertEqual(turn(reportOnly, noon), 0)
+        wake.answered(.helperNotAvailable, for: 0, now: noon, awake: awake)
+        XCTAssertEqual(wake.alarm?.jobName, "backup")
+        XCTAssertNil(turn(reportOnly, noon), "Awake, one cancel for each try")
+        XCTAssertEqual(turn(reportOnly, noon, willSleep: true), 0, "Before sleep the cancel goes again")
+        wake.answered(.cancelled, for: 0, now: noon, awake: awake)
+        XCTAssertNil(wake.alarm)
+        XCTAssertFalse(wake.owesCancel)
+        XCTAssertEqual(wake.status, .refused(.tooOften), "The refusal of the new time is still what is known")
+        XCTAssertNil(turn(reportOnly, noon), "The new time waits for its retry")
+        XCTAssertEqual(turn(reportOnly, noon, willSleep: true), time, "With no alarm left, the time goes again before sleep")
+    }
+
+    /// No alarm is wanted, and the 0 failed: it waits for its retry while
+    /// the Mac is awake, and goes again when the Mac goes to sleep.
+    func testAtWillSleepACancelThatFailedGoesAgain() {
+        set(input(), noon)
+        let off = input(on: [])
+        for result in [WakeAlarmResult.refused(.notCancelled), .helperNotAvailable] {
+            XCTAssertEqual(turn(off, noon, willSleep: result == .helperNotAvailable), 0)
+            wake.answered(result, for: 0, now: noon, awake: awake)
+            XCTAssertTrue(wake.owesCancel)
+            XCTAssertNil(turn(off, noon), "\(result): awake, it waits")
+        }
+        XCTAssertEqual(turn(off, noon, willSleep: true), 0)
+        wake.answered(.cancelled, for: 0, now: noon, awake: awake)
+        XCTAssertNil(turn(off, noon, willSleep: true), "No alarm is left")
     }
 
     func testAJobThatIsTooFarAheadTakesTheOldAlarmAwayAndAsksForNone() {

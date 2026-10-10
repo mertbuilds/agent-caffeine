@@ -13,6 +13,9 @@ struct JobEvent: Codable, Equatable {
         case alarmSet
         /// The helper said no. `reason` is the raw value of a `WakeAlarmRefusal`.
         case alarmRefused
+        /// The helper said no to the time of the alarm that is set. The
+        /// alarm stays until the lease of the helper is over.
+        case renewalRefused
         /// The helper gave no answer, or is of a build without alarms.
         case helperSilent
         /// The helper took the alarm out of the list.
