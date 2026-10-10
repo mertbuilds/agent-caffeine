@@ -389,3 +389,64 @@ final class WakeAlarmResultTests: XCTestCase {
         XCTAssertEqual(WakeAlarmResult(time: 1_800_000_000, code: 99), .refused(.unknown))
     }
 }
+
+/// Stands in for the XPC connection, with the helper's own rules behind it.
+private final class FakeAlarmConnection: SleepFlagHelperConnecting {
+    let events = FakeWakeEvents()
+    private(set) lazy var core = WakeAlarmCore(store: events, date: { 1_800_000_000 }, awake: { 1_000 })
+    var error: Error?
+    var asked: [TimeInterval] = []
+
+    func onConnectionLost(_ handler: @escaping () -> Void) {}
+    func reconnect() {}
+    func setSleepDisabled(_ on: Bool) async throws -> Bool { false }
+    func status() async throws -> (sleepDisabled: Bool, setByHelper: Bool, version: String) { (false, false, "1.0 (1)") }
+    func heartbeat() async throws -> Bool { false }
+    func retire() async throws {}
+
+    func setWakeAlarm(at time: TimeInterval) async throws -> (time: Double, code: Int) {
+        asked.append(time)
+        if let error { throw error }
+        return core.set(at: time).reply
+    }
+}
+
+final class WakeAlarmClientTests: XCTestCase {
+    func testTheClientGivesWhatTheHelperDid() async {
+        let helper = FakeAlarmConnection()
+        var result = await helper.wakeAlarm(at: 1_800_003_600)
+        XCTAssertEqual(result, .set(1_800_003_600))
+        result = await helper.wakeAlarm(at: 1_800_000_010)
+        XCTAssertEqual(result, .refused(.tooSoon))
+        result = await helper.wakeAlarm(at: 1_800_000_000 + 9 * 24 * 3600)
+        XCTAssertEqual(result, .refused(.tooFar))
+        result = await helper.wakeAlarm(at: 0)
+        XCTAssertEqual(result, .cancelled)
+        XCTAssertEqual(helper.asked, [1_800_003_600, 1_800_000_010, 1_800_000_000 + 9 * 24 * 3600, 0])
+        XCTAssertEqual(helper.events.oursListed, [])
+    }
+
+    func testAReadBackThatFailsReachesTheClient() async {
+        let helper = FakeAlarmConnection()
+        helper.events.dropsSchedules = true
+        let result = await helper.wakeAlarm(at: 1_800_003_600)
+        XCTAssertEqual(result, .refused(.notConfirmed))
+    }
+
+    /// No answer in time, a helper that went away, a helper of a build that
+    /// does not know the call, a helper with another signature.
+    func testAHelperThatCannotBeReachedIsAResultAndNoError() async {
+        let errors: [Error] = [
+            HelperCallError.timedOut, HelperCallError.connectionLost,
+            NSError(domain: NSCocoaErrorDomain, code: NSXPCConnectionInvalid),
+            NSError(domain: NSCocoaErrorDomain, code: NSXPCConnectionCodeSigningRequirementFailure),
+        ]
+        for error in errors {
+            let helper = FakeAlarmConnection()
+            helper.error = error
+            let result = await helper.wakeAlarm(at: 1_800_003_600)
+            XCTAssertEqual(result, .helperNotAvailable)
+            XCTAssertEqual(helper.events.scheduled, [])
+        }
+    }
+}
