@@ -76,24 +76,29 @@ struct JobSettings: Codable, Equatable {
         case wakeForJobs, onPowerOnly, leadTime, maxWakesPerDay, startGrace, holdCap, jobSwitches
     }
 
-    /// A key that is missing keeps its default. The numbers are not
-    /// trusted: one that is no number falls back to its default, and one
-    /// out of its range is cut to the range.
+    /// A key that is missing keeps its default, and so does a key whose
+    /// value is of the wrong type: one value that cannot be read does not
+    /// cost the other settings. A number out of its range is cut to the
+    /// range.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let defaults = JobSettings()
-        func time(_ key: CodingKeys, _ fallback: TimeInterval, _ range: ClosedRange<TimeInterval>) throws -> TimeInterval {
-            guard let value = try container.decodeIfPresent(TimeInterval.self, forKey: key), value.isFinite else { return fallback }
+        func value<Value: Decodable>(_ key: CodingKeys, _ fallback: Value) -> Value {
+            (try? container.decodeIfPresent(Value.self, forKey: key)) ?? fallback
+        }
+        func time(_ key: CodingKeys, _ fallback: TimeInterval, _ range: ClosedRange<TimeInterval>) -> TimeInterval {
+            let value = value(key, fallback)
+            guard value.isFinite else { return fallback }
             return min(max(value, range.lowerBound), range.upperBound)
         }
-        wakeForJobs = try container.decodeIfPresent(Bool.self, forKey: .wakeForJobs) ?? defaults.wakeForJobs
-        onPowerOnly = try container.decodeIfPresent(Bool.self, forKey: .onPowerOnly) ?? defaults.onPowerOnly
-        leadTime = try time(.leadTime, defaults.leadTime, Self.leadTimeRange)
-        let wakes = try container.decodeIfPresent(Int.self, forKey: .maxWakesPerDay) ?? defaults.maxWakesPerDay
+        wakeForJobs = value(.wakeForJobs, defaults.wakeForJobs)
+        onPowerOnly = value(.onPowerOnly, defaults.onPowerOnly)
+        leadTime = time(.leadTime, defaults.leadTime, Self.leadTimeRange)
+        let wakes = value(.maxWakesPerDay, defaults.maxWakesPerDay)
         maxWakesPerDay = min(max(wakes, Self.maxWakesRange.lowerBound), Self.maxWakesRange.upperBound)
-        startGrace = try time(.startGrace, defaults.startGrace, Self.startGraceRange)
-        holdCap = try time(.holdCap, defaults.holdCap, Self.holdCapRange)
-        jobSwitches = (try container.decodeIfPresent([String: Bool].self, forKey: .jobSwitches) ?? [:]).filter(\.value)
+        startGrace = time(.startGrace, defaults.startGrace, Self.startGraceRange)
+        holdCap = time(.holdCap, defaults.holdCap, Self.holdCapRange)
+        jobSwitches = value(.jobSwitches, [String: Bool]()).filter(\.value)
     }
 }
 

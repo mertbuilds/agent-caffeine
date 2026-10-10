@@ -102,6 +102,45 @@ final class JobSettingsStoreTests: XCTestCase {
         XCTAssertEqual(fine.holdCap, 7200)
     }
 
+    /// One value of the wrong type costs that one setting, and not the
+    /// switches of the user with it.
+    func testAValueOfTheWrongTypeResetsOnlyItsOwnKey() {
+        var want = JobSettings()
+        want.wakeForJobs = true
+        want.onPowerOnly = false
+        want.leadTime = 90
+        want.maxWakesPerDay = 4
+        want.startGrace = 180
+        want.holdCap = 3600
+        want.set(true, for: "crontab:0 3 * * *:backup.sh")
+        let good: [String: String] = [
+            "wakeForJobs": "true", "onPowerOnly": "false", "leadTime": "90", "maxWakesPerDay": "4", "startGrace": "180", "holdCap": "3600",
+            "jobSwitches": #"{"crontab:0 3 * * *:backup.sh":true}"#,
+        ]
+        func load(_ changed: [String: String]) -> JobSettings {
+            let json = "{" + good.merging(changed) { $1 }.map { "\"\($0.key)\":\($0.value)" }.sorted().joined(separator: ",") + "}"
+            defaults.set(Data(json.utf8), forKey: JobSettingsStore.key)
+            return JobSettingsStore.load(from: defaults)
+        }
+        XCTAssertEqual(load([:]), want)
+        let wrong: [(String, String, (inout JobSettings) -> Void)] = [
+            ("leadTime", #""soon""#, { $0.leadTime = 60 }),
+            ("leadTime", "null", { $0.leadTime = 60 }),
+            ("maxWakesPerDay", "2.5", { $0.maxWakesPerDay = 12 }),
+            ("maxWakesPerDay", #""many""#, { $0.maxWakesPerDay = 12 }),
+            ("startGrace", "[240]", { $0.startGrace = 240 }),
+            ("holdCap", "true", { $0.holdCap = 1800 }),
+            ("wakeForJobs", #""yes""#, { $0.wakeForJobs = false }),
+            ("onPowerOnly", "0", { $0.onPowerOnly = true }),
+            ("jobSwitches", #"["a"]"#, { $0.jobSwitches = [:] }),
+        ]
+        for (key, value, reset) in wrong {
+            var expected = want
+            reset(&expected)
+            XCTAssertEqual(load([key: value]), expected, "\(key): \(value)")
+        }
+    }
+
     func testUnreadableSettingsGiveDefaults() {
         defaults.set(Data("not json".utf8), forKey: JobSettingsStore.key)
         XCTAssertEqual(JobSettingsStore.load(from: defaults), JobSettings())
