@@ -141,6 +141,18 @@ final class JobSettingsStoreTests: XCTestCase {
         }
     }
 
+    /// One switch that cannot be read is off, and the other switches of
+    /// the user stay. Only `true` is on.
+    func testASwitchOfTheWrongTypeCostsOnlyThatSwitch() {
+        let json = #"{"wakeForJobs":true,"jobSwitches":{"crontab:a":true,"crontab:b":"yes","crontab:c":1,"crontab:d":null,"crontab:e":{"on":true},"crontab:f":false,"launchd:g":true}}"#
+        defaults.set(Data(json.utf8), forKey: JobSettingsStore.key)
+        let loaded = JobSettingsStore.load(from: defaults)
+        XCTAssertTrue(loaded.wakeForJobs)
+        XCTAssertEqual(loaded.jobSwitches, ["crontab:a": true, "launchd:g": true])
+        JobSettingsStore.save(loaded, to: defaults)
+        XCTAssertEqual(JobSettingsStore.load(from: defaults), loaded)
+    }
+
     func testUnreadableSettingsGiveDefaults() {
         defaults.set(Data("not json".utf8), forKey: JobSettingsStore.key)
         XCTAssertEqual(JobSettingsStore.load(from: defaults), JobSettings())

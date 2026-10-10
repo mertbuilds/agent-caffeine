@@ -86,8 +86,8 @@ struct JobSettings: Codable, Equatable {
 
     /// A key that is missing keeps its default, and so does a key whose
     /// value is of the wrong type: one value that cannot be read does not
-    /// cost the other settings. A number out of its range is cut to the
-    /// range.
+    /// cost the other settings. The same goes for each switch of a job.
+    /// A number out of its range is cut to the range.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let defaults = JobSettings()
@@ -106,7 +106,17 @@ struct JobSettings: Codable, Equatable {
         maxWakesPerDay = min(max(wakes, Self.maxWakesRange.lowerBound), Self.maxWakesRange.upperBound)
         startGrace = time(.startGrace, defaults.startGrace, Self.startGraceRange)
         holdCap = time(.holdCap, defaults.holdCap, Self.holdCapRange)
-        jobSwitches = value(.jobSwitches, [String: Bool]()).filter(\.value)
+        jobSwitches = value(.jobSwitches, [String: StoredSwitch]()).compactMapValues { $0.on ? true : nil }
+    }
+
+    /// One switch as it is stored. A value that is no boolean is off,
+    /// and does not cost the other switches.
+    private struct StoredSwitch: Decodable {
+        var on: Bool
+
+        init(from decoder: Decoder) throws {
+            on = (try? decoder.singleValueContainer().decode(Bool.self)) ?? false
+        }
     }
 }
 
