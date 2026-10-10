@@ -12,11 +12,14 @@ import os
 struct SystemWakeEvents: WakeEventStoring {
     private let log = Logger(subsystem: SleepFlagHelper.label, category: "SystemWakeEvents")
 
-    // The call gives no array for an empty list, and also when it cannot
-    // read it. Both are an empty list here: WakeAlarmCore reads the list
-    // again after it scheduled, and reports an alarm it does not find.
-    func events() -> [WakeEvent] {
-        guard let list = IOPMCopyScheduledPowerEvents()?.takeRetainedValue() as? [[String: Any]] else { return [] }
+    // powerd gives an empty array for an empty list. So no array means
+    // the list could not be read, and that is nil here: WakeAlarmCore
+    // must not take it for "no alarm of ours".
+    func events() -> [WakeEvent]? {
+        guard let list = IOPMCopyScheduledPowerEvents()?.takeRetainedValue() as? [[String: Any]] else {
+            log.error("IOPMCopyScheduledPowerEvents gave no list")
+            return nil
+        }
         return list.compactMap { entry in
             guard let date = entry[kIOPMPowerEventTimeKey] as? Date,
                   let owner = entry[kIOPMPowerEventAppNameKey] as? String,

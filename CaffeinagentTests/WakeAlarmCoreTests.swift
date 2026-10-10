@@ -14,11 +14,16 @@ final class FakeWakeEvents: WakeEventStoring {
     var cancelFails = false
     /// One cancel takes every equal entry, not one.
     var cancelTakesAll = false
+    /// The list cannot be read.
+    var unreadable = false
+    /// The list cannot be read from the next schedule on.
+    var unreadableAfterSchedule = false
 
-    func events() -> [WakeEvent] { list }
+    func events() -> [WakeEvent]? { unreadable ? nil : list }
 
     func schedule(at date: Date) -> Bool {
         scheduled.append(date.timeIntervalSince1970)
+        if unreadableAfterSchedule { unreadable = true }
         if scheduleFails { return false }
         if dropsSchedules { return true }
         list.append(Self.ours(date.timeIntervalSince1970))
@@ -241,6 +246,76 @@ final class WakeAlarmCoreTests: XCTestCase {
         store.cancelFails = true
         XCTAssertEqual(core.set(at: date + 7200), .refused(.notCancelled))
         XCTAssertEqual(store.scheduled, [date + 3600], "Never two alarms")
+    }
+
+    // MARK: A list that cannot be read
+
+    /// macOS gives an empty list for no events. No list at all means the
+    /// read failed, and an alarm of ours can still be there.
+    func testAListThatCannotBeReadIsNotAnEmptyList() {
+        let core = makeCore()
+        XCTAssertEqual(core.set(at: date + 3600), .set(date + 3600))
+        store.unreadable = true
+        store.cancelFails = true
+        XCTAssertEqual(core.set(at: 0), .refused(.notCancelled), "Not known to be gone")
+        XCTAssertEqual(store.cancelled, [date + 3600], "The time it scheduled last is tried all the same")
+        XCTAssertTrue(core.needsTicks, "The timer goes on")
+        stayAwake(30)
+        core.tick()
+        XCTAssertTrue(core.needsTicks)
+        XCTAssertEqual(store.cancelled, [date - 30 + 3600, date - 30 + 3600])
+        XCTAssertEqual(store.oursListed.count, 1, "Still in the list of macOS")
+        store.unreadable = false
+        store.cancelFails = false
+        stayAwake(30)
+        core.tick()
+        XCTAssertEqual(store.oursListed, [])
+        XCTAssertFalse(core.needsTicks)
+    }
+
+    func testACancelByTheLastTimeIsNotProofWhileTheListCannotBeRead() {
+        let core = makeCore()
+        _ = core.set(at: date + 3600)
+        store.unreadable = true
+        XCTAssertEqual(core.set(at: 0), .refused(.notCancelled))
+        XCTAssertEqual(store.list, [], "The cancel worked")
+        XCTAssertTrue(core.needsTicks, "And nobody could see it")
+        store.unreadable = false
+        XCTAssertEqual(core.set(at: 0), .cancelled)
+        XCTAssertFalse(core.needsTicks)
+    }
+
+    func testNoNewTimeWhileTheListCannotBeRead() {
+        let core = makeCore()
+        store.unreadable = true
+        XCTAssertEqual(core.set(at: date + 3600), .refused(.notCancelled))
+        XCTAssertEqual(store.scheduled, [])
+        XCTAssertTrue(core.needsTicks)
+        store.unreadable = false
+        XCTAssertEqual(core.set(at: date + 3600), .set(date + 3600))
+    }
+
+    func testAScheduleThatCannotBeReadBackIsTakenAway() {
+        let core = makeCore()
+        store.unreadableAfterSchedule = true
+        XCTAssertEqual(core.set(at: date + 3600), .refused(.notConfirmed))
+        XCTAssertEqual(store.cancelled, [date + 3600])
+        XCTAssertEqual(store.list, [])
+        XCTAssertTrue(core.needsTicks)
+    }
+
+    func testAnAlarmOfAnEarlierRunBehindAListThatCannotBeReadAtTheStart() {
+        store.list = [FakeWakeEvents.ours(date + 600), appleAlarm]
+        store.unreadable = true
+        let core = makeCore()
+        core.start()
+        XCTAssertTrue(core.needsTicks, "It is looked for again")
+        XCTAssertEqual(store.cancelled, [], "No time is known to cancel")
+        store.unreadable = false
+        stayAwake(30)
+        core.tick()
+        XCTAssertEqual(store.list, [appleAlarm])
+        XCTAssertFalse(core.needsTicks)
     }
 
     // MARK: Rate limit
