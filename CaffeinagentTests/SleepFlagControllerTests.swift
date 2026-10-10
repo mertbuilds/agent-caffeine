@@ -154,6 +154,12 @@ private final class FakeHelper: SleepFlagHelperConnecting {
         if stale { throw signingFailed }
         return flag
     }
+
+    func setWakeAlarm(at time: TimeInterval) async throws -> (time: Double, code: Int) {
+        called("wake alarm")
+        try fail()
+        return (time, 0)
+    }
 }
 
 private final class FakeSudoers: SudoersCleaning {

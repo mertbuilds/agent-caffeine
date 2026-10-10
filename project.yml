@@ -263,6 +263,7 @@ targets:
       - CaffeinagentHelper/HelperCore.swift
       - CaffeinagentHelper/HelperService.swift
       - CaffeinagentHelper/SleepFlagWatchdog.swift
+      - CaffeinagentHelper/WakeAlarmCore.swift
       # The commands and the MCP server of the command line tool, without
       # the part that starts a process.
       - CaffeinagentCLI/HoldCommand.swift

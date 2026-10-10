@@ -1,14 +1,19 @@
 import Foundation
 import os
 
-// The XPC face of HelperCore. Every call and the watchdog timer run on one
-// serial queue.
+// The XPC face of HelperCore and WakeAlarmCore. Every call and the two timers
+// run on one serial queue.
 final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProtocol {
     private static let tickInterval: TimeInterval = 5
+    // The lease of the wake alarm is 10 minutes, so half a minute is close
+    // enough, and the system may move the tick to save power.
+    private static let alarmTickInterval: TimeInterval = 30
     private let queue = DispatchQueue(label: SleepFlagHelper.label)
     private let core: HelperCore
+    private let alarm: WakeAlarmCore
     private let exitProcess: (Int32) -> Void
     private var timer: DispatchSourceTimer?
+    private var alarmTimer: DispatchSourceTimer?
     private var termination: DispatchSourceSignal?
     /// The helper leaves after `retire`. Read and written on the queue.
     private var retiring = false
@@ -16,10 +21,12 @@ final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProto
     private static let retireGrace: TimeInterval = 1
     private let log = Logger(subsystem: SleepFlagHelper.label, category: "HelperService")
 
-    // The core and the exit are passed in, so a test can stop the service
-    // without the kernel flag and without leaving the process.
-    init(core: HelperCore, exitProcess: @escaping (Int32) -> Void = { exit($0) }) {
+    // The cores and the exit are passed in, so a test can stop the service
+    // without the kernel flag, without a power event and without leaving
+    // the process.
+    init(core: HelperCore, alarm: WakeAlarmCore, exitProcess: @escaping (Int32) -> Void = { exit($0) }) {
         self.core = core
+        self.alarm = alarm
         self.exitProcess = exitProcess
     }
 
@@ -30,12 +37,15 @@ final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProto
         return "\(version) (\(build))"
     }()
 
-    // Clears a flag that an earlier run left behind, before any client is served.
+    // Clears a flag and takes away a wake alarm that an earlier run left
+    // behind, before any client is served.
     func start() {
         queue.sync {
             if core.setByHelper { log.info("marker found at start, clearing SleepDisabled") }
             core.tick()
             updateTimer()
+            alarm.start()
+            updateAlarmTimer()
         }
     }
 
@@ -48,6 +58,7 @@ final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProto
             guard let self else { return exitProcess(0) }
             if self.core.setByHelper { self.log.info("stopping, clearing SleepDisabled") }
             self.core.shutdown()
+            self.alarm.shutdown()
             self.exitProcess(0)
         }
         source.resume()
@@ -94,11 +105,49 @@ final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProto
             if self.core.setByHelper { self.log.info("retiring, clearing SleepDisabled") }
             self.retiring = true
             self.core.shutdown()
+            self.alarm.shutdown()
             reply()
             guard let connection else { return self.exitProcess(0) }
             // After the reply went out.
             connection.scheduleSendBarrierBlock { self.exitProcess(0) }
             self.queue.asyncAfter(deadline: .now() + Self.retireGrace) { self.exitProcess(0) }
+        }
+    }
+
+    // The one number is all that comes from the client. The owner and the
+    // type of the event are constants of WakeAlarmCore and SystemWakeEvents.
+    func setWakeAlarm(at time: Double, reply: @escaping (Double, Int) -> Void) {
+        queue.async {
+            let result = self.alarm.set(at: time)
+            switch result {
+            case .set(let time): self.log.info("wake alarm set at \(time, privacy: .public)")
+            case .cancelled: self.log.info("wake alarm cancelled")
+            case .refused(let reason): self.log.info("wake alarm refused: \(reason.rawValue, privacy: .public)")
+            case .helperNotAvailable: break
+            }
+            self.updateAlarmTimer()
+            let answer = result.reply
+            reply(answer.time, answer.code)
+        }
+    }
+
+    // Runs only while a wake alarm has a lease, so an idle helper never
+    // wakes up. Dispatch counts the interval in awake time, like the lease.
+    private func updateAlarmTimer() {
+        if alarm.needsTicks, alarmTimer == nil {
+            let timer = DispatchSource.makeTimerSource(queue: queue)
+            timer.schedule(deadline: .now() + Self.alarmTickInterval, repeating: Self.alarmTickInterval, leeway: .seconds(10))
+            timer.setEventHandler { [weak self] in
+                guard let self else { return }
+                self.alarm.tick()
+                if !self.alarm.needsTicks { self.log.info("wake alarm cancelled: the app did not ask again") }
+                self.updateAlarmTimer()
+            }
+            timer.resume()
+            alarmTimer = timer
+        } else if !alarm.needsTicks, let alarmTimer {
+            alarmTimer.cancel()
+            self.alarmTimer = nil
         }
     }
 

@@ -495,6 +495,7 @@ private struct NoHelper: SleepFlagHelperConnecting {
     func status() async throws -> (sleepDisabled: Bool, setByHelper: Bool, version: String) { throw HelperCallError.connectionLost }
     func heartbeat() async throws -> Bool { throw HelperCallError.connectionLost }
     func retire() async throws { throw HelperCallError.connectionLost }
+    func setWakeAlarm(at time: TimeInterval) async throws -> (time: Double, code: Int) { throw HelperCallError.connectionLost }
 }
 
 private struct NoSudoers: SudoersCleaning {

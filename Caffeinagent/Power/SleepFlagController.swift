@@ -57,6 +57,23 @@ protocol SleepFlagHelperConnecting {
     // The helper clears a flag it owns and exits. launchd starts it again
     // on the next call.
     func retire() async throws
+    // The two numbers of the helper's reply. See SleepFlagHelperProtocol.
+    func setWakeAlarm(at time: TimeInterval) async throws -> (time: Double, code: Int)
+}
+
+extension SleepFlagHelperConnecting {
+    /// Asks the helper for its one wake alarm at `time`, seconds since 1970,
+    /// or for none with 0. The same time again keeps the alarm for 10 more
+    /// minutes of awake time. Never throws: a helper that cannot be reached
+    /// is one of the results.
+    func wakeAlarm(at time: TimeInterval) async -> WakeAlarmResult {
+        do {
+            let reply = try await setWakeAlarm(at: time)
+            return WakeAlarmResult(time: reply.time, code: reply.code)
+        } catch {
+            return .helperNotAvailable
+        }
+    }
 }
 
 // The sudoers entry of the method this helper replaced.

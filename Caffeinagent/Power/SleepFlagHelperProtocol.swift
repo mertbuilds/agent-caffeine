@@ -1,7 +1,8 @@
 import Foundation
 
 // Shared by the app and the root helper. The helper takes two booleans and
-// nothing else from its client: no strings, no paths.
+// one wake time from its client and nothing else: no strings, no paths, no
+// commands and no event types.
 @objc protocol SleepFlagHelperProtocol {
     // Replies with the value read back from the kernel.
     func setSleepDisabled(_ on: Bool, reply: @escaping (Bool) -> Void)
@@ -13,6 +14,75 @@ import Foundation
     // and exits. launchd starts the binary that is in the bundle now on the
     // next connection, and nothing about the registration changes.
     func retire(reply: @escaping () -> Void)
+    // One wake alarm for the whole Mac. `time` is seconds since 1970, and 0
+    // takes the alarm away. The helper fixes the rest itself: the kind of
+    // event (a wake, never a power on) and the name the event is listed
+    // under. The app sends the time again every few minutes: the helper
+    // takes away an alarm that nobody asked for in 10 minutes of awake time.
+    // Replies with the time that is set now, or 0, and a code: 0 for done,
+    // else the raw value of a WakeAlarmRefusal.
+    func setWakeAlarm(at time: Double, reply: @escaping (_ time: Double, _ code: Int) -> Void)
+}
+
+/// Why the helper did not set or take away the wake alarm.
+enum WakeAlarmRefusal: Int, Equatable {
+    /// Not a number that is a time.
+    case notATime = 1
+    /// Less than `WakeAlarmLimits.minimumLead` ahead, or in the past.
+    case tooSoon = 2
+    /// More than `WakeAlarmLimits.maximumLead` ahead.
+    case tooFar = 3
+    /// More than `WakeAlarmLimits.setsPerHour` new times in one hour.
+    case tooOften = 4
+    /// macOS did not take the event.
+    case notScheduled = 5
+    /// macOS took the event, and the list of events does not show it once.
+    /// The helper took it away again.
+    case notConfirmed = 6
+    /// An alarm of the helper is still in the list after the cancel.
+    case notCancelled = 7
+    /// A code this build does not know.
+    case unknown = -1
+}
+
+enum WakeAlarmLimits {
+    static let minimumLead: TimeInterval = 20
+    static let maximumLead: TimeInterval = 8 * 24 * 3600
+    static let setsPerHour = 30
+    /// The alarm goes when the app did not ask for it again for this long,
+    /// in time the Mac was awake.
+    static let lease: TimeInterval = 600
+}
+
+/// What a call of `setWakeAlarm` came to.
+enum WakeAlarmResult: Equatable {
+    /// The alarm is in the list of macOS once, at this time.
+    case set(TimeInterval)
+    case cancelled
+    case refused(WakeAlarmRefusal)
+    /// The helper is not set up, gave no answer, or is of a build that does
+    /// not know the call. Never sent by the helper.
+    case helperNotAvailable
+
+    init(time: Double, code: Int) {
+        if code != 0 {
+            self = .refused(WakeAlarmRefusal(rawValue: code) ?? .unknown)
+        } else if time > 0 {
+            self = .set(time)
+        } else {
+            self = .cancelled
+        }
+    }
+
+    /// The two numbers of the reply.
+    var reply: (time: Double, code: Int) {
+        switch self {
+        case .set(let time): return (time, 0)
+        case .cancelled: return (0, 0)
+        case .refused(let reason): return (0, reason.rawValue)
+        case .helperNotAvailable: return (0, WakeAlarmRefusal.unknown.rawValue)
+        }
+    }
 }
 
 enum SleepFlagHelper {
