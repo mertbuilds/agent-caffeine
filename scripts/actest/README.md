@@ -6,6 +6,7 @@ Python 3.11 or later, standard library only. Not shipped in the app.
 
     scripts/actest/actest check                 the preflight alone
     scripts/actest/actest list --layer 1        the tests, with the last result per build
+    scripts/actest/actest list --busy           only the tests that can start as the agents are now
     scripts/actest/actest run HELP-21 HELP-02   run tests, in this order
     scripts/actest/actest board                 the result board, as text and as board.html
     scripts/actest/actest report <run-id>       everything recorded for one run
@@ -32,7 +33,23 @@ The lab recorder runs an engine of its own. What the real app decided is in `.st
 
 ## A test is a file
 
-`tests/<area>/<id>.toml`, with the ids of the test inventory. See the head of `actestlib/catalog.py` for the keys, `actestlib/expr.py` for the conditions (`lid=closed`, `app.agent[grok].state=working`) and `actestlib/judge.py` for the pass rules (`within 65s after step 2: sleepdisabled=0`).
+`tests/<area>/<id>.toml`, with the ids of the test inventory. See the head of `actestlib/catalog.py` for the keys, `actestlib/expr.py` for the conditions (`lid=closed`, `app.agent[grok].state=working`, `held.first=true`) and `actestlib/judge.py` for the pass rules (`within 65s after step 2: sleepdisabled=0`).
+
+## Testing while agents work
+
+Agent Caffeine holds the Mac awake most of the day, for the agents of the owner. A test says what it needs of them, and `actest list` shows it for each test:
+
+- `any time`: the test can start while agents work. Most tests are of this kind.
+- `needs idle` (`idle = true` under `[needs]`): no agent may work. The `why` of the test says the reason. These are the tests where the Mac must sleep while the app is on, and the tests where the sleep flag must follow one hold.
+- `needs sleep` (`sleeps = true`): the app must not hold, and it can be off. The fix is: pause Agent Caffeine or switch it off for this test. While the Mac sleeps, the agents stop.
+
+`actest list --busy` reads the Mac once and lists only the tests that can start now.
+
+A rule with `if idle: ` in front is judged only when Agent Caffeine held nothing before the first step. While an agent works, such a rule is `SKIP` with the reason. It is never a pass. Example: the hold of `CLI-01` is found by its id (`held.hold=true`) and ends at its time while agents work. That the Mac is awake because of this hold (`app.headline=manualHold`) shows on an idle Mac only.
+
+A run can thus end in three ways per rule: pass, fail, skipped. When rules were skipped and the others passed, the verdict and the board say `PASS (partial: 2 checks need an idle Mac)`, and the page lists the rules that were not judged. Run the test again on an idle Mac for the whole pass. A run in which no rule was judged is `SKIPPED`.
+
+The runner looks at the start only. If an agent starts to work in the middle of a run on an idle Mac, a rule for an idle Mac can fail. The measured value says so. Run the test again.
 
 ## The evidence
 
