@@ -17,6 +17,8 @@ export type Placement = "header" | "hero" | "pricing" | "blog" | "footer";
 /** Every event the site counts, with what it carries. None carries anything about the visitor. */
 export type TrackEvents = {
   download_click: { placement: Placement };
+  /** A download button pressed off a Mac: the popup opened and no download started. */
+  download_blocked_not_mac: { placement: Placement };
   plan_select: { plan: Plan["id"] };
   buy_click: { plan: Plan["id"]; price: number; placement: Placement };
   /** The first time in a page view that a visitor touches the menu bar simulator. */

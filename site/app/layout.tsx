@@ -5,6 +5,7 @@ import { Analytics } from "@/components/analytics";
 import { DevKnobs } from "@/components/dev-knobs";
 import { HashScroll } from "@/components/hash-scroll";
 import { Header } from "@/components/header";
+import { SendToMacPopup } from "@/components/send-to-mac-popup";
 import { PRICE } from "@/lib/pricing";
 import { getLatestRelease } from "@/lib/release";
 import { THEME_SCRIPT } from "@/lib/theme";
@@ -71,6 +72,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Header />
         {children}
         <HashScroll />
+        <SendToMacPopup />
         <Analytics />
         <DevKnobs />
       </body>

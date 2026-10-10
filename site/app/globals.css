@@ -116,6 +116,38 @@
 }
 
 /*
+ * The popup a download button opens off a Mac (components/send-to-mac-popup.tsx): it and the
+ * dimmed page behind it come in together, briefly.
+ */
+@keyframes popup-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@keyframes popup-dim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.popup-in {
+  animation: popup-in var(--duration-fast) var(--ease-smooth-out);
+}
+
+.popup-in::backdrop {
+  animation: popup-dim-in 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popup-in,
+  .popup-in::backdrop {
+    animation: none;
+  }
+}
+
+/*
  * The how it works demo (components/menu-bar-simulator.tsx): the pointer comes
  * in, a ring goes out where it presses, the demo tag fills up to the next step
  * and its dot breathes, and a change on the right pulses once. The demo never

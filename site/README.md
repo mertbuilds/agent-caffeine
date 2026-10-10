@@ -22,6 +22,7 @@ Every download button links to `/download?from=<placement>`. The route (`app/dow
 - What is counted: one event named `download`, with the version, the build, the placement (`header`, `menu`, `hero`, `pricing`, `blog`, `footer`, else `other`) and `utm_source`, `utm_medium` and `utm_campaign` when the link carries them. OpenPanel takes the country and the device from the visitor's IP address and user agent, which the route sends on. The site stores nothing and sets no cookie.
 - What is not counted: requests off `caffeinagent.com` and `www.caffeinagent.com`, bots, prefetches and `HEAD` requests. They still get the redirect. `robots.txt` keeps crawlers away from `/download`.
 - Where to see it: the OpenPanel project `caffeinagent`, event `download`.
+- Off a Mac (a phone, a tablet, Windows, Linux), a click on a download button starts no download. The browser opens a popup that gives the site's link to copy or share on to a Mac, and counts the event `download_blocked_not_mac` with the placement. The link itself is the same for everyone, and `/download` still answers every request.
 - `OPENPANEL_CLIENT_SECRET` must be set on Vercel, for production only, next to `NEXT_PUBLIC_OPENPANEL_CLIENT_ID`. Without it the route only redirects.
 
 ## Link preview picture
