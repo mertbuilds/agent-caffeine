@@ -121,7 +121,9 @@ extension PanelText {
         case .dailyLimit: return "No wake is set: your Mac was woken \(HumaneDuration.counted(settings.maxWakesPerDay, "time")) in the last 24 hours."
         case .noJobSwitchedOn: return "Switch on a job, and Agent Caffeine wakes your Mac for it."
         case .noRunKnown: return "No wake is set: no next run is known for the jobs that are on."
-        case .tooFarAhead: return "No wake is set yet: the next job is more than 8 days away."
+        // Not "the next job": a run in the next minutes of an awake Mac
+        // gets no wake, and the run after it is the one that is far.
+        case .tooFarAhead: return "No wake is set yet: the next run to wake for is more than 8 days away."
         }
     }
 

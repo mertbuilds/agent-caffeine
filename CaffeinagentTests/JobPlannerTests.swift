@@ -152,6 +152,22 @@ final class JobPlannerTests: XCTestCase {
         XCTAssertEqual(self.plan([monthly, job("daily", "0 21 * * *")]).alarm?.jobName, "daily")
     }
 
+    /// A monthly job runs in 20 minutes and the Mac is awake: that run
+    /// needs no alarm, and the one after it is next month. So the line
+    /// of Settings cannot say that the next job is 8 days away.
+    func testAMonthlyJobThatRunsSoonOnAnAwakeMacIsTooFarAhead() {
+        let monthly = job("monthly", "20 12 10 * *")
+        let plan = self.plan([monthly])
+        XCTAssertEqual(plan.nextRuns.map(\.fireAt), [at("2026-10-10 12:20")], "The next run is in 20 minutes")
+        XCTAssertNil(plan.alarm)
+        XCTAssertEqual(plan.noAlarm, .tooFarAhead, "The run to wake for is the one of November")
+        let line = PanelText.jobStatus(.noAlarm(.tooFarAhead), settings: settings, now: now)
+        XCTAssertEqual(line, "No wake is set yet: the next run to wake for is more than 8 days away.")
+        XCTAssertFalse(line?.contains("next job") ?? true)
+        let asleep = self.plan([monthly], context: JobPlanContext(macAwake: false))
+        XCTAssertEqual(asleep.alarm?.fireAt, at("2026-10-10 12:20"), "About to sleep, the near run gets the alarm")
+    }
+
     func testTheTimeAHermesJobReports() {
         let reported = ScheduledJob(id: "hermes:x", source: .hermes, name: "Briefing", schedule: .reported(ReportedSchedule(nextRun: at("2026-10-10 17:45"), everyMinutes: 360)), enabled: true)
         XCTAssertEqual(plan([reported, job("daily", "0 21 * * *")]).alarm, JobAlarm(at: at("2026-10-10 17:44"), fireAt: at("2026-10-10 17:45"), jobID: "hermes:x", jobName: "Briefing"))

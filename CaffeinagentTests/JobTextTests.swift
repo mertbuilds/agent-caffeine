@@ -72,7 +72,7 @@ final class JobTextTests: XCTestCase {
         XCTAssertEqual(status(.refused(.tooOften)), "The helper did not set the wake time: the time changed too often in one hour. Agent Caffeine tries again.")
         XCTAssertEqual(status(.noAlarm(.onBattery)), "No wake is set while your Mac is on battery.")
         XCTAssertEqual(status(.noAlarm(.noJobSwitchedOn)), "Switch on a job, and Agent Caffeine wakes your Mac for it.")
-        XCTAssertEqual(status(.noAlarm(.tooFarAhead)), "No wake is set yet: the next job is more than 8 days away.")
+        XCTAssertEqual(status(.noAlarm(.tooFarAhead)), "No wake is set yet: the next run to wake for is more than 8 days away.")
         var settings = JobSettings()
         settings.maxWakesPerDay = 12
         XCTAssertEqual(status(.noAlarm(.dailyLimit), settings), "No wake is set: your Mac was woken 12 times in the last 24 hours.")
