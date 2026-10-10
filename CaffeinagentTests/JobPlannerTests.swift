@@ -91,6 +91,36 @@ final class JobPlannerTests: XCTestCase {
         XCTAssertEqual(plan([job("two", "2 12 * * *")], context: asleep, now: almost.addingTimeInterval(1)).alarm?.fireAt, at("2026-10-11 12:02"))
     }
 
+    /// The rule for a run that is too close is for a new alarm. An alarm
+    /// that is set stays while its job is on and its run is ahead.
+    func testAnAlarmThatIsSetStaysThoughItsRunIsClose() {
+        let jobs = [job("soon", "20 12 * * *"), job("later", "0 15 * * *")]
+        let set = JobAlarm(at: at("2026-10-10 12:19"), fireAt: at("2026-10-10 12:20"), jobID: "crontab:soon", jobName: "soon")
+        let close = at("2026-10-10 12:19").addingTimeInterval(-25)
+        for awake in [true, false] {
+            var context = JobPlanContext(macAwake: awake)
+            XCTAssertEqual(plan(jobs, context: context, now: close).alarm?.jobName, "later", "No new alarm that close")
+            context.alarmSet = set
+            XCTAssertEqual(plan(jobs, context: context, now: close).alarm, set)
+            XCTAssertEqual(plan(jobs, context: context, now: at("2026-10-10 12:19").addingTimeInterval(30)).alarm, set, "Up to the time of the job")
+            XCTAssertEqual(plan(jobs, context: context, now: at("2026-10-10 12:20")).alarm?.jobName, "later", "The run is not ahead any more")
+            var off = jobs
+            off[0].enabled = false
+            XCTAssertEqual(plan(off, context: context, now: close).alarm?.jobName, "later", "The job was switched off")
+            var edited = jobs
+            edited[0].schedule = .cron(JobTime.cron("21 12 * * *"))
+            XCTAssertNotEqual(plan(edited, context: context, now: close).alarm, set, "The job runs at another time now")
+            var stopped = context
+            stopped.enabled = false
+            XCTAssertNil(plan(jobs, context: stopped, now: close).alarm, "A stop takes it away")
+        }
+        var context = JobPlanContext()
+        context.alarmSet = set
+        var settings = settings
+        settings.leadTime = 300
+        XCTAssertEqual(plan(jobs, settings: settings, context: context, now: at("2026-10-10 11:00")).alarm?.at, at("2026-10-10 12:15"), "Far ahead a new lead time moves it")
+    }
+
     func testAJobThatRunsTooOftenIsListedAndGetsNoAlarm() {
         let jobs = [job("often", "*/10 * * * *"), job("daily", "0 21 * * *")]
         let plan = self.plan(jobs)

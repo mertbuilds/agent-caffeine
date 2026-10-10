@@ -73,6 +73,8 @@ struct JobPlanContext: Equatable {
     var macAwake = true
     /// The alarms that rang in the last 24 hours. The caller counts them.
     var wakesInLastDay = 0
+    /// The alarm the helper confirmed and that did not ring yet.
+    var alarmSet: JobAlarm?
 }
 
 /// Decides for which job the Mac is woken next. Pure: the jobs come with
@@ -104,11 +106,20 @@ enum JobPlanner {
         }
         let wanted = nextRuns.filter { $0.job.enabled && !$0.tooOften }
         guard !wanted.isEmpty else { return JobPlan(noAlarm: .noJobSwitchedOn, nextRuns: nextRuns) }
-        // An alarm that is too close is refused, so the run after it counts.
+        // A new alarm that is too close is refused, so the run after it
+        // counts.
         let closest = context.macAwake ? JobSettings.nearWindow : settings.leadTime + JobSettings.minimumAhead
         let from = now.addingTimeInterval(closest)
         var alarm: JobAlarm?
         for run in wanted {
+            // An alarm that is set stays as it is while its job is on and
+            // its run is still the next one. The Mac wakes by itself in
+            // the last seconds before an alarm too, and a plan that
+            // moved the alarm then would lose the run.
+            if let set = context.alarmSet, set.jobID == run.job.id, let next = run.fireAt, next == set.fireAt, next <= from {
+                if alarm.map({ next < $0.fireAt }) ?? true { alarm = set }
+                continue
+            }
             guard let fireAt = run.fireAt.flatMap({ $0 > from ? $0 : nil }) ?? run.job.schedule.next(after: from, clock: clock) else { continue }
             if alarm.map({ fireAt < $0.fireAt }) ?? true {
                 alarm = JobAlarm(at: fireAt.addingTimeInterval(-settings.leadTime), fireAt: fireAt, jobID: run.job.id, jobName: run.job.name)

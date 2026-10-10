@@ -162,7 +162,7 @@ final class JobWakeLoopTests: XCTestCase {
         XCTAssertEqual(sender.asked.count, 2, "A sample before the sleep changes nothing")
         loop.wokeInFull()
         await settle()
-        XCTAssertEqual(sender.asked.last, "\(nextAlarmTime)")
+        XCTAssertEqual(sender.asked.count, 2, "Awake in full again, and the alarm that is set stays")
     }
 
     func testAHoldOpensAtTheAlarmAndEndsWhenTheJobIsGone() async {

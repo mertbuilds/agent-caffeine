@@ -32,8 +32,8 @@ struct JobSettings: Codable, Equatable {
     /// A job that runs more often than this on average is not offered.
     static let minimumGap: TimeInterval = 1800
     /// While the Mac is awake, a job that runs within this time needs no
-    /// alarm: the alarm of an awake Mac does nothing, and a new plan is
-    /// made when the Mac is about to sleep.
+    /// new alarm: the alarm of an awake Mac does nothing, and a new plan
+    /// is made when the Mac is about to sleep. An alarm that is set stays.
     static let nearWindow: TimeInterval = 1800
     /// No alarm on battery at the battery floor plus this or below: a
     /// stop cannot undo a wake.

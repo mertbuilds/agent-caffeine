@@ -5,7 +5,7 @@ struct JobWakeInput: Equatable {
     /// What `JobStore` read, with every job switched off.
     var readings: [JobSourceReading] = []
     var settings = JobSettings()
-    /// `macAwake` and `wakesInLastDay` are filled in by `JobWake`.
+    /// `macAwake`, `wakesInLastDay` and `alarmSet` are filled in by `JobWake`.
     var context = JobPlanContext()
     /// The app runs from the Applications folder. The helper takes calls
     /// from that copy only.
@@ -130,6 +130,7 @@ struct JobWake: Equatable {
         var context = input.context
         context.macAwake = !sleepAnnounced
         context.wakesInLastDay = wakesInLastDay
+        context.alarmSet = alarm
         plan = JobPlanner.plan(jobs: jobs, settings: input.settings, context: context, now: now, clock: clock)
         defer { status = currentStatus }
 
@@ -149,6 +150,9 @@ struct JobWake: Equatable {
         if time > 0 {
             if let alarm, isSame(alarm.at.timeIntervalSince1970, time) {
                 guard awake - (confirmedAwake ?? -.infinity) >= Self.renewEvery || willSleep else { return nil }
+                // The helper refuses a time that is this close, also the
+                // one it has. The lease is longer than that.
+                guard time - now.timeIntervalSince1970 >= JobSettings.minimumAhead else { return nil }
             } else if failedTime == time, awake < retryAt {
                 // The helper refused the new time and kept the alarm it
                 // had. That alarm is not wanted any more, and it can be

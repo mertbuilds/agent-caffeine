@@ -151,7 +151,8 @@ final class JobWakeTests: XCTestCase {
         XCTAssertEqual(wake.alarm?.at, at("2026-10-10 20:59"))
         XCTAssertNil(turn(input(), soon.addingTimeInterval(5)), "A sample before the sleep keeps the alarm")
         wake.wokeInFull()
-        XCTAssertEqual(turn(input(), soon.addingTimeInterval(10)), seconds("2026-10-11 20:59"), "Awake in full again")
+        XCTAssertNil(turn(input(), soon.addingTimeInterval(10)), "Awake in full again, and the alarm that is set stays")
+        XCTAssertEqual(wake.plan.alarm?.at, at("2026-10-10 20:59"))
     }
 
     func testWillSleepDoesNotWaitForACallThatIsUnderWay() {
@@ -164,6 +165,32 @@ final class JobWakeTests: XCTestCase {
         XCTAssertNil(wake.alarm, "The late answer to the first call means nothing")
         wake.answered(.set(second!), for: second!, now: soon, awake: awake)
         XCTAssertEqual(wake.alarm?.at, at("2026-10-10 20:59"))
+    }
+
+    /// The Mac sleeps with the alarm set, and wakes by itself 25 seconds
+    /// before it, with the display off. The run is too close for a new
+    /// alarm, and the alarm that is set stays all the same: it wakes the
+    /// Mac, it counts, and its hold opens.
+    func testADarkWakeJustBeforeTheAlarmDoesNotMoveIt() {
+        let alarm = at("2026-10-10 20:59")
+        set(input(), noon)
+        awake += 5
+        XCTAssertEqual(turn(input(), noon.addingTimeInterval(5), willSleep: true), seconds("2026-10-10 20:59"))
+        wake.answered(.set(alarm.timeIntervalSince1970), for: alarm.timeIntervalSince1970, now: noon.addingTimeInterval(5), awake: awake)
+        sleep(for: 8 * 3600)
+        for before in [TimeInterval(25), 20, 15] {
+            awake += 5
+            XCTAssertNil(turn(input(), alarm.addingTimeInterval(-before)), "\(before) seconds before the alarm")
+            XCTAssertEqual(wake.plan.alarm?.fireAt, at("2026-10-10 21:00"))
+            XCTAssertEqual(wake.status, .alarmSet(wake.alarm!))
+        }
+        awake += 5
+        XCTAssertNil(turn(input(), alarm.addingTimeInterval(-10), willSleep: true), "No renewal that the helper would refuse as too close")
+        sleep(for: 10)
+        turn(input(), alarm.addingTimeInterval(2))
+        XCTAssertEqual(kinds, [.alarmSet, .wokeAtAlarm])
+        XCTAssertEqual(wake.wakesInLastDay, 1)
+        XCTAssertEqual(wake.holds.map(\.fireAt), [seconds("2026-10-10 21:00")])
     }
 
     func testWillSleepRenewsAnAlarmThatIsSet() {
