@@ -16,6 +16,14 @@ import Foundation
 /// A job that an agent runs (Hermes) is not watched here. Its hold is a
 /// bridge from the alarm to the start grace, and from the moment the
 /// agent works the detection engine holds the Mac by its own rules.
+///
+/// Version 1, lid closed: the alarm wakes the Mac with no full wake, so
+/// the wake gate stays closed, and awake time under a job hold does not
+/// open it (`WakeGate.sampled`). The detection engine can then not take
+/// over from the bridge, and a Hermes job holds for the bridge alone:
+/// `JobSettings.agentStartGrace`, 5 minutes after its time. A run that
+/// is longer goes on only while the Mac stays awake for another reason.
+/// There is no rule of the gate for it yet.
 struct JobHold: Codable, Equatable, Identifiable {
     /// No job holds for longer, whatever the settings say.
     static let capLimit: TimeInterval = 2 * 3600
