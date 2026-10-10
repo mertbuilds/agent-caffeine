@@ -63,11 +63,13 @@ class ParseTests(unittest.TestCase):
         self.assertEqual(events[1], {"kind": "wake", "at": "10/11/2026 02:58:24", "owner": "com.caffeinagent.app.wake"})
         self.assertEqual(parse.schedule("Scheduled power events:\n"), [])
 
-    def test_app_pid(self):
+    def test_app_pids(self):
         table = "  532 /usr/libexec/powerd\n75087 /Applications/agent caffeine.app/Contents/MacOS/caffeinagent\n75119 Contents/MacOS/CaffeinagentHelper\n 9000 /tmp/build/caffeinagent.app/Contents/MacOS/caffeinagent\n"
-        self.assertEqual(parse.app_pid(table, "/Applications/Agent Caffeine.app"), 75087)
-        self.assertIsNone(parse.app_pid(table, "/Applications/Other.app"))
-        self.assertIsNone(parse.app_pid(table, None))
+        self.assertEqual(parse.app_pids(table, "/Applications/Agent Caffeine.app"), [75087])
+        self.assertEqual(parse.app_pids(table, "/Applications/Other.app"), [])
+        self.assertEqual(parse.app_pids(table, None), [])
+        twice = table + "80000 /Applications/agent caffeine.app/Contents/MacOS/caffeinagent\n"
+        self.assertEqual(parse.app_pids(twice, "/Applications/agent caffeine.app"), [75087, 80000])
 
     def test_external_displays(self):
         internal = {"spdisplays_connection_type": "spdisplays_internal"}

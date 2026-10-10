@@ -64,16 +64,18 @@ def schedule(text):
     return events
 
 
-def app_pid(text, app_path):
-    """`ps -axo pid=,comm=`: the pid of the app in the Applications folder."""
+def app_pids(text, app_path):
+    """`ps -axo pid=,comm=`: the pids that run the binary of the app in the
+    Applications folder. More than one: a lab recording runs too."""
     if not app_path:
-        return None
+        return []
     wanted = (app_path + "/Contents/MacOS/caffeinagent").lower()
+    pids = []
     for line in text.splitlines():
         parts = line.strip().split(None, 1)
         if len(parts) == 2 and parts[1].lower() == wanted:
-            return int(parts[0])
-    return None
+            pids.append(int(parts[0]))
+    return pids
 
 
 def external_displays(profile):
