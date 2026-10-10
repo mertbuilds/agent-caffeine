@@ -138,13 +138,21 @@ enum JobPlanner {
         guard context.enabled else { return .switchedOff }
         if let pausedUntil = context.pausedUntil, now < pausedUntil { return .paused }
         if case .expired? = context.entitlement { return .notEntitled }
-        if context.onBattery {
-            if settings.onPowerOnly { return .onBattery }
-            guard context.batteryFloorEnabled else { return .batteryFloorOff }
-            guard let percent = context.batteryPercent else { return .batteryUnknown }
-            if percent <= context.batteryFloorPercent + JobSettings.batteryMargin { return .batteryLow }
-        }
+        if let reason = batteryStop(settings: settings, context: context) { return reason }
         if context.wakesInLastDay >= settings.maxWakesPerDay { return .dailyLimit }
+        return nil
+    }
+
+    /// Why no alarm is set on battery, nil on power and where the user
+    /// and the charge allow it. A job hold follows the same rule: an
+    /// alarm that was set on power can wake a Mac that was unplugged
+    /// while it slept, and nothing keeps it awake then.
+    static func batteryStop(settings: JobSettings, context: JobPlanContext) -> NoAlarmReason? {
+        guard context.onBattery else { return nil }
+        if settings.onPowerOnly { return .onBattery }
+        guard context.batteryFloorEnabled else { return .batteryFloorOff }
+        guard let percent = context.batteryPercent else { return .batteryUnknown }
+        if percent <= context.batteryFloorPercent + JobSettings.batteryMargin { return .batteryLow }
         return nil
     }
 }

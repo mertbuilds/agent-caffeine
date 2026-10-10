@@ -35,6 +35,7 @@ final class JobTextTests: XCTestCase {
         XCTAssertEqual(PanelText.jobsExplained(leadTime: 300), "Wakes your Mac 5 minutes before a job, keeps it awake until the job ends, then lets it sleep.")
         XCTAssertEqual(PanelText.jobsExplained(leadTime: 30), "Wakes your Mac 30 seconds before a job, keeps it awake until the job ends, then lets it sleep.")
         XCTAssertEqual(PanelText.jobsOnPowerOnly, "Only on power")
+        XCTAssertEqual(PanelText.jobsOnPowerExplained, "On battery, Agent Caffeine sets no wake and keeps your Mac awake for no job.")
         XCTAssertEqual(PanelText.jobsOnBatteryWarning, "On battery with the lid closed this is not tested yet. Your Mac can wake in a bag.")
         XCTAssertEqual(PanelText.jobsShowHistory, "Show history")
     }
@@ -129,6 +130,7 @@ final class JobTextTests: XCTestCase {
         XCTAssertEqual(line(.endedByGrace, alarm: nil), "backup.sh was not seen to start, and your Mac can sleep")
         XCTAssertEqual(line(.endedByCap, alarm: nil), "backup.sh ran longer than the limit, and your Mac can sleep")
         XCTAssertEqual(line(.endedByStop, alarm: nil), "Stopped staying awake for backup.sh")
+        XCTAssertEqual(line(.endedOnBattery, alarm: nil), "On battery, your Mac does not stay awake for backup.sh")
         XCTAssertEqual(line(.bridgeOver, alarm: nil, job: "Digest"), "The wait for Digest is over")
         XCTAssertEqual(PanelText.jobEventTime(at("2026-10-10 03:02"), now: now, calendar: calendar, locale: locale), "03:02")
         XCTAssertEqual(PanelText.jobEventTime(at("2026-10-08 03:02"), now: now, calendar: calendar, locale: locale), "Oct 8, 03:02")

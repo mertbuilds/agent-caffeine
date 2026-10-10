@@ -67,6 +67,9 @@ struct JobWake: Equatable {
     private(set) var alarm: JobAlarm?
 
     private var settings = JobSettings()
+    /// The Mac is on battery, and no alarm would be set there
+    /// (`JobPlanner.batteryStop`). No hold opens and none goes on.
+    private var onBatteryStop = false
     private var usable = false
     private var inApplications = true
     /// The time that is with the helper and not answered, 0 for a cancel.
@@ -122,6 +125,7 @@ struct JobWake: Equatable {
         inApplications = input.inApplications
         usable = input.inApplications && input.helperEnabled
         let jobs = input.settings.applied(to: input.readings.flatMap(\.jobs))
+        onBatteryStop = JobPlanner.batteryStop(settings: input.settings, context: input.context) != nil
 
         ring(jobs: jobs, slept: slept, now: now)
         memory.prune(now: now)
@@ -198,6 +202,12 @@ struct JobWake: Equatable {
         guard settings.wakeForJobs, let job = jobs.first(where: { $0.id == rung.jobID }),
               let hold = JobHold.open(job: job, fireAt: rung.fireAt, settings: settings), hold.isTimely(now: now),
               !holds.contains(where: { $0.id == hold.id }) else { return }
+        // The alarm was set on power, and the Mac was unplugged while it
+        // slept. It can be in a bag.
+        guard !onBatteryStop else {
+            memory.history.note(.endedOnBattery, at: now, job: hold.name)
+            return
+        }
         holds.append(hold)
     }
 
@@ -332,6 +342,8 @@ struct JobWake: Equatable {
             let kind: JobEvent.Kind?
             if !settings.wakeForJobs || !settings.isOn(hold.jobID) {
                 kind = .endedByStop
+            } else if onBatteryStop {
+                kind = .endedOnBattery
             } else {
                 switch hold.state(now: now) {
                 case .waiting, .running: return false

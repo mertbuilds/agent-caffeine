@@ -33,6 +33,9 @@ struct JobEvent: Codable, Equatable {
         case endedByCap
         /// "Stop" in the menu, or the switch of the job or the feature.
         case endedByStop
+        /// The Mac is on battery, and no alarm would be set there: the
+        /// hold did not open, or it ended when the Mac was unplugged.
+        case endedOnBattery
         /// The bridge for an agent job is over.
         case bridgeOver
     }

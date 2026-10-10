@@ -14,7 +14,9 @@ extension PanelText {
     static let jobsNoneFound = "No scheduled job was found on this Mac."
     static let jobsPerJob = "Agent Caffeine wakes your Mac only for the jobs you switch on."
     static let jobsOnPowerOnly = "Only on power"
-    static let jobsOnPowerExplained = "On battery, Agent Caffeine does not wake your Mac."
+    /// A wake that was set on power can still come when the Mac was
+    /// unplugged while it slept, so this does not say "does not wake".
+    static let jobsOnPowerExplained = "On battery, Agent Caffeine sets no wake and keeps your Mac awake for no job."
     static let jobsOnBatteryWarning = "On battery with the lid closed this is not tested yet. Your Mac can wake in a bag."
     static let jobsShowHistory = "Show history"
     static let jobsHideHistory = "Hide history"
@@ -143,6 +145,7 @@ extension PanelText {
         case .endedByGrace: return "\(first) was not seen to start, and your Mac can sleep"
         case .endedByCap: return "\(first) ran longer than the limit, and your Mac can sleep"
         case .endedByStop: return "Stopped staying awake for \(job)"
+        case .endedOnBattery: return "On battery, your Mac does not stay awake for \(job)"
         case .bridgeOver: return "The wait for \(job) is over"
         }
     }

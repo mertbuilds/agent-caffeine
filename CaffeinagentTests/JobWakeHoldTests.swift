@@ -143,6 +143,76 @@ final class JobWakeHoldTests: XCTestCase {
         }
     }
 
+    // MARK: Battery
+
+    /// What stops an alarm on battery, and one case that does not.
+    private var batteryCases: [(String, (inout JobWakeInput) -> Void, Bool)] {
+        [
+            ("only on power", { $0.context.batteryPercent = 90 }, true),
+            ("the battery floor is off", { $0.settings.onPowerOnly = false; $0.context.batteryPercent = 90; $0.context.batteryFloorEnabled = false }, true),
+            ("the charge is not known", { $0.settings.onPowerOnly = false; $0.context.batteryPercent = nil }, true),
+            ("the charge is low", { $0.settings.onPowerOnly = false; $0.context.batteryPercent = 25 }, true),
+            ("allowed on battery with enough charge", { $0.settings.onPowerOnly = false; $0.context.batteryPercent = 90 }, false),
+        ]
+    }
+
+    /// The alarm was set on power. The Mac was unplugged while it slept,
+    /// and the alarm wakes it in a bag: nothing holds it awake.
+    func testNoHoldOpensOnBatteryWhileAnAlarmWouldNotBeSet() {
+        for (name, change, stops) in batteryCases {
+            wake = JobWake()
+            asleep = 0
+            var onPower = input()
+            change(&onPower)
+            let time = turn(onPower, noon)!
+            wake.answered(.set(time), for: time, now: noon, awake: 1000)
+            asleep += 8 * 3600
+            var onBattery = onPower
+            onBattery.context.onBattery = true
+            turn(onBattery, alarm.addingTimeInterval(2))
+            XCTAssertEqual(wake.holds.isEmpty, stops, name)
+            XCTAssertEqual(kinds, stops ? [.alarmSet, .wokeAtAlarm, .endedOnBattery] : [.alarmSet, .wokeAtAlarm], name)
+            XCTAssertEqual(wake.wakesInLastDay, 1, "\(name): the Mac woke, so it counts")
+            if stops { XCTAssertEqual(wake.memory.history.events.last?.job, "backup.sh", name) }
+        }
+    }
+
+    /// The hold opened on power, and the Mac is unplugged under it.
+    func testAHoldEndsWhenTheMacGoesToBattery() {
+        for (name, change, stops) in batteryCases {
+            wake = JobWake()
+            asleep = 0
+            var onPower = input()
+            change(&onPower)
+            wakeAtTheAlarm(onPower)
+            XCTAssertEqual(wake.holds.count, 1, name)
+            wake.observe([holdID: true], now: alarm.addingTimeInterval(70))
+            var onBattery = onPower
+            onBattery.context.onBattery = true
+            turn(onBattery, alarm.addingTimeInterval(80))
+            XCTAssertEqual(wake.holds.isEmpty, stops, name)
+            XCTAssertEqual(kinds.last, stops ? .endedOnBattery : .jobSeen, name)
+            wake.observe([holdID: true], now: alarm.addingTimeInterval(84))
+            XCTAssertEqual(wake.holds.isEmpty, stops, "\(name): what is seen of the job opens it no more")
+        }
+    }
+
+    /// The Mac goes to battery while it is awake: the alarm that was set
+    /// on power is taken away at the next turn.
+    func testTheAlarmIsTakenAwayWhenTheMacGoesToBattery() {
+        let time = turn(input(), noon)!
+        wake.answered(.set(time), for: time, now: noon, awake: 1000)
+        var onBattery = input()
+        onBattery.context.onBattery = true
+        onBattery.context.batteryPercent = 90
+        XCTAssertEqual(turn(onBattery, noon.addingTimeInterval(5)), 0)
+        wake.answered(.cancelled, for: 0, now: noon.addingTimeInterval(5), awake: 1000)
+        XCTAssertNil(wake.alarm)
+        XCTAssertFalse(wake.owesCancel)
+        XCTAssertEqual(kinds, [.alarmSet, .alarmCancelled])
+        XCTAssertEqual(wake.status, .noAlarm(.onBattery))
+    }
+
     func testTheHoldOfAnAgentJobIsABridgeThatNobodyWatches() {
         wakeAtTheAlarm(input(.hermes, name: "Digest"))
         XCTAssertEqual(wake.holds.count, 1)
