@@ -44,6 +44,11 @@ final class JobWakeLoop: ObservableObject {
     static let blockingTimeout: TimeInterval = 2
     /// The processes are looked at no more often.
     static let probeEvery: TimeInterval = 4
+    /// One `run` brings no more calls to the helper than this: its own,
+    /// and those of the turns that follow an answer. `JobWake` waits
+    /// before it sends a time again. This holds when a rule there is
+    /// wrong too: the helper is root and is never called in a loop.
+    static let callsPerRun = 3
 
     @PublishedOnChange private(set) var view = JobWakeView()
     /// The job holds that are open. `HoldPolicy` decides what they are worth.
@@ -63,6 +68,8 @@ final class JobWakeLoop: ObservableObject {
     private let jobClock: () -> JobClock
     private var probing = false
     private var probedAwake = -TimeInterval.infinity
+    /// The calls the `run` that came last may still make.
+    private var callsLeft = JobWakeLoop.callsPerRun
     /// The call to the helper and the look at the processes that are
     /// under way. A test waits for them.
     private(set) var sending: Task<Void, Never>?
@@ -91,6 +98,7 @@ final class JobWakeLoop: ObservableObject {
     /// - Parameter next: what the app knows now. Nil keeps the input.
     func run(_ next: JobWakeInput? = nil) {
         if let next { input = next }
+        callsLeft = Self.callsPerRun
         turn(willSleep: false)
         look()
     }
@@ -129,6 +137,9 @@ final class JobWakeLoop: ObservableObject {
     }
 
     private func turn(willSleep: Bool) {
+        // `JobWake` is not asked either: it would wait for an answer to
+        // a time that was never sent. The next `run` asks it.
+        guard willSleep || callsLeft > 0 else { return }
         let time = core.turn(input, now: now(), awake: clocks.awake(), asleep: clocks.asleep(), clock: jobClock(), willSleep: willSleep)
         publish()
         guard let time else { return }
@@ -138,6 +149,7 @@ final class JobWakeLoop: ObservableObject {
             answered(sender.wakeAlarmNow(at: time, timeout: Self.blockingTimeout), for: time)
             return
         }
+        callsLeft -= 1
         sending = Task { [weak self, sender] in
             let result = await sender.wakeAlarm(at: time)
             self?.answered(result, for: time)

@@ -80,6 +80,36 @@ final class JobWakeTests: XCTestCase {
         XCTAssertNil(turn(input(), noon.addingTimeInterval(181)))
     }
 
+    /// The helper is root. A renewal that it refuses waits as a new time
+    /// does, and is not sent again at the next turn.
+    func testARenewalThatFailsWaitsBeforeItGoesAgain() {
+        let waits: [(WakeAlarmResult, TimeInterval)] = [
+            (.refused(.tooOften), JobWake.retryAfterTooOften), (.refused(.notCancelled), JobWake.retryAfter),
+            (.helperNotAvailable, JobWake.retryAfter),
+        ]
+        for (result, wait) in waits {
+            wake = JobWake()
+            awake = 1000
+            set(input(), noon)
+            awake += JobWake.renewEvery
+            let time = seconds("2026-10-10 20:59")
+            XCTAssertEqual(turn(input(), noon), time)
+            wake.answered(result, for: time, now: noon, awake: awake)
+            var calls = 0
+            for second in 0..<60 {
+                awake += second == 0 ? 0 : 1
+                if turn(input(), noon.addingTimeInterval(TimeInterval(second))) != nil { calls += 1 }
+            }
+            XCTAssertEqual(calls, 0, "\(result): 60 seconds of turns")
+            XCTAssertEqual(wake.alarm?.at, at("2026-10-10 20:59"), "Inside the lease the alarm is still there")
+            awake += wait - 59
+            XCTAssertEqual(turn(input(), noon.addingTimeInterval(wait)), time, "\(result): after the wait")
+            wake.answered(result, for: time, now: noon, awake: awake)
+            XCTAssertNil(turn(input(), noon.addingTimeInterval(wait)))
+            XCTAssertEqual(turn(input(), noon.addingTimeInterval(wait), willSleep: true), time, "Before sleep it goes all the same")
+        }
+    }
+
     func testTimeAsleepDoesNotCountForTheRenewal() {
         set(input(), noon)
         sleep(for: 3600)

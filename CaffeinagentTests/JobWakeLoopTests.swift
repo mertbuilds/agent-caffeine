@@ -9,12 +9,16 @@ private final class FakeSender: WakeAlarmSending {
     /// Nil sets what is asked for.
     var result: WakeAlarmResult?
 
+    /// Runs at every call that does not block, before the answer.
+    var onAsk: (() -> Void)?
+
     private func answer(_ time: TimeInterval) -> WakeAlarmResult {
         result ?? (time > 0 ? .set(time) : .cancelled)
     }
 
     func wakeAlarm(at time: TimeInterval) async -> WakeAlarmResult {
         asked.append("\(Int(time))")
+        onAsk?()
         return answer(time)
     }
 
@@ -125,6 +129,36 @@ final class JobWakeLoopTests: XCTestCase {
         loop.run()
         await settle()
         XCTAssertEqual(sender.asked.count, 2)
+    }
+
+    /// The helper is root, so one run never brings a row of calls,
+    /// whatever the rules of `JobWake` say. Here each call moves the
+    /// clock a day on, so every answer is followed by a new time.
+    func testOneRunBringsNoMoreThanAFewCalls() async {
+        sender.onAsk = { [unowned self] in
+            if self.sender.asked.count <= 20 { self.now = self.now.addingTimeInterval(86_400) }
+        }
+        loop.run(input)
+        for _ in 0..<60 { await loop.sending?.value }
+        XCTAssertEqual(sender.asked.count, JobWakeLoop.callsPerRun)
+        XCTAssertLessThanOrEqual(JobWakeLoop.callsPerRun, 3)
+        XCTAssertEqual(Set(sender.asked).count, JobWakeLoop.callsPerRun, "A new time each")
+        loop.run()
+        for _ in 0..<60 { await loop.sending?.value }
+        XCTAssertEqual(sender.asked.count, 2 * JobWakeLoop.callsPerRun, "The next run goes on")
+    }
+
+    func testARenewalThatIsRefusedBringsOneCallAndNoLoop() async {
+        loop.run(input)
+        await settle()
+        awake += JobWake.renewEvery
+        sender.result = .refused(.tooOften)
+        for second in 0..<60 {
+            awake += second == 0 ? 0 : 1
+            loop.run()
+            for _ in 0..<20 { await loop.sending?.value }
+        }
+        XCTAssertEqual(sender.asked, ["\(alarmTime)", "\(alarmTime)"], "The first time and one renewal")
     }
 
     func testSwitchingTheFeatureOffCancelsAndASilentHelperIsAStatus() async {

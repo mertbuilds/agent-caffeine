@@ -41,6 +41,8 @@ enum JobWakeStatus: Equatable {
 /// - A new time goes to the helper at once. The same time goes again
 ///   every `renewEvery` seconds the Mac was awake: the helper takes an
 ///   alarm away that nobody asked for in 10 minutes.
+/// - A time the helper did not take, new or the same again, waits
+///   `retryAfter` before it goes again.
 /// - 0 goes when no alarm is wanted and one can still be set.
 /// - After macOS said the Mac goes to sleep, the plan is made for a Mac
 ///   that sleeps, until the Mac woke in full.
@@ -154,6 +156,10 @@ struct JobWake: Equatable {
         if time > 0 {
             if let alarm, isSame(alarm.at.timeIntervalSince1970, time) {
                 guard awake - (confirmedAwake ?? -.infinity) >= Self.renewEvery || willSleep else { return nil }
+                // A renewal that failed waits as a new time does. The
+                // turn after an answer comes at once, and the same time
+                // would go to the helper in a loop.
+                if failedTime == time, awake < retryAt, !willSleep { return nil }
                 // The helper refuses a time that is this close, also the
                 // one it has. The lease is longer than that.
                 guard time - now.timeIntervalSince1970 >= JobSettings.minimumAhead else { return nil }
