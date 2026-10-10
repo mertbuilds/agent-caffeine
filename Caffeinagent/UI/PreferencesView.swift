@@ -264,7 +264,7 @@ struct AboutPreferences: View {
                     Button("Check for updates…", action: checkForUpdates)
                         .disabled(!canCheckForUpdates)
                 }
-                Text("While it keeps the Mac awake, Agent Caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. For a closed lid on battery, its helper also turns on the SleepDisabled setting of macOS, and turns it off when Agent Caffeine stops or quits.")
+                Text("While it keeps the Mac awake, Agent Caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. For a closed lid on battery, its helper also turns on the SleepDisabled setting of macOS, and turns it off when Agent Caffeine stops or quits. With Wake for jobs on, the helper also keeps one wake time in the schedule of macOS, and takes it away when Agent Caffeine quits.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 Text("Agent Caffeine checks caffeinagent.com for updates. It checks your license key with Polar. It sends the key and your Mac's model, and nothing about you or your agents.")
