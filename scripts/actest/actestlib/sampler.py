@@ -99,6 +99,10 @@ def has_state_export(env):
     app_path = getattr(env, "app", None)
     if not app_path:
         return False
+    # The tool of a build with the export knows the option --detail. The key
+    # of the switch is too short to be found as text in a Swift binary.
+    data = env.read(app_path + "/" + config.TOOL_BINARY, limit=64 << 20)
+    return data is not None and b"--detail" in data
     # The key of the switch is in the app, which reads it, and not in the tool.
     for binary in (config.TOOL_BINARY, "Contents/MacOS/caffeinagent"):
         data = env.read(app_path + "/" + binary, limit=64 << 20)
