@@ -6,7 +6,7 @@ import Foundation
 //     agent-caffeine hold --for 30m [--reason "text"]
 //     agent-caffeine hold [--reason "text"] -- <command> [args...]
 //     agent-caffeine release [<id> | --all]
-//     agent-caffeine status [--json]
+//     agent-caffeine status [--json] [--detail]
 //     agent-caffeine mcp
 //     agent-caffeine skill
 //
@@ -35,8 +35,8 @@ case .success(.hold(let length, let reason, let json)):
     finish(HoldCommands.hold(length: length, reason: reason, json: json, tools: tools))
 case .success(.release(let target)):
     finish(HoldCommands.release(target, tools: tools))
-case .success(.status(let json)):
-    finish(HoldCommands.status(json: json, tools: tools))
+case .success(.status(let json, let detail)):
+    finish(HoldCommands.status(json: json, detail: detail, tools: tools))
 case .success(.skill):
     finish(HoldCommands.skill(executable: Bundle.main.executableURL))
 case .success(.mcp):

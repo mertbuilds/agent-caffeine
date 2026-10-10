@@ -9,6 +9,8 @@ struct HoldTools {
     var startTime: (Int32) -> TimeInterval? = { SystemProcessCensus.row(of: $0)?.startTime }
     var calendar = Calendar.current
     var locale = Locale.current
+    /// The hidden switch of the app for its state for tests.
+    var stateForTests: () -> Bool = { UserDefaults(suiteName: HoldStore.bundleID)?.bool(forKey: HoldStore.stateSwitchKey) ?? false }
 
     var liveHolds: [ManualHold] {
         store.live(now: now(), startTime: startTime)
@@ -27,7 +29,7 @@ enum HoldInvocation: Equatable {
     case hold(length: TimeInterval, reason: String?, json: Bool)
     case run(command: [String], reason: String?)
     case release(Release)
-    case status(json: Bool)
+    case status(json: Bool, detail: Bool = false)
     case mcp
     case skill
     case help
@@ -69,7 +71,8 @@ enum HoldArguments {
         switch verb {
         case "hold": return hold(rest)
         case "release": return release(rest)
-        case "status": return flags(rest, allowed: ["--json"]).map { .status(json: $0.contains("--json")) }
+        case "status":
+            return flags(rest, allowed: ["--json", "--detail"]).map { .status(json: $0.contains("--json"), detail: $0.contains("--detail")) }
         case "mcp": return flags(rest, allowed: []).map { _ in .mcp }
         case "skill": return flags(rest, allowed: []).map { _ in .skill }
         case "help", "--help", "-h": return .success(.help)
@@ -229,18 +232,41 @@ enum HoldCommands {
 
     // MARK: Status
 
-    static func status(json: Bool, tools: HoldTools) -> HoldOutcome {
+    static let stateSwitchOff = "The state for tests is off. Turn it on with: defaults write \(HoldStore.bundleID) \(HoldStore.stateSwitchKey) -bool true"
+    static let stateNotWritten = "The state for tests is on, and Agent Caffeine wrote none. This build has no state export: install the new build."
+    static let stateNeedsApp = "Agent Caffeine is not running, so there is no state for tests."
+
+    /// - Parameter detail: also the state the app writes for the test
+    ///   runner, or one line that says why there is none.
+    static func status(json: Bool, detail: Bool = false, tools: HoldTools) -> HoldOutcome {
         let holds = tools.liveHolds
         let running = tools.store.appIsRunning
         let status = tools.store.status()
         let line = sleepLine(running: running, status: status)
+        let state = detail ? self.state(running: running, tools: tools) : nil
         if json {
             var object: [String: Any] = ["appRunning": running, "holds": holds.map(HoldText.json), "line": line]
             if let status { object["awake"] = status.awake }
+            if let state {
+                object["stateForTests"] = tools.stateForTests()
+                object["detail"] = state.object
+                object["detailNote"] = state.note
+            }
             return HoldOutcome(out: [HoldText.line(object)])
         }
         let listed = holds.isEmpty ? ["No holds."] : holds.map { HoldText.listed($0, tools: tools) }
-        return HoldOutcome(out: listed + [line])
+        let stated = state.map { [$0.note ?? HoldText.line($0.object ?? [:])] } ?? []
+        return HoldOutcome(out: listed + [line] + stated)
+    }
+
+    /// The state for tests as the app wrote it, or why there is none.
+    private static func state(running: Bool, tools: HoldTools) -> (object: Any?, note: String?) {
+        guard running else { return (nil, stateNeedsApp) }
+        guard tools.stateForTests() else { return (nil, stateSwitchOff) }
+        guard let data = tools.store.stateData(), let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return (nil, stateNotWritten)
+        }
+        return (object, nil)
     }
 
     // MARK: Skill

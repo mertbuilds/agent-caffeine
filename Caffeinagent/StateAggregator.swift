@@ -286,6 +286,11 @@ final class StateAggregator: ObservableObject {
     /// test, which runs next to a copy that is installed.
     private var holdLock: HoldStore.AppLock?
     private lazy var holdStatus = HoldStore.StatusWriter(store: holdStore)
+    /// The state for the tests, while its hidden switch is on. See `TestState`.
+    private lazy var testState = TestStateWriter(store: holdStore, defaults: defaults)
+    private var testStateTimer: Timer?
+    private var testNotices = TestNoticeLog()
+    private var chimePlayedAt: Date?
     /// The loop of "Wake for jobs". See `JobWake` for its rules.
     private let jobLoop: JobWakeLoop
     private let jobStore: JobStore?
@@ -309,6 +314,8 @@ final class StateAggregator: ObservableObject {
     /// After the time of an alarm or the end of a hold, so the turn finds
     /// it passed.
     private static let jobTimerSlack: TimeInterval = 0.05
+    /// The state for the tests is never older than 5 seconds.
+    private static let testStateInterval: TimeInterval = 4
 
     init(parts: AggregatorParts) {
         let license = parts.license
@@ -790,6 +797,7 @@ final class StateAggregator: ObservableObject {
         syncSleepFlag()
         // A stop gives the brightness back at once, not at the next sample.
         display?.update(holding: decision.hold, now: Date())
+        writeTestState()
     }
 
     private func sampled(_ sample: DetectionSample) {
@@ -801,12 +809,14 @@ final class StateAggregator: ObservableObject {
         if batteryPercent != context.batteryPercent { batteryPercent = context.batteryPercent }
         let stop = safetyMonitor.update(context.safetyInputs, afterGap: sample.afterGap)
         if let begun = SafetyStop.toAnnounce(previous: engine.safety, current: stop, wasHolding: power.held) {
+            testNotices.note(.safetyStop, at: sample.frame.at)
             notify(begun.notificationText)
         }
         let warned = noLimitWarning.update(
             context.safetyInputs, drainingOnPower: safetyMonitor.drainingOnPower, floorEnabled: settings.batteryFloorEnabled, holding: power.held
         )
         if let percent = warned {
+            testNotices.note(.batteryWarning, at: sample.frame.at)
             notify(NoLimitBatteryWarning.notificationText(percent: percent))
         }
         engine.safety = stop
@@ -848,6 +858,7 @@ final class StateAggregator: ObservableObject {
         // Sends again what did not get through.
         syncSleepFlag()
         if sample.frame.at.timeIntervalSince(lastHelperRefresh) >= Self.helperRefreshInterval { refreshHelperStatus() }
+        writeTestState()
     }
 
     /// The lid and the power source come with the sample. The sleep timer
@@ -891,6 +902,7 @@ final class StateAggregator: ObservableObject {
             entitlement: entitlement
         )
         if let begun = HiddenNotice.toAnnounce(previous: hiddenNotice, current: current, iconHidden: !showMenuBarIcon) {
+            testNotices.note(.hidden, at: Date())
             notify(begun.notificationText)
         }
         hiddenNotice = current
@@ -903,6 +915,7 @@ final class StateAggregator: ObservableObject {
         trialNoticesTold.insert(notice)
         TrialNoticeStore.save(trialNoticesTold, to: defaults)
         Notifier.log.notice("\(notice.logLine, privacy: .public)")
+        testNotices.note(.trial, at: now)
         notify(PanelText.notification(notice, end: license.trialEnd, now: now))
     }
 
@@ -950,6 +963,7 @@ final class StateAggregator: ObservableObject {
             if notice.kind == .waiting { Notifier.log.notice("\(outlook.logLine, privacy: .public)") }
             let content = AgentNoticeText.content(notice, outlook: outlook, now: sample.frame.at)
             history.posted(content, at: sample.frame.at)
+            testNotices.note(notice.kind == .waiting ? .waiting : .finished, at: sample.frame.at)
             notifier.post(content)
         }
         if noticeHistory != history { noticeHistory = history }
@@ -982,7 +996,9 @@ final class StateAggregator: ObservableObject {
             lidClosed: lidClosed, enabled: settings.chimeOnLidClose, holding: decision.hold && power.held, onBattery: onBattery,
             flagWanted: decision.lidClosedFlag, helperEnabled: sleepFlag.helperStatus == .enabled, flagConfirmed: sleepFlag.sleepDisabled
         )
-        lidChimer.observe(inputs, sound: settings.lidChimeSound, detail: decision.headline.text, now: Self.uptime)
+        if lidChimer.observe(inputs, sound: settings.lidChimeSound, detail: decision.headline.text, now: Self.uptime) == .played {
+            chimePlayedAt = Date()
+        }
         guard lidChimer.isWaiting != (lidChimeTimer != nil) else { return }
         lidChimeTimer?.invalidate()
         lidChimeTimer = nil
@@ -1007,6 +1023,39 @@ final class StateAggregator: ObservableObject {
         holdStatus.write(HoldStore.Status(
             awake: decision.hold, line: "\(headline.title): \(headline.subtitle)", stopped: decision.headline.isStop
         ))
+    }
+
+    /// What the test runner reads. Only the copy that holds the lock
+    /// writes it, and only while the hidden switch is on. A timer keeps
+    /// the file young between two samples.
+    private func writeTestState() {
+        guard holdLock != nil else { return }
+        testState.update { TestState(testStateInput) }
+        guard testState.isOn != (testStateTimer != nil) else { return }
+        testStateTimer?.invalidate()
+        testStateTimer = nil
+        guard testState.isOn else { return }
+        let timer = Timer(timeInterval: Self.testStateInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.writeTestState() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        testStateTimer = timer
+    }
+
+    private var testStateInput: TestStateInput {
+        let info = Bundle.main.infoDictionary
+        return TestStateInput(
+            at: Date(),
+            version: info?["CFBundleShortVersionString"] as? String ?? "unknown",
+            build: info?["CFBundleVersion"] as? String ?? "unknown",
+            bundlePath: AppInstall.running.path,
+            pid: ProcessInfo.processInfo.processIdentifier,
+            enabled: enabled, pausedUntil: pause.until, reachableUntil: reachable.until, mode: mode, entitlement: entitlement,
+            decision: decision, frame: engine.frame, assertionHeld: power.held,
+            helper: sleepFlag.helperStatus, setup: sleepFlag.setup, flagSet: sleepFlag.sleepDisabled,
+            lidAngle: display?.lidAngle, safety: engine.safety, gate: engine.gateCode,
+            wakeForJobs: jobSettings.wakeForJobs, jobs: jobWake, notices: testNotices.events, chimeAt: chimePlayedAt
+        )
     }
 
     private func updatePower() {
@@ -1316,6 +1365,7 @@ final class StateAggregator: ObservableObject {
         reachableTimer?.invalidate()
         lidChimeTimer?.invalidate()
         jobTimer?.invalidate()
+        testStateTimer?.invalidate()
         jobStore?.stop()
         hotKeys.unregisterAll()
         display?.stop()
@@ -1325,6 +1375,7 @@ final class StateAggregator: ObservableObject {
         power.release()
         if holdLock != nil {
             holdStatus.remove()
+            testState.remove()
             holdLock = nil
         }
         if let napActivity {

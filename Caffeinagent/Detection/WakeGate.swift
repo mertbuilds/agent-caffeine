@@ -88,6 +88,14 @@ struct WakeGate: Equatable {
         if announced || wokeAt != nil { return holding }
         return true
     }
+
+    /// A short stable name for the state file of the tests.
+    var code: String {
+        if slept { return "slept" }
+        if announced { return "sleepAnnounced" }
+        if wokeAt != nil { return "woke" }
+        return "open"
+    }
 }
 
 /// The time around an alarm of "Wake for jobs" in which its job hold may

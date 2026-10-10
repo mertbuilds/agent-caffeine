@@ -98,6 +98,8 @@ final class DetectionEngine: ObservableObject {
     private var agentMemory: [ProcessIdentity: AgentMemory] = [:]
     private var policyMemory = PolicyMemory()
     private var wakeGate = WakeGate()
+    /// `WakeGate.code`, for the state file of the tests.
+    var gateCode: String { wakeGate.code }
     /// The decision holds, and only because a job hold is in the window
     /// of its alarm while the gate is closed. For the gate and for the
     /// memory of the agents that is no hold: the awake time under it does

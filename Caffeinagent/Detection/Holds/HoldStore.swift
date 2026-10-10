@@ -20,6 +20,11 @@ struct HoldStore {
     /// Held by the app for as long as it runs. See `AppLock`.
     static let lockName = ".app"
     static let statusName = ".status"
+    /// The state for the tests, next to the status. See `TestState`.
+    static let stateName = ".state.json"
+    /// The hidden switch of the app for it, in the settings of the app.
+    static let stateSwitchKey = "StateForTests"
+    static let maxStateBytes = 256 * 1024
 
     let directory: URL
     /// The folder above the holds. The lock and the status are here: the
@@ -230,6 +235,27 @@ struct HoldStore {
             store.removeStatus()
             written = nil
         }
+    }
+
+    // MARK: State for the tests
+
+    /// The whole file, written like the status. Only the app writes it,
+    /// and only while its hidden switch is on.
+    @discardableResult
+    func writeState(_ data: Data) -> Bool {
+        guard prepare() else { return false }
+        return Self.writeWhole(data, to: home.appendingPathComponent(Self.stateName).path, in: home)
+    }
+
+    func removeState() {
+        unlink(home.appendingPathComponent(Self.stateName).path)
+    }
+
+    /// Nil when the app does not run or wrote no state.
+    func stateData() -> Data? {
+        guard appIsRunning, let data = try? Data(contentsOf: home.appendingPathComponent(Self.stateName)),
+              !data.isEmpty, data.count <= Self.maxStateBytes else { return nil }
+        return data
     }
 
     /// Nil when the app does not run: what it wrote last says nothing then.

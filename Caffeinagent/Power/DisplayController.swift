@@ -207,6 +207,8 @@ final class DisplayController {
     /// False on a Mac without a lid angle sensor: the display then goes
     /// dark when the lid is closed, with no fade.
     var hasLidAngleSensor: Bool { lid?.isAvailable ?? false }
+    /// Degrees, nil while the sensor is not open or gave no answer.
+    var lidAngle: Double? { lid?.angle() }
 
     /// A brightness that a copy before this one left at zero comes back
     /// first. The rules dim again when that is still right.
