@@ -223,6 +223,56 @@ final class JobWakeTests: XCTestCase {
         XCTAssertEqual(wake.holds.map(\.fireAt), [seconds("2026-10-10 21:00")])
     }
 
+    /// The turn at "will sleep" and the turn of the timer at the alarm
+    /// come with no sample. The power source of the last sample can be
+    /// from before the Mac was unplugged, so it is read again for them.
+    func testTheTurnsWithNoSampleTakeThePowerSourceAsItIsNow() {
+        var stale = input()
+        stale.context.batteryPercent = 80
+        stale.context.batteryFloorPercent = 30
+        let unplugged = FrameContext(onBattery: true, batteryPercent: 79, lidClosed: true, thermalState: 2)
+        let fresh = stale.withPower(of: unplugged)
+        var want = stale
+        want.context.onBattery = true
+        want.context.batteryPercent = 79
+        XCTAssertEqual(fresh, want, "The power source and the battery, and nothing else")
+
+        // Unplugged, and the lid closed before the next sample.
+        set(stale, noon)
+        XCTAssertEqual(turn(stale, noon.addingTimeInterval(3), willSleep: true), seconds("2026-10-10 20:59"), "The old values keep the alarm")
+        wake = JobWake()
+        set(stale, noon)
+        XCTAssertEqual(turn(fresh, noon.addingTimeInterval(3), willSleep: true), 0, "On battery the alarm goes before the sleep")
+        XCTAssertEqual(wake.status, .noAlarm(.onBattery))
+
+        // Unplugged while the Mac slept, and the timer runs at the alarm.
+        wake = JobWake()
+        asleep = 0
+        set(stale, noon)
+        sleep(for: 9 * 3600)
+        turn(fresh, at("2026-10-10 20:59").addingTimeInterval(1))
+        XCTAssertEqual(wake.holds, [], "No hold on a Mac that can be in a bag")
+        XCTAssertEqual(kinds, [.alarmSet, .wokeAtAlarm, .endedOnBattery])
+
+        var plugged = stale
+        plugged.context.onBattery = true
+        XCTAssertFalse(plugged.withPower(of: FrameContext(onBattery: false, batteryPercent: nil)).context.onBattery)
+        XCTAssertNil(plugged.withPower(of: FrameContext()).context.batteryPercent)
+    }
+
+    /// The owner of the loop cannot be made in a test, so its source is
+    /// read: both turns with no sample pass the power source of now.
+    func testTheOwnerReadsThePowerSourceForTheTurnsWithNoSample() throws {
+        let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+        let source = try String(contentsOf: root.appendingPathComponent("Caffeinagent/StateAggregator.swift"), encoding: .utf8)
+        XCTAssertTrue(source.contains("jobLoop.willSleep(jobWakeInput.withPower(of: powerContext.context()))"))
+        XCTAssertFalse(source.contains("jobLoop.willSleep(jobWakeInput)"))
+        let timer = try XCTUnwrap(source.range(of: "private func armJobTimer()"))
+        let body = source[timer.upperBound...].prefix(600)
+        XCTAssertTrue(body.contains("self?.updateJobWake(powerNow: true)"))
+        XCTAssertTrue(source.contains("jobLoop.run(powerNow ? jobWakeInput.withPower(of: powerContext.context()) : jobWakeInput)"))
+    }
+
     func testWillSleepRenewsAnAlarmThatIsSet() {
         set(input(), noon)
         XCTAssertEqual(turn(input(), noon.addingTimeInterval(5), willSleep: true), seconds("2026-10-10 20:59"))

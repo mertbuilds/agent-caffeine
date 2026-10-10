@@ -12,6 +12,17 @@ struct JobWakeInput: Equatable {
     var inApplications = true
     /// The helper is allowed in Login Items.
     var helperEnabled = true
+
+    /// The same input with the power source and the battery of
+    /// `context`. For the turns that no sample starts, at "will sleep"
+    /// and at the time of the alarm: the values of the last sample can
+    /// be 5 seconds old there, from before the Mac was unplugged.
+    func withPower(of context: FrameContext) -> JobWakeInput {
+        var input = self
+        input.context.onBattery = context.onBattery
+        input.context.batteryPercent = context.batteryPercent
+        return input
+    }
 }
 
 /// The one thing Settings says about the state of "Wake for jobs".

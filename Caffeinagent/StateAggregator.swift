@@ -531,8 +531,10 @@ final class StateAggregator: ObservableObject {
         engine.willSleep()
         // A Mac that is awake needs no alarm for a job that is near. One
         // that goes to sleep does, and the alarm is with the helper
-        // before macOS is told that the app is ready for the sleep.
-        if samples > 0 { jobLoop.willSleep(jobWakeInput) }
+        // before macOS is told that the app is ready for the sleep. The
+        // power source is read now: a Mac that was unplugged and closed
+        // within one sample keeps no alarm that is for power only.
+        if samples > 0 { jobLoop.willSleep(jobWakeInput.withPower(of: powerContext.context())) }
     }
 
     private func macDidWake() {
@@ -1142,9 +1144,13 @@ final class StateAggregator: ObservableObject {
     /// with every sample, which also renews the lease of the alarm. Not
     /// before the first sample: until then the power source and the
     /// battery are not known, and an alarm could be set on battery.
-    private func updateJobWake() {
+    /// - Parameter powerNow: the power source and the battery are read
+    ///   now and not taken from the last sample. For the turn of the
+    ///   timer: at the alarm the Mac may have been unplugged while it
+    ///   slept, and no sample has seen that yet.
+    private func updateJobWake(powerNow: Bool = false) {
         guard samples > 0 else { return }
-        jobLoop.run(jobWakeInput)
+        jobLoop.run(powerNow ? jobWakeInput.withPower(of: powerContext.context()) : jobWakeInput)
     }
 
     /// The job holds go to the engine, where `HoldPolicy` decides what
@@ -1164,7 +1170,7 @@ final class StateAggregator: ObservableObject {
         jobTimer = nil
         guard let next = jobLoop.nextTurn else { return }
         let timer = Timer(fire: next.addingTimeInterval(Self.jobTimerSlack), interval: 0, repeats: false) { [weak self] _ in
-            MainActor.assumeIsolated { self?.updateJobWake() }
+            MainActor.assumeIsolated { self?.updateJobWake(powerNow: true) }
         }
         RunLoop.main.add(timer, forMode: .common)
         jobTimer = timer
