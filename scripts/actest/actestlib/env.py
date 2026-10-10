@@ -133,7 +133,8 @@ class RealEnv:
             return None
         if not ready:
             return None
-        char = sys.stdin.read(1)
+        # Past the buffer of Python, so a second key is not left in it.
+        char = os.read(sys.stdin.fileno(), 1).decode("utf-8", "ignore")
         if char == "":
             self.sleep(timeout)
             return None

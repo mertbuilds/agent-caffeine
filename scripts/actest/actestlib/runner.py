@@ -134,6 +134,9 @@ class Session:
                 self.lab = env.spawn_lab("actest-" + self.test["id"])
             self.note_active()
             self.start = env.now()
+            # The Mac before the first step, and the pid of the app for
+            # the text of a step.
+            self.sample()
             for number, step in enumerate(self.test["steps"], 1):
                 if not self._step(number, step):
                     break

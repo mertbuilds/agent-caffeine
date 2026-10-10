@@ -155,6 +155,14 @@ class RunTests(unittest.TestCase):
         verdict = runner.run_test(catalog.validate(json.loads(json.dumps(AGENT))), env, self.ui)
         self.assertEqual(verdict["reason"], "the owner skipped step 1")
 
+    def test_the_real_environment_refuses_what_is_not_a_read(self):
+        from actestlib import env as environment
+        real = environment.RealEnv.__new__(environment.RealEnv)
+        for args in [("pmset", "-a", "disablesleep", "0"), ("pmset", "schedule", "cancelall"), ("sudo", "pmset", "-g"),
+                     ("defaults", "write", config.BUNDLE_ID, config.SWITCH_KEY, "-bool", "true"), ("kill", "-9", "1"), ("osascript", "-e", "x")]:
+            with self.assertRaises(environment.Refused):
+                real.command(args)
+
     def test_the_runner_never_writes_a_power_setting(self):
         env, _ = self.run_lid()
         self.assertTrue(all(args[:2] in (("pmset", "-g"),) or args[0] in ("ioreg", "ps", "sysctl", "sw_vers") for args in env.commands), set(env.commands))
