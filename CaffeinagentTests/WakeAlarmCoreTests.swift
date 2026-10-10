@@ -18,6 +18,8 @@ final class FakeWakeEvents: WakeEventStoring {
     var unreadable = false
     /// The list cannot be read from the next schedule on.
     var unreadableAfterSchedule = false
+    /// Called at the end of every cancel, on the thread of the caller.
+    var onCancel: (() -> Void)?
 
     func events() -> [WakeEvent]? { unreadable ? nil : list }
 
@@ -33,6 +35,7 @@ final class FakeWakeEvents: WakeEventStoring {
 
     func cancel(at date: Date) -> Bool {
         cancelled.append(date.timeIntervalSince1970)
+        defer { onCancel?() }
         if cancelFails { return false }
         let event = WakeEvent(date: date, owner: WakeAlarmCore.owner, type: WakeAlarmCore.eventType)
         guard let index = list.firstIndex(of: event) else { return false }
@@ -398,6 +401,101 @@ final class WakeAlarmCoreTests: XCTestCase {
         let core = makeCore()
         core.tick()
         XCTAssertEqual(store.cancelled, [])
+    }
+
+    // MARK: Clients
+
+    /// The app died, or quit with no cancel: its connection ended. The
+    /// lease would keep the alarm for 10 minutes more.
+    func testTheAlarmGoesHalfAMinuteAfterTheLastClientLeft() {
+        XCTAssertEqual(WakeAlarmLimits.clientGrace, 30)
+        store.list = [appleAlarm]
+        let core = makeCore()
+        core.clientConnected()
+        XCTAssertEqual(core.set(at: date + 3600), .set(date + 3600))
+        stayAwake(120)
+        core.tick()
+        XCTAssertEqual(store.oursListed.count, 1, "A client is connected")
+        core.clientGone()
+        stayAwake(29)
+        core.tick()
+        XCTAssertEqual(store.oursListed.count, 1, "Not yet")
+        stayAwake(1)
+        core.tick()
+        XCTAssertEqual(store.list, [appleAlarm], "30 seconds after the connection ended")
+        XCTAssertFalse(core.needsTicks)
+    }
+
+    /// The app is started again after an update.
+    func testANewConnectionInTimeKeepsTheAlarm() {
+        let core = makeCore()
+        core.clientConnected()
+        _ = core.set(at: date + 3600)
+        core.clientGone()
+        stayAwake(20)
+        core.clientConnected()
+        stayAwake(60)
+        core.tick()
+        XCTAssertEqual(store.oursListed.count, 1)
+        core.clientGone()
+        stayAwake(30)
+        core.tick()
+        XCTAssertEqual(store.oursListed, [], "Counted again from the end of the new connection")
+    }
+
+    func testTheAlarmStaysWhileOneOfTwoClientsIsConnected() {
+        let core = makeCore()
+        core.clientConnected()
+        core.clientConnected()
+        _ = core.set(at: date + 3600)
+        core.clientGone()
+        stayAwake(60)
+        core.tick()
+        XCTAssertEqual(store.oursListed.count, 1)
+        core.clientGone()
+        core.clientGone()
+        stayAwake(30)
+        core.tick()
+        XCTAssertEqual(store.oursListed, [])
+    }
+
+    func testTimeAsleepDoesNotCountAfterTheLastClientLeft() {
+        let core = makeCore()
+        core.clientConnected()
+        _ = core.set(at: date + 3600)
+        core.clientGone()
+        stayAwake(10)
+        sleep(1800)
+        core.tick()
+        XCTAssertEqual(store.oursListed.count, 1)
+        stayAwake(20)
+        core.tick()
+        XCTAssertEqual(store.oursListed, [])
+    }
+
+    func testAnAlarmThatDoesNotGoAfterTheLastClientLeftIsTriedAgain() {
+        let core = makeCore()
+        core.clientConnected()
+        _ = core.set(at: date + 3600)
+        core.clientGone()
+        store.cancelFails = true
+        stayAwake(30)
+        core.tick()
+        XCTAssertTrue(core.needsTicks)
+        store.cancelFails = false
+        stayAwake(30)
+        core.tick()
+        XCTAssertEqual(store.oursListed, [])
+        XCTAssertFalse(core.needsTicks)
+    }
+
+    func testTheLeaseStillEndsAnAlarmOfAClientThatStaysConnected() {
+        let core = makeCore()
+        core.clientConnected()
+        _ = core.set(at: date + 3600)
+        stayAwake(WakeAlarmLimits.lease)
+        core.tick()
+        XCTAssertEqual(store.oursListed, [])
     }
 
     // MARK: Stop and start

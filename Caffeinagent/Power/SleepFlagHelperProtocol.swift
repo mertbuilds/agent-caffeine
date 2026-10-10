@@ -52,6 +52,11 @@ enum WakeAlarmLimits {
     /// The alarm goes when the app did not ask for it again for this long,
     /// in time the Mac was awake.
     static let lease: TimeInterval = 600
+    /// The alarm goes this long after the last connection of the app to
+    /// the helper ended, in time the Mac was awake: the app quit with no
+    /// cancel, or died. A new connection in that time keeps the alarm, as
+    /// when the app starts again after an update.
+    static let clientGrace: TimeInterval = 30
 }
 
 /// What a call of `setWakeAlarm` came to.

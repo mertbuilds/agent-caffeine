@@ -35,6 +35,8 @@ protocol WakeEventStoring {
 //   when the list shows it once.
 // - At most 30 new times per hour.
 // - The app asks again within 10 minutes of awake time, or the alarm goes.
+// - The alarm goes 30 seconds of awake time after the last connection of
+//   the app ended, unless a new one came.
 // - The alarm goes when the helper stops, and at its start: the lease is
 //   not kept across a restart, so an alarm found then has no one behind it.
 //
@@ -69,6 +71,12 @@ final class WakeAlarmCore {
     // be read: then this is the one time a cancel can be tried for.
     private var lastScheduled: TimeInterval?
     private var sets: [TimeInterval] = []
+    private let clientGrace: TimeInterval
+    // The connections of the app that are open.
+    private var clients = 0
+    // When the last of them ended, in awake seconds. Nil while one is
+    // open, and before the first one.
+    private var clientsGoneAt: TimeInterval?
 
     // The timer of the service runs while this is true.
     var needsTicks: Bool { leaseEnds != nil }
@@ -76,12 +84,30 @@ final class WakeAlarmCore {
     init(
         store: WakeEventStoring,
         date: @escaping () -> TimeInterval = { Date().timeIntervalSince1970 },
-        awake: @escaping () -> TimeInterval = HelperCore.awakeSeconds
+        awake: @escaping () -> TimeInterval = HelperCore.awakeSeconds,
+        clientGrace: TimeInterval = WakeAlarmLimits.clientGrace
     ) {
         self.store = store
         self.date = date
         self.awake = awake
+        self.clientGrace = clientGrace
     }
+
+    // The app opened a connection.
+    func clientConnected() {
+        clients += 1
+        clientsGoneAt = nil
+    }
+
+    // A connection of the app ended. HelperService says it once for each.
+    // After the last one the alarm has `clientGrace` left: see `tick`.
+    func clientGone() {
+        clients = max(clients - 1, 0)
+        if clients == 0 { clientsGoneAt = awake() }
+    }
+
+    // How long after `clientGone` a tick is due.
+    var graceAfterClients: TimeInterval { clientGrace }
 
     // An alarm in the list at the start of the helper is one of an earlier
     // run: a crash, a reboot, an app that was removed.
@@ -130,7 +156,11 @@ final class WakeAlarmCore {
         return .set(time)
     }
 
-    // The app did not ask again in time: it quit, crashed or was removed.
+    // Takes the alarm away when nobody is behind it:
+    // - The app has no connection for `clientGrace`: it quit with no cancel,
+    //   or died.
+    // - The app did not ask again within the lease. This stays as the rule
+    //   for an app that is connected and hangs.
     //
     // The bridge would go here: when the clock passes an alarm the helper
     // set, the helper sets SleepDisabled itself for at most 60 seconds, until
@@ -138,8 +168,13 @@ final class WakeAlarmCore {
     // decides it: with the lid closed on battery, can the app set the flag
     // through the helper before the Mac sleeps again after the alarm?
     func tick() {
-        guard let leaseEnds, awake() >= leaseEnds else { return }
-        removeOurs()
+        guard let leaseEnds else { return }
+        let now = awake()
+        if let clientsGoneAt, now - clientsGoneAt >= clientGrace {
+            removeOurs()
+        } else if now >= leaseEnds {
+            removeOurs()
+        }
     }
 
     // launchd stops the helper, or the app retires it. One try: the next

@@ -17,6 +17,8 @@ final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProto
     private var termination: DispatchSourceSignal?
     /// The helper leaves after `retire`. Read and written on the queue.
     private var retiring = false
+    /// The connections of the app that are open. Read and written on the queue.
+    private var clients: Set<UUID> = []
     /// The exit after `retire` waits for the reply to go out, at most this long.
     private static let retireGrace: TimeInterval = 1
     private let log = Logger(subsystem: SleepFlagHelper.label, category: "HelperService")
@@ -67,11 +69,41 @@ final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProto
 
     func listener(_ listener: NSXPCListener, shouldAcceptNewConnection connection: NSXPCConnection) -> Bool {
         // The next connection is for the helper that launchd starts after this one.
-        if queue.sync(execute: { retiring }) { return false }
+        let id = UUID()
+        let accepted = queue.sync { () -> Bool in
+            if retiring { return false }
+            clients.insert(id)
+            alarm.clientConnected()
+            return true
+        }
+        guard accepted else { return false }
         connection.exportedInterface = NSXPCInterface(with: SleepFlagHelperProtocol.self)
         connection.exportedObject = self
+        // The app quit or died. The handlers hold an id and not the
+        // connection, so the connection can go.
+        connection.invalidationHandler = { [weak self] in self?.clientGone(id) }
+        connection.interruptionHandler = { [weak self] in self?.clientGone(id) }
         connection.resume()
         return true
+    }
+
+    // The wake alarm has no one behind it when the last connection of the
+    // app ended: the app sends no cancel when it dies. WakeAlarmCore takes
+    // the alarm away after its grace, unless a new connection came, as
+    // when the app starts again after an update. Both handlers of a
+    // connection can run, and it counts once.
+    private func clientGone(_ id: UUID) {
+        queue.async {
+            guard self.clients.remove(id) != nil else { return }
+            self.alarm.clientGone()
+            guard self.clients.isEmpty, self.alarm.needsTicks else { return }
+            // Dispatch counts this in awake time, like the grace.
+            self.queue.asyncAfter(deadline: .now() + self.alarm.graceAfterClients) {
+                self.alarm.tick()
+                if !self.alarm.needsTicks { self.log.info("wake alarm cancelled: the app has no connection") }
+                self.updateAlarmTimer()
+            }
+        }
     }
 
     func setSleepDisabled(_ on: Bool, reply: @escaping (Bool) -> Void) {

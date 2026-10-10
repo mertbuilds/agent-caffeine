@@ -517,6 +517,69 @@ final class HelperServiceTests: XCTestCase {
         XCTAssertEqual(events.list, [])
     }
 
+    /// A listener and a client in this process, with no name in launchd.
+    private func connect(to service: HelperService) -> (NSXPCListener, NSXPCConnection, SleepFlagHelperProtocol?) {
+        let listener = NSXPCListener.anonymous()
+        listener.delegate = service
+        listener.resume()
+        let connection = NSXPCConnection(listenerEndpoint: listener.endpoint)
+        connection.remoteObjectInterface = NSXPCInterface(with: SleepFlagHelperProtocol.self)
+        connection.resume()
+        return (listener, connection, connection.remoteObjectProxyWithErrorHandler { _ in } as? SleepFlagHelperProtocol)
+    }
+
+    /// The app dies with an alarm set: its connection ends, and the
+    /// helper takes the alarm away after the grace, here none.
+    func testTheWakeAlarmGoesAfterTheConnectionOfTheClientEnded() {
+        events.list = [appleAlarm]
+        let alarm = WakeAlarmCore(store: events, date: { 1_800_000_000 }, awake: { 1_000 }, clientGrace: 0)
+        let core = HelperCore(flag: FakeFlag(), marker: FakeMarker(), timeout: 60, now: { 1_000 })
+        let service = HelperService(core: core, alarm: alarm) { _ in }
+        let (listener, connection, helper) = connect(to: service)
+        defer { listener.invalidate() }
+        let answered = expectation(description: "answered")
+        var reply: String?
+        helper?.setWakeAlarm(at: 1_800_003_600) { time, code in
+            reply = "\(Int(time)) \(code)"
+            answered.fulfill()
+        }
+        wait(for: [answered], timeout: 5)
+        XCTAssertEqual(reply, "1800003600 0")
+        let cancelled = expectation(description: "cancelled")
+        events.onCancel = { cancelled.fulfill() }
+        connection.invalidate()
+        wait(for: [cancelled], timeout: 5)
+        // After the call under way on the queue of the service.
+        let idle = expectation(description: "idle")
+        service.status { _, _, _ in idle.fulfill() }
+        wait(for: [idle], timeout: 5)
+        XCTAssertEqual(events.cancelled, [1_800_003_600])
+        XCTAssertEqual(events.list, [appleAlarm])
+    }
+
+    /// The client stays connected: nothing takes the alarm away.
+    func testTheWakeAlarmStaysWhileTheClientIsConnected() {
+        let alarm = WakeAlarmCore(store: events, date: { 1_800_000_000 }, awake: { 1_000 }, clientGrace: 0)
+        let core = HelperCore(flag: FakeFlag(), marker: FakeMarker(), timeout: 60, now: { 1_000 })
+        let service = HelperService(core: core, alarm: alarm) { _ in }
+        let (listener, connection, helper) = connect(to: service)
+        defer {
+            connection.invalidate()
+            listener.invalidate()
+        }
+        let answered = expectation(description: "answered")
+        helper?.setWakeAlarm(at: 1_800_003_600) { _, _ in answered.fulfill() }
+        wait(for: [answered], timeout: 5)
+        let later = expectation(description: "later")
+        DispatchQueue.global().asyncAfter(deadline: .now() + 0.3) { later.fulfill() }
+        wait(for: [later], timeout: 5)
+        let idle = expectation(description: "idle")
+        helper?.status { _, _, _ in idle.fulfill() }
+        wait(for: [idle], timeout: 5)
+        XCTAssertEqual(events.cancelled, [])
+        XCTAssertEqual(events.oursListed, [1_800_003_600])
+    }
+
     func testTheStartTakesAwayAnAlarmOfAnEarlierRun() {
         events.list = [appleAlarm, FakeWakeEvents.ours(1_800_003_600)]
         let exited = expectation(description: "exit")
