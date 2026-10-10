@@ -39,9 +39,31 @@ struct SystemJobSourceAccess: JobSourceAccess {
     }
 
     func crontab() -> JobSourceRead<String> {
+        switch JobCommand.run(crontabCommand, arguments: ["-l"], timeout: timeout) {
+        case .notStarted: return .failed("crontab could not be started")
+        case .noAnswer: return .failed("crontab gave no answer")
+        case .ended(let status, let output, let errors):
+            return CrontabJobReader.output(status: status, stdout: output, stderr: errors)
+        }
+    }
+}
+
+/// Runs a command of macOS that only reads, and waits for it. Never on
+/// the main thread. What the command prints goes to the caller and into
+/// no log.
+enum JobCommand {
+    enum Result {
+        case notStarted
+        /// It ran longer than the timeout, and was stopped.
+        case noAnswer
+        case ended(status: Int32, output: String, errors: String)
+    }
+
+    /// The arguments go to the command as they are, through no shell.
+    static func run(_ command: URL, arguments: [String], timeout: TimeInterval, maxBytes: Int = SystemJobSourceAccess.maxBytes) -> Result {
         let process = Process()
-        process.executableURL = crontabCommand
-        process.arguments = ["-l"]
+        process.executableURL = command
+        process.arguments = arguments
         let output = Pipe(), errors = Pipe()
         process.standardInput = FileHandle.nullDevice
         process.standardOutput = output
@@ -51,7 +73,7 @@ struct SystemJobSourceAccess: JobSourceAccess {
         do {
             try process.run()
         } catch {
-            return .failed("crontab could not be started")
+            return .notStarted
         }
         // Both pipes are read while the command runs: a pipe that is full
         // would stop it.
@@ -60,17 +82,17 @@ struct SystemJobSourceAccess: JobSourceAccess {
         for (pipe, isOutput) in [(output, true), (errors, false)] {
             reading.enter()
             DispatchQueue.global(qos: .utility).async {
-                let data = pipe.fileHandleForReading.readDataToEndOfFile().prefix(Self.maxBytes)
+                let data = pipe.fileHandleForReading.readDataToEndOfFile().prefix(maxBytes)
                 texts.set(String(decoding: data, as: UTF8.self), isOutput: isOutput)
                 reading.leave()
             }
         }
         guard exited.wait(timeout: .now() + timeout) == .success else {
             process.terminate()
-            return .failed("crontab gave no answer")
+            return .noAnswer
         }
-        guard reading.wait(timeout: .now() + timeout) == .success else { return .failed("crontab gave no answer") }
-        return CrontabJobReader.output(status: process.terminationStatus, stdout: texts.output, stderr: texts.errors)
+        guard reading.wait(timeout: .now() + timeout) == .success else { return .noAnswer }
+        return .ended(status: process.terminationStatus, output: texts.output, errors: texts.errors)
     }
 
     /// What the two readers got, each on its own thread.
