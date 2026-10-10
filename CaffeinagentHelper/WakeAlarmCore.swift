@@ -42,7 +42,9 @@ protocol WakeEventStoring {
 //
 // What is ours is read from the list on every call, never from memory.
 // A list that cannot be read is not an empty list: the alarm counts as
-// still there, a cancel answers "not cancelled", and the ticks go on.
+// still there, a cancel answers "not cancelled", and the ticks go on. The
+// time that was scheduled last is cancelled blind then, but not when the
+// app asks for that same time again.
 final class WakeAlarmCore {
     // The name our event has in `pmset -g sched`. powerd makes a dark wake
     // for a name with "com.apple.alarm" in it; ours has none.
@@ -119,8 +121,9 @@ final class WakeAlarmCore {
         if requested == 0 {
             return removeOurs() ? .cancelled : .refused(.notCancelled)
         }
-        // A refusal changes nothing: an alarm that is set stays, and its
-        // lease is not made longer.
+        // A time that is no time, too close or too far is refused and
+        // changes nothing: an alarm that is set stays, and its lease is
+        // not made longer. The refusals further down say what they change.
         guard requested.isFinite, requested > 0 else { return .refused(.notATime) }
         let time = requested.rounded()
         let ahead = time - date()
@@ -129,7 +132,12 @@ final class WakeAlarmCore {
 
         let now = awake()
         guard let mine = ours() else {
-            unread()
+            // The list cannot be read, so nothing is set and nothing is
+            // confirmed. An alarm for another time is cancelled blind.
+            // The time that was scheduled last is not: the app asks for
+            // it again, and the blind cancel would take the alarm that
+            // is wanted away. Its lease is not made longer.
+            if lastScheduled.map({ abs($0 - time) < Self.sameTime }) != true { unread() }
             return .refused(.notCancelled)
         }
         if mine.count == 1, isSame(mine[0], time) {
@@ -138,6 +146,7 @@ final class WakeAlarmCore {
         }
 
         sets.removeAll { now - $0 >= Self.hour }
+        // Too often changes nothing: the alarm that is set stays.
         guard sets.count < WakeAlarmLimits.setsPerHour else { return .refused(.tooOften) }
         sets.append(now)
 

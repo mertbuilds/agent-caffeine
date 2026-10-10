@@ -272,8 +272,12 @@ struct JobWake: Equatable {
             alarm = nil
             memory.owedAlarm = nil
         case .refused(let reason):
-            // A refusal changes nothing in the helper: an alarm that is
-            // set stays.
+            // What a refusal leaves in the helper depends on its reason:
+            // the alarm that was set stays (too soon, too far, too
+            // often, the same time behind a list that cannot be read),
+            // or it is taken away with the new one (not scheduled, not
+            // confirmed). So the alarm here stays as it was known. 0
+            // goes after a refused new time, and the lease ends the rest.
             silent = false
             // The cancel after a refused time failed too. The refusal of
             // the time and its retry stay as they are, and the cancel is

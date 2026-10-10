@@ -288,6 +288,50 @@ final class WakeAlarmCoreTests: XCTestCase {
         XCTAssertFalse(core.needsTicks)
     }
 
+    /// The app asks for the same time again, as it does every few
+    /// minutes and before the Mac sleeps. A blind cancel there would
+    /// take the alarm that is wanted away, and the app would still show it.
+    func testTheSameTimeAgainIsNotCancelledBlindWhileTheListCannotBeRead() {
+        let core = makeCore()
+        let time = date + 3600
+        XCTAssertEqual(core.set(at: time), .set(time))
+        store.unreadable = true
+        XCTAssertEqual(core.set(at: time), .refused(.notCancelled), "Not confirmed, so not said to be set")
+        XCTAssertEqual(core.set(at: time + 0.2), .refused(.notCancelled), "The same whole second")
+        XCTAssertEqual(store.cancelled, [], "No cancel call")
+        XCTAssertEqual(store.oursListed, [time], "The alarm is still in the list of macOS")
+        stayAwake(30)
+        core.tick()
+        XCTAssertEqual(store.cancelled, [], "The lease goes on as it was")
+        store.unreadable = false
+        XCTAssertEqual(core.set(at: time), .set(time))
+        XCTAssertEqual(store.scheduled, [time], "It was never set a second time")
+
+        // Another time, 0, the end of the lease and the stop of the
+        // helper still cancel blind.
+        store.unreadable = true
+        XCTAssertEqual(core.set(at: time + 60), .refused(.notCancelled))
+        XCTAssertEqual(store.cancelled, [time])
+        XCTAssertEqual(store.oursListed, [])
+        store.unreadable = false
+        XCTAssertEqual(core.set(at: time), .set(time))
+        store.unreadable = true
+        XCTAssertEqual(core.set(at: 0), .refused(.notCancelled))
+        XCTAssertEqual(store.cancelled, [time, time])
+        store.unreadable = false
+        XCTAssertEqual(core.set(at: time), .set(time))
+        store.unreadable = true
+        stayAwake(WakeAlarmLimits.lease)
+        core.tick()
+        XCTAssertEqual(store.cancelled, [time, time, time])
+        store.unreadable = false
+        XCTAssertEqual(core.set(at: date + 3600), .set(date + 3600))
+        store.unreadable = true
+        core.shutdown()
+        XCTAssertEqual(store.cancelled.count, 4)
+        XCTAssertEqual(store.oursListed, [])
+    }
+
     func testNoNewTimeWhileTheListCannotBeRead() {
         let core = makeCore()
         store.unreadable = true
