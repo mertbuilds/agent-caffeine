@@ -142,8 +142,7 @@ final class HermesJobReaderTests: XCTestCase {
     func testAnIntervalThatIsTooShortIsKnown() {
         let jobs = jobs(#"{"jobs":[{"id":"a","schedule":{"kind":"interval","minutes":10}},{"id":"b","schedule_display":"every 6h"},{"id":"c","schedule":{"display":"every 20m"}}]}"#)
         XCTAssertEqual(jobs.map { reported($0).everyMinutes }, [10, 360, 20])
-        let now = at("2026-10-10 12:00")
-        XCTAssertEqual(jobs.map { $0.schedule.runsMoreOften(than: 1800, now: now, clock: clock) }, [true, false, true])
+        XCTAssertEqual(jobs.map { $0.schedule.runsMoreOften(than: 1800) }, [true, false, true])
     }
 
     func testTimes() {

@@ -90,7 +90,7 @@ enum JobPlanner {
         let runs = jobs.enumerated().map { index, job in
             (index, JobRun(
                 job: job, fireAt: job.schedule.next(after: now, clock: clock),
-                tooOften: job.schedule.runsMoreOften(than: JobSettings.minimumGap, now: now, clock: clock)
+                tooOften: job.schedule.runsMoreOften(than: JobSettings.minimumGap)
             ))
         }
         let nextRuns = runs.sorted { first, second in

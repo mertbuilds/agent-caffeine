@@ -175,33 +175,52 @@ final class CronExpressionTests: XCTestCase {
     }
 
     func testAJobThatRunsMoreOftenThanEveryHalfHour() {
-        let now = at("2026-10-10 10:07"), clock = JobTime.clock(), gap: TimeInterval = 1800
-        func often(_ text: String) -> Bool { JobSchedule.cron(JobTime.cron(text)).runsMoreOften(than: gap, now: now, clock: clock) }
+        func often(_ text: String) -> Bool { JobSchedule.cron(JobTime.cron(text)).runsMoreOften(than: 1800) }
         XCTAssertTrue(often("* * * * *"))
         XCTAssertTrue(often("*/20 * * * *"))
         XCTAssertFalse(often("*/30 * * * *"), "Every half hour is offered")
         XCTAssertFalse(often("0 * * * *"))
         XCTAssertFalse(often("0,10 3 * * *"), "Two runs close together once a day")
         XCTAssertFalse(often("0 0 30 2 *"))
+        XCTAssertFalse(often("*/45 * * * *"), "Minute 0 and 45: 48 times a day")
+        XCTAssertFalse(often("0,5,10 9-17 * * *"))
+        XCTAssertFalse(often("*/5 3 * * *"))
+        XCTAssertTrue(often("0,10,20,30 * * * *"))
+        XCTAssertTrue(often("*/10 9-17 * * *"))
     }
 
-    /// The answer is a switch in Settings, and it must not flip with the
-    /// time of day. "*/45" runs at minute 0 and 45: 15 and 45 minutes
-    /// apart, 48 times a day.
-    func testTooOftenIsTheSameAtEveryTimeOfDay() {
+    func testTooOftenCountsTheTimesOfADayOfEveryEntryOnce() {
+        func often(_ entries: [String]) -> Bool { JobSchedule.calendar(entries.map { JobTime.cron($0) }).runsMoreOften(than: 1800) }
+        XCTAssertTrue(often(["0 * * * *", "20 * * * *", "40 * * * *"]), "72 times a day in all")
+        XCTAssertFalse(often(["0 * * * *", "30 * * * *"]), "48 times")
+        XCTAssertFalse(often(["0,30 * * * 1", "0,30 * * * 2", "0,30 * * * 3"]), "The same 48 times on three days")
+        XCTAssertTrue(often(["0,30 * * * 1", "0,30 * * * 2", "15 9 * * 3"]), "49 times")
+        func reported(_ schedule: ReportedSchedule) -> Bool { JobSchedule.reported(schedule).runsMoreOften(than: 1800) }
+        XCTAssertTrue(reported(ReportedSchedule(everyMinutes: 29)))
+        XCTAssertFalse(reported(ReportedSchedule(everyMinutes: 30)))
+        XCTAssertTrue(reported(ReportedSchedule(cron: JobTime.cron("*/20 * * * *"), everyMinutes: 360)), "The expression says")
+        XCTAssertFalse(reported(ReportedSchedule(nextRun: at("2026-10-10 12:00"))), "A one time job")
+    }
+
+    /// The answer is a switch in Settings, and it must not change by
+    /// itself. A job of weekdays or of one day of the month has many
+    /// runs after one time of the week and few after another.
+    func testTooOftenIsTheSameAtEveryHourOfAWeek() {
         let clock = JobTime.clock()
         let cases: [(String, Bool)] = [
-            ("*/45 * * * *", false), ("*/30 * * * *", false), ("*/20 * * * *", true), ("0,10,20,30 * * * *", true),
-            ("0,5,10 9-17 * * *", false), ("*/10 9-17 * * *", true), ("0 * * * *", false), ("*/5 3 * * *", false),
+            ("*/10 9-17 * * 1-5", true), ("*/20 * * * 6", true), ("*/10 * 15 * *", true), ("*/30 * * * 1-5", false),
+            ("*/45 * * * *", false), ("0,5,10 9-17 * * 1-5", false),
         ]
         for (text, expected) in cases {
-            let schedule = JobSchedule.cron(JobTime.cron(text))
-            for minute in stride(from: 0, to: 24 * 60, by: 5) {
-                let now = at("2026-10-10 00:00").addingTimeInterval(TimeInterval(minute * 60 + 7))
-                XCTAssertEqual(schedule.runsMoreOften(than: 1800, now: now, clock: clock), expected, "\(text) at minute \(minute)")
+            let job = ScheduledJob(id: "crontab:a", source: .crontab, name: "a", schedule: .cron(JobTime.cron(text)), enabled: true)
+            var settings = JobSettings()
+            settings.wakeForJobs = true
+            // A Saturday.
+            for hour in 0..<(7 * 24) {
+                let now = at("2026-10-10 00:00").addingTimeInterval(TimeInterval(hour * 3600 + 7 * 60))
+                let plan = JobPlanner.plan(jobs: [job], settings: settings, context: JobPlanContext(), now: now, clock: clock)
+                XCTAssertEqual(plan.nextRuns.map(\.tooOften), [expected], "\(text) at hour \(hour) of the week")
             }
         }
-        let calendar = JobSchedule.calendar([JobTime.cron("0 * * * *"), JobTime.cron("20 * * * *"), JobTime.cron("40 * * * *")])
-        XCTAssertTrue(calendar.runsMoreOften(than: 1800, now: at("2026-10-10 10:07"), clock: clock), "72 runs a day in all")
     }
 }

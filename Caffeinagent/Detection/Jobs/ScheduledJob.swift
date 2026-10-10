@@ -79,27 +79,37 @@ enum JobSchedule: Equatable {
     }
 
     /// True for a job that runs more often than every `gap` on average
-    /// over the 24 hours after `now`: more than 48 times for half an
+    /// on a day it runs: at more than 48 times of the day for half an
     /// hour. Such a job is not offered: the Mac would not sleep between
     /// two of its runs. Two runs close together once a day are not often.
     ///
-    /// A whole day is counted, so the answer is the same at every time of
-    /// day. A few next runs would say "often" before two runs that are
-    /// close and "not often" after them.
-    func runsMoreOften(than gap: TimeInterval, now: Date, clock: JobClock) -> Bool {
-        if case .reported(let schedule) = self, schedule.cron == nil, let minutes = schedule.everyMinutes {
-            return TimeInterval(minutes) * 60 < gap
-        }
+    /// The times of one day are counted, the hours and minutes, and the
+    /// date is not asked. So the answer is the same on every day and at
+    /// every time of day, also for a job of some days of the week or of
+    /// the month. A count of the runs after now would say "often" on
+    /// Monday and "not often" on Friday afternoon for a job of weekdays.
+    func runsMoreOften(than gap: TimeInterval) -> Bool {
         guard gap > 0 else { return false }
-        let limit = Int(JobWakeMemory.day / gap)
-        let end = now.addingTimeInterval(JobWakeMemory.day)
-        var runs = 0
-        var from = now
-        while runs <= limit, let time = next(after: from, clock: clock), time <= end {
-            runs += 1
-            from = time
+        let entries: [CronExpression]
+        switch self {
+        case .cron(let expression): entries = [expression]
+        case .calendar(let all): entries = all
+        case .reported(let schedule):
+            if let cron = schedule.cron {
+                entries = [cron]
+            } else if let minutes = schedule.everyMinutes {
+                return TimeInterval(minutes) * 60 < gap
+            } else {
+                return false
+            }
         }
-        return runs > limit
+        let limit = Int(JobWakeMemory.day / gap)
+        if let only = entries.first, entries.count == 1 { return only.minutes.count * only.hours.count > limit }
+        var times: Set<Int> = []
+        for entry in entries {
+            for hour in entry.hours { times.formUnion(entry.minutes.map { hour * 60 + $0 }) }
+        }
+        return times.count > limit
     }
 }
 
