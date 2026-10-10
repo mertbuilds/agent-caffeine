@@ -97,7 +97,7 @@ final class JobTextTests: XCTestCase {
             PanelText.jobsTitle, PanelText.jobsSwitch, PanelText.jobsNoneFound, PanelText.jobsPerJob, PanelText.jobsOnPowerOnly,
             PanelText.jobsOnPowerExplained, PanelText.jobsOnBatteryWarning, PanelText.jobsShowHistory, PanelText.jobsHideHistory, PanelText.jobsNoHistory,
             PanelText.jobsTooOften, PanelText.jobsNoRunKnown, PanelText.jobsNeedHelper, PanelText.jobsExplained(leadTime: 60, holdCap: 1800), PanelText.jobHoldHint,
-            PanelText.jobNoSwitch(.sameLines), PanelText.jobNoSwitch(.noPlainName),
+            PanelText.jobNoSwitch(.sameLines), PanelText.jobNoSwitch(.noPlainName), PanelText.jobSwitchLost("backup.sh"), PanelText.jobsCloseNotice,
             PanelText.wakesAt(alarm("2026-10-10 20:59"), now: now, calendar: calendar, locale: locale),
         ]
         return lines
@@ -128,6 +128,9 @@ final class JobTextTests: XCTestCase {
         XCTAssertEqual(line(.alarmRefused, reason: WakeAlarmRefusal.notConfirmed.rawValue), "The wake at 20:59 was not set: macOS did not list it")
         XCTAssertEqual(line(.alarmRefused, reason: 99), "The wake at 20:59 was not set: it did not take the time")
         XCTAssertEqual(line(.helperSilent, alarm: nil, job: nil), "The helper gave no answer")
+        XCTAssertEqual(line(.switchLost, alarm: nil), "backup.sh was switched off: two lines of the crontab look the same now")
+        XCTAssertEqual(line(.switchLost, alarm: nil, job: nil), "A job was switched off: two lines of the crontab look the same now")
+        XCTAssertEqual(PanelText.jobSwitchLost("backup.sh"), "backup.sh was switched off: two lines of the crontab look the same now.")
         XCTAssertEqual(line(.alarmCancelled), "The wake at 20:59 was taken away")
         XCTAssertEqual(line(.wokeAtAlarm), "Your Mac woke for backup.sh")
         XCTAssertEqual(line(.alarmSeenLate), "The wake at 20:59 passed while your Mac slept")

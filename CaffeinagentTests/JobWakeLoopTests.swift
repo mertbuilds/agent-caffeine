@@ -273,6 +273,59 @@ final class JobWakeLoopTests: XCTestCase {
         XCTAssertEqual(loop.view.history.map(\.kind), [.alarmCancelled, .alarmSet, .wokeAtAlarm, .alarmSet])
     }
 
+    /// A normal edit of the crontab: a second line with the same times
+    /// and the same command name. The line that was on has no switch any
+    /// more, and its stored switch goes. That is said, in the history
+    /// and in Settings, and not done in silence.
+    func testASwitchThatWasOnAndGoesOffByItselfIsSaid() async throws {
+        let before = CrontabJobReader.jobs("0 21 * * * /Users/someone/bin/backup.sh --key hunter2\n0 4 * * * sync")
+        var settings = JobSettings()
+        settings.wakeForJobs = true
+        settings.set(true, for: try XCTUnwrap(before.first?.id))
+        XCTAssertEqual(loop.forgetSwitches(ofUnclear: before, in: settings), settings, "Nothing to forget")
+        XCTAssertEqual(loop.view.lostSwitches, [])
+        XCTAssertEqual(loop.view.history, [])
+
+        let after = CrontabJobReader.jobs("0 21 * * * /Users/someone/bin/backup.sh --key hunter2\n0 4 * * * sync\n0 21 * * * backup.sh --other")
+        XCTAssertEqual(after.map(\.noSwitch), [.sameLines, nil, .sameLines])
+        var changes = 0
+        loop.onChange = { changes += 1 }
+        let kept = loop.forgetSwitches(ofUnclear: after, in: settings)
+        XCTAssertEqual(kept.jobSwitches, [:], "The switch is forgotten")
+        XCTAssertEqual(loop.view.lostSwitches, ["backup.sh"])
+        XCTAssertEqual(loop.view.history.map(\.kind), [.switchLost])
+        XCTAssertEqual(loop.view.history.first?.job, "backup.sh")
+        XCTAssertEqual(loop.view.history.first?.at, now.timeIntervalSince1970)
+        XCTAssertEqual(PanelText.jobEvent(loop.view.history[0]), "backup.sh was switched off: two lines of the crontab look the same now")
+        XCTAssertEqual(changes, 1, "Settings is told")
+        let stored = String(decoding: try XCTUnwrap(defaults.data(forKey: JobWakeMemoryStore.key)), as: UTF8.self)
+        XCTAssertTrue(stored.contains("switchLost"), "The history is saved")
+        for word in ["someone", "hunter2", "--", "other"] { XCTAssertFalse(stored.contains(word), word) }
+
+        XCTAssertEqual(loop.forgetSwitches(ofUnclear: after, in: kept), kept)
+        XCTAssertEqual(loop.view.history.count, 1, "Once, and not at every reading")
+        loop.run(JobWakeInput(readings: [JobSourceReading(source: .crontab, jobs: after)], settings: kept))
+        await settle()
+        XCTAssertEqual(loop.view.lostSwitches, ["backup.sh"], "It stays until the user closes it")
+        loop.closeSwitchNotice()
+        XCTAssertEqual(loop.view.lostSwitches, [])
+        XCTAssertEqual(loop.view.history.map(\.kind), [.switchLost], "The history keeps it")
+    }
+
+    func testASwitchThatWasOffGoesWithNoWord() {
+        let jobs = CrontabJobReader.jobs("0 21 * * * backup.sh a\n0 21 * * * backup.sh b\n0 6 * * * TOKEN=abc run")
+        var settings = JobSettings()
+        XCTAssertEqual(settings.switchesLost(toUnclear: jobs), [])
+        // Of an earlier version of the list: a line with no plain name never had a switch the user saw.
+        settings.set(true, for: jobs[2].id)
+        XCTAssertEqual(settings.switchesLost(toUnclear: jobs), [])
+        XCTAssertEqual(loop.forgetSwitches(ofUnclear: jobs, in: settings).jobSwitches, [:])
+        XCTAssertEqual(loop.view.history, [])
+        settings.set(true, for: jobs[0].id)
+        XCTAssertEqual(settings.switchesLost(toUnclear: jobs).map(\.name), ["backup.sh"])
+        XCTAssertEqual(settings.withoutSwitches(ofUnclear: jobs).switchesLost(toUnclear: jobs), [])
+    }
+
     /// The store, the log lines and the view hold the short name of a
     /// job and nothing else of it.
     func testNothingOfACommandLineIsKept() async throws {

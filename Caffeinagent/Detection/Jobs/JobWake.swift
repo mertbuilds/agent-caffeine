@@ -78,6 +78,10 @@ struct JobWake: Equatable {
     private(set) var holds: [JobHold] = []
     /// The alarm the helper confirmed, nil for none.
     private(set) var alarm: JobAlarm?
+    /// The short names of the jobs whose switch was on and went off by
+    /// itself, until the user closed the line that says so or changed a
+    /// switch. See `switchesLost`.
+    private(set) var lostSwitches: [String] = []
 
     private var settings = JobSettings()
     /// The Mac is on battery, and no alarm would be set there
@@ -322,6 +326,23 @@ struct JobWake: Equatable {
         askedTime = nil
         asked = nil
         status = currentStatus
+    }
+
+    // MARK: Switches
+
+    /// The switch of each of these jobs was on and is forgotten: another
+    /// line of the crontab looks the same now. One line of the history
+    /// each, and Settings says it until `closeSwitchNotice`.
+    mutating func switchesLost(_ names: [String], now: Date) {
+        for name in names.compactMap({ ManualHold.clean($0, limit: ScheduledJob.nameLimit) }) {
+            memory.history.note(.switchLost, at: now, job: name)
+            if !lostSwitches.contains(name) { lostSwitches.append(name) }
+        }
+    }
+
+    /// The user closed the line, or changed a switch.
+    mutating func closeSwitchNotice() {
+        lostSwitches = []
     }
 
     // MARK: Holds

@@ -72,7 +72,8 @@ struct PreferencesView: View {
                 removeSudoersEntry: aggregator.removeSudoersEntry,
                 playChime: aggregator.playLidChime,
                 jobSettings: $aggregator.jobSettings,
-                jobWake: aggregator.jobWake
+                jobWake: aggregator.jobWake,
+                closeJobSwitchNotice: aggregator.closeJobSwitchNotice
             )
             .tabItem { Label("Battery and lid", systemImage: "laptopcomputer") }
             .tag(PreferencesTab.lidClosed)
@@ -715,6 +716,7 @@ struct LidClosedPreferences: View {
     var playChime: () -> Void = {}
     var jobSettings: Binding<JobSettings> = .constant(JobSettings())
     var jobWake = JobWakeView()
+    var closeJobSwitchNotice: () -> Void = {}
     @State private var confirmingFloorOff = false
 
     /// Off waits for the answer to the question. On is set at once.
@@ -798,7 +800,7 @@ struct LidClosedPreferences: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
-            WakeForJobsSection(settings: jobSettings, view: jobWake)
+            WakeForJobsSection(settings: jobSettings, view: jobWake, closeSwitchNotice: closeJobSwitchNotice)
             if needsSudoersCleanup {
                 Section {
                     Text("An older version of Agent Caffeine added an admin entry to this Mac. It is no longer used.")

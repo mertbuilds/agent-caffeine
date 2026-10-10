@@ -1110,7 +1110,7 @@ final class StateAggregator: ObservableObject {
                     self.jobReadings = readings
                     // A switch never waits for a line that can be another
                     // command tomorrow.
-                    let kept = self.jobSettings.withoutSwitches(ofUnclear: readings.flatMap(\.jobs))
+                    let kept = self.jobLoop.forgetSwitches(ofUnclear: readings.flatMap(\.jobs), in: self.jobSettings)
                     if kept != self.jobSettings { self.jobSettings = kept }
                     self.updateJobWake()
                 }
@@ -1119,6 +1119,12 @@ final class StateAggregator: ObservableObject {
             jobStore.stop()
             jobReadings = []
         }
+    }
+
+    /// The user closed the line that says a switch went off by itself,
+    /// or changed a switch of a job.
+    func closeJobSwitchNotice() {
+        jobLoop.closeSwitchNotice()
     }
 
     /// Called when Settings opens: the crontab has no file to watch.

@@ -31,6 +31,12 @@ extension PanelText {
         case .noPlainName: return "The command has no plain name, so Agent Caffeine cannot tell this line apart"
         }
     }
+    /// The switch of a job was on and went off by itself. The same words
+    /// as the line of the history, as a sentence.
+    static func jobSwitchLost(_ name: String) -> String {
+        "\(name) was switched off: two lines of the crontab look the same now."
+    }
+    static let jobsCloseNotice = "Close"
     static let jobsNeedHelper = "This needs the helper. Set it up under Lid closed first."
 
     /// "Wakes your Mac 1 minute before a job, keeps it awake while the
@@ -158,6 +164,7 @@ extension PanelText {
         case .endedByStop: return "Stopped staying awake for \(job)"
         case .endedOnBattery: return "On battery, your Mac does not stay awake for \(job)"
         case .bridgeOver: return "The wait for \(job) is over"
+        case .switchLost: return "\(first) was switched off: two lines of the crontab look the same now"
         }
     }
 

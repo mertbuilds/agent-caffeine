@@ -31,6 +31,8 @@ struct JobWakeView: Equatable {
     var alarm: JobAlarm?
     /// The newest first.
     var history: [JobEvent] = []
+    /// The short names of the jobs whose switch went off by itself.
+    var lostSwitches: [String] = []
 }
 
 /// Runs `JobWake`: asks it at every change and every sample, makes the
@@ -121,6 +123,26 @@ final class JobWakeLoop: ObservableObject {
         publish()
     }
 
+    /// A new reading of the jobs. The switch of a line that cannot be
+    /// told apart is forgotten, so it never comes back on another
+    /// command. A switch that was on does not go in silence: the history
+    /// and Settings say it.
+    /// - Returns: the settings to keep.
+    func forgetSwitches(ofUnclear jobs: [ScheduledJob], in settings: JobSettings) -> JobSettings {
+        let lost = settings.switchesLost(toUnclear: jobs)
+        if !lost.isEmpty {
+            core.switchesLost(lost.map(\.name), now: now())
+            publish()
+        }
+        return settings.withoutSwitches(ofUnclear: jobs)
+    }
+
+    /// The user closed the line about such a switch, or changed a switch.
+    func closeSwitchNotice() {
+        core.closeSwitchNotice()
+        publish()
+    }
+
     /// The helper was stopped and started again.
     func helperReplaced() {
         core.helperReplaced()
@@ -189,7 +211,7 @@ final class JobWakeLoop: ObservableObject {
         for reading in input.readings { sources[reading.source] = reading.status }
         let next = JobWakeView(
             status: core.status, runs: core.plan.nextRuns, sources: sources, alarm: core.alarm,
-            history: core.memory.history.events.reversed()
+            history: core.memory.history.events.reversed(), lostSwitches: core.lostSwitches
         )
         let changed = view != next || holds != core.holds
         if view != next { view = next }

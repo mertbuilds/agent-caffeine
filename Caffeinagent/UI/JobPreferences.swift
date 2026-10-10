@@ -15,6 +15,8 @@ struct WakeForJobsSection: View {
     var locale = Locale.current
     /// For a preview.
     var startsWithHistory = false
+    /// The user closed the line about a switch that went off by itself.
+    var closeSwitchNotice: () -> Void = {}
     @State private var showsHistory: Bool?
 
     private var historyIsOpen: Bool { showsHistory ?? startsWithHistory }
@@ -93,6 +95,20 @@ struct WakeForJobsSection: View {
 
     @ViewBuilder
     private var status: some View {
+        ForEach(view.lostSwitches, id: \.self) { name in
+            HStack(alignment: .firstTextBaseline) {
+                Label(PanelText.jobSwitchLost(name), systemImage: "exclamationmark.triangle")
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button(action: closeSwitchNotice) {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.borderless)
+                .help(PanelText.jobsCloseNotice)
+                .accessibilityLabel(PanelText.jobsCloseNotice)
+            }
+        }
         if let line = PanelText.jobStatus(view.status, settings: settings, now: now, calendar: calendar, locale: locale) {
             Text(line)
                 .font(.callout)
@@ -139,7 +155,10 @@ struct WakeForJobsSection: View {
     private func isOn(_ run: JobRun) -> Binding<Bool> {
         Binding(
             get: { hasSwitch(run) && settings.isOn(run.job.id) },
-            set: { settings.set($0, for: run.job.id) }
+            set: {
+                settings.set($0, for: run.job.id)
+                closeSwitchNotice()
+            }
         )
     }
 }

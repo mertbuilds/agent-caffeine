@@ -38,6 +38,10 @@ struct JobEvent: Codable, Equatable {
         case endedOnBattery
         /// The bridge for an agent job is over.
         case bridgeOver
+        /// The switch of the job was on and went off by itself: another
+        /// line of the crontab looks the same now, so the job has no
+        /// switch any more (`ScheduledJob.NoSwitch.sameLines`).
+        case switchLost
     }
 
     /// Seconds since the epoch.

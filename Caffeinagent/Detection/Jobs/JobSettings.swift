@@ -72,6 +72,14 @@ struct JobSettings: Codable, Equatable {
         return next
     }
 
+    /// The jobs whose switch is on and is forgotten by
+    /// `withoutSwitches(ofUnclear:)` because another line looks the same
+    /// now. The user switched them on and did not switch them off, so
+    /// the caller says it. A normal edit of the crontab does this.
+    func switchesLost(toUnclear jobs: [ScheduledJob]) -> [ScheduledJob] {
+        jobs.filter { $0.noSwitch == .sameLines && isOn($0.id) }
+    }
+
     private enum CodingKeys: String, CodingKey {
         case wakeForJobs, onPowerOnly, leadTime, maxWakesPerDay, startGrace, holdCap, jobSwitches
     }
