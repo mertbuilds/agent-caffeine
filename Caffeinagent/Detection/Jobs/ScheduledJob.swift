@@ -68,17 +68,27 @@ enum JobSchedule: Equatable {
     }
 
     /// True for a job that runs more often than every `gap` on average
-    /// over its next runs. Such a job is not offered: the Mac would not
-    /// sleep between two of its runs. Two runs close together once a day
-    /// are not often.
+    /// over the 24 hours after `now`: more than 48 times for half an
+    /// hour. Such a job is not offered: the Mac would not sleep between
+    /// two of its runs. Two runs close together once a day are not often.
+    ///
+    /// A whole day is counted, so the answer is the same at every time of
+    /// day. A few next runs would say "often" before two runs that are
+    /// close and "not often" after them.
     func runsMoreOften(than gap: TimeInterval, now: Date, clock: JobClock) -> Bool {
         if case .reported(let schedule) = self, schedule.cron == nil, let minutes = schedule.everyMinutes {
             return TimeInterval(minutes) * 60 < gap
         }
-        let runs = 4
-        let times = fireTimes(after: now, count: runs, clock: clock)
-        guard times.count == runs, let first = times.first, let last = times.last else { return false }
-        return last.timeIntervalSince(first) < gap * TimeInterval(runs - 1)
+        guard gap > 0 else { return false }
+        let limit = Int(JobWakeMemory.day / gap)
+        let end = now.addingTimeInterval(JobWakeMemory.day)
+        var runs = 0
+        var from = now
+        while runs <= limit, let time = next(after: from, clock: clock), time <= end {
+            runs += 1
+            from = time
+        }
+        return runs > limit
     }
 }
 

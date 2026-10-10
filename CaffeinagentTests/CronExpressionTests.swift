@@ -157,4 +157,24 @@ final class CronExpressionTests: XCTestCase {
         XCTAssertFalse(often("0,10 3 * * *"), "Two runs close together once a day")
         XCTAssertFalse(often("0 0 30 2 *"))
     }
+
+    /// The answer is a switch in Settings, and it must not flip with the
+    /// time of day. "*/45" runs at minute 0 and 45: 15 and 45 minutes
+    /// apart, 48 times a day.
+    func testTooOftenIsTheSameAtEveryTimeOfDay() {
+        let clock = JobTime.clock()
+        let cases: [(String, Bool)] = [
+            ("*/45 * * * *", false), ("*/30 * * * *", false), ("*/20 * * * *", true), ("0,10,20,30 * * * *", true),
+            ("0,5,10 9-17 * * *", false), ("*/10 9-17 * * *", true), ("0 * * * *", false), ("*/5 3 * * *", false),
+        ]
+        for (text, expected) in cases {
+            let schedule = JobSchedule.cron(JobTime.cron(text))
+            for minute in stride(from: 0, to: 24 * 60, by: 5) {
+                let now = at("2026-10-10 00:00").addingTimeInterval(TimeInterval(minute * 60 + 7))
+                XCTAssertEqual(schedule.runsMoreOften(than: 1800, now: now, clock: clock), expected, "\(text) at minute \(minute)")
+            }
+        }
+        let calendar = JobSchedule.calendar([JobTime.cron("0 * * * *"), JobTime.cron("20 * * * *"), JobTime.cron("40 * * * *")])
+        XCTAssertTrue(calendar.runsMoreOften(than: 1800, now: at("2026-10-10 10:07"), clock: clock), "72 runs a day in all")
+    }
 }
