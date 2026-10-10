@@ -40,6 +40,10 @@ enum NoAlarmReason: Equatable {
     case noJobSwitchedOn
     /// The jobs that are on have no run that an alarm can be set for.
     case noRunKnown
+    /// The next run is more than `WakeAlarmLimits.maximumLead` ahead. The
+    /// helper takes no time that far, so none is asked for until it is
+    /// closer.
+    case tooFarAhead
 }
 
 struct JobPlan: Equatable {
@@ -109,6 +113,9 @@ enum JobPlanner {
             if alarm.map({ fireAt < $0.fireAt }) ?? true {
                 alarm = JobAlarm(at: fireAt.addingTimeInterval(-settings.leadTime), fireAt: fireAt, jobID: run.job.id, jobName: run.job.name)
             }
+        }
+        if let alarm, alarm.at.timeIntervalSince(now) > WakeAlarmLimits.maximumLead {
+            return JobPlan(noAlarm: .tooFarAhead, nextRuns: nextRuns)
         }
         return JobPlan(alarm: alarm, noAlarm: alarm == nil ? .noRunKnown : nil, nextRuns: nextRuns)
     }

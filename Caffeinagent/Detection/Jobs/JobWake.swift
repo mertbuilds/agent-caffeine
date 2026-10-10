@@ -77,6 +77,11 @@ struct JobWake: Equatable {
     private var failedTime: TimeInterval?
     private var refusal: WakeAlarmRefusal?
     private var retryAt: TimeInterval = 0
+    /// The refused time after which 0 went to the helper, so the alarm
+    /// it kept goes. Nil when the time is tried again.
+    private var clearedFor: TimeInterval?
+    /// The 0 that is with the helper went for that reason.
+    private var clearing = false
     private var silent = false
     /// macOS said the Mac goes to sleep, and it did not wake in full since.
     private var sleepAnnounced = false
@@ -145,12 +150,22 @@ struct JobWake: Equatable {
             if let alarm, isSame(alarm.at.timeIntervalSince1970, time) {
                 guard awake - (confirmedAwake ?? -.infinity) >= Self.renewEvery || willSleep else { return nil }
             } else if failedTime == time, awake < retryAt {
-                return nil
+                // The helper refused the new time and kept the alarm it
+                // had. That alarm is not wanted any more, and it can be
+                // for a job that is off: it goes, once for each try of
+                // the new time.
+                guard refusal != nil, clearedFor != time, alarm != nil || memory.owedAlarm != nil else { return nil }
+                clearedFor = time
+                clearing = true
+                askedTime = 0
+                asked = nil
+                return 0
             }
         } else {
             guard owesCancel else { return nil }
             if failedTime == 0, awake < retryAt { return nil }
         }
+        clearing = false
         askedTime = time
         asked = wanted
         return time
@@ -189,6 +204,8 @@ struct JobWake: Equatable {
     mutating func answered(_ result: WakeAlarmResult, for time: TimeInterval, now: Date, awake: TimeInterval) {
         guard askedTime == time else { return }
         let wanted = asked
+        let clearing = clearing
+        self.clearing = false
         askedTime = nil
         asked = nil
         defer { status = currentStatus }
@@ -197,6 +214,7 @@ struct JobWake: Equatable {
             silent = false
             failedTime = nil
             refusal = nil
+            clearedFor = nil
             confirmedAwake = awake
             memory.owedAlarm = at
             guard var next = wanted else { return }
@@ -207,8 +225,12 @@ struct JobWake: Equatable {
             alarm = next
         case .cancelled:
             silent = false
-            failedTime = nil
-            refusal = nil
+            // After a cancel that followed a refused time, the refusal
+            // of that time is still what is known.
+            if !clearing {
+                failedTime = nil
+                refusal = nil
+            }
             if let at = alarm?.at.timeIntervalSince1970 ?? memory.owedAlarm {
                 memory.history.note(.alarmCancelled, at: now, alarmAt: at, job: alarm?.jobName)
             }
@@ -218,6 +240,11 @@ struct JobWake: Equatable {
             // A refusal changes nothing in the helper: an alarm that is
             // set stays.
             silent = false
+            // The cancel after a refused time failed too. The refusal of
+            // the time and its retry stay as they are, and the cancel is
+            // tried again with the time.
+            if clearing { return }
+            if time > 0 { clearedFor = nil }
             if failedTime != time || refusal != reason {
                 memory.history.note(.alarmRefused, at: now, alarmAt: time > 0 ? time : nil, job: wanted?.jobName, reason: reason.rawValue)
             }
@@ -247,6 +274,7 @@ struct JobWake: Equatable {
         memory.owedAlarm = nil
         failedTime = nil
         refusal = nil
+        clearedFor = nil
         retryAt = 0
         silent = false
         status = currentStatus

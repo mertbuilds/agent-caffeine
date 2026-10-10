@@ -110,6 +110,18 @@ final class JobPlannerTests: XCTestCase {
         XCTAssertEqual(self.plan([interval]).noAlarm, .noRunKnown, "The time Hermes wrote is over")
     }
 
+    func testNoAlarmForAJobThatIsMoreThanEightDaysAhead() {
+        let monthly = job("monthly", "0 3 1 * *")
+        let plan = self.plan([monthly])
+        XCTAssertNil(plan.alarm, "The helper would refuse it")
+        XCTAssertEqual(plan.noAlarm, .tooFarAhead)
+        XCTAssertEqual(plan.nextRuns.map(\.fireAt), [at("2026-11-01 03:00")], "It is still in the list")
+        let edge = at("2026-10-24 02:59")
+        XCTAssertEqual(self.plan([monthly], now: edge).alarm?.at, at("2026-11-01 02:59"), "8 days ahead to the second")
+        XCTAssertEqual(self.plan([monthly], now: edge.addingTimeInterval(-1)).noAlarm, .tooFarAhead)
+        XCTAssertEqual(self.plan([monthly, job("daily", "0 21 * * *")]).alarm?.jobName, "daily")
+    }
+
     func testTheTimeAHermesJobReports() {
         let reported = ScheduledJob(id: "hermes:x", source: .hermes, name: "Briefing", schedule: .reported(ReportedSchedule(nextRun: at("2026-10-10 17:45"), everyMinutes: 360)), enabled: true)
         XCTAssertEqual(plan([reported, job("daily", "0 21 * * *")]).alarm, JobAlarm(at: at("2026-10-10 17:44"), fireAt: at("2026-10-10 17:45"), jobID: "hermes:x", jobName: "Briefing"))

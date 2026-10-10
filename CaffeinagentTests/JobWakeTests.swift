@@ -262,6 +262,68 @@ final class JobWakeTests: XCTestCase {
         XCTAssertEqual(wake.status, .refused(.tooOften))
     }
 
+    /// The helper keeps the old alarm after a refusal, and the old alarm
+    /// can be for a job that is off by now. So 0 goes to the helper.
+    func testAfterARefusedNewTimeTheOldAlarmIsTakenAway() {
+        let both = [job("backup", "0 21 * * *"), job("report", "0 3 * * *")]
+        set(input(both, on: ["backup", "report"]), noon)
+        XCTAssertEqual(wake.alarm?.jobName, "backup")
+        let reportOnly = input(both, on: ["report"])
+        let time = turn(reportOnly, noon)!
+        XCTAssertEqual(time, seconds("2026-10-11 02:59"))
+        wake.answered(.refused(.tooOften), for: time, now: noon, awake: awake)
+        XCTAssertEqual(turn(reportOnly, noon), 0, "The alarm of the job that is off must not stay")
+        wake.answered(.cancelled, for: 0, now: noon, awake: awake)
+        XCTAssertNil(wake.alarm)
+        XCTAssertFalse(wake.owesCancel)
+        XCTAssertEqual(wake.status, .refused(.tooOften), "The new time is still not set")
+        XCTAssertEqual(kinds, [.alarmSet, .alarmRefused, .alarmCancelled])
+        XCTAssertNil(turn(reportOnly, noon), "The new time waits for its retry")
+        awake += JobWake.retryAfterTooOften
+        XCTAssertEqual(turn(reportOnly, noon), time)
+    }
+
+    /// The cancel after a refusal fails too: one try for each try of the
+    /// new time, and not one at every turn.
+    func testACancelAfterARefusalThatFailsIsTriedAgainWithTheNewTime() {
+        set(input(), noon)
+        let edited = input([job("backup", "30 18 * * *")])
+        let time = turn(edited, noon)!
+        wake.answered(.refused(.notScheduled), for: time, now: noon, awake: awake)
+        XCTAssertEqual(turn(edited, noon), 0)
+        wake.answered(.refused(.notCancelled), for: 0, now: noon, awake: awake)
+        XCTAssertTrue(wake.owesCancel)
+        XCTAssertEqual(wake.status, .refused(.notScheduled))
+        XCTAssertNil(turn(edited, noon))
+        XCTAssertNil(turn(edited, noon))
+        awake += JobWake.retryAfter
+        XCTAssertEqual(turn(edited, noon), time)
+        wake.answered(.refused(.notScheduled), for: time, now: noon, awake: awake)
+        XCTAssertEqual(turn(edited, noon), 0)
+        wake.answered(.cancelled, for: 0, now: noon, awake: awake)
+        XCTAssertNil(turn(edited, noon))
+        XCTAssertEqual(kinds, [.alarmSet, .alarmRefused, .alarmCancelled], "The same refusal is one line")
+    }
+
+    /// A daily job and a monthly job are on, and the daily one is switched
+    /// off. The helper takes no time that is more than 8 days ahead, so
+    /// none is asked for, and the alarm of the daily job goes.
+    func testAJobThatIsTooFarAheadTakesTheOldAlarmAwayAndAsksForNone() {
+        let both = [job("backup", "0 21 * * *"), job("monthly", "0 3 1 * *")]
+        set(input(both, on: ["backup", "monthly"]), noon)
+        let monthlyOnly = input(both, on: ["monthly"])
+        XCTAssertEqual(turn(monthlyOnly, noon), 0)
+        XCTAssertEqual(wake.plan.noAlarm, .tooFarAhead)
+        wake.answered(.cancelled, for: 0, now: noon, awake: awake)
+        XCTAssertNil(wake.alarm)
+        XCTAssertEqual(wake.status, .noAlarm(.tooFarAhead))
+        for _ in 0..<20 {
+            awake += JobWake.retryAfter
+            XCTAssertNil(turn(monthlyOnly, noon), "Nothing is asked for every minute")
+        }
+        XCTAssertEqual(turn(monthlyOnly, at("2026-10-25 12:00")), seconds("2026-11-01 02:59"), "Inside 8 days the alarm is set")
+    }
+
     /// A helper of a build before alarms does not know the call, and a
     /// helper that is gone gives no answer. Both are the same result.
     func testAHelperThatGivesNoAnswer() {
