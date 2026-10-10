@@ -21,9 +21,13 @@ class Session:
         self.timeline = store.Timeline(run_dir)
         self.steps, self.keys, self.commands, self.children = [], {}, {}, {}
         self.names = {"run": run_dir}
+        # The ids of the holds that the `run` steps made, by the name of the step.
+        self.own = {}
         self.holds_before = sampler.holds(env)
         self.heartbeat = self.lab = None
         self.problem = None
+        # If the Mac was idle before the first step, and what held it.
+        self.idle = self.busy = None
         self.number = 0
         self.start = self.end = env.now()
 
@@ -31,6 +35,8 @@ class Session:
         """`step` is -1 for a sample of the cleanup. The rules do not
         look at those."""
         found = sampler.take(self.env, test or self.test, self.run_dir, self.number if step is None else step, self.children)
+        if self.own:
+            found["own"] = dict(self.own)
         self.timeline.add(found)
         if found.get("app_pid") is not None:
             self.names["app_pid"] = found["app_pid"]
@@ -56,7 +62,7 @@ class Session:
             code, out = env.tool([files.render(part, self.names) for part in step["run"][1:]])
             self.commands[step["name"]] = {"code": code, "out": out[:500]}
             try:
-                self.names[step["name"] + "_id"] = json.loads(out.splitlines()[0])["id"]
+                self.own[step["name"]] = self.names[step["name"] + "_id"] = json.loads(out.splitlines()[0])["id"]
             except (ValueError, IndexError, KeyError, TypeError):
                 pass
         if "spawn" in step:
@@ -136,7 +142,12 @@ class Session:
             self.start = env.now()
             # The Mac before the first step, and the pid of the app for
             # the text of a step.
-            self.sample()
+            first = self.sample()
+            holding = sampler.holding(first)
+            self.idle = None if holding is None else not holding
+            if holding:
+                headline = (first.get("app") or {}).get("decision", {}).get("headline")
+                self.busy = "Agent Caffeine held the Mac awake at the start" + (f": {headline}" if headline else "")
             for number, step in enumerate(self.test["steps"], 1):
                 if not self._step(number, step):
                     break
@@ -162,11 +173,13 @@ class Session:
             "start": self.start, "end": self.end, "alarm": self.names.get("alarm_time"), "steps": self.steps, "keys": self.keys,
             "samples": [sample for sample in self.timeline.samples if sample["step"] >= 0],
             "commands": self.commands, "heartbeat": heartbeat.read(os.path.join(self.run_dir, "heartbeat.txt")), "log": log,
+            "idle": self.idle, "busy": self.busy,
         }
         results = judge.judge(evidence, test["checks"])
         result, reason = judge.verdict(results, self.problem)
         if aborted:
             result, reason = "aborted", f"stopped at step {self.number}"
+        partial = judge.skipped(results) if result == "pass" else 0
         build = sampler.installed_build(env)
         common = {"test": test["id"], "title": test["title"], "area": test["area"], "layer": test["layer"], "build": build,
                   "started": self.start, "ended": last, "run": os.path.basename(self.run_dir)}
@@ -175,12 +188,11 @@ class Session:
             "macos": env.command(("sw_vers", "-productVersion"))[1].strip(), "steps": self.steps, "keys": self.keys,
             "commands": self.commands, "last_step_ended": self.end, "alarm": self.names.get("alarm_time"), "job": self.names.get("job_time"),
         }))
-        verdict = dict(common, result=result, reason=reason, checks=results, cleanup=left)
+        verdict = dict(common, result=result, reason=reason, checks=results, cleanup=left, idle=self.idle, partial=partial)
         store.write_verdict(self.run_dir, verdict)
-        self.ui.banner(result, test["id"], reason)
+        self.ui.banner(result, test["id"], reason, judge.partial(partial) if partial else None)
         for result_line in results:
-            word = "note" if result_line["info"] else ("pass" if result_line["ok"] else "fail")
-            self.ui.item({"status": word, "name": "", "text": f"{result_line['check']}  ({result_line['measured']})"})
+            self.ui.item({"status": judge.word(result_line), "name": "", "text": f"{result_line['check']}  ({result_line['measured']})"})
         for tell in left["left"]:
             self.ui.line(f"Still to do: {tell}")
         self.ui.line(f"Evidence: {self.run_dir}")

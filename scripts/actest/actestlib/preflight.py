@@ -61,14 +61,16 @@ def check(facts, test=None):
         add("state", app is not None, "the app writes its state" if app else "the app wrote no fresh state",
             "Wait 10 seconds and check again. If it stays: quit Agent Caffeine and open it.")
 
+    # A test that only needs the Mac to sleep can start with the app off.
+    sleeps = bool(needs.get("sleeps"))
     if app:
         on = app.get("on") and app.get("pausedUntil") is None
-        add("on", on, "switched on, no pause" if on else "switched off or paused", "Switch Agent Caffeine on and end the pause.")
+        add("on", on or sleeps, "switched on, no pause" if on else "switched off or paused", "Switch Agent Caffeine on and end the pause.")
         licence = app.get("entitlement") != "expired"
         add("licence", licence, f"licence: {app.get('entitlement')}", "Enter a key, or use a Mac with a trial.")
     elif running:
         stopped = status.get("stopped")
-        add("on", stopped is False, "no stop is in force" if stopped is False else "a stop is in force: off, paused, the licence or a safety stop",
+        add("on", stopped is False or sleeps, "no stop is in force" if stopped is False else "a stop is in force: off, paused, the licence or a safety stop",
             "Switch Agent Caffeine on and end the pause.")
 
     helper = (app or {}).get("flag", {}).get("helper")
@@ -78,13 +80,20 @@ def check(facts, test=None):
         else:
             unknown("helper", "the state of the helper is not known")
 
+    holding = sampler.holding(sample)
+    held = "Agent Caffeine holds now" + (f": {app['decision'].get('headline')}" if app else "")
     if needs.get("idle"):
-        if app:
-            holding = app["decision"].get("hold")
-            add("idle", not holding, "nothing holds the Mac awake now" if not holding else f"Agent Caffeine holds now: {app['decision'].get('headline')}",
-                "Wait until no agent works, or close the agents that work. Then check again.")
-        else:
+        if holding is None:
             unknown("idle", "it is not known if an agent works now")
+        else:
+            add("idle", not holding, "nothing holds the Mac awake now" if not holding else held,
+                "Wait until no agent works, or close the agents that work. Then check again.")
+    if sleeps:
+        if holding is None:
+            unknown("sleeps", "it is not known if Agent Caffeine holds now")
+        else:
+            add("sleeps", not holding, "Agent Caffeine does not hold: the Mac can sleep" if not holding else held,
+                "Pause Agent Caffeine or switch it off for this test.")
 
     flag = sample.get("sleepdisabled")
     if app:
@@ -139,6 +148,15 @@ def check(facts, test=None):
     timers = facts["timers"]
     items.append(_item("timers", "note", f"sleep timer {timers.get('sleep', '?')} min, display {timers.get('displaysleep', '?')} min"))
     return items
+
+
+def free_now(sample, test):
+    """True when a test can start as the agents are now: it needs
+    nothing of them, or Agent Caffeine holds nothing."""
+    needs = test.get("needs", {})
+    if needs.get("idle") or needs.get("sleeps"):
+        return sampler.holding(sample) is False
+    return True
 
 
 def blocked(items):

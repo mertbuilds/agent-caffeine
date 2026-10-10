@@ -18,12 +18,21 @@ from the first moment up to, and not at, the second one. The owner presses
 a key a moment after the thing happened, so a rule that ends at a key
 step takes some seconds off: `to step 3 - 5s`. `info ` in front makes a
 rule that only measures and never fails.
+
+`if idle: ` in front makes a rule that is judged only when nothing but the
+test held the Mac awake at the start. While an agent works such a rule is
+skipped, with the reason. A skipped rule is never a pass.
+
+    if idle: within 5s after step 3: app.hold=false
 """
 import re
 
 from . import expr, parse
 
 _REF = r"(start|end|alarm|step \d+(?: start)?)(?:\s*([+-])\s*(\d+(?:\.\d+)?[smh]?))?"
+IDLE = "if idle:"
+NOT_IDLE = "an agent worked at the start"
+IDLE_UNKNOWN = "it is not known if the Mac was idle at the start"
 _FORMS = [
     ("within", re.compile(rf"^within (\S+) after {_REF}: (.+)$")),
     ("always", re.compile(rf"^always from {_REF} to {_REF}: (.+)$")),
@@ -45,6 +54,8 @@ class CheckError(ValueError):
 def parse_check(text):
     """(info, form, groups). Raises CheckError for a rule that cannot be read."""
     body = text.strip()
+    if body.startswith(IDLE):
+        body = body[len(IDLE):].strip()
     info = body.startswith("info ")
     if info:
         body = body[5:].strip()
@@ -59,6 +70,11 @@ def parse_check(text):
                     raise CheckError(str(error)) from error
             return info, form, groups
     raise CheckError(f"cannot read the rule: {text!r}")
+
+
+def needs_idle(text):
+    """True for a rule that is judged on an idle Mac only."""
+    return text.strip().startswith(IDLE)
 
 
 def moment(evidence, name, sign=None, offset=None):
@@ -159,22 +175,54 @@ def _judge(evidence, form, groups):
 
 
 def judge(evidence, checks):
-    """One result per rule: the rule, pass or fail, and what was measured."""
+    """One result per rule: the rule, pass, fail or skipped, and what was
+    measured. `evidence["idle"]` says if the Mac was idle at the start:
+    True, False, or None when nobody knows. A run that has no such key
+    was judged on an idle Mac."""
     results = []
+    idle = evidence.get("idle", True)
     for text in checks:
         info, form, groups = parse_check(text)
+        if needs_idle(text) and idle is not True:
+            why = evidence.get("busy") or (NOT_IDLE if idle is False else IDLE_UNKNOWN)
+            results.append({"check": text, "ok": None, "info": info, "skipped": True, "measured": f"skipped: {why}"})
+            continue
         ok, measured = _judge(evidence, form, groups)
-        results.append({"check": text, "ok": True if info else ok, "info": info, "measured": measured})
+        results.append({"check": text, "ok": True if info else ok, "info": info, "skipped": False, "measured": measured})
     return results
+
+
+def word(result):
+    """pass, fail, skipped or note: how one rule shows."""
+    if result.get("skipped"):
+        return "skipped"
+    if result.get("info"):
+        return "note"
+    return "pass" if result["ok"] else "fail"
+
+
+def skipped(results):
+    """How many rules that count were not judged."""
+    return sum(1 for result in results if result.get("skipped") and not result.get("info"))
+
+
+def partial(count):
+    """What stands after PASS when rules were skipped."""
+    return f"partial: {count} check{' needs' if count == 1 else 's need'} an idle Mac"
 
 
 def verdict(results, problem=None):
     """(result, reason): the first rule that failed, with its value. A
-    pass shows the first rule that measured something."""
+    pass shows the first rule that measured something. A run in which no
+    rule that counts was judged is skipped, not passed."""
     if problem:
         return "fail", problem
-    failed = next((result for result in results if not result["ok"]), None)
+    failed = next((result for result in results if word(result) == "fail"), None)
     if failed:
         return "fail", f"{failed['check']} ({failed['measured']})"
-    shown = next((result for result in results if not result["info"]), None)
-    return "pass", f"{shown['check']} ({shown['measured']})" if shown else "no rule to check"
+    shown = next((result for result in results if word(result) == "pass"), None)
+    if shown:
+        return "pass", f"{shown['check']} ({shown['measured']})"
+    if skipped(results):
+        return "skipped", f"no rule was judged: {partial(skipped(results))}"
+    return "pass", "no rule to check"

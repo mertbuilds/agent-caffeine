@@ -84,6 +84,42 @@ class PreflightTests(unittest.TestCase):
         env = fakes.FakeEnv(lambda t: {"state": fakes.state()}, build=self.expected)
         self.assertEqual(items(env, {"needs": {"idle": True}})["idle"]["status"], "pass")
 
+    def test_a_test_that_needs_sleep_starts_when_the_app_is_paused_or_off(self):
+        test = {"needs": {"sleeps": True}}
+        busy = fakes.FakeEnv(lambda t: {"flag": 1, "awake": True, "state": fakes.state(hold=True, flag=True)}, build=self.expected)
+        found = items(busy, test)
+        self.assertEqual(found["sleeps"]["status"], "fail")
+        self.assertEqual(found["sleeps"]["text"], "Agent Caffeine holds now: working")
+        self.assertEqual(found["sleeps"]["fix"], "Pause Agent Caffeine or switch it off for this test.")
+        self.assertNotIn("idle", found)
+        for stopped in (fakes.state(pausedUntil=1.0), fakes.state(on=False), fakes.state()):
+            env = fakes.FakeEnv(lambda t, stopped=stopped: {"stopped": True, "state": stopped}, build=self.expected)
+            found = items(env, test)
+            self.assertEqual(found["sleeps"]["status"], "pass")
+            self.assertEqual(found["on"]["status"], "pass", "Off is how this test gets its sleep")
+            self.assertEqual(preflight.blocked(list(found.values())), [])
+        paused = fakes.FakeEnv(lambda t: {"state": fakes.state(pausedUntil=1.0)}, build=self.expected)
+        self.assertEqual(items(paused, {"needs": {}})["on"]["status"], "fail", "Every other test wants the app on")
+        self.assertEqual(items(paused, {"needs": {"idle": True}})["on"]["status"], "fail")
+
+    def test_without_the_state_the_status_file_says_if_the_app_holds(self):
+        env = fakes.FakeEnv(lambda t: {"flag": 1, "awake": True}, export=False, build=self.expected)
+        found = items(env, {"needs": {"idle": True, "sleeps": True}})
+        self.assertEqual((found["idle"]["status"], found["idle"]["text"]), ("fail", "Agent Caffeine holds now"))
+        self.assertEqual(found["sleeps"]["status"], "fail")
+        gone = fakes.FakeEnv(lambda t: {"pid": None}, build=self.expected)
+        found = items(gone, {"needs": {"idle": True, "sleeps": True}})
+        self.assertEqual((found["idle"]["status"], found["sleeps"]["status"]), ("unknown", "unknown"))
+
+    def test_what_can_start_as_the_agents_are_now(self):
+        busy = preflight.gather(fakes.FakeEnv(lambda t: {"awake": True, "state": fakes.state(hold=True)}))["sample"]
+        quiet = preflight.gather(fakes.FakeEnv(lambda t: {"state": fakes.state()}))["sample"]
+        unknown = preflight.gather(fakes.FakeEnv(lambda t: {"pid": None}))["sample"]
+        for needs, expected in [({}, (True, True, True)), ({"idle": True}, (False, True, False)), ({"sleeps": True}, (False, True, False)),
+                                ({"power": "battery", "helper": True}, (True, True, True))]:
+            test = {"needs": needs}
+            self.assertEqual((preflight.free_now(busy, test), preflight.free_now(quiet, test), preflight.free_now(unknown, test)), expected, needs)
+
     def test_the_preflight_only_reads(self):
         env = fakes.FakeEnv(lambda t: {"state": fakes.state()})
         preflight.gather(env)

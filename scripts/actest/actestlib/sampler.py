@@ -80,6 +80,17 @@ def take(env, test=None, run_dir="", step=0, children=None):
     return sample
 
 
+def holding(sample):
+    """True when Agent Caffeine keeps the Mac awake in this sample, False
+    when it does not, None when nobody knows. Without the state of the
+    app the status file says it."""
+    app = sample.get("app")
+    if app:
+        return bool(app["decision"].get("hold"))
+    status = sample.get("status")
+    return status["awake"] if status else None
+
+
 def installed_build(env):
     """"1.0.3 (17)" of the app in the Applications folder, or None."""
     app_path = getattr(env, "app", None)

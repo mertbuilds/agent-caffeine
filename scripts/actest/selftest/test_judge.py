@@ -105,6 +105,56 @@ class JudgeTests(unittest.TestCase):
         self.assertEqual(judge.verdict(results[:1]), ("pass", "key chime is yes (answer: yes)"))
         self.assertEqual(judge.verdict(results[:1], "step 2 timed out")[0], "fail")
 
+    def test_a_rule_for_an_idle_mac_is_judged_when_the_mac_was_idle(self):
+        text = "if idle: within 20s after step 3: sleepdisabled=0"
+        for data in (evidence(), dict(evidence(), idle=True)):
+            result = self.one(text, data)
+            self.assertEqual((result["ok"], result["skipped"], judge.word(result)), (True, False, "pass"))
+        result = self.one("if idle: within 10s after step 3: sleepdisabled=0", dict(evidence(), idle=True))
+        self.assertEqual((result["ok"], judge.word(result)), (False, "fail"), "On an idle Mac it can fail")
+
+    def test_a_rule_for_an_idle_mac_is_skipped_while_an_agent_works_and_is_never_a_pass(self):
+        text = "if idle: within 20s after step 3: sleepdisabled=0"
+        result = self.one(text, dict(evidence(), idle=False))
+        self.assertEqual((result["ok"], result["skipped"], judge.word(result)), (None, True, "skipped"))
+        self.assertEqual(result["measured"], "skipped: an agent worked at the start")
+        result = self.one(text, dict(evidence(), idle=False, busy="Agent Caffeine held the Mac awake at the start: working"))
+        self.assertEqual(result["measured"], "skipped: Agent Caffeine held the Mac awake at the start: working")
+        result = self.one(text, dict(evidence(), idle=None))
+        self.assertEqual(judge.word(result), "skipped", "Not known is not idle")
+        self.assertEqual(result["measured"], "skipped: it is not known if the Mac was idle at the start")
+        result = self.one("if idle: within 1s after step 3: sleepdisabled=0", dict(evidence(), idle=False))
+        self.assertEqual(judge.word(result), "skipped", "A rule that would fail is skipped too, not failed")
+        result = self.one("if idle: info at end: sleepdisabled=0", dict(evidence(), idle=False))
+        self.assertEqual((judge.word(result), result["info"]), ("skipped", True))
+        self.assertEqual(judge.skipped([result]), 0, "A rule that only measures does not count")
+
+    def test_the_other_rules_are_judged_while_an_agent_works(self):
+        result = self.one("within 20s after step 3: sleepdisabled=0", dict(evidence(), idle=False))
+        self.assertEqual(judge.word(result), "pass")
+        self.assertTrue(judge.needs_idle(" if idle: at end: lid=open"))
+        self.assertFalse(judge.needs_idle("at end: lid=open"))
+        for text in ["if idle: sometimes lid=open", "if idle at end: lid=open", "if busy: at end: lid=open"]:
+            with self.assertRaises(judge.CheckError):
+                judge.parse_check(text)
+
+    def test_a_pass_with_skipped_rules_is_partial_and_a_fail_stays_a_fail(self):
+        rules = ["key chime is yes", "if idle: at end: sleepdisabled=0", "if idle: at end: lid=open", "info at end: lid=open"]
+        results = judge.judge(dict(evidence(), idle=False), rules)
+        self.assertEqual([judge.word(result) for result in results], ["pass", "skipped", "skipped", "note"])
+        self.assertEqual(judge.verdict(results), ("pass", "key chime is yes (answer: yes)"))
+        self.assertEqual(judge.skipped(results), 2)
+        self.assertEqual(judge.partial(2), "partial: 2 checks need an idle Mac")
+        self.assertEqual(judge.partial(1), "partial: 1 check needs an idle Mac")
+        self.assertEqual(judge.skipped(judge.judge(evidence(), rules)), 0)
+        results = judge.judge(dict(evidence(), idle=False), ["if idle: at end: lid=open", "key glow is yes"])
+        self.assertEqual(judge.verdict(results), ("fail", "key glow is yes (answer: no)"))
+
+    def test_a_run_with_no_judged_rule_is_skipped_not_passed(self):
+        results = judge.judge(dict(evidence(), idle=False), ["if idle: at end: sleepdisabled=0", "info at end: lid=open"])
+        self.assertEqual(judge.verdict(results), ("skipped", "no rule was judged: partial: 1 check needs an idle Mac"))
+        self.assertEqual(judge.verdict([]), ("pass", "no rule to check"))
+
 
 if __name__ == "__main__":
     unittest.main()

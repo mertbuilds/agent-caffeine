@@ -44,6 +44,23 @@ AGENT = {
     ],
 }
 
+HOLD = {
+    "id": "CLI-01", "title": "hold --for", "layer": 1, "area": "cli", "minutes": 1,
+    "steps": [
+        {"say": "The runner starts a hold.", "run": ["agent-caffeine", "hold", "--for", "20s", "--json"], "name": "hold",
+         "until": "held.hold=true", "timeout": 10},
+        {"say": "The hold ends.", "until": "held.hold=false", "timeout": 40},
+        {"say": "Wait.", "until": "time>=6s"},
+    ],
+    "checks": [
+        "exit hold == 0",
+        "within 3s after step 1: held.hold=true and app.hold=true",
+        "if idle: within 3s after step 1: app.headline=manualHold",
+        "within 25s after step 1: held.hold=false",
+        "if idle: within 5s after step 2: app.hold=false",
+    ],
+}
+
 
 class RunTests(unittest.TestCase):
     def setUp(self):
@@ -154,6 +171,55 @@ class RunTests(unittest.TestCase):
         env = fakes.FakeEnv(self.agent_world(), keys={3: "s"})
         verdict = runner.run_test(catalog.validate(json.loads(json.dumps(AGENT))), env, self.ui)
         self.assertEqual(verdict["reason"], "the owner skipped step 1")
+
+    def run_hold(self, busy, stuck=False):
+        """A hold of 20 seconds. `busy`: an agent of the owner works the
+        whole time. `stuck`: the app never lets the hold go."""
+        env = fakes.FakeEnv(None)
+
+        def world(t):
+            if env.holds and t >= 22 and not stuck:
+                env.holds.clear()
+            held = busy or bool(env.holds)
+            rows = [{"id": "claude", "pid": 9, "state": "working" if busy else "idle", "hold": "working" if busy else None}]
+            state = fakes.state(hold=held, flag=held, holds=env.holds, agents=rows)
+            state["decision"]["headline"] = "working" if busy else ("manualHold" if env.holds else "idle")
+            return {"flag": 1 if held else 0, "awake": held, "state": state}
+
+        env.world = world
+        return env, runner.run_test(catalog.validate(json.loads(json.dumps(HOLD))), env, self.ui)
+
+    def test_on_an_idle_mac_every_rule_is_judged(self):
+        env, verdict = self.run_hold(busy=False)
+        self.assertEqual(verdict["result"], "pass", verdict["reason"])
+        self.assertEqual((verdict["idle"], verdict["partial"]), (True, 0))
+        self.assertEqual([check["ok"] for check in verdict["checks"]], [True] * 5)
+        self.assertIn("PASS   CLI-01", self.out.getvalue())
+        self.assertNotIn("partial", self.out.getvalue())
+        self.assertNotIn("SKIP", self.out.getvalue())
+
+    def test_while_an_agent_works_the_hold_is_judged_and_the_pass_is_partial(self):
+        env, verdict = self.run_hold(busy=True)
+        self.assertEqual(verdict["result"], "pass", verdict["reason"])
+        self.assertEqual((verdict["idle"], verdict["partial"]), (False, 2))
+        self.assertEqual([check["ok"] for check in verdict["checks"]], [True, True, None, True, None])
+        self.assertEqual(verdict["checks"][2]["measured"], "skipped: Agent Caffeine held the Mac awake at the start: working")
+        said = self.out.getvalue()
+        self.assertIn("PASS (partial: 2 checks need an idle Mac)   CLI-01", said)
+        self.assertNotIn("PASS   CLI-01", said)
+        self.assertIn("SKIP                 if idle: within 5s after step 2: app.hold=false  (skipped: Agent Caffeine held", said)
+        stored = store.read_json(os.path.join(config.runs_dir(), verdict["run"], "verdict.json"))
+        self.assertEqual((stored["partial"], stored["idle"], stored["checks"][4]["skipped"]), (2, False, True))
+        samples = store.read_timeline(os.path.join(config.runs_dir(), verdict["run"]))
+        self.assertNotIn("own", samples[0], "Before the first step the runner made no hold")
+        self.assertEqual(samples[-1]["own"], {"hold": "aaaa0002"})
+
+    def test_while_an_agent_works_a_hold_that_stays_still_fails(self):
+        env, verdict = self.run_hold(busy=True, stuck=True)
+        self.assertEqual(verdict["result"], "fail")
+        self.assertEqual(verdict["partial"], 0, "A fail is not partial")
+        self.assertTrue(verdict["reason"].startswith("step 2 timed out after 40 s: held.hold=true"))
+        self.assertIn("FAIL   CLI-01", self.out.getvalue())
 
     def test_the_real_environment_refuses_what_is_not_a_read(self):
         from actestlib import env as environment

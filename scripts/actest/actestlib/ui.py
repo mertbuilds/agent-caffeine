@@ -3,7 +3,7 @@ import sys
 
 GREEN, RED, AMBER, DIM, BOLD, RESET = "\033[32m", "\033[31m", "\033[33m", "\033[2m", "\033[1m", "\033[0m"
 MARKS = {"pass": ("PASS", GREEN), "fail": ("FAIL", RED), "unknown": ("  ? ", AMBER), "note": ("NOTE", DIM),
-         "aborted": ("ABORTED", AMBER), "none": ("  - ", DIM)}
+         "aborted": ("ABORTED", AMBER), "none": ("  - ", DIM), "skipped": ("SKIP", AMBER)}
 
 
 class UI:
@@ -50,8 +50,11 @@ class UI:
         if item.get("fix"):
             self.line(f"      {'':<14} Fix: {item['fix']}")
 
-    def banner(self, result, test_id, reason):
+    def banner(self, result, test_id, reason, note=None):
+        """`note` stands after the word: a pass that is not whole says so."""
         word, colour = MARKS.get(result, MARKS["fail"])
+        if note:
+            word, colour = f"{word} ({note})", AMBER
         bar = "=" * 60
         self.line()
         self.line(self.paint(bar, colour))

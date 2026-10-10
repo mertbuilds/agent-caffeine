@@ -6,10 +6,13 @@
     decides = "..."           what the result of the test decides
     lab = true                a lab recording of the app binary runs too
     watch = ["sched"]         also sample `pmset -g sched` every second
-    [needs]                   power, charge, helper, display, agents, wake_for_jobs
+    [needs]                   power, charge, helper, display, agents, wake_for_jobs,
+                              idle (no agent works: the app holds nothing),
+                              sleeps (the app does not hold: idle, paused or off)
     [probes.<name>]           a look at one of our own files
     [[steps]]                 say, and what ends the step
-    checks = [...]            the pass rules, see judge.py
+    checks = [...]            the pass rules, see judge.py. `if idle: ` in front:
+                              the rule is skipped while an agent works
     [[cleanup]]               expect, tell
 
 A step ends with `until` (a condition the runner sees), `key = "enter"`
@@ -31,7 +34,7 @@ from . import config, expr, judge
 
 TOP = {"id", "title", "layer", "area", "minutes", "risk", "why", "heartbeat", "lab", "watch", "every", "needs", "probes", "steps",
        "checks", "cleanup", "decides"}
-NEEDS = {"power", "charge", "helper", "display", "agents", "wake_for_jobs", "idle"}
+NEEDS = {"power", "charge", "helper", "display", "agents", "wake_for_jobs", "idle", "sleeps"}
 STEP = {"say", "until", "timeout", "key", "ask", "name", "run", "spawn", "signal", "write", "in_minutes", "job_seconds", "alarm_in",
         "command", "optional"}
 MARKER = "/Library/Application Support/com.caffeinagent.app/sleep-flag-set"
@@ -96,7 +99,7 @@ def validate(test, path="test"):
             raise TestError(f"{path} probe {name}: this path is not one of our own files")
     if not test["steps"]:
         raise TestError(f"{path}: a test has one step at least")
-    names = set()
+    names, made = set(), set()
     for number, step in enumerate(test["steps"], 1):
         where = f"{path} step {number}"
         _unknown(step, STEP, where)
@@ -117,6 +120,8 @@ def validate(test, path="test"):
                     raise TestError(f"{where}: {key} starts {TOOL} and nothing else")
                 if "name" not in step:
                     raise TestError(f"{where}: {key} needs a name")
+        if "run" in step:
+            made.add(step["name"])
         if "signal" in step and (step["signal"] not in SIGNALS or "name" not in step):
             raise TestError(f"{where}: signal is one of {', '.join(sorted(SIGNALS))} and needs the name of a spawned command")
         if "write" in step and step["write"] not in WRITES:
@@ -143,6 +148,9 @@ def validate(test, path="test"):
         for name in re.findall(r"probe\.(\w+)", text):
             if name not in test["probes"]:
                 raise TestError(f"{path}: there is no probe {name}")
+        for name in re.findall(r"held\.(\w+)", text):
+            if name not in made:
+                raise TestError(f"{path}: no run step has the name {name}")
     test.setdefault("watch", [])
     test.setdefault("every", 1)
     test.setdefault("heartbeat", False)
@@ -176,6 +184,19 @@ def load_all(root=None):
                     raise TestError(f"{test['id']} is in two files")
                 tests[test["id"]] = test
     return tests
+
+
+def when(test):
+    """When a test can start: any time, or what it needs of the Mac."""
+    needs = test.get("needs", {})
+    if needs.get("idle"):
+        return "needs idle"
+    return "needs sleep" if needs.get("sleeps") else "any time"
+
+
+def idle_rules(test):
+    """How many rules of a test are judged on an idle Mac only."""
+    return sum(1 for text in test["checks"] if judge.needs_idle(text))
 
 
 def select(tests, area=None, layer=None):

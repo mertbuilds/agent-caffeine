@@ -63,6 +63,14 @@ class ExprTests(unittest.TestCase):
         self.assertTrue(self.ok("app.agent[hermes-agent].count=0"))
         self.assertTrue(self.ok("app.agent[*].state=working"))
 
+    def test_a_hold_of_the_test_is_found_by_its_id(self):
+        sample = dict(SAMPLE, own={"first": "0a1b2c3d", "second": "ffff0000"})
+        self.assertTrue(self.ok("held.first=true and held.second=false", sample))
+        self.assertTrue(self.ok("held.other=none", sample), "No step of that name made a hold")
+        self.assertTrue(self.ok("held.first=none"), "The runner recorded no id")
+        self.assertTrue(self.ok("held.first=none", dict(sample, app=None)), "No state of the app is not the same as no hold")
+        expr.check("held.first=true")
+
     def test_time_counts_from_the_start_of_the_step(self):
         self.assertTrue(self.ok("time>=30s", since=70))
         self.assertFalse(self.ok("time>=30s", since=71))

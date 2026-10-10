@@ -3,6 +3,8 @@
     lid=closed            power=battery         sleepdisabled=1
     app.hold=true         app.agent[grok].state=working
     time>=30s             app.running=false and sleepdisabled=0
+    held.first=true       the hold that the `run` step `first` made is in
+                          the list of the app, by the id the tool gave
 
 A term is `path op value`. Terms join with `and`, and groups of them with
 `or`. A path that has no value compares equal to `none` and to nothing else.
@@ -117,6 +119,11 @@ def value(sample, path, since=None):
     head, _, rest = path.partition(".")
     if head == "app":
         return _app(sample, rest, now)
+    if head == "held":
+        app, wanted = sample.get("app"), (sample.get("own") or {}).get(rest)
+        if app is None or wanted is None:
+            return None
+        return any(hold.get("id") == wanted for hold in app.get("holds", []))
     if head in ("status", "probe", "child"):
         return _dig(sample.get(head), rest.split("."))
     raise ExprError(f"unknown path {path}")
