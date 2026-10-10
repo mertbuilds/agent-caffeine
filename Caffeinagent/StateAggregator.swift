@@ -1106,6 +1106,10 @@ final class StateAggregator: ObservableObject {
                 MainActor.assumeIsolated {
                     guard let self, self.jobSettings.wakeForJobs else { return }
                     self.jobReadings = readings
+                    // A switch never waits for a line that can be another
+                    // command tomorrow.
+                    let kept = self.jobSettings.withoutSwitches(ofUnclear: readings.flatMap(\.jobs))
+                    if kept != self.jobSettings { self.jobSettings = kept }
                     self.updateJobWake()
                 }
             }

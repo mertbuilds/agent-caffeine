@@ -64,6 +64,53 @@ final class CrontabJobReaderTests: XCTestCase {
         XCTAssertEqual(Set(jobs.map(\.id)).count, 4)
     }
 
+    /// The id of such a line holds its place among the lines that look
+    /// the same, or its count among all lines. A line that is added or
+    /// removed would move a switch to another command. So these lines
+    /// are listed and get no switch.
+    func testALineThatCannotBeToldApartGetsNoSwitch() {
+        let text = "0 3 * * * python3 a.py\n0 3 * * * python3 b.py\n0 4 * * * python3 a.py\n*/40 * * * * TOKEN=abc run\n0 5 * * * /usr/bin/backup"
+        let jobs = CrontabJobReader.jobs(text)
+        XCTAssertEqual(jobs.map(\.name), ["python3", "python3", "python3", "cron job 4", "backup"])
+        XCTAssertEqual(jobs.map(\.noSwitch), [.sameLines, .sameLines, nil, .noPlainName, nil])
+        XCTAssertEqual(Set(jobs.map(\.id)).count, 5, "Each still has an id of its own for the list")
+
+        // The switches of an earlier version of the list, all on.
+        var settings = JobSettings()
+        for job in jobs { settings.set(true, for: job.id) }
+        XCTAssertEqual(settings.applied(to: jobs).map(\.enabled), [false, false, true, false, true])
+        // Their switches are forgotten, so none comes back on another line.
+        settings = settings.withoutSwitches(ofUnclear: jobs)
+        XCTAssertEqual(settings.jobSwitches.keys.sorted(), ["crontab:0 4 * * *:python3", "crontab:0 5 * * *:backup"])
+        // The first line is removed: b.py has the id that a.py had.
+        let after = CrontabJobReader.jobs(text.components(separatedBy: "\n").dropFirst().joined(separator: "\n"))
+        XCTAssertEqual(after.map(\.noSwitch), [nil, nil, .noPlainName, nil])
+        XCTAssertEqual(after.first?.id, jobs.first?.id)
+        XCTAssertEqual(settings.applied(to: after).map(\.enabled), [false, true, false, true], "b.py does not get the switch that a.py had")
+        XCTAssertEqual(settings.withoutSwitches(ofUnclear: after.filter { $0.noSwitch == nil }), settings, "Nothing else is forgotten")
+    }
+
+    func testTheLineOfAJobWithNoSwitchSaysWhy() {
+        let jobs = CrontabJobReader.jobs("0 3 * * * python3 a.py\n0 3 * * * python3 b.py\n0 6 * * * TOKEN=abc run")
+        let lines = jobs.map { PanelText.jobDetail(JobRun(job: $0, fireAt: nil, tooOften: false), now: Date(timeIntervalSince1970: 0)) }
+        XCTAssertEqual(lines, [
+            "crontab · Two lines look the same, so Agent Caffeine cannot tell them apart",
+            "crontab · Two lines look the same, so Agent Caffeine cannot tell them apart",
+            "crontab · The command has no plain name, so Agent Caffeine cannot tell this line apart",
+        ])
+    }
+
+    func testAJobWithNoSwitchGetsNoAlarm() {
+        var jobs = CrontabJobReader.jobs("0 3 * * * python3 a.py\n0 3 * * * python3 b.py")
+        for index in jobs.indices { jobs[index].enabled = true }
+        var settings = JobSettings()
+        settings.wakeForJobs = true
+        let plan = JobPlanner.plan(jobs: jobs, settings: settings, context: JobPlanContext(), now: JobTime.date("2026-10-10 12:00"), clock: JobTime.clock())
+        XCTAssertNil(plan.alarm, "Also when a caller says it is on")
+        XCTAssertEqual(plan.noAlarm, .noJobSwitchedOn)
+        XCTAssertEqual(plan.nextRuns.count, 2, "Both are listed")
+    }
+
     func testTheIdStaysWhenOtherLinesChange() {
         let before = CrontabJobReader.jobs("15 3 * * * /usr/bin/backup --key one")
         let after = CrontabJobReader.jobs("# new\nPATH=/bin\n0 1 * * * /usr/bin/other\n15  3 * * *   /usr/bin/backup --key two")

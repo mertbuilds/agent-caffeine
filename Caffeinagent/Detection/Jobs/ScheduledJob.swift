@@ -35,6 +35,17 @@ struct ScheduledJob: Equatable, Identifiable {
     /// The switch of the user. Off for a job that was found: nothing is
     /// adopted by itself.
     var enabled = false
+    /// Why the job is listed with no switch, nil for a job that has one.
+    var noSwitch: NoSwitch?
+
+    /// The id of such a job does not stay with its line, so a switch
+    /// would move to another job when lines are added or removed.
+    enum NoSwitch: Equatable {
+        /// Other lines have the same times and the same name.
+        case sameLines
+        /// The name is a count among the lines, not the name of a command.
+        case noPlainName
+    }
 }
 
 /// When a job runs.

@@ -63,11 +63,11 @@ struct WakeForJobsSection: View {
             ForEach(view.runs, id: \.job.id) { run in
                 Toggle(isOn: isOn(run)) {
                     Text(run.job.name)
-                        .foregroundStyle(run.tooOften ? .secondary : .primary)
+                        .foregroundStyle(hasSwitch(run) ? .primary : .secondary)
                     Text(PanelText.jobDetail(run, now: now, calendar: calendar, locale: locale))
                         .monospacedDigit()
                 }
-                .disabled(run.tooOften)
+                .disabled(!hasSwitch(run))
             }
         }
         ForEach(ScheduledJob.Source.allCases.filter(isUnreadable), id: \.self) { source in
@@ -129,10 +129,16 @@ struct WakeForJobsSection: View {
         return false
     }
 
-    /// A job that runs too often is never on.
+    /// False for a job that is listed and cannot be switched on.
+    private func hasSwitch(_ run: JobRun) -> Bool {
+        !run.tooOften && run.job.noSwitch == nil
+    }
+
+    /// A job that runs too often is never on, and so is one that cannot
+    /// be told apart from another.
     private func isOn(_ run: JobRun) -> Binding<Bool> {
         Binding(
-            get: { !run.tooOften && settings.isOn(run.job.id) },
+            get: { hasSwitch(run) && settings.isOn(run.job.id) },
             set: { settings.set($0, for: run.job.id) }
         )
     }

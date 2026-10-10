@@ -104,7 +104,7 @@ enum JobPlanner {
         if let reason = stop(settings: settings, context: context, now: now) {
             return JobPlan(noAlarm: reason, nextRuns: nextRuns)
         }
-        let wanted = nextRuns.filter { $0.job.enabled && !$0.tooOften }
+        let wanted = nextRuns.filter { $0.job.enabled && !$0.tooOften && $0.job.noSwitch == nil }
         guard !wanted.isEmpty else { return JobPlan(noAlarm: .noJobSwitchedOn, nextRuns: nextRuns) }
         // A new alarm that is too close is refused, so the run after it
         // counts.

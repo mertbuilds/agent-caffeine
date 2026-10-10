@@ -38,10 +38,20 @@ struct CrontabJobReader {
         for line in text.components(separatedBy: .newlines) {
             guard let (expression, command) = split(line) else { continue }
             number += 1
-            let name = name(ofCommand: command, number: number)
+            let plain = plainName(ofCommand: command)
+            let name = plain ?? fallbackName(number)
             let base = "crontab:\(expression.key):\(name)"
-            let same = jobs.filter { $0.id == base || $0.id.hasPrefix(base + "#") }.count
-            jobs.append(ScheduledJob(id: same == 0 ? base : "\(base)#\(same + 1)", source: .crontab, name: name, schedule: .cron(expression)))
+            let same = jobs.indices.filter { jobs[$0].id == base || jobs[$0].id.hasPrefix(base + "#") }
+            // The id of a line stays with it only while no other line
+            // looks the same and its name is the name of its command.
+            // Every other line is listed with no switch: its id holds a
+            // count, and a line that is added or removed would move the
+            // switch to another command.
+            for index in same { jobs[index].noSwitch = .sameLines }
+            jobs.append(ScheduledJob(
+                id: same.isEmpty ? base : "\(base)#\(same.count + 1)", source: .crontab, name: name, schedule: .cron(expression),
+                noSwitch: !same.isEmpty ? .sameLines : plain == nil ? .noPlainName : nil
+            ))
         }
         return jobs
     }
@@ -93,12 +103,18 @@ struct CrontabJobReader {
     /// because it can then hold anything: a variable that is set in front
     /// of the command (`TOKEN=abc run`), a quote, a `$`, a pipe.
     static func name(ofCommand command: Substring, number: Int) -> String {
-        let fallback = "cron job \(number)"
+        plainName(ofCommand: command) ?? fallbackName(number)
+    }
+
+    private static func fallbackName(_ number: Int) -> String { "cron job \(number)" }
+
+    /// Nil when the first word is not a plain file name.
+    private static func plainName(ofCommand command: Substring) -> String? {
         let word = command.prefix(while: { $0 != " " && $0 != "\t" })
         let plain: (Character) -> Bool = { $0.isASCII && ($0.isLetter || $0.isNumber || "._+-_".contains($0)) }
-        guard word.allSatisfy({ plain($0) || $0 == "/" || $0 == "~" }) else { return fallback }
+        guard word.allSatisfy({ plain($0) || $0 == "/" || $0 == "~" }) else { return nil }
         let base = (String(word) as NSString).lastPathComponent
-        guard !base.isEmpty, base.count <= commandLimit, base.allSatisfy(plain), base.contains(where: \.isLetter) else { return fallback }
+        guard !base.isEmpty, base.count <= commandLimit, base.allSatisfy(plain), base.contains(where: \.isLetter) else { return nil }
         return base
     }
 }

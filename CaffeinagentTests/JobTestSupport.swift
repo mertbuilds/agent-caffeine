@@ -65,7 +65,7 @@ final class FixtureJobAccess: JobSourceAccess {
 
 enum JobPrivacy {
     /// What a job holds, by the names of its fields.
-    static let fields = ["id", "source", "name", "schedule", "enabled"]
+    static let fields = ["id", "source", "name", "schedule", "enabled", "noSwitch"]
 
     /// Fails when a job has a field more, or when any text of a job holds
     /// one of the words.

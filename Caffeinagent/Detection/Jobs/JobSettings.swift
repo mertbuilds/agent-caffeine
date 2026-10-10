@@ -52,13 +52,24 @@ struct JobSettings: Codable, Equatable {
         jobSwitches[jobID] = on ? true : nil
     }
 
-    /// The jobs with the switches of the user.
+    /// The jobs with the switches of the user. A job that is listed
+    /// with no switch is off, whatever is stored for its id.
     func applied(to jobs: [ScheduledJob]) -> [ScheduledJob] {
         jobs.map { job in
             var job = job
-            job.enabled = isOn(job.id)
+            job.enabled = job.noSwitch == nil && isOn(job.id)
             return job
         }
+    }
+
+    /// The settings without the switches of the jobs that are listed
+    /// with no switch (`ScheduledJob.noSwitch`). The id of such a job can
+    /// belong to another line tomorrow, and a switch that was kept would
+    /// then be on for a job the user never switched on.
+    func withoutSwitches(ofUnclear jobs: [ScheduledJob]) -> JobSettings {
+        var next = self
+        for job in jobs where job.noSwitch != nil { next.jobSwitches[job.id] = nil }
+        return next
     }
 
     private enum CodingKeys: String, CodingKey {

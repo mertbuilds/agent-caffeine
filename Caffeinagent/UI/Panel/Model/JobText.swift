@@ -23,6 +23,14 @@ extension PanelText {
     static let jobsNoHistory = "Nothing happened yet."
     static let jobsTooOften = "Runs too often to wake for"
     static let jobsNoRunKnown = "No next run is known"
+
+    /// Why a job is listed with no switch.
+    static func jobNoSwitch(_ reason: ScheduledJob.NoSwitch) -> String {
+        switch reason {
+        case .sameLines: return "Two lines look the same, so Agent Caffeine cannot tell them apart"
+        case .noPlainName: return "The command has no plain name, so Agent Caffeine cannot tell this line apart"
+        }
+    }
     static let jobsNeedHelper = "This needs the helper. Set it up under Lid closed first."
 
     /// "Wakes your Mac 1 minute before a job, keeps it awake until the
@@ -52,6 +60,7 @@ extension PanelText {
     /// Below the name of a job: "crontab · next run tomorrow at 03:00".
     static func jobDetail(_ run: JobRun, now: Date, calendar: Calendar = .current, locale: Locale = .current) -> String {
         let source = jobSource(run.job.source)
+        if let reason = run.job.noSwitch { return "\(source) · \(jobNoSwitch(reason))" }
         if run.tooOften { return "\(source) · \(jobsTooOften)" }
         guard let fireAt = run.fireAt else { return "\(source) · \(jobsNoRunKnown)" }
         return "\(source) · next run \(when(fireAt, now: now, calendar: calendar, locale: locale))"

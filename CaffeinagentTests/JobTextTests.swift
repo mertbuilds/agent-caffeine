@@ -91,6 +91,7 @@ final class JobTextTests: XCTestCase {
             PanelText.jobsTitle, PanelText.jobsSwitch, PanelText.jobsNoneFound, PanelText.jobsPerJob, PanelText.jobsOnPowerOnly,
             PanelText.jobsOnPowerExplained, PanelText.jobsOnBatteryWarning, PanelText.jobsShowHistory, PanelText.jobsHideHistory, PanelText.jobsNoHistory,
             PanelText.jobsTooOften, PanelText.jobsNoRunKnown, PanelText.jobsNeedHelper, PanelText.jobsExplained(leadTime: 60), PanelText.jobHoldHint,
+            PanelText.jobNoSwitch(.sameLines), PanelText.jobNoSwitch(.noPlainName),
             PanelText.wakesAt(alarm("2026-10-10 20:59"), now: now, calendar: calendar, locale: locale),
         ]
         return lines
