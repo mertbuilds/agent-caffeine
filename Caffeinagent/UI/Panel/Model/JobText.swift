@@ -33,11 +33,13 @@ extension PanelText {
     }
     static let jobsNeedHelper = "This needs the helper. Set it up under Lid closed first."
 
-    /// "Wakes your Mac 1 minute before a job, keeps it awake until the
-    /// job ends, then lets it sleep."
-    static func jobsExplained(leadTime: TimeInterval) -> String {
+    /// "Wakes your Mac 1 minute before a job, keeps it awake while the
+    /// job runs, for 30 minutes at most, then lets it sleep." The limit
+    /// is said, because a job that runs longer is not waited for.
+    static func jobsExplained(leadTime: TimeInterval, holdCap: TimeInterval) -> String {
         let lead = HumaneDuration.length(seconds: leadTime) ?? HumaneDuration.counted(Int(leadTime), "second")
-        return "Wakes your Mac \(lead) before a job, keeps it awake until the job ends, then lets it sleep."
+        let cap = HumaneDuration.length(seconds: holdCap) ?? HumaneDuration.counted(Int(holdCap), "second")
+        return "Wakes your Mac \(lead) before a job, keeps it awake while the job runs, for \(cap) at most, then lets it sleep."
     }
 
     static func jobSource(_ source: ScheduledJob.Source) -> String {

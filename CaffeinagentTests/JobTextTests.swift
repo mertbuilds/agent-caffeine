@@ -29,11 +29,17 @@ final class JobTextTests: XCTestCase {
     func testWhatTheSwitchDoes() {
         XCTAssertEqual(PanelText.jobsTitle, "Wake for jobs")
         XCTAssertEqual(
-            PanelText.jobsExplained(leadTime: JobSettings().leadTime),
-            "Wakes your Mac 1 minute before a job, keeps it awake until the job ends, then lets it sleep."
+            PanelText.jobsExplained(leadTime: JobSettings().leadTime, holdCap: JobSettings().holdCap),
+            "Wakes your Mac 1 minute before a job, keeps it awake while the job runs, for 30 minutes at most, then lets it sleep."
         )
-        XCTAssertEqual(PanelText.jobsExplained(leadTime: 300), "Wakes your Mac 5 minutes before a job, keeps it awake until the job ends, then lets it sleep.")
-        XCTAssertEqual(PanelText.jobsExplained(leadTime: 30), "Wakes your Mac 30 seconds before a job, keeps it awake until the job ends, then lets it sleep.")
+        XCTAssertEqual(
+            PanelText.jobsExplained(leadTime: 300, holdCap: 7200),
+            "Wakes your Mac 5 minutes before a job, keeps it awake while the job runs, for 2 hours at most, then lets it sleep."
+        )
+        XCTAssertEqual(
+            PanelText.jobsExplained(leadTime: 30, holdCap: 300),
+            "Wakes your Mac 30 seconds before a job, keeps it awake while the job runs, for 5 minutes at most, then lets it sleep."
+        )
         XCTAssertEqual(PanelText.jobsOnPowerOnly, "Only on power")
         XCTAssertEqual(PanelText.jobsOnPowerExplained, "On battery, Agent Caffeine sets no wake and keeps your Mac awake for no job.")
         XCTAssertEqual(PanelText.jobsOnBatteryWarning, "On battery with the lid closed this is not tested yet. Your Mac can wake in a bag.")
@@ -90,7 +96,7 @@ final class JobTextTests: XCTestCase {
         lines += [
             PanelText.jobsTitle, PanelText.jobsSwitch, PanelText.jobsNoneFound, PanelText.jobsPerJob, PanelText.jobsOnPowerOnly,
             PanelText.jobsOnPowerExplained, PanelText.jobsOnBatteryWarning, PanelText.jobsShowHistory, PanelText.jobsHideHistory, PanelText.jobsNoHistory,
-            PanelText.jobsTooOften, PanelText.jobsNoRunKnown, PanelText.jobsNeedHelper, PanelText.jobsExplained(leadTime: 60), PanelText.jobHoldHint,
+            PanelText.jobsTooOften, PanelText.jobsNoRunKnown, PanelText.jobsNeedHelper, PanelText.jobsExplained(leadTime: 60, holdCap: 1800), PanelText.jobHoldHint,
             PanelText.jobNoSwitch(.sameLines), PanelText.jobNoSwitch(.noPlainName),
             PanelText.wakesAt(alarm("2026-10-10 20:59"), now: now, calendar: calendar, locale: locale),
         ]

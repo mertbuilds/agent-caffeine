@@ -32,7 +32,7 @@ struct WakeForJobsSection: View {
     var body: some View {
         Section(PanelText.jobsTitle) {
             Toggle(PanelText.jobsSwitch, isOn: $settings.wakeForJobs)
-            Text(PanelText.jobsExplained(leadTime: settings.leadTime))
+            Text(PanelText.jobsExplained(leadTime: settings.leadTime, holdCap: min(settings.holdCap, JobHold.capLimit)))
                 .font(.callout)
                 .foregroundStyle(.secondary)
             if settings.wakeForJobs {

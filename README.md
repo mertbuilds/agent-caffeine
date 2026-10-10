@@ -122,7 +122,7 @@ Builds before the helper used a sudoers entry for `pmset -b disablesleep`. The a
 
 ## Wake for jobs
 
-"Wake for jobs" (Settings > Battery and lid, off by default) wakes the Mac one minute before a scheduled job, keeps it awake until the job ends, and then lets it sleep by its own timers. It needs the helper, and it works only in the copy in the Applications folder.
+"Wake for jobs" (Settings > Battery and lid, off by default) wakes the Mac one minute before a scheduled job, keeps it awake while the job runs, for 30 minutes at most, and then lets it sleep by its own timers. It needs the helper, and it works only in the copy in the Applications folder.
 
 - What it finds: launchd agents in `~/Library/LaunchAgents` with `StartCalendarInterval`, the lines of your crontab (`crontab -l`), and the cron jobs of Hermes Agent (`~/.hermes/cron/jobs.json`). Nothing is read while the switch is off. Each job has a switch of its own, off at first: Agent Caffeine adopts nothing by itself, and it edits no crontab, no plist and no file of an agent. A job that runs more than 48 times in 24 hours is listed and cannot be switched on. The same goes for a crontab line that cannot be told apart from another one (the same times and the same command name), or whose command has no plain name: its switch could move to another line when the crontab changes.
 - What it keeps of a job: its times and a short name (the launchd label, the name of the command without its folder and its arguments, the name of the Hermes job). No command line, no argument, no environment and no prompt is kept, shown or logged.
