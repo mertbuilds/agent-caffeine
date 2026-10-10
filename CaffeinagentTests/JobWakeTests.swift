@@ -415,6 +415,38 @@ final class JobWakeTests: XCTestCase {
     /// A daily job and a monthly job are on, and the daily one is switched
     /// off. The helper takes no time that is more than 8 days ahead, so
     /// none is asked for, and the alarm of the daily job goes.
+    /// The 0 after a refused time gets no answer. The refused time still
+    /// waits for its retry: it does not go again at the next turn.
+    func testACancelAfterARefusalThatGetsNoAnswerKeepsTheWaitOfTheRefusedTime() {
+        set(input(), noon)
+        let edited = input([job("backup", "30 18 * * *")])
+        let time = turn(edited, noon)!
+        wake.answered(.refused(.notScheduled), for: time, now: noon, awake: awake)
+        XCTAssertEqual(turn(edited, noon), 0)
+        wake.answered(.helperNotAvailable, for: 0, now: noon, awake: awake)
+        XCTAssertEqual(wake.status, .helperSilent)
+        XCTAssertEqual(kinds, [.alarmSet, .alarmRefused, .helperSilent])
+        XCTAssertEqual(wake.alarm?.at, at("2026-10-10 20:59"), "Inside the lease the old alarm can still be there")
+        var calls: [TimeInterval] = []
+        for second in 1..<Int(JobWake.retryAfter) {
+            awake += 1
+            if let call = turn(edited, noon.addingTimeInterval(TimeInterval(second))) { calls.append(call) }
+        }
+        XCTAssertEqual(calls, [], "No call in the 59 seconds after")
+        XCTAssertEqual(kinds, [.alarmSet, .alarmRefused, .helperSilent])
+        awake += 1
+        XCTAssertEqual(turn(edited, noon.addingTimeInterval(60)), time, "The retry of the refused time")
+        wake.answered(.refused(.notScheduled), for: time, now: noon, awake: awake)
+        XCTAssertEqual(kinds, [.alarmSet, .alarmRefused, .helperSilent], "The same refusal is one line")
+        XCTAssertEqual(turn(edited, noon.addingTimeInterval(60)), 0, "One cancel for each try")
+
+        // The lease rule counts for this answer too.
+        awake += WakeAlarmLimits.lease
+        wake.answered(.helperNotAvailable, for: 0, now: noon, awake: awake)
+        XCTAssertNil(wake.alarm, "The helper took it away itself, or is gone with it")
+        XCTAssertFalse(wake.owesCancel)
+    }
+
     func testAJobThatIsTooFarAheadTakesTheOldAlarmAwayAndAsksForNone() {
         let both = [job("backup", "0 21 * * *"), job("monthly", "0 3 1 * *")]
         set(input(both, on: ["backup", "monthly"]), noon)

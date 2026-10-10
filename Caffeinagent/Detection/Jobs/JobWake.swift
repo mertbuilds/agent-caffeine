@@ -293,9 +293,14 @@ struct JobWake: Equatable {
         case .helperNotAvailable:
             if !silent { memory.history.note(.helperSilent, at: now) }
             silent = true
-            failedTime = time
-            refusal = nil
-            retryAt = awake + Self.retryAfter
+            // The cancel after a refused time got no answer. The refusal
+            // of the time and its retry stay as they are: with them
+            // gone, the refused time would go again at the next turn.
+            if !clearing {
+                failedTime = time
+                refusal = nil
+                retryAt = awake + Self.retryAfter
+            }
             // The helper takes an alarm away that nobody asked for in
             // the time of the lease, and a helper that stopped took it
             // away at once.
