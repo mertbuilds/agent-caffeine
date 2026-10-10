@@ -68,6 +68,10 @@ enum PanelText {
             return (awakeTitle, "\(name) asked for it")
         case .manualHold(.many(let count)):
             return (awakeTitle, "\(count) commands asked for it")
+        case .scheduledJob(.one(let name)):
+            return (awakeTitle, "For the job \(name)")
+        case .scheduledJob(.many(let count)):
+            return (awakeTitle, "For \(count) scheduled jobs")
         case .idle(.one(let name)):
             return (canSleepTitle, "\(name) is idle")
         case .idle(.many):

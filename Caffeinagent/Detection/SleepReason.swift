@@ -39,7 +39,7 @@ enum SleepReason: Equatable {
         case .notEntitled(let reason): return .notEntitled(reason)
         case .waitingReleased(let subject): return .waitedTooLong(subject, hold: snapshot.waitingHold)
         case .switchedOff, .idle, .noAgents: return nil
-        case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess, .reachable, .manualHold:
+        case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess, .reachable, .manualHold, .scheduledJob:
             guard snapshot.lidClosed, snapshot.onBattery else { return nil }
             if !snapshot.helperSetUp { return .lidClosedNoHelper }
             return snapshot.lidClosedWanted ? nil : .lidClosedSettingOff

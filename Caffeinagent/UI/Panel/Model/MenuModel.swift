@@ -76,7 +76,7 @@ enum MenuModel {
     static func pose(for headline: HoldHeadline) -> HeroPose {
         switch headline {
         case .working(.many(let count)) where count >= 3: return .awake(wisps: 3)
-        case .working, .finishedRecently, .open, .alwaysOn, .remoteAccess, .manualHold: return .awake(wisps: 2)
+        case .working, .finishedRecently, .open, .alwaysOn, .remoteAccess, .manualHold, .scheduledJob: return .awake(wisps: 2)
         case .reachable: return .reachable
         case .waitingHeld: return .attentive
         case .idle, .waitingReleased, .noAgents: return .asleep

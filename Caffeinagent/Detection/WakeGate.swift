@@ -83,3 +83,42 @@ struct WakeGate: Equatable {
         return true
     }
 }
+
+/// The time around an alarm of "Wake for jobs" in which its job hold may
+/// start while the gate is closed: from 30 seconds before the alarm to
+/// the end of the hold, which is the start grace after the time of the
+/// job while the job was not seen, and the cap while it runs.
+///
+/// The alarm wakes a Mac with a closed lid without a full wake, so no
+/// word of a wake comes and the gate stays closed. The job hold is new
+/// evidence all the same: it comes from the clock and the schedule. What
+/// the app knew of the agents before the sleep stays behind the gate.
+struct AlarmWindow: Equatable {
+    static let lead: TimeInterval = 30
+
+    var alarmAt: Date
+    var end: Date
+
+    init(alarmAt: Date, end: Date) {
+        self.alarmAt = alarmAt
+        self.end = end
+    }
+
+    init(_ hold: JobHold) {
+        self.init(alarmAt: hold.startedAt, end: hold.endsAt)
+    }
+
+    func contains(_ now: Date) -> Bool {
+        now >= alarmAt.addingTimeInterval(-Self.lead) && now < end
+    }
+}
+
+extension WakeGate {
+    /// Whether a job hold may keep the Mac awake: when the gate is open,
+    /// and inside the window of an alarm also while it is closed. Outside
+    /// of every window the gate decides alone.
+    /// - Parameter holding: the decision before it does.
+    func allowsJobHold(holding: Bool, windows: [AlarmWindow], now: Date) -> Bool {
+        allowsHold(holding: holding) || windows.contains { $0.contains(now) }
+    }
+}

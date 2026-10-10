@@ -109,9 +109,16 @@ enum LabFormat {
     /// states, counts and times. The names are the only free text, and a
     /// name the user gave as a path is cut to its last part. What a hold
     /// from the command line is for is the caller's own text, and is left
-    /// out.
+    /// out. A job hold keeps its source and its times: the name of the
+    /// job, which is in its ids too, is left out.
     static func scrubbed(_ frame: EvidenceFrame) -> EvidenceFrame {
         var frame = frame
+        for index in frame.jobHolds.indices {
+            let source = frame.jobHolds[index].source.rawValue
+            frame.jobHolds[index].name = source
+            frame.jobHolds[index].jobID = "\(source):\(index + 1)"
+            frame.jobHolds[index].id = "\(source):\(index + 1)@\(Int(frame.jobHolds[index].fireAt))"
+        }
         for index in frame.holds.indices {
             frame.holds[index].reason = nil
             frame.holds[index].command = frame.holds[index].command.map(withoutPath)

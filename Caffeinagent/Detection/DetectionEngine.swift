@@ -74,6 +74,18 @@ final class DetectionEngine: ObservableObject {
         }
     }
     var safety: SafetyStop? { didSet { if safety != oldValue { decideAgain() } } }
+    /// The job holds of "Wake for jobs" that are open. Their owner sets
+    /// them. A new one brings a sample at once: after an alarm woke the
+    /// Mac, the frame at hand is from before the sleep.
+    var jobHolds: [JobHold] = [] {
+        didSet {
+            guard jobHolds != oldValue else { return }
+            decideAgain()
+            requestSample()
+        }
+    }
+    /// The wake alarm that is set, for the recording.
+    var wakeAlarm: Date?
 
     /// Gets every sample while it records.
     var recorder: LabRecorder?
@@ -199,12 +211,15 @@ final class DetectionEngine: ObservableObject {
         let (readings, nextAgents) = VerdictRules.readings(for: sample.frame, memory: agentMemory, settings: settings)
         agentMemory = nextAgents
         self.readings = readings
-        frame = sample.frame
+        var taken = sample.frame
+        taken.jobHolds = jobHolds
+        taken.wakeAlarm = wakeAlarm?.timeIntervalSince1970
+        frame = taken
         decide(at: sample.frame.at, context: sample.frame.context)
         let cost = sample.cost + TimeInterval(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000_000
 
-        recorder?.record(frame: sample.frame, decision: decision, cost: cost)
-        onSample?(DetectionSample(frame: sample.frame, readings: readings, decision: decision, cost: cost, sessionHints: sample.sessionHints, afterGap: gap != nil))
+        recorder?.record(frame: taken, decision: decision, cost: cost)
+        onSample?(DetectionSample(frame: taken, readings: readings, decision: decision, cost: cost, sessionHints: sample.sessionHints, afterGap: gap != nil))
 
         watcher.watch(files: sample.watchedFiles, processes: sample.roots) { [weak self, scheduler] in
             scheduler.onMain { self?.requestSample() }
@@ -213,7 +228,7 @@ final class DetectionEngine: ObservableObject {
         // A sample that an event asked for is still to come, and it sets
         // the timer again.
         if !resamplePending {
-            let quiet = sample.frame.agents.isEmpty && sample.frame.holds.isEmpty
+            let quiet = sample.frame.agents.isEmpty && sample.frame.holds.isEmpty && jobHolds.isEmpty
             scheduleTick(after: quiet ? Self.idleInterval : Self.activeInterval, resample: false)
         }
     }
@@ -231,8 +246,9 @@ final class DetectionEngine: ObservableObject {
     private func decide(at now: Date, context: FrameContext) {
         let (next, memory) = HoldPolicy.decide(
             readings: readings, memory: policyMemory, mode: mode, enabled: enabled, pausedUntil: pausedUntil, reachableUntil: reachableUntil,
-            holds: frame?.holds ?? [], entitlement: entitlement, safety: safety, settings: settings, context: context,
-            mayHold: wakeGate.allowsHold(holding: decision.hold), now: now
+            holds: frame?.holds ?? [], jobHolds: jobHolds, entitlement: entitlement, safety: safety, settings: settings, context: context,
+            mayHold: wakeGate.allowsHold(holding: decision.hold),
+            jobsMayHold: wakeGate.allowsJobHold(holding: decision.hold, windows: jobHolds.map(AlarmWindow.init), now: now), now: now
         )
         policyMemory = memory
         if decision != next { decision = next }

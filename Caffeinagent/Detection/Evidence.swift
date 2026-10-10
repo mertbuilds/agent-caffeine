@@ -314,6 +314,13 @@ struct EvidenceFrame: Codable, Equatable {
     /// The holds from the command line whose holder lives. Left out of a
     /// line with none.
     var holds: [ManualHold] = []
+    /// The job holds of "Wake for jobs" that are open. Left out of a
+    /// line with none. The engine adds them: the collector does not
+    /// know them.
+    var jobHolds: [JobHold] = []
+    /// The time of the wake alarm that is set, in seconds since the
+    /// epoch. Left out of a line with none.
+    var wakeAlarm: TimeInterval?
 
     init(at: Date, agents: [AgentEvidence], context: FrameContext = FrameContext(), holds: [ManualHold] = []) {
         self.at = at
@@ -323,7 +330,7 @@ struct EvidenceFrame: Codable, Equatable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case version = "v", at, awake = "up", agents, context = "ctx", holds
+        case version = "v", at, awake = "up", agents, context = "ctx", holds, jobHolds = "jobs", wakeAlarm = "alarm"
     }
 
     init(from decoder: Decoder) throws {
@@ -334,6 +341,8 @@ struct EvidenceFrame: Codable, Equatable {
         agents = try container.decodeIfPresent([AgentEvidence].self, forKey: .agents) ?? []
         context = try container.decodeIfPresent(FrameContext.self, forKey: .context) ?? FrameContext()
         holds = try container.decodeIfPresent([ManualHold].self, forKey: .holds) ?? []
+        jobHolds = try container.decodeIfPresent([JobHold].self, forKey: .jobHolds) ?? []
+        wakeAlarm = try container.decodeIfPresent(TimeInterval.self, forKey: .wakeAlarm)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -344,5 +353,7 @@ struct EvidenceFrame: Codable, Equatable {
         try container.encode(agents, forKey: .agents)
         try container.encode(context, forKey: .context)
         if !holds.isEmpty { try container.encode(holds, forKey: .holds) }
+        if !jobHolds.isEmpty { try container.encode(jobHolds, forKey: .jobHolds) }
+        try container.encodeIfPresent(wakeAlarm, forKey: .wakeAlarm)
     }
 }

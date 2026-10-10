@@ -108,7 +108,8 @@ enum LabReplay {
             previous = sample.frame.time
             let (readings, nextAgents) = VerdictRules.readings(for: sample.frame, memory: agentMemory, settings: settings)
             let (decision, nextPolicy) = HoldPolicy.decide(
-                readings: readings, memory: policyMemory, mode: mode, enabled: true, holds: sample.frame.holds, entitlement: nil, safety: nil,
+                readings: readings, memory: policyMemory, mode: mode, enabled: true, holds: sample.frame.holds, jobHolds: sample.frame.jobHolds,
+                entitlement: nil, safety: nil,
                 settings: settings, context: sample.frame.context, now: sample.frame.at
             )
             agentMemory = nextAgents

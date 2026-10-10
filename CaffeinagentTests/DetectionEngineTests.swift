@@ -494,6 +494,43 @@ final class DetectionEngineTests: XCTestCase {
         }
     }
 
+    /// The alarm of "Wake for jobs" woke the Mac with the lid closed: no
+    /// word of a full wake comes. The job hold starts all the same, and
+    /// the agent whose state still says "working" from before the sleep
+    /// holds nothing. After the hold nothing passes the gate.
+    func testAJobHoldStartsAfterAnAlarmWakeWithNoFullWakeAndAStaleAgentDoesNot() {
+        state = .working
+        engine.pausedUntil = Self.start.addingTimeInterval(600)
+        engine.settings.stayAwakeLidClosedOnBattery = true
+        engine.start()
+        scheduler.advance(by: 4)
+        engine.willSleep()
+        slept = 3600
+        let alarm = now.timeIntervalSince1970
+        let hold = JobHold(id: "crontab:backup@1", jobID: "crontab:backup", source: .crontab, name: "backup.sh", start: alarm, fireAt: alarm + 30, startGrace: 60, cap: 1800)
+        engine.wakeAlarm = Date(timeIntervalSince1970: alarm + 86_400)
+        let before = collector.samples
+        engine.jobHolds = [hold]
+        XCTAssertFalse(engine.decision.hold, "The frame at hand is from before the sleep")
+        scheduler.advance(by: DetectionEngine.resampleDelay)
+        XCTAssertEqual(collector.samples, before + 1, "A new job hold brings a sample at once")
+        XCTAssertTrue(engine.decision.hold)
+        XCTAssertTrue(engine.decision.lidClosedFlag)
+        XCTAssertEqual(engine.decision.headline, .scheduledJob(.one("backup.sh")))
+        XCTAssertEqual(engine.decision.perAgent.map(\.cause), [nil])
+        XCTAssertEqual(engine.frame?.jobHolds, [hold])
+        XCTAssertEqual(engine.frame?.wakeAlarm, alarm + 86_400)
+        scheduler.advance(by: 80)
+        XCTAssertTrue(engine.decision.hold, "Up to the start grace")
+        scheduler.advance(by: 12)
+        XCTAssertFalse(engine.decision.hold, "The hold is over, and the gate is still closed for the agent")
+        XCTAssertFalse(engine.decision.lidClosedFlag)
+        engine.jobHolds = []
+        scheduler.advance(by: 2)
+        XCTAssertFalse(engine.decision.hold)
+        XCTAssertEqual(engine.frame?.jobHolds, [])
+    }
+
     /// Lid closed on wall power under a hold: the word of sleep came and
     /// the Mac stays awake. The sampling stalls once for 15 seconds, or
     /// the clock is set. The Mac did not sleep, so the hold goes on.
