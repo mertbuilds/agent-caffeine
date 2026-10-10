@@ -57,6 +57,67 @@ final class JobStoreTests: XCTestCase {
         XCTAssertEqual(reason, "The file is too large")
     }
 
+    /// Dotfile managers keep a plist or the jobs file elsewhere and put a
+    /// link in its place.
+    func testALinkToAFileIsReadAndALinkToAnythingElseIsNot() throws {
+        let access = SystemJobSourceAccess()
+        let files = FileManager.default
+        let real = home.appendingPathComponent("dotfiles-jobs.json")
+        try Data(#"{"jobs": []}"#.utf8).write(to: real)
+        let link = home.appendingPathComponent("jobs.json")
+        try files.createSymbolicLink(at: link, withDestinationURL: real)
+        guard case .found(let data) = access.data(at: link) else { return XCTFail("A link to a file is read") }
+        XCTAssertEqual(data, Data(#"{"jobs": []}"#.utf8))
+
+        let twice = home.appendingPathComponent("link-to-link.json")
+        try files.createSymbolicLink(at: twice, withDestinationURL: link)
+        guard case .found = access.data(at: twice) else { return XCTFail("A link to a link to a file is read") }
+
+        let toFolder = home.appendingPathComponent("folder.json")
+        try files.createSymbolicLink(at: toFolder, withDestinationURL: home.appendingPathComponent("Library"))
+        guard case .failed(let folderReason) = access.data(at: toFolder) else { return XCTFail("A link to a folder is no file") }
+        XCTAssertEqual(folderReason, "It is no file")
+
+        // A pipe with no writer: the open must not wait for one.
+        let pipe = home.appendingPathComponent("pipe")
+        XCTAssertEqual(mkfifo(pipe.path, 0o600), 0)
+        let toPipe = home.appendingPathComponent("pipe.json")
+        try files.createSymbolicLink(at: toPipe, withDestinationURL: pipe)
+        for url in [pipe, toPipe] {
+            guard case .failed(let reason) = access.data(at: url) else { return XCTFail("A pipe is no file") }
+            XCTAssertEqual(reason, "It is no file")
+        }
+
+        let toDevice = home.appendingPathComponent("zero.json")
+        try files.createSymbolicLink(at: toDevice, withDestinationURL: URL(fileURLWithPath: "/dev/zero"))
+        guard case .failed(let deviceReason) = access.data(at: toDevice) else { return XCTFail("A device is no file") }
+        XCTAssertEqual(deviceReason, "It is no file")
+
+        let large = home.appendingPathComponent("large.bin")
+        try Data(count: SystemJobSourceAccess.maxBytes + 1).write(to: large)
+        let toLarge = home.appendingPathComponent("large.json")
+        try files.createSymbolicLink(at: toLarge, withDestinationURL: large)
+        guard case .failed(let largeReason) = access.data(at: toLarge) else { return XCTFail("Too large behind a link too") }
+        XCTAssertEqual(largeReason, "The file is too large")
+        try Data(count: SystemJobSourceAccess.maxBytes).write(to: large)
+        guard case .found(let most) = access.data(at: toLarge) else { return XCTFail("The limit itself is read") }
+        XCTAssertEqual(most.count, SystemJobSourceAccess.maxBytes)
+
+        let dangling = home.appendingPathComponent("dangling.json")
+        try files.createSymbolicLink(at: dangling, withDestinationURL: home.appendingPathComponent("gone.json"))
+        guard case .missing = access.data(at: dangling) else { return XCTFail("A link to nothing is no file that is there") }
+    }
+
+    /// A launchd agent behind a link is found like any other.
+    func testALaunchdAgentBehindALinkIsFound() throws {
+        let real = home.appendingPathComponent("dotfiles-agent.plist")
+        try plist(label: "com.example.linked", hour: 9).write(to: real)
+        try FileManager.default.createSymbolicLink(at: home.appendingPathComponent("Library/LaunchAgents/com.example.linked.plist"), withDestinationURL: real)
+        let reading = LaunchAgentsJobReader(home: home).read(SystemJobSourceAccess())
+        XCTAssertEqual(reading.jobs.map(\.name), ["com.example.linked"])
+        JobPrivacy.check(reading.jobs, neverHolds: Self.secrets)
+    }
+
     // MARK: crontab
 
     func testWhatTheCommandPrintsIsTheCrontab() throws {

@@ -28,13 +28,32 @@ struct SystemJobSourceAccess: JobSourceAccess {
         return .found(names)
     }
 
+    /// A link is followed: dotfile managers keep a plist or the jobs
+    /// file elsewhere and put a link in its place. What the link leads
+    /// to is checked on the open descriptor, so it cannot change between
+    /// the check and the read: only a regular file is read, and at most
+    /// `maxBytes` of it. The open does not block, so a pipe with no
+    /// writer is refused by its type and not waited for.
     func data(at file: URL) -> JobSourceRead<Data> {
-        guard let attributes = try? FileManager.default.attributesOfItem(atPath: file.path) else { return .missing }
-        guard attributes[.type] as? FileAttributeType == .typeRegular, let size = attributes[.size] as? Int else {
-            return .failed("It is no file")
+        let descriptor = open(file.path, O_RDONLY | O_NONBLOCK | O_CLOEXEC)
+        guard descriptor >= 0 else {
+            return errno == ENOENT || errno == ENOTDIR ? .missing : .failed("The file could not be read")
         }
-        guard size <= Self.maxBytes else { return .failed("The file is too large") }
-        guard let data = try? Data(contentsOf: file) else { return .failed("The file could not be read") }
+        defer { close(descriptor) }
+        var info = stat()
+        guard fstat(descriptor, &info) == 0, info.st_mode & S_IFMT == S_IFREG else { return .failed("It is no file") }
+        guard info.st_size <= Self.maxBytes else { return .failed("The file is too large") }
+        // One byte more than the limit shows a file that grew meanwhile.
+        var data = Data()
+        var buffer = [UInt8](repeating: 0, count: 65_536)
+        while data.count <= Self.maxBytes {
+            let count = read(descriptor, &buffer, min(buffer.count, Self.maxBytes + 1 - data.count))
+            if count < 0, errno == EINTR { continue }
+            guard count >= 0 else { return .failed("The file could not be read") }
+            if count == 0 { break }
+            data.append(contentsOf: buffer[0..<count])
+        }
+        guard data.count <= Self.maxBytes else { return .failed("The file is too large") }
         return .found(data)
     }
 
