@@ -1,0 +1,50 @@
+id = "CLI-16"
+title = "Set up for agents: one click installs the skill and links the command"
+layer = 1
+area = "cli"
+minutes = 3
+risk = "Files are written into the skills folders of the agents."
+why = "The skill in each folder, and the link. Installed on this Mac on 2026-10-09 and never checked as a test. Run CLI-20 first, so this is a real install."
+checks = [
+  "at step 1 start: probe.skill_claude=false and probe.link=false",
+  "at step 2: probe.skill_claude=true and probe.skill_agents=true and probe.link=true",
+  "key shown is yes",
+  "key line is yes",
+  "exit skill == 0",
+  "out skill contains agent-caffeine",
+]
+
+[probes.skill_claude]
+kind = "contains"
+path = "~/.claude/skills/agent-caffeine/SKILL.md"
+contains = "agent-caffeine-skill"
+
+[probes.skill_agents]
+kind = "contains"
+path = "~/.agents/skills/agent-caffeine/SKILL.md"
+contains = "agent-caffeine-skill"
+
+[probes.link]
+kind = "link"
+path = "~/.local/bin/agent-caffeine"
+contains = "/Contents/MacOS/agent-caffeine"
+
+[[steps]]
+say = "Open Settings of Agent Caffeine, the tab Agents. Click Show what changes and read it."
+ask = "Does it list the skill folders and the link in ~/.local/bin?"
+name = "shown"
+
+[[steps]]
+say = "Click Set up for agents."
+until = "probe.skill_claude=true and probe.link=true"
+timeout = 300
+
+[[steps]]
+say = "Read the line in the block."
+ask = "Does it say: Set up for ... The command agent-caffeine is linked?"
+name = "line"
+
+[[steps]]
+say = "Nothing to do. The runner asks the tool for the skill."
+run = ["agent-caffeine", "skill"]
+name = "skill"

@@ -1,0 +1,41 @@
+id = "DET-CD-03"
+title = "Claude desktop: a Code session waits for an approval"
+layer = 1
+area = "det"
+minutes = 4
+risk = "Low: one short paid turn."
+why = "Waiting in a desktop Code session was never seen live."
+checks = [
+  "within 20s after step 2: app.agent[claude-desktop].state=waiting",
+  "always from step 2 + 20s to step 4 - 5s: app.agent[claude-desktop].state=waiting",
+  "within 10s after step 4: app.agent[claude-desktop].state=working",
+  "always from step 4 + 10s to step 5 - 5s: app.agent[claude-desktop].state=working",
+  "within 15s after step 5 - 5s: app.agent[claude-desktop].state=idle",
+  "info within 25s after step 2: app.notice[waiting].age<30",
+  "info at step 3: app.agent[claude-desktop].why=asksPermission",
+]
+
+[needs]
+agents = ["claude-desktop"]
+
+[[steps]]
+say = "The runner checks that the Claude desktop app is open and idle. If it waits here, end the turn that runs in the Claude desktop app."
+until = "app.agent[claude-desktop].state=idle"
+timeout = 60
+
+[[steps]]
+say = "In the Code tab of the Claude desktop app, send this prompt: run `sleep 30` in the shell, then say done. Press Enter here at the moment the approval question shows."
+key = "enter"
+
+[[steps]]
+say = "Do not answer the question. The runner waits 60 seconds."
+until = "time>=60s"
+timeout = 120
+
+[[steps]]
+say = "Approve the command now. Press Enter here at the moment you approve."
+key = "enter"
+
+[[steps]]
+say = "Wait for the full answer. Press Enter here at the moment the answer is complete."
+key = "enter"

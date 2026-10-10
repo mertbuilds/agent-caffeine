@@ -1,0 +1,21 @@
+id = "DET-CD-01"
+title = "Claude desktop idle with its own wake lock reads idle"
+layer = 1
+area = "det"
+minutes = 13
+risk = "None."
+why = "The trap of 1.0.0: the app takes a wake lock of its own for about 5 minutes again and again with no turn. It held the Mac for hours. It must read idle."
+checks = [
+  "always from start + 60s to end: app.agent[claude-desktop].state=idle",
+  "always from start + 60s to end: app.agent[claude-desktop].hold=none",
+  "info at end: app.agent[claude-desktop].why=atPrompt",
+  "info at end: app.agent[claude-desktop].count>=1",
+]
+
+[needs]
+agents = ["claude-desktop"]
+
+[[steps]]
+say = "Leave the Claude desktop app open with no turn running. The runner watches for 12 minutes, so its own wake lock comes and goes at least twice. You can use the Mac for other things."
+until = "time>=720s"
+timeout = 780

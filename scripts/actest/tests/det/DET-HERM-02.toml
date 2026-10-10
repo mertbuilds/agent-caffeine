@@ -1,0 +1,38 @@
+id = "DET-HERM-02"
+title = "Hermes Agent works through a quiet command"
+layer = 1
+area = "det"
+minutes = 6
+risk = "Low: one short paid turn."
+why = "The lease row of a chat turn was never seen in a real database."
+checks = [
+  "within 10s after step 2: app.agent[hermes-agent].state=working",
+  "always from step 2 + 10s to step 3 - 5s: app.agent[hermes-agent].state=working",
+  "always from step 2 + 10s to step 3 - 5s: app.agent[hermes-agent].hold=working",
+  "within 15s after step 3 - 5s: app.agent[hermes-agent].state=idle",
+  "within 135s after step 3 - 5s: app.agent[hermes-agent].hold=none",
+  "info at step 2 + 15s: app.agent[hermes-agent].why=reportsBusy",
+  "info within 10s after step 3 - 5s: app.agent[hermes-agent].hold=finished",
+  "info within 15s after step 3 - 5s: app.notice[finished].age<20",
+]
+
+[needs]
+agents = ["hermes-agent"]
+
+[[steps]]
+say = "The runner checks that Hermes Agent is open and idle. If it waits here, end the turn that runs in Hermes Agent."
+until = "app.agent[hermes-agent].state=idle"
+timeout = 60
+
+[[steps]]
+say = "In the Hermes chat, send this prompt: run `sleep 120` in the shell, then say done. Press Enter here at the moment you send it."
+key = "enter"
+
+[[steps]]
+say = "Wait for the full answer. Press Enter here at the moment the answer is complete."
+key = "enter"
+
+[[steps]]
+say = "Nothing to do. The runner waits until Agent Caffeine lets go of Hermes Agent."
+until = "app.agent[hermes-agent].hold=none"
+timeout = 180

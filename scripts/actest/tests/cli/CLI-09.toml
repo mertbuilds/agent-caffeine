@@ -1,0 +1,46 @@
+id = "CLI-09"
+title = "Every stop beats a hold: pause and the switch"
+layer = 1
+area = "cli"
+minutes = 4
+risk = "None."
+why = "The battery limit, a pause and the switch still let the Mac sleep. The battery limit case is HOLD-10."
+checks = [
+  "within 3s after step 2: app.hold=false and app.holds=1",
+  "within 5s after step 2: sleepdisabled=0",
+  "within 5s after step 3: app.hold=true",
+  "within 3s after step 4: app.hold=false and app.holds=1",
+  "within 5s after step 4: sleepdisabled=0",
+  "at step 5: app.hold=true",
+]
+
+[needs]
+helper = true
+idle = true
+
+[[steps]]
+say = "Nothing to do. The runner starts a hold of 10 minutes."
+run = ["agent-caffeine", "hold", "--for", "10m", "--json"]
+name = "hold"
+until = "app.hold=true and sleepdisabled=1"
+timeout = 15
+
+[[steps]]
+say = "Pause Agent Caffeine for 30 minutes (the timer button in its menu)."
+until = "app.paused=true"
+timeout = 180
+
+[[steps]]
+say = "Wait 5 seconds. Then click Resume."
+until = "app.paused=false and app.hold=true"
+timeout = 180
+
+[[steps]]
+say = "Wait 5 seconds. Then switch Agent Caffeine off (the switch in its menu)."
+until = "app.on=false"
+timeout = 180
+
+[[steps]]
+say = "Wait 5 seconds. Then switch it on again."
+until = "app.on=true and app.hold=true"
+timeout = 180

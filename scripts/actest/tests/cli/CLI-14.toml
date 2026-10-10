@@ -1,0 +1,28 @@
+id = "CLI-14"
+title = "The holds of an MCP session end with the session"
+layer = 1
+area = "cli"
+minutes = 3
+risk = "Low: one short paid turn."
+why = "Run with a stand-in for the app only. Never in a real agent."
+checks = [
+  "within 10s after step 2: app.holds=0",
+  "at step 1: app.hold=true",
+]
+
+[needs]
+idle = true
+
+[[steps]]
+say = "In an agent that has the agent-caffeine MCP server, ask it to call hold_awake for 30 minutes."
+until = "app.holds=1"
+timeout = 300
+
+[[steps]]
+say = "Quit that agent. Press Enter here at the moment you quit it."
+key = "enter"
+
+[[steps]]
+say = "Nothing to do. The runner waits for the hold to go."
+until = "app.holds=0"
+timeout = 40

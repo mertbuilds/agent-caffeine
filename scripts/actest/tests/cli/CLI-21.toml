@@ -1,0 +1,27 @@
+id = "CLI-21"
+title = "The PATH hint in the setup block of Settings"
+layer = 1
+area = "cli"
+minutes = 1
+risk = "None."
+why = "The hint shows only when ~/.local/bin is not on the PATH of a new Terminal. It needs eyes."
+checks = [
+  "key works is yes",
+  "key hint is no",
+  "at start: probe.link=true",
+]
+
+[probes.link]
+kind = "link"
+path = "~/.local/bin/agent-caffeine"
+contains = "/Contents/MacOS/agent-caffeine"
+
+[[steps]]
+say = "Open a new Terminal window and run: which agent-caffeine"
+ask = "Did it print a path in ~/.local/bin?"
+name = "works"
+
+[[steps]]
+say = "Open Settings of Agent Caffeine, the tab Agents, the block Set up for agents."
+ask = "Does the block show a hint that ~/.local/bin is not on your PATH?"
+name = "hint"

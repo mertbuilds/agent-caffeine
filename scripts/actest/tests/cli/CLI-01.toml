@@ -1,0 +1,39 @@
+id = "CLI-01"
+title = "hold --for keeps the Mac awake and ends at its time"
+layer = 1
+area = "cli"
+minutes = 2
+risk = "None."
+why = "A script can ask for the Mac to stay awake. Never run against the real app."
+checks = [
+  "exit hold == 0",
+  "within 3s after step 1 start: app.hold=true and app.headline=manualHold",
+  "key row is yes",
+  "within 65s after step 1 start: app.holds=0",
+  "within 5s after step 3: app.hold=false",
+]
+
+[needs]
+idle = true
+
+[[steps]]
+say = "Nothing to do. The runner starts a hold of 60 seconds."
+run = ["agent-caffeine", "hold", "--for", "60s", "--json"]
+name = "hold"
+until = "app.holds=1"
+timeout = 10
+
+[[steps]]
+say = "Open the menu of Agent Caffeine."
+ask = "Is there a row for the hold, with a Stop link?"
+name = "row"
+
+[[steps]]
+say = "Nothing to do. The hold ends by itself."
+until = "app.holds=0"
+timeout = 90
+
+[[steps]]
+say = "Nothing to do."
+until = "time>=6s"
+timeout = 30

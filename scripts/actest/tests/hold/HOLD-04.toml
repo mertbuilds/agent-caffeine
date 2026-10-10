@@ -1,0 +1,53 @@
+id = "HOLD-04"
+title = "Lid closed on battery for 10 minutes under a working agent, then sleep after it ends"
+layer = 1
+area = "hold"
+minutes = 20
+risk = "The Mac is awake with the lid closed for about 14 minutes. Keep it on a table, not in a bag."
+why = "The headline promise, after the lid code changed. And lets it sleep after: the Mac must sleep once the agent is done."
+heartbeat = true
+checks = [
+  "heartbeat gap from step 3 to step 3 + 600s < 15s",
+  "log from step 3 to step 3 + 600s has no Sleep,Wake,DarkWake",
+  "always from step 3 to step 3 + 600s: sleepdisabled=1",
+  "always from step 3 to step 3 + 600s: app.hold=true",
+  "log from step 3 + 600s to step 4 has Sleep",
+  "at end: sleepdisabled=0 or app.wanted=true",
+  "key chime is yes",
+  "info within 5s after step 3: app.chime.age<10",
+]
+
+[needs]
+power = "battery"
+charge = 40
+helper = true
+display = "builtin"
+idle = true
+
+[[steps]]
+say = "In any agent, send this prompt: run `sleep 720` in the shell, then say done. Press Enter here at the moment you send it."
+key = "enter"
+
+[[steps]]
+say = "Nothing to do. The runner waits until Agent Caffeine holds for the agent."
+until = "app.hold=true and app.headline=working and sleepdisabled=1"
+timeout = 40
+
+[[steps]]
+say = "Close the lid now and listen for the chime. Leave the Mac on the table. Open the lid at {clock+17}, not before."
+until = "lid=closed"
+timeout = 120
+
+[[steps]]
+say = "Open the lid at the time you were told."
+until = "lid=open"
+timeout = 1500
+
+[[steps]]
+say = "One question."
+ask = "Did you hear the chime when you closed the lid?"
+name = "chime"
+
+[[cleanup]]
+expect = "power=ac"
+tell = "Plug the charger in again."

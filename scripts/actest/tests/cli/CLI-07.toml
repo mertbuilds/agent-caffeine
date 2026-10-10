@@ -1,0 +1,49 @@
+id = "CLI-07"
+title = "status and status --json tell the truth of the app"
+layer = 1
+area = "cli"
+minutes = 3
+risk = "None."
+why = "status must say what the app decided: with a hold, and while paused."
+checks = [
+  "exit plain == 0",
+  "out plain contains stays awake",
+  "out json contains \"awake\":true",
+  "out paused contains \"awake\":false",
+  "at step 4: app.hold=false and app.holds=1",
+]
+
+[needs]
+idle = true
+
+[[steps]]
+say = "Nothing to do. The runner starts a hold of 10 minutes."
+run = ["agent-caffeine", "hold", "--for", "10m", "--json"]
+name = "hold"
+until = "app.hold=true"
+timeout = 10
+
+[[steps]]
+say = "Nothing to do. The runner reads the status."
+run = ["agent-caffeine", "status"]
+name = "plain"
+
+[[steps]]
+say = "Nothing to do. The runner reads the status as JSON."
+run = ["agent-caffeine", "status", "--json"]
+name = "json"
+
+[[steps]]
+say = "Pause Agent Caffeine for 30 minutes (the timer button in its menu)."
+until = "app.paused=true"
+timeout = 180
+
+[[steps]]
+say = "Nothing to do. The runner reads the status again."
+run = ["agent-caffeine", "status", "--json"]
+name = "paused"
+
+[[steps]]
+say = "Click Resume in the menu of Agent Caffeine."
+until = "app.paused=false"
+timeout = 180

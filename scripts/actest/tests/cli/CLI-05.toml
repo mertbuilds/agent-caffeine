@@ -1,0 +1,37 @@
+id = "CLI-05"
+title = "Control-Z stops the hold, fg brings it back"
+layer = 1
+area = "cli"
+minutes = 2
+risk = "None."
+why = "A stopped holder keeps nothing awake."
+checks = [
+  "at step 1: app.hold=true",
+  "at step 2: app.hold=false",
+  "always from step 3 to step 4 - 3s: app.hold=true",
+  "at step 4: app.holds=0",
+]
+
+[needs]
+idle = true
+
+[[steps]]
+say = "Start a hold in another Terminal."
+command = "agent-caffeine hold -- sleep 300"
+until = "app.holds=1"
+timeout = 180
+
+[[steps]]
+say = "Press Control-Z in that Terminal."
+until = "app.holds=0"
+timeout = 120
+
+[[steps]]
+say = "Type fg in that Terminal and press Enter."
+until = "app.holds=1 and app.hold=true"
+timeout = 120
+
+[[steps]]
+say = "Wait 5 seconds. Then press Control-C in that Terminal."
+until = "app.holds=0"
+timeout = 120

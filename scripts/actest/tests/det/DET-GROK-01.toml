@@ -1,0 +1,21 @@
+id = "DET-GROK-01"
+title = "Grok Build idle stays idle"
+layer = 1
+area = "det"
+minutes = 11
+risk = "None."
+why = "No wrong hold: the process shape of Grok Build at its prompt was never scored live."
+checks = [
+  "always from start + 60s to end: app.agent[grok].state=idle",
+  "always from start + 60s to end: app.agent[grok].hold=none",
+  "info at end: app.agent[grok].why=atPrompt",
+  "info at end: app.agent[grok].count>=1",
+]
+
+[needs]
+agents = ["grok"]
+
+[[steps]]
+say = "Leave Grok Build open and do not type in it. The runner watches for 10 minutes. You can use the Mac for other things."
+until = "time>=600s"
+timeout = 660

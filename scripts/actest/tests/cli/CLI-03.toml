@@ -1,0 +1,34 @@
+id = "CLI-03"
+title = "kill -9 of the tool: a dead holder keeps nothing awake"
+layer = 1
+area = "cli"
+minutes = 1
+risk = "None."
+why = "A dead holder keeps nothing awake."
+checks = [
+  "at step 1: app.hold=true",
+  "within 10s after step 2 start: app.holds=0",
+  "within 12s after step 2 start: app.hold=false",
+]
+
+[needs]
+idle = true
+
+[[steps]]
+say = "Nothing to do. The runner runs: agent-caffeine hold -- sleep 300"
+spawn = ["agent-caffeine", "hold", "--", "sleep", "300"]
+name = "sleeper"
+until = "app.holds=1"
+timeout = 10
+
+[[steps]]
+say = "Nothing to do. The runner kills the tool it started with kill -9."
+signal = "KILL"
+name = "sleeper"
+until = "app.holds=0"
+timeout = 40
+
+[[steps]]
+say = "Nothing to do."
+until = "time>=3s"
+timeout = 20

@@ -1,0 +1,38 @@
+id = "DET-CD-02"
+title = "Claude desktop: a Code session works through a quiet command"
+layer = 1
+area = "det"
+minutes = 5
+risk = "Low: one short paid turn."
+why = "Busy in the session file of a desktop Code session was never seen live."
+checks = [
+  "within 10s after step 2: app.agent[claude-desktop].state=working",
+  "always from step 2 + 10s to step 3 - 5s: app.agent[claude-desktop].state=working",
+  "always from step 2 + 10s to step 3 - 5s: app.agent[claude-desktop].hold=working",
+  "within 15s after step 3 - 5s: app.agent[claude-desktop].state=idle",
+  "within 135s after step 3 - 5s: app.agent[claude-desktop].hold=none",
+  "info at step 2 + 15s: app.agent[claude-desktop].why=reportsBusy",
+  "info within 10s after step 3 - 5s: app.agent[claude-desktop].hold=finished",
+  "info within 15s after step 3 - 5s: app.notice[finished].age<20",
+]
+
+[needs]
+agents = ["claude-desktop"]
+
+[[steps]]
+say = "The runner checks that the Claude desktop app is open and idle. If it waits here, end the turn that runs in the Claude desktop app."
+until = "app.agent[claude-desktop].state=idle"
+timeout = 60
+
+[[steps]]
+say = "In the Code tab of the Claude desktop app, send this prompt: run `sleep 90` in the shell, then say done. Press Enter here at the moment you send it."
+key = "enter"
+
+[[steps]]
+say = "Wait for the full answer. Press Enter here at the moment the answer is complete."
+key = "enter"
+
+[[steps]]
+say = "Nothing to do. The runner waits until Agent Caffeine lets go of the Claude desktop app."
+until = "app.agent[claude-desktop].hold=none"
+timeout = 180

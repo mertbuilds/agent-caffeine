@@ -1,0 +1,70 @@
+id = "WAKE-E04"
+title = "The hold keeps a dark wake up for 10 minutes while a job writes to disk"
+layer = 1
+area = "wake"
+minutes = 20
+risk = "You load one launchd job and remove it after. The Mac is awake with the lid closed for about 11 minutes."
+why = "A job needs the Mac for its whole run. The test job writes one line every 10 seconds for 10 minutes. It uses no network: the network part of E04 is left out."
+heartbeat = true
+watch = ["sched"]
+checks = [
+  "log from step 3 to step 4 has Sleep",
+  "within 10s after step 4: app.history[alarmSet]>=1",
+  "within 100s after step 4: probe.job_lines>=1",
+  "heartbeat gap from step 4 to step 4 + 600s < 15s",
+  "at step 5: probe.job_lines>=58",
+  "log from step 4 + 5s to step 4 + 600s has no Sleep",
+]
+
+[needs]
+power = "ac"
+helper = true
+display = "builtin"
+wake_for_jobs = true
+idle = true
+
+[probes.job_plist]
+kind = "exists"
+path = "~/Library/LaunchAgents/com.caffeinagent.actest.job.plist"
+
+[probes.job_lines]
+kind = "lines"
+path = "{run}/job.log"
+
+[[steps]]
+say = "The runner wrote a test job that runs at {job_hhmm}. It appends lines to a file in the folder of this run and does nothing else. Load it."
+write = "launchd-job"
+in_minutes = 5
+job_seconds = 600
+command = "cp \"{job_plist}\" ~/Library/LaunchAgents/ && launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.caffeinagent.actest.job.plist"
+until = "probe.job_plist=true"
+timeout = 240
+
+[[steps]]
+say = "Open Settings of Agent Caffeine, the part Wake for jobs. Switch on the job com.caffeinagent.actest.job."
+until = "app.jobs.enabled>=1"
+timeout = 240
+
+[[steps]]
+say = "Close the lid now. Open it at {job_hhmm+13}, not before."
+until = "lid=closed"
+timeout = 200
+
+[[steps]]
+say = "The lid is closed. The runner waits for the Mac to wake for the job."
+until = "app.jobholds>=1"
+timeout = 900
+
+[[steps]]
+say = "The runner waits for the job hold to end."
+until = "app.jobholds=0"
+timeout = 1500
+
+[[steps]]
+say = "Open the lid at the time you were told."
+until = "lid=open"
+timeout = 1200
+
+[[cleanup]]
+expect = "probe.job_plist=false"
+tell = "Remove the test job. Run: launchctl bootout gui/$UID/com.caffeinagent.actest.job; rm ~/Library/LaunchAgents/com.caffeinagent.actest.job.plist"

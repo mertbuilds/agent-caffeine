@@ -1,0 +1,48 @@
+id = "CLI-06"
+title = "release, release <id>, release --all"
+layer = 1
+area = "cli"
+minutes = 1
+risk = "None."
+why = "End a hold. Never run against the real app."
+checks = [
+  "exit bare == 2",
+  "out bare contains There are 2 holds",
+  "exit one == 0",
+  "at step 4: app.holds=1",
+  "exit rest == 0",
+  "at step 5: app.holds=0",
+]
+
+[[steps]]
+say = "Nothing to do. The runner starts a first hold."
+run = ["agent-caffeine", "hold", "--for", "5m", "--json"]
+name = "first"
+until = "app.holds=1"
+timeout = 10
+
+[[steps]]
+say = "Nothing to do. The runner starts a second hold."
+run = ["agent-caffeine", "hold", "--for", "5m", "--json"]
+name = "second"
+until = "app.holds=2"
+timeout = 10
+
+[[steps]]
+say = "Nothing to do. The runner runs release with no id. It must refuse and list both."
+run = ["agent-caffeine", "release"]
+name = "bare"
+
+[[steps]]
+say = "Nothing to do. The runner releases the first hold by its id."
+run = ["agent-caffeine", "release", "{first_id}"]
+name = "one"
+until = "app.holds=1"
+timeout = 10
+
+[[steps]]
+say = "Nothing to do. The runner releases the rest."
+run = ["agent-caffeine", "release", "--all"]
+name = "rest"
+until = "app.holds=0"
+timeout = 10

@@ -1,0 +1,21 @@
+id = "CLI-26"
+title = "The name of the bundle on disk: hooks count as current"
+layer = 1
+area = "cli"
+minutes = 1
+risk = "None."
+why = "An install that was updated keeps the lowercase name agent caffeine.app. Its hook lines must count as current. It needs eyes."
+checks = [
+  "key update is no",
+  "key name is yes",
+]
+
+[[steps]]
+say = "Open Settings of Agent Caffeine, the tab Agents."
+ask = "Is an Update button offered for any agent under Better detection?"
+name = "update"
+
+[[steps]]
+say = "Open Settings, the tab About, and the Applications folder in Finder."
+ask = "Does the app show one name everywhere (Agent Caffeine), with no second copy in Applications?"
+name = "name"

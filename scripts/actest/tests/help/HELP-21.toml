@@ -1,0 +1,24 @@
+id = "HELP-21"
+title = "At rest the sleep flag is 0 and no marker is left"
+layer = 1
+area = "help"
+minutes = 1
+risk = "None."
+why = "A flag found on with nothing that holds is the worst fault of the app: a Mac that cannot sleep in a bag. First test of every session."
+checks = [
+  "never from start to end: sleepdisabled=1 and app.wanted=false",
+  "never from start to end: probe.marker=true and app.wanted=false",
+  "always from start to end: app.helper=enabled",
+]
+
+[needs]
+helper = true
+
+[probes.marker]
+kind = "exists"
+path = "/Library/Application Support/com.caffeinagent.app/sleep-flag-set"
+
+[[steps]]
+say = "Nothing to do. The runner reads the sleep flag for 20 seconds."
+until = "time>=20s"
+timeout = 60

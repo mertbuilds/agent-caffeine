@@ -1,0 +1,42 @@
+id = "CLI-08"
+title = "The app does not run: hold --for is refused, hold -- command runs and warns"
+layer = 1
+area = "cli"
+minutes = 3
+risk = "You quit the app and open it again."
+why = "A hold that nothing honours would be a promise the tool cannot keep."
+checks = [
+  "exit refused == 1",
+  "out refused contains not running",
+  "exit runs == 0",
+  "out runs contains can sleep while this runs",
+  "out status contains is not running",
+  "within 5s after step 1: sleepdisabled=0",
+]
+
+[[steps]]
+say = "Quit Agent Caffeine from its menu (the gear, then Quit)."
+until = "app.running=false"
+timeout = 240
+
+[[steps]]
+say = "Nothing to do. The runner asks for a hold. It must be refused."
+run = ["agent-caffeine", "hold", "--for", "1m"]
+name = "refused"
+
+[[steps]]
+say = "Nothing to do. The runner runs a command under a hold. It must run and warn."
+run = ["agent-caffeine", "hold", "--", "true"]
+name = "runs"
+
+[[steps]]
+say = "Nothing to do. The runner reads the status."
+run = ["agent-caffeine", "status"]
+name = "status"
+until = "time>=5s"
+timeout = 20
+
+[[steps]]
+say = "Open Agent Caffeine again."
+until = "app.running=true and app.state=true"
+timeout = 240

@@ -1,0 +1,44 @@
+id = "HELP-03"
+title = "The app is killed with the sleep flag on: the flag clears in 65 seconds"
+layer = 1
+area = "help"
+minutes = 4
+risk = "The app is killed. You open it again in the last step."
+why = "The proof that a crash cannot leave the Mac awake in a bag. It comes before any test that leaves the lid closed for long."
+checks = [
+  "within 65s after step 2: sleepdisabled=0",
+  "within 65s after step 2: probe.marker=false",
+  "never from step 2 to step 3: app.running=true",
+  "info within 20s after step 4: sleepdisabled=1",
+]
+
+[needs]
+helper = true
+idle = true
+
+[probes.marker]
+kind = "exists"
+path = "/Library/Application Support/com.caffeinagent.app/sleep-flag-set"
+
+[[steps]]
+say = "Nothing to do. The runner starts a hold of 10 minutes and waits for the flag."
+run = ["agent-caffeine", "hold", "--for", "10m", "--json"]
+name = "hold"
+until = "sleepdisabled=1 and app.flag=true"
+timeout = 15
+
+[[steps]]
+say = "Kill Agent Caffeine. The runner never does this itself."
+command = "kill -9 {app_pid}"
+until = "app.running=false"
+timeout = 240
+
+[[steps]]
+say = "Do not open the app yet. The helper must clear the flag by itself. The runner waits."
+until = "sleepdisabled=0"
+timeout = 100
+
+[[steps]]
+say = "Open Agent Caffeine again (Spotlight, or the Applications folder)."
+until = "app.running=true and app.state=true"
+timeout = 240

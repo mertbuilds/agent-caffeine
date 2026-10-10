@@ -1,0 +1,31 @@
+id = "CLI-04"
+title = "Control-C in a real Terminal ends the hold once, with exit code 130"
+layer = 1
+area = "cli"
+minutes = 2
+risk = "None."
+why = "The signal comes from the terminal to the tool and to the command. The command must end once."
+checks = [
+  "key code is yes",
+  "at step 1: app.hold=true",
+  "at step 2: app.holds=0",
+]
+
+[needs]
+idle = true
+
+[[steps]]
+say = "Start a hold in another Terminal."
+command = "agent-caffeine hold -- sleep 300"
+until = "app.holds=1"
+timeout = 180
+
+[[steps]]
+say = "Press Control-C in that Terminal. Then run there: echo $?"
+until = "app.holds=0"
+timeout = 120
+
+[[steps]]
+say = "One question."
+ask = "Did echo $? print 130?"
+name = "code"

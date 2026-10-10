@@ -1,0 +1,57 @@
+id = "WAKE-E01"
+title = "Does a wake alarm fire with the lid closed on battery"
+layer = 1
+area = "wake"
+minutes = 8
+risk = "You set one wake alarm with sudo. It fires once and is gone. Agent Caffeine is off for the test."
+why = "The make-or-break question of Wake for jobs. Nobody measured it. A wrong promise wakes Macs in bags."
+decides = "the battery promise: if no alarm fires here, Wake for jobs stays only on power and no helper bridge is built"
+watch = ["sched"]
+checks = [
+  "log from step 3 to alarm - 10s has Sleep",
+  "log within 20s after alarm - 5s has AlarmWake",
+  "at end: sched.byhand=false",
+  "info log from alarm - 5s to step 4 has DarkWake",
+  "info log from alarm - 5s to step 4 has Wake",
+]
+
+[needs]
+power = "battery"
+charge = 40
+display = "builtin"
+idle = true
+
+[[steps]]
+say = "Switch Agent Caffeine off (the switch in its menu)."
+until = "app.on=false and sleepdisabled=0"
+timeout = 180
+
+[[steps]]
+say = "Set a wake alarm for {alarm_hhmm}. The runner never sets one itself."
+alarm_in = 4
+command = "sudo pmset schedule wake \"{alarm_date}\""
+until = "sched.byhand=true"
+timeout = 150
+
+[[steps]]
+say = "Close the lid now. Open it at {alarm_hhmm+2}, not before."
+until = "lid=closed"
+timeout = 60
+
+[[steps]]
+say = "Open the lid at the time you were told."
+until = "lid=open"
+timeout = 900
+
+[[steps]]
+say = "Switch Agent Caffeine on again."
+until = "app.on=true"
+timeout = 180
+
+[[cleanup]]
+expect = "sched.byhand=false"
+tell = "Your alarm is still set. Run: pmset -g sched. Then: sudo pmset schedule cancel wake \"<its date>\""
+
+[[cleanup]]
+expect = "power=ac"
+tell = "Plug the charger in again."

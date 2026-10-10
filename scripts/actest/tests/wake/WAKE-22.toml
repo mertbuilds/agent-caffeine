@@ -1,0 +1,76 @@
+id = "WAKE-22"
+title = "The alarm is set and seen, and the switch and a quit take it away"
+layer = 1
+area = "wake"
+minutes = 7
+risk = "You load one launchd job and remove it after. You quit the app and open it again."
+why = "An alarm of ours in the list of macOS with our owner name. No alarm stays when the feature is off or the app does not run."
+watch = ["sched"]
+checks = [
+  "at step 3: sched.ours=true and app.alarm=true",
+  "within 10s after step 4: sched.ours=false",
+  "at step 5: sched.ours=true",
+  "within 30s after step 6: sched.ours=false",
+  "at step 3: app.history[alarmSet].age<60",
+  "within 10s after step 4: app.history[alarmCancelled].age<15",
+]
+
+[needs]
+power = "ac"
+helper = true
+wake_for_jobs = true
+
+[probes.job_plist]
+kind = "exists"
+path = "~/Library/LaunchAgents/com.caffeinagent.actest.job.plist"
+
+[probes.job_lines]
+kind = "lines"
+path = "{run}/job.log"
+
+[[steps]]
+say = "The runner wrote a test job that runs at {job_hhmm}, in about 45 minutes. It will not run: you remove it before. Load it."
+write = "launchd-job"
+in_minutes = 45
+command = "cp \"{job_plist}\" ~/Library/LaunchAgents/ && launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.caffeinagent.actest.job.plist"
+until = "probe.job_plist=true"
+timeout = 240
+
+[[steps]]
+say = "Open Settings of Agent Caffeine, the part Wake for jobs. Switch on the job com.caffeinagent.actest.job."
+until = "app.jobs.enabled>=1"
+timeout = 240
+
+[[steps]]
+say = "Nothing to do. The runner waits for the alarm in the list of macOS."
+until = "sched.ours=true"
+timeout = 60
+
+[[steps]]
+say = "Switch Wake for jobs off in Settings."
+until = "app.jobs.on=false"
+timeout = 180
+
+[[steps]]
+say = "Switch Wake for jobs on again."
+until = "app.jobs.on=true and sched.ours=true"
+timeout = 180
+
+[[steps]]
+say = "Quit Agent Caffeine from its menu (the gear, then Quit)."
+until = "app.running=false"
+timeout = 180
+
+[[steps]]
+say = "Nothing to do. The runner watches the list of macOS for 30 seconds."
+until = "time>=32s"
+timeout = 60
+
+[[steps]]
+say = "Open Agent Caffeine again."
+until = "app.running=true and app.state=true"
+timeout = 240
+
+[[cleanup]]
+expect = "probe.job_plist=false"
+tell = "Remove the test job. Run: launchctl bootout gui/$UID/com.caffeinagent.actest.job; rm ~/Library/LaunchAgents/com.caffeinagent.actest.job.plist"

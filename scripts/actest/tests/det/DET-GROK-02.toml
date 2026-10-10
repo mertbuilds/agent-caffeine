@@ -1,0 +1,38 @@
+id = "DET-GROK-02"
+title = "Grok Build works through a quiet command"
+layer = 1
+area = "det"
+minutes = 6
+risk = "Low: one short paid turn."
+why = "No live turn of Grok Build was ever measured. A wrong release loses the work of the user. Also the finished state after the turn."
+checks = [
+  "within 10s after step 2: app.agent[grok].state=working",
+  "always from step 2 + 10s to step 3 - 5s: app.agent[grok].state=working",
+  "always from step 2 + 10s to step 3 - 5s: app.agent[grok].hold=working",
+  "within 15s after step 3 - 5s: app.agent[grok].state=idle",
+  "within 135s after step 3 - 5s: app.agent[grok].hold=none",
+  "info at step 2 + 15s: app.agent[grok].why=reportsBusy",
+  "info within 10s after step 3 - 5s: app.agent[grok].hold=finished",
+  "info within 15s after step 3 - 5s: app.notice[finished].age<20",
+]
+
+[needs]
+agents = ["grok"]
+
+[[steps]]
+say = "The runner checks that Grok Build is open and idle. If it waits here, end the turn that runs in Grok Build."
+until = "app.agent[grok].state=idle"
+timeout = 60
+
+[[steps]]
+say = "In Grok Build, send this prompt: run `sleep 120` in the shell, then say done. Press Enter here at the moment you send it."
+key = "enter"
+
+[[steps]]
+say = "Wait for the full answer. Press Enter here at the moment the answer is complete."
+key = "enter"
+
+[[steps]]
+say = "Nothing to do. The runner waits until Agent Caffeine lets go of Grok Build."
+until = "app.agent[grok].hold=none"
+timeout = 180

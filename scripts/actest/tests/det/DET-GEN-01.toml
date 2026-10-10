@@ -1,0 +1,26 @@
+id = "DET-GEN-01"
+title = "A night with every agent open and idle: the Mac sleeps"
+layer = 1
+area = "det"
+minutes = 480
+risk = "None."
+why = "Lets it sleep after: the sum of all traps. Two traps that held the Mac for hours were found only by the eye of the owner. Overnight: about 2 minutes of the owner."
+every = 60
+checks = [
+  "log from start + 30m to end has Sleep",
+  "never from start + 10m to end: app.hold=true",
+  "never from start to end: sleepdisabled=1",
+  "info at end: app.agent[*].count>=1",
+]
+
+[needs]
+power = "ac"
+idle = true
+
+[[steps]]
+say = "Open every agent you have and leave each one idle at its prompt. Keep the charger in and the lid open. Press Enter here when all are open and idle."
+key = "enter"
+
+[[steps]]
+say = "Leave the Mac alone for the night. Do not close this Terminal. Press Enter here in the morning."
+key = "enter"

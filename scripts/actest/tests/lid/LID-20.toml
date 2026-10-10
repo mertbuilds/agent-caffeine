@@ -1,0 +1,43 @@
+id = "LID-20"
+title = "The chime plays when the lid closes on battery under a hold"
+layer = 1
+area = "lid"
+minutes = 2
+risk = "The Mac is awake with the lid closed for some seconds."
+why = "The sound says: I stay awake. By ear, open since 2026-10-08."
+checks = [
+  "key chime is yes",
+  "within 5s after step 2: app.chime.age<8",
+  "always from step 2 to step 3: sleepdisabled=1",
+]
+
+[needs]
+power = "battery"
+helper = true
+display = "builtin"
+
+[[steps]]
+say = "Nothing to do. The runner starts a hold of 5 minutes."
+run = ["agent-caffeine", "hold", "--for", "5m", "--json"]
+name = "hold"
+until = "sleepdisabled=1 and app.hold=true"
+timeout = 15
+
+[[steps]]
+say = "Close the lid and listen. Count to 5. Then open the lid."
+until = "lid=closed"
+timeout = 120
+
+[[steps]]
+say = "Open the lid."
+until = "lid=open"
+timeout = 120
+
+[[steps]]
+say = "One question."
+ask = "Did you hear one chime when the lid closed?"
+name = "chime"
+
+[[cleanup]]
+expect = "power=ac"
+tell = "Plug the charger in again."

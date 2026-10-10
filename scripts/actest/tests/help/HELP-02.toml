@@ -1,0 +1,39 @@
+id = "HELP-02"
+title = "The sleep flag and its marker follow a hold"
+layer = 1
+area = "help"
+minutes = 2
+risk = "None."
+why = "If the flag does not follow the hold, every lid and battery test means nothing."
+checks = [
+  "exit hold == 0",
+  "within 3s after step 1 start: sleepdisabled=1 and probe.marker=true",
+  "always from step 1 + 3s to step 2 - 3s: sleepdisabled=1 and app.flag=true",
+  "within 5s after step 2: sleepdisabled=0 and probe.marker=false",
+  "at end: app.wanted=false",
+]
+
+[needs]
+helper = true
+idle = true
+
+[probes.marker]
+kind = "exists"
+path = "/Library/Application Support/com.caffeinagent.app/sleep-flag-set"
+
+[[steps]]
+say = "Nothing to do. The runner starts a hold of 30 seconds and reads the flag."
+run = ["agent-caffeine", "hold", "--for", "30s", "--json"]
+name = "hold"
+until = "app.holds=1"
+timeout = 10
+
+[[steps]]
+say = "Nothing to do. The hold ends by itself."
+until = "app.holds=0"
+timeout = 60
+
+[[steps]]
+say = "Nothing to do. The runner waits for the flag to clear."
+until = "time>=8s"
+timeout = 30

@@ -1,0 +1,21 @@
+id = "DET-OCL-01"
+title = "OpenClaw gateway at rest reads idle for 10 minutes"
+layer = 1
+area = "det"
+minutes = 11
+risk = "None."
+why = "The CPU trap: the gateway at rest sits at the threshold and held the Mac in 178 of 192 samples before the fix. It must read idle for 10 minutes."
+checks = [
+  "always from start + 60s to end: app.agent[openclaw].state=idle",
+  "always from start + 60s to end: app.agent[openclaw].hold=none",
+  "info at end: app.agent[openclaw].why=atPrompt",
+  "info at end: app.agent[openclaw].count>=1",
+]
+
+[needs]
+agents = ["openclaw"]
+
+[[steps]]
+say = "Leave the OpenClaw gateway running and send it nothing. The runner watches for 10 minutes. You can use the Mac for other things."
+until = "time>=600s"
+timeout = 660

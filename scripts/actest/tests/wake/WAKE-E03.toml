@@ -1,0 +1,85 @@
+id = "WAKE-E03"
+title = "Lid closed on battery: can the app take the hold inside the wake of its alarm"
+layer = 1
+area = "wake"
+minutes = 14
+risk = "You load one launchd job and remove it after. You switch Only on power off and put it back. The Mac wakes once on battery with the lid closed."
+why = "On battery a wake with the lid closed can last a few seconds only. If the hold does not start inside it, the helper needs its bridge."
+decides = "the battery promise: if the hold does not open inside the wake on battery, the helper needs its bridge, or the text stays only on power"
+heartbeat = true
+watch = ["sched"]
+checks = [
+  "log from step 4 to step 5 has Sleep",
+  "within 10s after step 5: app.history[alarmSet]>=1",
+  "within 100s after step 5: probe.job_lines>=1",
+  "within 10s after step 6 start: sleepdisabled=1",
+  "heartbeat gap from step 6 start to step 6 < 15s",
+  "key warning is yes",
+]
+
+[needs]
+power = "battery"
+helper = true
+display = "builtin"
+wake_for_jobs = true
+idle = true
+charge = 50
+
+[probes.job_plist]
+kind = "exists"
+path = "~/Library/LaunchAgents/com.caffeinagent.actest.job.plist"
+
+[probes.job_lines]
+kind = "lines"
+path = "{run}/job.log"
+
+[[steps]]
+say = "The runner wrote a test job that runs at {job_hhmm}. It appends lines to a file in the folder of this run and does nothing else. Load it."
+write = "launchd-job"
+in_minutes = 5
+job_seconds = 20
+command = "cp \"{job_plist}\" ~/Library/LaunchAgents/ && launchctl bootstrap gui/$UID ~/Library/LaunchAgents/com.caffeinagent.actest.job.plist"
+until = "probe.job_plist=true"
+timeout = 240
+
+[[steps]]
+say = "Open Settings of Agent Caffeine, the part Wake for jobs. Switch Only on power off. Read the warning."
+ask = "Does a warning about a Mac in a bag show?"
+name = "warning"
+
+[[steps]]
+say = "Open Settings of Agent Caffeine, the part Wake for jobs. Switch on the job com.caffeinagent.actest.job."
+until = "app.jobs.enabled>=1"
+timeout = 240
+
+[[steps]]
+say = "Close the lid now. Open it at {job_hhmm+3}, not before."
+until = "lid=closed"
+timeout = 200
+
+[[steps]]
+say = "The lid is closed. The runner waits for the Mac to wake for the job."
+until = "app.jobholds>=1"
+timeout = 900
+
+[[steps]]
+say = "The runner waits for the job hold to end."
+until = "app.jobholds=0"
+timeout = 920
+
+[[steps]]
+say = "Open the lid at the time you were told."
+until = "lid=open"
+timeout = 1200
+
+[[steps]]
+say = "Open Settings of Agent Caffeine, the part Wake for jobs. Switch Only on power on again. Press Enter here when it is on."
+key = "enter"
+
+[[cleanup]]
+expect = "probe.job_plist=false"
+tell = "Remove the test job. Run: launchctl bootout gui/$UID/com.caffeinagent.actest.job; rm ~/Library/LaunchAgents/com.caffeinagent.actest.job.plist"
+
+[[cleanup]]
+expect = "power=ac"
+tell = "Plug the charger in again."

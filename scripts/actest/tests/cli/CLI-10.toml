@@ -1,0 +1,44 @@
+id = "CLI-10"
+title = "Lid closed on battery under a command line hold, then sleep when it ends"
+layer = 1
+area = "cli"
+minutes = 8
+risk = "The Mac is awake with the lid closed for 4 minutes. Keep it on a table."
+why = "The hold goes through the same lid path. And the Mac must sleep when the hold ends."
+heartbeat = true
+checks = [
+  "heartbeat gap from step 2 to step 2 + 180s < 15s",
+  "log from step 2 to step 2 + 180s has no Sleep,DarkWake",
+  "always from step 2 to step 2 + 180s: sleepdisabled=1",
+  "log from step 2 + 180s to step 3 has Sleep",
+  "at end: sleepdisabled=0 or app.wanted=true",
+  "info within 5s after step 2: app.chime.age<8",
+]
+
+[needs]
+power = "battery"
+charge = 40
+helper = true
+display = "builtin"
+idle = true
+
+[[steps]]
+say = "Nothing to do. The runner starts a hold of 4 minutes."
+run = ["agent-caffeine", "hold", "--for", "4m", "--json"]
+name = "hold"
+until = "sleepdisabled=1 and app.hold=true"
+timeout = 15
+
+[[steps]]
+say = "Close the lid now, within 30 seconds. Open it at {clock+7}, not before."
+until = "lid=closed"
+timeout = 45
+
+[[steps]]
+say = "Open the lid at the time you were told."
+until = "lid=open"
+timeout = 900
+
+[[cleanup]]
+expect = "power=ac"
+tell = "Plug the charger in again."

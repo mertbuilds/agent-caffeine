@@ -1,0 +1,21 @@
+id = "DET-HERM-01"
+title = "Hermes Agent idle stays idle"
+layer = 1
+area = "det"
+minutes = 11
+risk = "None."
+why = "Matching and the live read of the database: chat and gateway at rest must read idle."
+checks = [
+  "always from start + 60s to end: app.agent[hermes-agent].state=idle",
+  "always from start + 60s to end: app.agent[hermes-agent].hold=none",
+  "info at end: app.agent[hermes-agent].why=atPrompt",
+  "info at end: app.agent[hermes-agent].count>=1",
+]
+
+[needs]
+agents = ["hermes-agent"]
+
+[[steps]]
+say = "Leave the Hermes chat and its gateway open and do not send anything. The runner watches for 10 minutes. You can use the Mac for other things."
+until = "time>=600s"
+timeout = 660

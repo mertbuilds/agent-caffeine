@@ -1,0 +1,37 @@
+id = "CLI-02"
+title = "hold -- command holds while the command runs and ends with its exit code"
+layer = 1
+area = "cli"
+minutes = 1
+risk = "None."
+why = "Holds while the command runs. Ends with its exit code."
+checks = [
+  "at step 1: app.hold=true and app.headline=manualHold",
+  "within 5s after step 2: app.holds=0",
+  "exit seven == 7",
+]
+
+[needs]
+idle = true
+
+[[steps]]
+say = "Nothing to do. The runner runs: agent-caffeine hold -- sleep 20"
+spawn = ["agent-caffeine", "hold", "--", "sleep", "20"]
+name = "sleeper"
+until = "app.holds=1"
+timeout = 10
+
+[[steps]]
+say = "Nothing to do. The command runs for 20 seconds."
+until = "child.sleeper=exited"
+timeout = 60
+
+[[steps]]
+say = "Nothing to do."
+until = "app.holds=0"
+timeout = 15
+
+[[steps]]
+say = "Nothing to do. The runner runs a command that ends with exit code 7."
+run = ["agent-caffeine", "hold", "--", "sh", "-c", "exit 7"]
+name = "seven"

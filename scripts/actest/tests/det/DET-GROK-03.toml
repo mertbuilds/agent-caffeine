@@ -1,0 +1,41 @@
+id = "DET-GROK-03"
+title = "Grok Build waits for an approval"
+layer = 1
+area = "det"
+minutes = 4
+risk = "Low: one short paid turn."
+why = "The permission request must read as waiting while it is open."
+checks = [
+  "within 20s after step 2: app.agent[grok].state=waiting",
+  "always from step 2 + 20s to step 4 - 5s: app.agent[grok].state=waiting",
+  "within 10s after step 4: app.agent[grok].state=working",
+  "always from step 4 + 10s to step 5 - 5s: app.agent[grok].state=working",
+  "within 15s after step 5 - 5s: app.agent[grok].state=idle",
+  "info within 25s after step 2: app.notice[waiting].age<30",
+  "info at step 3: app.agent[grok].why=asksPermission",
+]
+
+[needs]
+agents = ["grok"]
+
+[[steps]]
+say = "The runner checks that Grok Build is open and idle. If it waits here, end the turn that runs in Grok Build."
+until = "app.agent[grok].state=idle"
+timeout = 60
+
+[[steps]]
+say = "In Grok Build (started in the default permission mode), send this prompt: run `sleep 30` in the shell, then say done. Press Enter here at the moment the approval question shows."
+key = "enter"
+
+[[steps]]
+say = "Do not answer the question. The runner waits 60 seconds."
+until = "time>=60s"
+timeout = 120
+
+[[steps]]
+say = "Approve the command now. Press Enter here at the moment you approve."
+key = "enter"
+
+[[steps]]
+say = "Wait for the full answer. Press Enter here at the moment the answer is complete."
+key = "enter"

@@ -1,0 +1,44 @@
+id = "DET-CUR-04"
+title = "Cursor: Stop in a turn, hooks off"
+layer = 1
+area = "det"
+minutes = 4
+risk = "Low: two short paid turns."
+why = "Open since 2026-10-07: does Cursor write an end marker for a stopped turn. With no marker it reads waiting for 15 seconds and then holds 5 minutes. The result decides a rule."
+checks = [
+  "within 10s after step 2: app.agent[cursor-desktop].state=working",
+  "within 20s after step 3: app.agent[cursor-desktop].state=idle",
+  "never from step 3 to step 4: app.agent[cursor-desktop].state=waiting",
+  "always from step 3 + 20s to step 4: app.agent[cursor-desktop].state=idle",
+  "within 10s after step 5: app.agent[cursor-desktop].state=working",
+  "info within 320s after step 3: app.agent[cursor-desktop].hold=none",
+]
+
+[needs]
+agents = ["cursor-desktop"]
+
+[[steps]]
+say = "The runner checks that Cursor is open and idle. If it waits here, end the turn that runs in Cursor."
+until = "app.agent[cursor-desktop].state=idle"
+timeout = 60
+
+[[steps]]
+say = "In the agent panel of Cursor (hooks off), send this prompt: run `sleep 120` in the shell. Press Enter here at the moment you send it."
+key = "enter"
+
+[[steps]]
+say = "Wait about 20 seconds. Then stop the turn with the Stop button. Press Enter here at the moment you stop it."
+key = "enter"
+
+[[steps]]
+say = "Nothing to do. The runner watches for 30 seconds."
+until = "time>=30s"
+timeout = 60
+
+[[steps]]
+say = "In the agent panel of Cursor (hooks off), send this prompt: say hi. Press Enter here at the moment you send it."
+key = "enter"
+
+[[steps]]
+say = "Press Enter here when the answer is complete."
+key = "enter"

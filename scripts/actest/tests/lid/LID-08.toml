@@ -1,0 +1,44 @@
+id = "LID-08"
+title = "Lid closed on battery with no monitor: the display is dark"
+layer = 1
+area = "lid"
+minutes = 4
+risk = "The Mac is awake with the lid closed for 90 seconds."
+why = "No light at the hinge. Open since 2026-10-06."
+checks = [
+  "key glow is no",
+  "log from step 2 to step 3 has DisplayOff",
+  "log from step 2 to step 3 has no Sleep",
+  "always from step 2 to step 3: sleepdisabled=1",
+]
+
+[needs]
+power = "battery"
+helper = true
+display = "builtin"
+
+[[steps]]
+say = "Nothing to do. The runner starts a hold of 6 minutes."
+run = ["agent-caffeine", "hold", "--for", "6m", "--json"]
+name = "hold"
+until = "sleepdisabled=1 and app.hold=true"
+timeout = 15
+
+[[steps]]
+say = "Go where it is dark, or shade the hinge with your hand. Close the lid. Look into the hinge gap for light. Open the lid at {clock+2}."
+until = "lid=closed"
+timeout = 180
+
+[[steps]]
+say = "Open the lid at the time you were told."
+until = "lid=open"
+timeout = 400
+
+[[steps]]
+say = "One question."
+ask = "Did you see light in the hinge gap while the lid was closed?"
+name = "glow"
+
+[[cleanup]]
+expect = "power=ac"
+tell = "Plug the charger in again."
