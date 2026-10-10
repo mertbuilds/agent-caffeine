@@ -3,8 +3,8 @@ title = "Does a wake alarm fire with the lid closed on battery"
 layer = 1
 area = "wake"
 minutes = 8
-risk = "You set one wake alarm with sudo. It fires once and is gone. Agent Caffeine is off for the test."
-why = "The make-or-break question of Wake for jobs. Nobody measured it. A wrong promise wakes Macs in bags."
+risk = "You set one wake alarm with sudo. It fires once and is gone. Agent Caffeine is off for the test: an agent that works stops while the Mac sleeps, about 6 minutes."
+why = "The make-or-break question of Wake for jobs. Nobody measured it. A wrong promise wakes Macs in bags. It tests macOS and a plain alarm, not our hold, so it needs no idle Mac: it needs a Mac that sleeps, and Agent Caffeine off gives that while agents work."
 decides = "the battery promise: if no alarm fires here, Wake for jobs stays only on power and no helper bridge is built"
 watch = ["sched"]
 checks = [
@@ -19,7 +19,7 @@ checks = [
 power = "battery"
 charge = 40
 display = "builtin"
-idle = true
+sleeps = true
 
 [[steps]]
 say = "Switch Agent Caffeine off (the switch in its menu)."

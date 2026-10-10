@@ -3,24 +3,23 @@ title = "status and status --json tell the truth of the app"
 layer = 1
 area = "cli"
 minutes = 3
-risk = "None."
-why = "status must say what the app decided: with a hold, and while paused."
+risk = "Agent Caffeine is paused for some seconds. Keep the lid open: while it is paused nothing keeps an agent that works awake."
+why = "status must say what the app decided: with a hold, and while paused. A pause beats a hold and a working agent alike, so every rule is true while agents work too: status says awake false under the pause though the hold is still there, and awake true after it."
 checks = [
   "exit plain == 0",
   "out plain contains stays awake",
   "out json contains \"awake\":true",
   "out paused contains \"awake\":false",
-  "at step 4: app.hold=false and app.holds=1",
+  "at step 4: app.hold=false and held.hold=true",
+  "at step 6: app.hold=true and held.hold=true",
+  "info at step 4: app.agent[*].state=working",
 ]
-
-[needs]
-idle = true
 
 [[steps]]
 say = "Nothing to do. The runner starts a hold of 10 minutes."
 run = ["agent-caffeine", "hold", "--for", "10m", "--json"]
 name = "hold"
-until = "app.hold=true"
+until = "held.hold=true and app.hold=true"
 timeout = 10
 
 [[steps]]
@@ -45,5 +44,5 @@ name = "paused"
 
 [[steps]]
 say = "Click Resume in the menu of Agent Caffeine."
-until = "app.paused=false"
+until = "app.paused=false and app.hold=true"
 timeout = 180

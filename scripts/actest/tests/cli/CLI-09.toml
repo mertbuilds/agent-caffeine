@@ -3,26 +3,26 @@ title = "Every stop beats a hold: pause and the switch"
 layer = 1
 area = "cli"
 minutes = 4
-risk = "None."
-why = "The battery limit, a pause and the switch still let the Mac sleep. The battery limit case is HOLD-10."
+risk = "Agent Caffeine is paused and switched off for some seconds each. Keep the lid open: in that time nothing keeps an agent that works awake."
+why = "The battery limit, a pause and the switch still let the Mac sleep. The battery limit case is HOLD-10. A stop beats a hold and a working agent alike, so every rule is true while agents work too, and says more then: the decision goes to no hold though agents still work, and comes back."
 checks = [
-  "within 3s after step 2: app.hold=false and app.holds=1",
+  "within 3s after step 2: app.hold=false and held.hold=true",
   "within 5s after step 2: sleepdisabled=0",
   "within 5s after step 3: app.hold=true",
-  "within 3s after step 4: app.hold=false and app.holds=1",
+  "within 3s after step 4: app.hold=false and held.hold=true",
   "within 5s after step 4: sleepdisabled=0",
   "at step 5: app.hold=true",
+  "info at step 2: app.agent[*].state=working",
 ]
 
 [needs]
 helper = true
-idle = true
 
 [[steps]]
 say = "Nothing to do. The runner starts a hold of 10 minutes."
 run = ["agent-caffeine", "hold", "--for", "10m", "--json"]
 name = "hold"
-until = "app.hold=true and sleepdisabled=1"
+until = "held.hold=true and app.hold=true and sleepdisabled=1"
 timeout = 15
 
 [[steps]]

@@ -4,15 +4,14 @@ layer = 1
 area = "cli"
 minutes = 1
 risk = "None."
-why = "Holds while the command runs. Ends with its exit code."
+why = "Holds while the command runs. Ends with its exit code. While an agent works the hold of the command and the exit code are judged. That the Mac is awake because of this hold shows on an idle Mac only."
 checks = [
-  "at step 1: app.hold=true and app.headline=manualHold",
+  "at step 1: app.holds=1 and app.hold=true",
+  "if idle: at step 1: app.headline=manualHold",
+  "always from step 1 to step 2 - 3s: app.holds=1",
   "within 5s after step 2: app.holds=0",
   "exit seven == 7",
 ]
-
-[needs]
-idle = true
 
 [[steps]]
 say = "Nothing to do. The runner runs: agent-caffeine hold -- sleep 20"

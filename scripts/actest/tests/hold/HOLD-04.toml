@@ -3,15 +3,15 @@ title = "Lid closed on battery for 10 minutes under a working agent, then sleep 
 layer = 1
 area = "hold"
 minutes = 20
-risk = "The Mac is awake with the lid closed for about 14 minutes. Keep it on a table, not in a bag."
-why = "The headline promise, after the lid code changed. And lets it sleep after: the Mac must sleep once the agent is done."
+risk = "The Mac is awake with the lid closed for about 14 minutes. Keep it on a table, not in a bag. While other agents work it stays awake until you open the lid, about 17 minutes."
+why = "The headline promise, after the lid code changed. And lets it sleep after: the Mac must sleep once the agent is done. The awake part is the same while other agents work. The sleep after is judged on an idle Mac only: another agent that works keeps the Mac awake after this one is done."
 heartbeat = true
 checks = [
   "heartbeat gap from step 3 to step 3 + 600s < 15s",
   "log from step 3 to step 3 + 600s has no Sleep,Wake,DarkWake",
   "always from step 3 to step 3 + 600s: sleepdisabled=1",
   "always from step 3 to step 3 + 600s: app.hold=true",
-  "log from step 3 + 600s to step 4 has Sleep",
+  "if idle: log from step 3 + 600s to step 4 has Sleep",
   "at end: sleepdisabled=0 or app.wanted=true",
   "key chime is yes",
   "info within 5s after step 3: app.chime.age<10",
@@ -22,7 +22,6 @@ power = "battery"
 charge = 40
 helper = true
 display = "builtin"
-idle = true
 
 [[steps]]
 say = "In any agent, send this prompt: run `sleep 720` in the shell, then say done. Press Enter here at the moment you send it."

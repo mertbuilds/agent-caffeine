@@ -4,15 +4,12 @@ layer = 1
 area = "cli"
 minutes = 1
 risk = "None."
-why = "A dead holder keeps nothing awake."
+why = "A dead holder keeps nothing awake. While an agent works the hold of the dead tool is judged: it leaves the list of the app. That the Mac can sleep after shows on an idle Mac only."
 checks = [
-  "at step 1: app.hold=true",
+  "at step 1: app.holds=1 and app.hold=true",
   "within 10s after step 2 start: app.holds=0",
-  "within 12s after step 2 start: app.hold=false",
+  "if idle: within 12s after step 2 start: app.hold=false",
 ]
-
-[needs]
-idle = true
 
 [[steps]]
 say = "Nothing to do. The runner runs: agent-caffeine hold -- sleep 300"

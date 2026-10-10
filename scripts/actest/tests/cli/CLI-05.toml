@@ -4,16 +4,14 @@ layer = 1
 area = "cli"
 minutes = 2
 risk = "None."
-why = "A stopped holder keeps nothing awake."
+why = "A stopped holder keeps nothing awake. While an agent works the hold is judged: it leaves the list of the app at Control-Z and comes back at fg. That the Mac can sleep while the tool is stopped shows on an idle Mac only."
 checks = [
-  "at step 1: app.hold=true",
-  "at step 2: app.hold=false",
-  "always from step 3 to step 4 - 3s: app.hold=true",
+  "at step 1: app.holds=1 and app.hold=true",
+  "at step 2: app.holds=0",
+  "if idle: at step 2: app.hold=false",
+  "always from step 3 to step 4 - 3s: app.holds=1 and app.hold=true",
   "at step 4: app.holds=0",
 ]
-
-[needs]
-idle = true
 
 [[steps]]
 say = "Start a hold in another Terminal."

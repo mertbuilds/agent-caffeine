@@ -3,8 +3,8 @@ title = "Kind and length of an alarm wake with no hold, lid closed on power"
 layer = 1
 area = "wake"
 minutes = 8
-risk = "You set one wake alarm with sudo. It fires once and is gone. Agent Caffeine is off for the test."
-why = "Decides if the app has time to take the hold. Of the four cases this file does lid closed on power. E01 does battery. The two lid open cases come later."
+risk = "You set one wake alarm with sudo. It fires once and is gone. Agent Caffeine is off for the test: an agent that works stops while the Mac sleeps, about 6 minutes."
+why = "Decides if the app has time to take the hold. Of the four cases this file does lid closed on power. E01 does battery. The two lid open cases come later. It tests macOS and a plain alarm, not our hold, so it needs no idle Mac: it needs a Mac that sleeps, and Agent Caffeine off gives that while agents work."
 watch = ["sched"]
 checks = [
   "log from step 3 to alarm - 10s has Sleep",
@@ -19,7 +19,7 @@ checks = [
 power = "ac"
 charge = 40
 display = "builtin"
-idle = true
+sleeps = true
 
 [[steps]]
 say = "Switch Agent Caffeine off (the switch in its menu)."

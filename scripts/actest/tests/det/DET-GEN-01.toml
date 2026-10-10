@@ -4,7 +4,7 @@ layer = 1
 area = "det"
 minutes = 480
 risk = "None."
-why = "Lets it sleep after: the sum of all traps. Two traps that held the Mac for hours were found only by the eye of the owner. Overnight: about 2 minutes of the owner."
+why = "Lets it sleep after: the sum of all traps. Two traps that held the Mac for hours were found only by the eye of the owner. Overnight: about 2 minutes of the owner. Needs an idle Mac for the whole night: one agent that works keeps the Mac awake, and then the night says nothing of the idle ones."
 every = 60
 checks = [
   "log from start + 30m to end has Sleep",

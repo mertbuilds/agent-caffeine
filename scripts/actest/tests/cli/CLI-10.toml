@@ -4,7 +4,7 @@ layer = 1
 area = "cli"
 minutes = 8
 risk = "The Mac is awake with the lid closed for 4 minutes. Keep it on a table."
-why = "The hold goes through the same lid path. And the Mac must sleep when the hold ends."
+why = "The hold goes through the same lid path. And the Mac must sleep when the hold ends. Needs an idle Mac: an agent that works keeps the Mac awake with the lid closed by itself, so the awake part would not be the work of the hold, and the Mac would not sleep after."
 heartbeat = true
 checks = [
   "heartbeat gap from step 2 to step 2 + 180s < 15s",

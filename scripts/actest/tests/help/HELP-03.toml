@@ -3,8 +3,8 @@ title = "The app is killed with the sleep flag on: the flag clears in 65 seconds
 layer = 1
 area = "help"
 minutes = 4
-risk = "The app is killed. You open it again in the last step."
-why = "The proof that a crash cannot leave the Mac awake in a bag. It comes before any test that leaves the lid closed for long."
+risk = "The app is killed. You open it again in the last step. Keep the lid open: while the app is dead nothing keeps an agent that works awake."
+why = "The proof that a crash cannot leave the Mac awake in a bag. It comes before any test that leaves the lid closed for long. It needs the flag on at the start and nothing else: the app is dead, so the agents that work do not count, and the helper must clear the flag alone."
 checks = [
   "within 65s after step 2: sleepdisabled=0",
   "within 65s after step 2: probe.marker=false",
@@ -14,7 +14,6 @@ checks = [
 
 [needs]
 helper = true
-idle = true
 
 [probes.marker]
 kind = "exists"

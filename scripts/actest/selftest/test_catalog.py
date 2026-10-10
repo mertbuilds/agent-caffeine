@@ -64,11 +64,33 @@ class CatalogTests(unittest.TestCase):
             (test(needs={"power": "solar"}), "power is any, ac or battery"),
             (test(probes={"x": {"kind": "exists", "path": "~/.ssh/id_rsa"}}), "not one of our own files"),
             (test(cleanup=[{"expect": "power=ac"}]), "expect and tell"),
+            (test(checks=["at end: held.chime=true"]), "no run step has the name chime"),
+            (test(checks=["if idle: sometimes"]), "cannot read the rule"),
+            (test(needs={"quiet": True}), "unknown key quiet"),
         ]
         for bad, said in wrong:
             with self.assertRaises(catalog.TestError) as raised:
                 catalog.validate(bad)
             self.assertIn(said, str(raised.exception))
+
+    def test_each_test_says_when_it_can_start(self):
+        tests = catalog.load_all()
+        by_kind = {}
+        for found in tests.values():
+            by_kind.setdefault(catalog.when(found), set()).add(found["id"])
+        self.assertEqual(by_kind["needs idle"], {"CLI-10", "DET-GEN-01", "HELP-02", "WAKE-18", "WAKE-E03", "WAKE-E04", "WAKE-E05", "WAKE-E06"})
+        self.assertEqual(by_kind["needs sleep"], {"WAKE-E01", "WAKE-E02"})
+        self.assertEqual(len(by_kind["any time"]), len(tests) - 10)
+        for name in by_kind["needs idle"]:
+            self.assertIn("Needs an idle Mac", tests[name]["why"], name)
+            self.assertEqual(catalog.idle_rules(tests[name]), 0, "A test for an idle Mac has no rule to skip")
+        self.assertEqual({name: catalog.idle_rules(tests[name]) for name in ("CLI-01", "CLI-02", "CLI-03", "CLI-05", "HOLD-04", "CLI-07", "CLI-09", "HELP-03")},
+                         {"CLI-01": 2, "CLI-02": 1, "CLI-03": 1, "CLI-05": 1, "HOLD-04": 1, "CLI-07": 0, "CLI-09": 0, "HELP-03": 0})
+        for found in tests.values():
+            judged = [text for text in found["checks"] if not catalog.judge.needs_idle(text) and not text.startswith("info ")]
+            self.assertTrue(judged, f"{found['id']} has a rule that is judged while agents work")
+        self.assertEqual(catalog.when(catalog.validate(test(needs={"sleeps": True}))), "needs sleep")
+        self.assertEqual(catalog.when(catalog.validate(test())), "any time")
 
     def test_a_probe_reads_our_own_files_only(self):
         for path in ["~/.claude/skills/agent-caffeine/SKILL.md", "~/.agents/skills/agent-caffeine/SKILL.md", "~/.local/bin/agent-caffeine",

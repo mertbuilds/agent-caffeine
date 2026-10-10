@@ -4,14 +4,11 @@ layer = 1
 area = "cli"
 minutes = 3
 risk = "Low: one short paid turn."
-why = "Run with a stand-in for the app only. Never in a real agent."
+why = "Run with a stand-in for the app only. Never in a real agent. No rule here asks for an idle Mac: the hold of the session leaves the list of the app while other agents work too."
 checks = [
   "within 10s after step 2: app.holds=0",
-  "at step 1: app.hold=true",
+  "at step 1: app.holds=1 and app.hold=true",
 ]
-
-[needs]
-idle = true
 
 [[steps]]
 say = "In an agent that has the agent-caffeine MCP server, ask it to call hold_awake for 30 minutes."

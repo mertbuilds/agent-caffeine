@@ -4,15 +4,12 @@ layer = 1
 area = "cli"
 minutes = 2
 risk = "None."
-why = "The signal comes from the terminal to the tool and to the command. The command must end once."
+why = "The signal comes from the terminal to the tool and to the command. The command must end once. No rule here asks for an idle Mac: the hold and the exit code are the same while an agent works."
 checks = [
   "key code is yes",
-  "at step 1: app.hold=true",
+  "at step 1: app.holds=1 and app.hold=true",
   "at step 2: app.holds=0",
 ]
-
-[needs]
-idle = true
 
 [[steps]]
 say = "Start a hold in another Terminal."

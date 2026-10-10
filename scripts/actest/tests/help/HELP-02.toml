@@ -4,7 +4,7 @@ layer = 1
 area = "help"
 minutes = 2
 risk = "None."
-why = "If the flag does not follow the hold, every lid and battery test means nothing."
+why = "If the flag does not follow the hold, every lid and battery test means nothing. Needs an idle Mac: while an agent works the flag is 1 before the hold and after it, so nothing here would follow the hold."
 checks = [
   "exit hold == 0",
   "within 3s after step 1 start: sleepdisabled=1 and probe.marker=true",
