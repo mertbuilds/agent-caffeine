@@ -136,7 +136,7 @@ class FakeEnv:
             version, build = self.build.rstrip(")").split(" (")
             return plistlib.dumps({"CFBundleShortVersionString": version, "CFBundleVersion": build})
         if path == APP + "/" + config.TOOL_BINARY:
-            return b"binary " + (config.SWITCH_KEY.encode() if self.export else b"old") + b" binary"
+            return b"binary " + (b"--detail" if self.export else b"old") + b" binary"
         return self.files.get(path)
 
     def exists(self, path):
