@@ -4,7 +4,8 @@ import shutil
 import tempfile
 import unittest
 
-from actestlib import board, cli, config, store, ui
+from actestlib import board, catalog, cli, config, judge, store, ui
+from selftest import fakes
 
 TESTS = {
     "HELP-03": {"id": "HELP-03", "title": "The app is killed", "area": "help", "layer": 1, "minutes": 3},
@@ -12,8 +13,12 @@ TESTS = {
 }
 
 
-def verdict(test, build, result, ended, reason="x"):
-    return {"test": test, "build": build, "result": result, "ended": ended, "reason": reason}
+def verdict(test, build, result, ended, reason="x", **more):
+    return dict({"test": test, "build": build, "result": result, "ended": ended, "reason": reason}, **more)
+
+
+SKIPPED = judge.judge({"idle": False, "keys": {"row": "yes"}}, ["key row is yes", "if idle: at end: app.hold=<false>"])
+PARTIAL = verdict("HELP-03", "1.0.3 (17)", "pass", 1_791_250_000, partial=1, idle=False, checks=SKIPPED)
 
 
 VERDICTS = [
@@ -50,6 +55,27 @@ class BoardTests(unittest.TestCase):
         self.assertIn("Grok &lt;quiet&gt;", page)
         self.assertIn("a &lt;b&gt; reason", page)
         self.assertIn('class="never"', page)
+        self.assertNotIn(chr(8212), page)
+
+    def test_a_partial_pass_never_shows_as_a_whole_pass(self):
+        day = "10-0"
+        cell = board.cell(PARTIAL)
+        self.assertTrue(cell.startswith("PASS (partial: 1 check needs an idle Mac) "), cell)
+        self.assertEqual(board.cell(dict(PARTIAL, partial=3))[:41], "PASS (partial: 3 checks need an idle Mac)")
+        self.assertRegex(board.cell(dict(PARTIAL, partial=0)), r"^PASS \d\d-\d\d$")
+        self.assertRegex(board.cell(verdict("HELP-03", "1.0.3 (17)", "fail", 1, partial=1)), r"^FAIL \d\d-\d\d$", "Only a pass is partial")
+        self.assertRegex(board.cell(verdict("HELP-03", "1.0.3 (17)", "skipped", 1)), r"^SKIPPED \d\d-\d\d$")
+        text = board.text(TESTS, VERDICTS[:3] + [PARTIAL])
+        row = next(line for line in text.splitlines() if line.startswith("HELP-03"))
+        self.assertIn("PASS (partial: 1 check needs an idle Mac)", row)
+        self.assertNotRegex(row, r"PASS \d\d-\d\d\s+PASS \d\d-\d\d", "The newer partial pass is the cell, not the older whole one")
+        head = text.splitlines()[0]
+        self.assertEqual(head.index("1.0.3 (17)"), row.index("PASS (partial"), "The columns stay in line")
+        page = board.page(TESTS, VERDICTS[:3] + [PARTIAL], 1_791_300_100)
+        self.assertIn('<td class="partial">PASS (partial: 1 check needs an idle Mac)', page)
+        self.assertIn('<div class="why">not judged: if idle: at end: app.hold=&lt;false&gt;</div>', page)
+        self.assertNotIn("not judged: key row is yes", page)
+        self.assertEqual(page.count('class="pass"'), 1, "The whole pass of the older build")
         self.assertNotIn(chr(8212), page)
 
 
@@ -105,6 +131,51 @@ class StoreAndReportTests(unittest.TestCase):
         self.assertEqual(cli.cmd_report(Args, None, ui.UI(plain=True, out=out)), 0)
         self.assertIn('"result": "pass"', out.getvalue())
         self.assertEqual(cli.cmd_report(type("A", (), {"run": "nothing"}), None, ui.UI(plain=True, out=out)), 2)
+
+    def listed(self, world, busy):
+        out = io.StringIO()
+        args = type("Args", (), {"area": None, "layer": None, "busy": busy})
+        self.assertEqual(cli.cmd_list(args, fakes.FakeEnv(world), ui.UI(plain=True, out=out)), 0)
+        return out.getvalue()
+
+    def test_list_says_when_each_test_can_start(self):
+        said = self.listed(lambda t: {"state": fakes.state()}, busy=False)
+        lines = said.splitlines()
+        self.assertRegex(next(line for line in lines if line.startswith("CLI-01 ")), r" min  any time     hold --for")
+        self.assertRegex(next(line for line in lines if line.startswith("HELP-02 ")), r" min  needs idle   The sleep flag")
+        self.assertRegex(next(line for line in lines if line.startswith("WAKE-E01 ")), r" min  needs sleep  Does a wake alarm")
+        self.assertEqual(lines[lines.index(next(line for line in lines if line.startswith("CLI-01 "))) + 2].strip(),
+                         "2 of 6 rules are judged on an idle Mac only")
+        total = len(catalog.load_all())
+        self.assertEqual(lines[-1], f"Of all: any time {total - 10}, needs idle 8, needs sleep 2.")
+        self.assertNotIn("holds now", said, "A plain list does not look at the Mac")
+
+    def test_list_busy_leaves_out_what_cannot_start_now(self):
+        total = len(catalog.load_all())
+        env_world = lambda t: {"awake": True, "flag": 1, "state": fakes.state(hold=True, flag=True)}
+        said = self.listed(env_world, busy=True)
+        self.assertTrue(said.startswith("Agent Caffeine holds now: working.\n"))
+        ids = {line.split()[0] for line in said.splitlines() if " L1 " in line}
+        self.assertEqual(len(ids), total - 10)
+        self.assertTrue({"CLI-01", "CLI-07", "CLI-09", "HELP-03", "HOLD-04", "HELP-21"} <= ids)
+        self.assertFalse({"HELP-02", "CLI-10", "DET-GEN-01", "WAKE-18", "WAKE-E01", "WAKE-E02", "WAKE-E06"} & ids)
+        self.assertIn(f"{total - 10} of {total} tests can start now", said)
+        self.assertTrue(said.endswith(f"Of all: any time {total - 10}, needs idle 8, needs sleep 2.\n"), "What was left out is counted")
+        said = self.listed(lambda t: {"state": fakes.state()}, busy=True)
+        self.assertTrue(said.startswith("Nothing holds the Mac awake now.\n"))
+        self.assertIn(f"{total} of {total} tests can start now", said)
+        said = self.listed(lambda t: {"state": fakes.state(on=False)}, busy=True)
+        self.assertIn(f"{total} of {total} tests can start now", said, "The list looks at the agents only. The preflight says the rest")
+        said = self.listed(lambda t: {"pid": None}, busy=True)
+        self.assertTrue(said.startswith("It is not known if Agent Caffeine holds now."))
+        self.assertIn(f"{total - 10} of {total} tests can start now", said)
+
+    def test_list_busy_only_reads(self):
+        env = fakes.FakeEnv(lambda t: {"state": fakes.state()})
+        out = io.StringIO()
+        cli.cmd_list(type("Args", (), {"area": None, "layer": None, "busy": True}), env, ui.UI(plain=True, out=out))
+        self.assertTrue(all(args[:2] in (("pmset", "-g"),) or args[0] in ("ioreg", "ps") for args in env.commands), set(env.commands))
+        self.assertEqual(env.tool_calls, [])
 
 
 if __name__ == "__main__":

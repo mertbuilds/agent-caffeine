@@ -1,6 +1,7 @@
 """actest: test Agent Caffeine together, one step at a time.
 
     actest list [--area X] [--layer N]   the tests, with the last result per build
+    actest list --busy                   only the tests that can start as the agents are now
     actest check                         the preflight alone
     actest run <id> [<id> ...]           run tests: preflight, steps, verdict, cleanup
     actest board                         the result board, as text and as board.html
@@ -16,7 +17,7 @@ import subprocess
 import sys
 import time
 
-from . import board, catalog, cleanup, env as environment, preflight, runner, store, ui as interface
+from . import board, catalog, cleanup, env as environment, preflight, runner, sampler, store, ui as interface
 
 WATCHED = ("lid", "power", "sleepdisabled", "app.hold", "app.headline", "app.flag", "app.running", "app.alarm", "app.gate")
 
@@ -32,15 +33,37 @@ def _tests(out):
 def cmd_list(args, env, out):
     tests = _tests(out)
     chosen = {test["id"]: test for test in catalog.select(tests, args.area, args.layer)}
+    every = len(chosen)
+    kinds = [catalog.when(test) for test in chosen.values()]
+    if args.busy:
+        sample = sampler.take(env)
+        holding = sampler.holding(sample)
+        headline = ((sample.get("app") or {}).get("decision") or {}).get("headline")
+        if holding is None:
+            out.line("It is not known if Agent Caffeine holds now. Only the tests for any time are listed.")
+        elif holding:
+            out.line("Agent Caffeine holds now" + (f": {headline}." if headline else "."))
+        else:
+            out.line("Nothing holds the Mac awake now.")
+        out.line()
+        chosen = {test_id: test for test_id, test in chosen.items() if preflight.free_now(sample, test)}
     builds, rows = board.table(chosen, store.verdicts())
     for row in rows:
         if row["id"] not in chosen:
             continue
+        test = chosen[row["id"]]
         results = ", ".join(f"{build}: {board.cell(verdict)}" for build, verdict in zip(builds, row["cells"]) if verdict) or "never run"
-        out.line(f"{row['id']:<13} L{row['layer']} {row['area']:<5} {row['minutes']:>4} min  {row['title']}")
+        out.line(f"{row['id']:<13} L{row['layer']} {row['area']:<5} {row['minutes']:>4} min  {catalog.when(test):<11}  {row['title']}")
         out.line(f"{'':<13} {results}")
+        if catalog.idle_rules(test):
+            out.line(f"{'':<13} {catalog.idle_rules(test)} of {len(test['checks'])} rules are judged on an idle Mac only")
+    minutes = sum(test["minutes"] for test in chosen.values())
     out.line()
-    out.line(f"{len(chosen)} tests, about {sum(test['minutes'] for test in chosen.values())} minutes.")
+    if args.busy:
+        out.line(f"{len(chosen)} of {every} tests can start now, about {minutes} minutes. The preflight of a run says what else to fix.")
+    else:
+        out.line(f"{len(chosen)} tests, about {minutes} minutes.")
+    out.line("Of all: " + ", ".join(f"{kind} {kinds.count(kind)}" for kind in ("any time", "needs idle", "needs sleep")) + ".")
     return 0
 
 
@@ -155,6 +178,7 @@ def main(argv=None):
     listing = commands.add_parser("list")
     listing.add_argument("--area")
     listing.add_argument("--layer", type=int)
+    listing.add_argument("--busy", action="store_true", help="only the tests that can start as the agents are now")
     commands.add_parser("check")
     running = commands.add_parser("run")
     running.add_argument("ids", nargs="+", metavar="id")

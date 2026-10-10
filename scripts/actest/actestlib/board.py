@@ -1,13 +1,14 @@
 """The result board: test by build, the last result and its date. It is
-made from the verdict files and from nothing else."""
+made from the verdict files and from nothing else. A pass in which rules
+were skipped, because an agent worked, says so in its cell."""
 import html
 import os
 import re
 import time
 
-from . import config
+from . import config, judge
 
-WORDS = {"pass": "PASS", "fail": "FAIL", "aborted": "ABORTED"}
+WORDS = {"pass": "PASS", "fail": "FAIL", "aborted": "ABORTED", "skipped": "SKIPPED"}
 
 
 def _build_key(build):
@@ -32,22 +33,31 @@ def table(tests, verdicts):
     return builds, rows
 
 
+def partial(verdict):
+    """How many rules of a pass were not judged. 0 for a whole pass."""
+    return verdict.get("partial", 0) if verdict["result"] == "pass" else 0
+
+
 def cell(verdict):
     if not verdict:
         return "never run"
     day = time.strftime("%m-%d", time.localtime(verdict.get("ended", 0)))
-    return f"{WORDS.get(verdict['result'], verdict['result'])} {day}"
+    word = WORDS.get(verdict["result"], verdict["result"])
+    if partial(verdict):
+        word += f" ({judge.partial(partial(verdict))})"
+    return f"{word} {day}"
 
 
 def text(tests, verdicts):
     builds, rows = table(tests, verdicts)
     lines = []
     width = max([len(row["id"]) for row in rows] + [4])
-    head = f"{'test':<{width}}  " + "  ".join(f"{build:<13}" for build in builds) if builds else f"{'test':<{width}}  no run yet"
-    lines.append(head)
+    wide = [max([13] + [len(cell(row["cells"][column])) for row in rows]) for column in range(len(builds))]
+    head = f"{'test':<{width}}  " + "  ".join(f"{build:<{size}}" for build, size in zip(builds, wide)) if builds else f"{'test':<{width}}  no run yet"
+    lines.append(head.rstrip())
     for row in rows:
-        cells = "  ".join(f"{cell(verdict):<13}" for verdict in row["cells"]) if builds else "never run"
-        lines.append(f"{row['id']:<{width}}  {cells}")
+        cells = "  ".join(f"{cell(verdict):<{size}}" for verdict, size in zip(row["cells"], wide)) if builds else "never run"
+        lines.append(f"{row['id']:<{width}}  {cells}".rstrip())
     done = sum(1 for row in rows if any(row["cells"]))
     lines.append("")
     lines.append(f"{done} of {len(rows)} tests have a result.")
@@ -65,7 +75,7 @@ table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: 7px 12px; border-bottom: 1px solid #1d2229; white-space: nowrap; font-weight: 400; }
 th { color: #8b939e; font-weight: 500; }
 td.title { white-space: normal; color: #a9b0ba; }
-.pass { color: #5fd38d; } .fail { color: #ff6b6b; } .aborted { color: #e6b450; } .never { color: #4d5560; }
+.pass { color: #5fd38d; } .fail { color: #ff6b6b; } .aborted, .skipped, .partial { color: #e6b450; } .never { color: #4d5560; }
 .why { color: #8b939e; white-space: normal; font-size: 12px; }
 """
 
@@ -86,7 +96,11 @@ def page(tests, verdicts, now):
                 cells += '<td class="never">never run</td>'
                 continue
             why = f'<div class="why">{html.escape(verdict.get("reason", ""))}</div>' if verdict["result"] != "pass" else ""
-            cells += f'<td class="{html.escape(verdict["result"])}">{html.escape(cell(verdict))}{why}</td>'
+            if partial(verdict):
+                why = "".join(f'<div class="why">not judged: {html.escape(check["check"])}</div>'
+                              for check in verdict.get("checks", []) if judge.word(check) == "skipped")
+            kind = "partial" if partial(verdict) else verdict["result"]
+            cells += f'<td class="{html.escape(kind)}">{html.escape(cell(verdict))}{why}</td>'
         out.append(f"<tr><td>{html.escape(row['id'])}</td><td>{row['layer']}</td><td>{html.escape(row['area'])}</td>"
                    f"<td class=\"title\">{html.escape(row['title'])}</td>{cells}</tr>")
     out.append("</table></div></main></body></html>")
