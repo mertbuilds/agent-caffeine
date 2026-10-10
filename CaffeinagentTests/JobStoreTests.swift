@@ -155,8 +155,8 @@ final class JobStoreTests: XCTestCase {
         let readings = JobStore.read(access: access, home: FixtureJobAccess.home, timeZone: TimeZone(identifier: "UTC")!)
         XCTAssertEqual(readings.map(\.source), [.launchd, .crontab, .hermes])
         XCTAssertEqual(readings.map(\.status), [.ok, .ok, .ok])
-        XCTAssertEqual(readings.flatMap(\.jobs).map(\.name), ["com.example.a", "sync", "Digest"])
-        JobPrivacy.check(readings.flatMap(\.jobs), neverHolds: Self.secrets + ["plan", "someone"])
+        XCTAssertEqual(readings.flatMap(\.jobs).map(\.name), ["com.example.a", "sync", "Hermes job j1"])
+        JobPrivacy.check(readings.flatMap(\.jobs), neverHolds: Self.secrets + ["plan", "someone", "Digest"])
         let line = JobStore.logLine(readings)
         XCTAssertEqual(line, "jobs: launchd 1, crontab 1, hermes 1")
     }

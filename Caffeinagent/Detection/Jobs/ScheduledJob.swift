@@ -27,9 +27,9 @@ struct ScheduledJob: Equatable, Identifiable {
     var source: Source
     /// For the menu and Settings. One line of at most `nameLimit`
     /// characters: the label of a launchd job, the name of the command of
-    /// a crontab line without its folder and arguments, the name of a
-    /// Hermes job, or "Hermes job" with its id when it has no name of
-    /// its own (`HermesJobReader`).
+    /// a crontab line without its folder and arguments, or "Hermes job"
+    /// with the id of a Hermes job. The name of a Hermes job is never
+    /// read: it can be a piece of its prompt (`HermesJobReader`).
     var name: String
     var schedule: JobSchedule
     /// The switch of the user. Off for a job that was found: nothing is

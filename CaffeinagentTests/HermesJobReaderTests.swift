@@ -52,7 +52,7 @@ final class HermesJobReaderTests: XCTestCase {
     func testTheJobsOfAFile() {
         let jobs = jobs(Self.file)
         XCTAssertEqual(jobs.map(\.id), ["hermes:a1b2c3", "hermes:d4e5f6", "hermes:once"])
-        XCTAssertEqual(jobs.map(\.name), ["Morning briefing", "Check the queue", "One time"])
+        XCTAssertEqual(jobs.map(\.name), ["Hermes job a1b2c3", "Hermes job d4e5f6", "Hermes job once"])
         XCTAssertTrue(jobs.allSatisfy { $0.source == .hermes && !$0.enabled }, "Nothing is adopted by itself")
 
         let briefing = reported(jobs.first)
@@ -65,61 +65,85 @@ final class HermesJobReaderTests: XCTestCase {
         XCTAssertEqual(reported(jobs.last).nextRun, at("2026-10-11 07:30", JobTime.istanbul), "A time with no zone is on the wall clock")
     }
 
-    func testAJobHoldsOnlyItsTimesAndItsName() {
+    func testAJobHoldsOnlyItsTimesAndItsId() {
         let jobs = jobs(Self.file)
         XCTAssertEqual(jobs.count, 3)
-        JobPrivacy.check(jobs, neverHolds: ["secret", "sk-live", "inbox", "boss", "example.com", "anthropic", "api_key", "prompt", "model", "last_status"])
+        JobPrivacy.check(jobs, neverHolds: [
+            "secret", "sk-live", "inbox", "boss", "example.com", "anthropic", "api_key", "prompt", "model", "last_status",
+            "Morning", "briefing", "queue", "One time",
+        ])
     }
 
-    /// Hermes gives a job with no name the first 50 characters of its
-    /// prompt as its name. Such a name is a piece of the prompt, and it
-    /// is never shown or kept.
-    func testANameThatIsTheStartOfThePromptIsNotTaken() {
+    /// Hermes gives a job with no name the first 50 code points of its
+    /// prompt as its name, and keeps that name when the prompt is edited
+    /// later. So no check can tell that a name is not a piece of a
+    /// prompt, and the name is never read: a job is shown by its id.
+    func testTheNameAndThePromptAreNeverReadOrKept() throws {
         let prompt = "Email the Q3 revenue figures to boss@example.com using token sk-live-promptsecret and then archive the thread"
-        func record(_ id: String, name: String) -> String {
+        // The cut after 50 code points goes through the family: the name
+        // ends with a part of it, and is no start of the prompt by characters.
+        let family = "Sum up the payroll invoices for the Zurich team: \u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467} salaries"
+        let cutFamily = String(String.UnicodeScalarView(family.unicodeScalars.prefix(50)))
+        XCTAssertFalse(family.hasPrefix(cutFamily), "A cut inside one character")
+        func record(_ id: String, name: String, prompt: String) -> String {
             #"{"id":"\#(id)","name":"\#(name)","prompt":"\#(prompt)","schedule":{"expr":"0 9 * * *"}}"#
         }
         let cut = String(prompt.prefix(50))
         let jobs = jobs("""
-        {"jobs":[\(record("a1", name: cut)), \(record("b2", name: cut + "...")), \(record("c3", name: "  " + String(prompt.prefix(20)))),
-        \(record("d4", name: prompt)), \(record("e5", name: "Daily digest")),
+        {"jobs":[\(record("a1", name: cut, prompt: prompt)), \(record("b2", name: cut + "...", prompt: prompt)),
+        \(record("c3", name: cutFamily, prompt: family)),
+        \(record("d4", name: cut, prompt: "Now it only says hello")),
+        \(record("e5", name: "Quarterly digest", prompt: prompt)),
         {"name":"\(cut)","prompt":"\(prompt)","schedule":{"expr":"0 9 * * *"}},
         {"name":"Has no id","schedule":{"expr":"0 9 * * *"}}]}
         """)
         XCTAssertEqual(jobs.map(\.id), ["hermes:a1", "hermes:b2", "hermes:c3", "hermes:d4", "hermes:e5"], "A job with no id is passed over")
-        XCTAssertEqual(jobs.map(\.name), ["Hermes job a1", "Hermes job b2", "Hermes job c3", "Hermes job d4", "Daily digest"])
-        JobPrivacy.check(jobs, neverHolds: ["Email", "Q3", "revenue figures", "boss", "example.com", "token", "sk-live", "secret", "archive"])
+        XCTAssertEqual(jobs.map(\.name), ["Hermes job a1", "Hermes job b2", "Hermes job c3", "Hermes job d4", "Hermes job e5"])
+        let words = [
+            "Email", "Q3", "revenue", "boss", "example.com", "token", "sk-live", "secret", "archive", "Sum up", "payroll", "invoices",
+            "Zurich", "\u{1F468}", "salaries", "hello", "Quarterly", "digest", "Has no id",
+        ]
+        JobPrivacy.check(jobs, neverHolds: words)
 
-        // What is made of a job later holds its name and nothing else of it.
+        // What is made of the jobs later: the settings, the alarm, the
+        // hold, the history, the lines of the user and the recording.
         var settings = JobSettings()
         settings.wakeForJobs = true
         for job in jobs { settings.set(true, for: job.id) }
         var wake = JobWake()
         let noon = at("2026-10-10 12:00")
-        let input = JobWakeInput(readings: [JobSourceReading(source: .hermes, jobs: jobs)], settings: settings)
-        let time = wake.turn(input, now: noon, awake: 0, asleep: 0, clock: JobTime.clock())!
+        let readings = [JobSourceReading(source: .hermes, jobs: jobs)]
+        let input = JobWakeInput(readings: readings, settings: settings)
+        let time = try XCTUnwrap(wake.turn(input, now: noon, awake: 0, asleep: 0, clock: JobTime.clock()))
         wake.answered(.set(time), for: time, now: noon, awake: 0)
+        var all = PanelText.jobStatus(wake.status, settings: settings, now: noon) ?? ""
         _ = wake.turn(input, now: Date(timeIntervalSince1970: time + 2), awake: 0, asleep: 3600, clock: JobTime.clock())
         XCTAssertEqual(wake.holds.map(\.name), ["Hermes job a1"])
-        var all = ""
         dump(wake, to: &all)
-        all += String(data: try! JSONEncoder().encode(wake.memory), encoding: .utf8)!
+        all += String(decoding: try JSONEncoder().encode(wake.memory), as: UTF8.self)
+        all += String(decoding: try JSONEncoder().encode(settings), as: UTF8.self)
+        all += JobStore.logLine(readings)
         all += PanelText.jobStatus(wake.status, settings: settings, now: noon) ?? ""
+        all += wake.plan.nextRuns.map { PanelText.jobDetail($0, now: noon) }.joined()
         all += wake.holds.map { PanelText.jobHold($0, holding: true, now: noon) + $0.subject + $0.title }.joined()
         all += wake.memory.history.events.map { PanelText.jobEvent($0) }.joined()
-        for word in ["Email", "Q3", "revenue", "boss", "example.com", "token", "sk-live", "secret", "archive"] {
-            XCTAssertFalse(all.localizedCaseInsensitiveContains(word), word)
-        }
+        var frame = EvidenceFrame(at: noon, agents: [])
+        frame.jobHolds = wake.holds
+        all += String(decoding: try LabFormat.encoder().encode(frame), as: UTF8.self)
+        all += String(decoding: try LabFormat.encoder().encode(LabFormat.scrubbed(frame)), as: UTF8.self)
+        XCTAssertTrue(all.contains("Hermes job a1"))
+        for word in words { XCTAssertFalse(all.localizedCaseInsensitiveContains(word), word) }
     }
 
-    func testTheNameIsOneLineOfSixtyCharacters() {
-        let long = String(repeating: "Summarise everything ", count: 10)
-        let jobs = jobs(#"{"jobs":[{"id":"x\ny","name":"\#(long)\nsecond line","schedule":{"expr":"0 9 * * *"}},{"id":77,"schedule":"30 6 * * *"}]}"#)
-        XCTAssertEqual(jobs.first?.name.count, 60)
-        XCTAssertEqual(jobs.first?.name, String(long.prefix(60)))
-        XCTAssertEqual(jobs.first?.id, "hermes:x y")
-        XCTAssertEqual(jobs.last?.name, "Hermes job 77", "The id when there is no name")
-        XCTAssertEqual(reported(jobs.last).cron, JobTime.cron("30 6 * * *"))
+    func testTheShownNameIsOneLineOfSixtyCharacters() {
+        let long = String(repeating: "abcdefgh", count: 10)
+        let jobs = jobs(#"{"jobs":[{"id":"x\ny","name":"A name\nsecond line","schedule":{"expr":"0 9 * * *"}},{"id":77,"schedule":"30 6 * * *"},{"id":"\#(long)","schedule":"0 7 * * *"}]}"#)
+        XCTAssertEqual(jobs.map(\.id), ["hermes:x y", "hermes:77", "hermes:" + String(long.prefix(64))])
+        XCTAssertEqual(jobs.first?.name, "Hermes job x y")
+        XCTAssertEqual(jobs.dropFirst().first?.name, "Hermes job 77")
+        XCTAssertEqual(jobs.last?.name, "Hermes job " + String(long.prefix(49)))
+        XCTAssertEqual(jobs.last?.name.count, 60)
+        XCTAssertEqual(reported(jobs.dropFirst().first).cron, JobTime.cron("30 6 * * *"))
     }
 
     func testTheTimeHermesWroteWinsWhileItIsAhead() {
