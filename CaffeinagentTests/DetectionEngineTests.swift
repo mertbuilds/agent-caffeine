@@ -498,6 +498,11 @@ final class DetectionEngineTests: XCTestCase {
     /// word of a full wake comes. The job hold starts all the same, and
     /// the agent whose state still says "working" from before the sleep
     /// holds nothing. After the hold nothing passes the gate.
+    ///
+    /// The hold has the lengths of the default settings: 60 seconds of
+    /// lead time and 240 seconds of start grace. That is longer than
+    /// `WakeGate.steadyAwake`, and the awake time under it must not open
+    /// the gate for the agent.
     func testAJobHoldStartsAfterAnAlarmWakeWithNoFullWakeAndAStaleAgentDoesNot() {
         state = .working
         engine.pausedUntil = Self.start.addingTimeInterval(600)
@@ -507,7 +512,12 @@ final class DetectionEngineTests: XCTestCase {
         engine.willSleep()
         slept = 3600
         let alarm = now.timeIntervalSince1970
-        let hold = JobHold(id: "crontab:backup@1", jobID: "crontab:backup", source: .crontab, name: "backup.sh", start: alarm, fireAt: alarm + 30, startGrace: 60, cap: 1800)
+        let defaults = JobSettings()
+        let hold = JobHold(
+            id: "crontab:backup@1", jobID: "crontab:backup", source: .crontab, name: "backup.sh", start: alarm,
+            fireAt: alarm + defaults.leadTime, startGrace: defaults.startGrace, cap: defaults.holdCap
+        )
+        XCTAssertGreaterThan(hold.end - alarm, WakeGate.steadyAwake + 60)
         engine.wakeAlarm = Date(timeIntervalSince1970: alarm + 86_400)
         let before = collector.samples
         engine.jobHolds = [hold]
@@ -520,8 +530,13 @@ final class DetectionEngineTests: XCTestCase {
         XCTAssertEqual(engine.decision.perAgent.map(\.cause), [nil])
         XCTAssertEqual(engine.frame?.jobHolds, [hold])
         XCTAssertEqual(engine.frame?.wakeAlarm, alarm + 86_400)
-        scheduler.advance(by: 80)
+        scheduler.advance(by: 130)
         XCTAssertTrue(engine.decision.hold, "Up to the start grace")
+        XCTAssertEqual(engine.decision.headline, .scheduledJob(.one("backup.sh")), "Longer than the steady stretch, and still the job alone")
+        XCTAssertEqual(engine.decision.perAgent.map(\.cause), [nil])
+        scheduler.advance(by: 160)
+        XCTAssertTrue(engine.decision.hold)
+        XCTAssertEqual(engine.decision.perAgent.map(\.cause), [nil])
         scheduler.advance(by: 12)
         XCTAssertFalse(engine.decision.hold, "The hold is over, and the gate is still closed for the agent")
         XCTAssertFalse(engine.decision.lidClosedFlag)
@@ -529,6 +544,29 @@ final class DetectionEngineTests: XCTestCase {
         scheduler.advance(by: 2)
         XCTAssertFalse(engine.decision.hold)
         XCTAssertEqual(engine.frame?.jobHolds, [])
+        // The lid is closed and nothing holds, so the Mac sleeps again,
+        // and wakes by itself for 30 seconds every 5 minutes for an hour.
+        for _ in 0..<12 {
+            slept += 270
+            scheduler.advance(by: 30)
+            XCTAssertFalse(engine.decision.hold)
+            XCTAssertFalse(engine.decision.lidClosedFlag)
+        }
+    }
+
+    /// The gate alone: an hour of samples under a job hold with no sleep
+    /// between them does not open it. The steady stretch starts when the
+    /// job hold is over.
+    func testAwakeTimeUnderAJobHoldAloneIsNoSteadyAwakeTime() {
+        var gate = WakeGate()
+        gate.willSleep(awake: 0)
+        gate.sampled(awake: 10, slept: true)
+        for second in stride(from: 12, through: 3600, by: 2) {
+            XCTAssertFalse(gate.sampled(awake: TimeInterval(second), slept: false, jobHoldOnly: true))
+        }
+        XCTAssertFalse(gate.allowsHold(holding: false))
+        XCTAssertFalse(gate.sampled(awake: 3600 + WakeGate.steadyAwake, slept: false), "The steady stretch counts from the end of the job hold")
+        XCTAssertTrue(gate.sampled(awake: 3602 + WakeGate.steadyAwake, slept: false))
     }
 
     /// Lid closed on wall power under a hold: the word of sleep came and

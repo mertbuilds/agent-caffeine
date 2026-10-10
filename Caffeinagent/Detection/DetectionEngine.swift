@@ -98,6 +98,12 @@ final class DetectionEngine: ObservableObject {
     private var agentMemory: [ProcessIdentity: AgentMemory] = [:]
     private var policyMemory = PolicyMemory()
     private var wakeGate = WakeGate()
+    /// The decision holds, and only because a job hold is in the window
+    /// of its alarm while the gate is closed. For the gate and for the
+    /// memory of the agents that is no hold: the awake time under it does
+    /// not open the gate, and it carries nothing over the sleep.
+    private var jobHoldOnly = false
+    private var heldPastGate: Bool { decision.hold && !jobHoldOnly }
     private let clock: AwakeClock
     /// `AwakeClock.asleep` at the last sample that saw a sleep, or at the
     /// first sample.
@@ -207,7 +213,10 @@ final class DetectionEngine: ObservableObject {
         if slept || asleepSeen == nil { asleepSeen = asleep }
         // With no hold over the sleep, what an agent did before it starts
         // none now: only what this sample reads counts.
-        if wakeGate.sampled(awake: sample.frame.awake ?? clock.awake(), slept: slept), !decision.hold { policyMemory = PolicyMemory() }
+        // A hold that only a job has behind the closed gate counts as no
+        // hold here.
+        let opened = wakeGate.sampled(awake: sample.frame.awake ?? clock.awake(), slept: slept, jobHoldOnly: jobHoldOnly)
+        if opened, !heldPastGate { policyMemory = PolicyMemory() }
         let (readings, nextAgents) = VerdictRules.readings(for: sample.frame, memory: agentMemory, settings: settings)
         agentMemory = nextAgents
         self.readings = readings
@@ -244,12 +253,14 @@ final class DetectionEngine: ObservableObject {
     }
 
     private func decide(at now: Date, context: FrameContext) {
+        let mayHold = wakeGate.allowsHold(holding: heldPastGate)
         let (next, memory) = HoldPolicy.decide(
             readings: readings, memory: policyMemory, mode: mode, enabled: enabled, pausedUntil: pausedUntil, reachableUntil: reachableUntil,
             holds: frame?.holds ?? [], jobHolds: jobHolds, entitlement: entitlement, safety: safety, settings: settings, context: context,
-            mayHold: wakeGate.allowsHold(holding: decision.hold),
-            jobsMayHold: wakeGate.allowsJobHold(holding: decision.hold, windows: jobHolds.map(AlarmWindow.init), now: now), now: now
+            mayHold: mayHold,
+            jobsMayHold: wakeGate.allowsJobHold(holding: heldPastGate, windows: jobHolds.map(AlarmWindow.init), now: now), now: now
         )
+        jobHoldOnly = next.hold && !mayHold
         policyMemory = memory
         if decision != next { decision = next }
     }

@@ -56,13 +56,19 @@ struct WakeGate: Equatable {
     /// - Parameters:
     ///   - awake: when the sample was taken.
     ///   - slept: the Mac slept between this sample and the one before it.
+    ///   - jobHoldOnly: only a job hold in the window of its alarm keeps
+    ///     the Mac awake. That time is not steady awake time: the hold is
+    ///     longer than `steadyAwake`, and it must not open the gate for
+    ///     what the app knew of the agents before the sleep.
     /// - Returns: true when this sample opens the gate: it is the first
     ///   one after a full wake, or the Mac was awake for `steadyAwake`.
     @discardableResult
-    mutating func sampled(awake: TimeInterval, slept: Bool) -> Bool {
+    mutating func sampled(awake: TimeInterval, slept: Bool, jobHoldOnly: Bool = false) -> Bool {
         if announced {
             if slept {
                 self.slept = true
+                steadySince = awake
+            } else if jobHoldOnly {
                 steadySince = awake
             } else if let steadySince, awake - steadySince > Self.steadyAwake {
                 self = WakeGate()
