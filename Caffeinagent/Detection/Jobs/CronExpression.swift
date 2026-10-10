@@ -26,6 +26,10 @@ struct CronExpression: Equatable {
     var anyDay: Bool
     /// The day of the week does not limit the days.
     var anyWeekday: Bool
+    /// The hour field begins with `*`. Such a job runs in both passes of
+    /// an hour that comes twice when the clock goes back, as cron does
+    /// it. A job with named hours runs once.
+    var anyHour = false
 
     static let fieldCount = 5
     private static let monthNames = ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"]
@@ -56,7 +60,7 @@ struct CronExpression: Equatable {
               let weekdays = values(fields[4], 0...7, names: weekdayNames, firstName: 0) else { return nil }
         return CronExpression(
             minutes: minutes, hours: hours, days: days, months: months, weekdays: Set(weekdays.map { $0 % 7 }),
-            anyDay: fields[2].hasPrefix("*"), anyWeekday: fields[4].hasPrefix("*")
+            anyDay: fields[2].hasPrefix("*"), anyWeekday: fields[4].hasPrefix("*"), anyHour: fields[1].hasPrefix("*")
         )
     }
 
@@ -92,11 +96,20 @@ struct CronExpression: Equatable {
                     // No jump of a clock is longer than two hours, so an
                     // earlier time of today is over.
                     let earliest = day == start.day ? start.minuteOfDay - 120 : 0
+                    // The second pass of a time that comes twice. It is
+                    // later than the first pass of every time before it
+                    // on the clock, and earlier than the times after the
+                    // hour that comes twice.
+                    var again: Date?
                     for hour in hours {
                         for minute in minutes where hour * 60 + minute >= earliest {
-                            if let date = clock.instant(day, hour: hour, minute: minute), date > now { return date }
+                            let dates = anyHour ? clock.instants(day, hour: hour, minute: minute) : [clock.instant(day, hour: hour, minute: minute)].compactMap { $0 }
+                            guard let first = dates.first else { continue }
+                            if first > now { return again.map { min($0, first) } ?? first }
+                            if let second = dates.dropFirst().first(where: { $0 > now }) { again = again.map { min($0, second) } ?? second }
                         }
                     }
+                    if let again { return again }
                 }
             }
             firstDay = 1

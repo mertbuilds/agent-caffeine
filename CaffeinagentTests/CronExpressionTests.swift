@@ -118,6 +118,33 @@ final class CronExpressionTests: XCTestCase {
         XCTAssertEqual(JobTime.cron("0 2 * * *").next(after: second, clock: clock), at("2026-11-01 10:00"), "02:00 comes once, after both")
     }
 
+    /// cron runs a job with `*` for the hour in both passes of the hour
+    /// that comes twice: an hourly job has no gap of two hours.
+    func testAJobOfEveryHourRunsInBothPassesOfAnHourThatComesTwice() {
+        // 1 November 2026, Los Angeles: 02:00 becomes 01:00.
+        let zone = JobTime.losAngeles, clock = JobTime.clock(zone)
+        let start = at("2026-11-01 00:30", zone)
+        func times(_ text: String, _ count: Int) -> [Date] { JobSchedule.cron(JobTime.cron(text)).fireTimes(after: start, count: count, clock: clock) }
+        XCTAssertEqual(times("0 * * * *", 4), [at("2026-11-01 08:00"), at("2026-11-01 09:00"), at("2026-11-01 10:00"), at("2026-11-01 11:00")])
+        XCTAssertEqual(times("*/30 * * * *", 6), [
+            at("2026-11-01 08:00"), at("2026-11-01 08:30"), at("2026-11-01 09:00"), at("2026-11-01 09:30"), at("2026-11-01 10:00"),
+            at("2026-11-01 10:30"),
+        ])
+        XCTAssertEqual(times("15 */1 * * *", 3), [at("2026-11-01 08:15"), at("2026-11-01 09:15"), at("2026-11-01 10:15")])
+        // From inside the second pass.
+        XCTAssertEqual(JobTime.cron("*/30 * * * *").next(after: at("2026-11-01 09:10"), clock: clock), at("2026-11-01 09:30"))
+        XCTAssertEqual(JobTime.cron("*/30 * * * *").next(after: at("2026-11-01 08:40"), clock: clock), at("2026-11-01 09:00"))
+        // An hour that is named runs once.
+        XCTAssertEqual(times("0 1-2 * * *", 2), [at("2026-11-01 08:00"), at("2026-11-01 10:00")])
+        XCTAssertEqual(times("0 0-23 * * *", 3), [at("2026-11-01 08:00"), at("2026-11-01 10:00"), at("2026-11-01 11:00")])
+        // A day with no jump is as before.
+        XCTAssertEqual(
+            JobSchedule.cron(JobTime.cron("0 * * * *")).fireTimes(after: at("2026-10-10 00:30", zone), count: 3, clock: clock),
+            [at("2026-10-10 01:00", zone), at("2026-10-10 02:00", zone), at("2026-10-10 03:00", zone)]
+        )
+        XCTAssertEqual(JobTime.cron("0 * * * *").key, JobTime.cron("0 0-23 * * *").key, "The id of a job does not change")
+    }
+
     func testTheTimeZoneChangesBetweenTwoCalls() {
         let job = JobTime.cron("0 9 * * *")
         let now = at("2026-10-10 05:00")

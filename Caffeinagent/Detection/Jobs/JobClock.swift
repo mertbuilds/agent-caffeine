@@ -51,16 +51,22 @@ struct JobClock {
     /// - A time that exists twice, because the clock goes back, is the
     ///   first of the two, so a job runs once.
     func instant(_ day: Day, hour: Int, minute: Int) -> Date? {
-        guard let plainTime = plainDate(day, hour: hour, minute: minute) else { return nil }
+        instants(day, hour: hour, minute: minute).first
+    }
+
+    /// The same, with both moments of a time that exists twice, the
+    /// first one first. cron runs a job with `*` for the hour at both.
+    func instants(_ day: Day, hour: Int, minute: Int) -> [Date] {
+        guard let plainTime = plainDate(day, hour: hour, minute: minute) else { return [] }
         // The offsets on both sides of a jump that is near.
         let before = timeZone.secondsFromGMT(for: plainTime.addingTimeInterval(-86_400))
         let after = timeZone.secondsFromGMT(for: plainTime.addingTimeInterval(86_400))
         let candidates = [before, after].map { (offset: $0, date: plainTime.addingTimeInterval(TimeInterval(-$0))) }
-        let real = candidates.filter { timeZone.secondsFromGMT(for: $0.date) == $0.offset }.map(\.date)
-        if let first = real.min() { return first }
+        let real = Set(candidates.filter { timeZone.secondsFromGMT(for: $0.date) == $0.offset }.map(\.date)).sorted()
+        if !real.isEmpty { return real }
         let dates = candidates.map(\.date)
-        guard let low = dates.min(), let high = dates.max() else { return nil }
-        return jump(between: low, and: high)
+        guard let low = dates.min(), let high = dates.max() else { return [] }
+        return [jump(between: low, and: high)]
     }
 
     /// The first second with another offset than `low` has, up to `high`.

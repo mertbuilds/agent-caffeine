@@ -48,7 +48,7 @@ enum LaunchdCalendar {
             days: day.map { [$0] } ?? Set(1...31),
             months: month.map { [$0] } ?? Set(1...12),
             weekdays: weekday.map { [$0 % 7] } ?? Set(0...6),
-            anyDay: day == nil, anyWeekday: weekday == nil
+            anyDay: day == nil, anyWeekday: weekday == nil, anyHour: hour == nil
         )
     }
 
