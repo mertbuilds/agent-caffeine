@@ -285,18 +285,24 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
     /// A helper that does not know how to leave is registered again. A
     /// helper that gives no version gets a new connection first, and is
     /// registered again when that does not help, once in a launch.
-    func replaceHelper(ifNot appVersion: String) async {
+    /// - Returns: true when the helper that ran was asked to leave or
+    ///   was registered again. What it held went with it.
+    @discardableResult
+    func replaceHelper(ifNot appVersion: String) async -> Bool {
         refreshStatus()
-        guard helperStatus == .enabled, !repairing else { return }
+        guard helperStatus == .enabled, !repairing else { return false }
         var running: String?
         do {
             running = try await helperVersion()
         } catch {
             log.error("the helper gave no version: \(String(describing: error), privacy: .public)")
             health.failed(now: now())
-            guard health.takeRepair(atOnce: true) else { return refreshHealth() }
+            guard health.takeRepair(atOnce: true) else {
+                refreshHealth()
+                return false
+            }
         }
-        guard running != appVersion, !repairing else { return }
+        guard running != appVersion, !repairing else { return false }
         _ = await duringRepair {
             var running = running
             if running == nil { running = await self.versionOnANewConnection() }
@@ -323,6 +329,7 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
             }
         }
         await send(.repair)
+        return true
     }
 
     /// "Try again" in the menu and in Preferences. A helper that answers is
@@ -686,5 +693,42 @@ final class SleepFlagController: ObservableObject, SleepFlagControlling {
     private func stopHeartbeat() {
         heartbeatTask?.cancel()
         heartbeatTask = nil
+    }
+}
+
+/// The wake alarm of the helper, for "Wake for jobs". A helper that is
+/// not allowed in Login Items gets no call: it does not run, and an alarm
+/// it had went with it.
+extension SleepFlagController: WakeAlarmSending {
+    func wakeAlarm(at time: TimeInterval) async -> WakeAlarmResult {
+        guard helperStatus == .enabled else { return .helperNotAvailable }
+        return await helper.wakeAlarm(at: time)
+    }
+
+    /// Blocks the caller for at most `timeout` seconds, as `clearForQuit`
+    /// does. When the answer is late, the call may still get through: the
+    /// lease of the helper ends an alarm that nobody asks for again.
+    func wakeAlarmNow(at time: TimeInterval, timeout: TimeInterval) -> WakeAlarmResult {
+        guard helperStatus == .enabled else { return .helperNotAvailable }
+        let answer = WakeAlarmAnswer()
+        let done = DispatchSemaphore(value: 0)
+        let helper = helper
+        Task.detached {
+            answer.set(await helper.wakeAlarm(at: time))
+            done.signal()
+        }
+        return done.wait(timeout: .now() + timeout) == .success ? answer.value : .helperNotAvailable
+    }
+}
+
+/// The answer of the helper, from the thread of the call to the one that waits.
+private final class WakeAlarmAnswer: @unchecked Sendable {
+    private let lock = NSLock()
+    private var result = WakeAlarmResult.helperNotAvailable
+
+    var value: WakeAlarmResult { lock.withLock { result } }
+
+    func set(_ result: WakeAlarmResult) {
+        lock.withLock { self.result = result }
     }
 }

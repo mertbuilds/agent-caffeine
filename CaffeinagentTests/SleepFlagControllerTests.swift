@@ -96,6 +96,10 @@ private final class FakeHelper: SleepFlagHelperConnecting {
     var reconnects = 0
     var journal: Journal?
     var lostHandler: (() -> Void)?
+    /// The times the wake alarm was asked for.
+    var alarms: [TimeInterval] = []
+    /// The call for the wake alarm gives no answer for a while.
+    var alarmHangs = false
 
     func onConnectionLost(_ handler: @escaping () -> Void) { lostHandler = handler }
 
@@ -157,6 +161,8 @@ private final class FakeHelper: SleepFlagHelperConnecting {
 
     func setWakeAlarm(at time: TimeInterval) async throws -> (time: Double, code: Int) {
         called("wake alarm")
+        alarms.append(time)
+        if alarmHangs { try? await Task.sleep(nanoseconds: 3_000_000_000) }
         try fail()
         return (time, 0)
     }
@@ -548,10 +554,12 @@ final class SleepFlagControllerTests: XCTestCase {
         let service = FakeService(status: .enabled)
         let helper = FakeHelper()
         let controller = makeController(service, helper)
-        await controller.replaceHelper(ifNot: "1.0 (1)")
+        let kept = await controller.replaceHelper(ifNot: "1.0 (1)")
+        XCTAssertFalse(kept, "The helper of this version stays, with what it holds")
         XCTAssertFalse(service.unregistered)
         XCTAssertEqual(service.registrations, 0)
-        await controller.replaceHelper(ifNot: "1.1 (2)")
+        let replaced = await controller.replaceHelper(ifNot: "1.1 (2)")
+        XCTAssertTrue(replaced)
         XCTAssertTrue(service.unregistered)
         XCTAssertEqual(service.registrations, 1)
         XCTAssertEqual(controller.helperStatus, .enabled)
@@ -1165,6 +1173,50 @@ final class SleepFlagControllerTests: XCTestCase {
         XCTAssertFalse(after.contains("set false"), "\(after)")
         XCTAssertFalse(after.contains("status"), "The helper is not repaired: \(after)")
         XCTAssertTrue(helper.flag)
+    }
+
+    // MARK: Wake alarm
+
+    func testTheWakeAlarmGoesToAHelperThatIsAllowedOnly() async {
+        let helper = FakeHelper()
+        let allowed = makeController(FakeService(status: .enabled), helper)
+        let set = await allowed.wakeAlarm(at: 2_000_000_000)
+        XCTAssertEqual(set, .set(2_000_000_000))
+        let none = await allowed.wakeAlarm(at: 0)
+        XCTAssertEqual(none, .cancelled)
+        XCTAssertEqual(helper.alarms, [2_000_000_000, 0])
+
+        let other = FakeHelper()
+        for status in [HelperStatus.notRegistered, .requiresApproval, .notFound] {
+            let controller = makeController(FakeService(status: status), other)
+            let result = await controller.wakeAlarm(at: 2_000_000_000)
+            XCTAssertEqual(result, .helperNotAvailable)
+            XCTAssertEqual(controller.wakeAlarmNow(at: 0, timeout: 1), .helperNotAvailable)
+        }
+        XCTAssertEqual(other.alarms, [], "A helper that is not allowed gets no call")
+    }
+
+    /// A helper of a build before alarms does not know the call, and one
+    /// that is gone gives no answer. Both are one result and no error.
+    func testAHelperThatDoesNotKnowTheWakeAlarmIsNotAvailable() async {
+        let helper = FakeHelper()
+        helper.unreachable = true
+        helper.error = HelperCallError.timedOut
+        let controller = makeController(FakeService(status: .enabled), helper)
+        let result = await controller.wakeAlarm(at: 2_000_000_000)
+        XCTAssertEqual(result, .helperNotAvailable)
+        XCTAssertEqual(controller.wakeAlarmNow(at: 2_000_000_000, timeout: 1), .helperNotAvailable)
+    }
+
+    func testTheWakeAlarmWhereNothingCanAwait() {
+        let helper = FakeHelper()
+        let controller = makeController(FakeService(status: .enabled), helper)
+        XCTAssertEqual(controller.wakeAlarmNow(at: 2_000_000_000, timeout: 5), .set(2_000_000_000))
+        XCTAssertEqual(controller.wakeAlarmNow(at: 0, timeout: 5), .cancelled)
+        helper.alarmHangs = true
+        let started = Date()
+        XCTAssertEqual(controller.wakeAlarmNow(at: 0, timeout: 0.1), .helperNotAvailable, "The wait ran out")
+        XCTAssertLessThan(Date().timeIntervalSince(started), 2)
     }
 
     func testWhichErrorsMeanNotPermittedAndStale() {

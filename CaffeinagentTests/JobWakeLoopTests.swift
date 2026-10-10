@@ -98,7 +98,7 @@ final class JobWakeLoopTests: XCTestCase {
     func testAChangeOfTheInputSendsTheAlarmAndShowsIt() async {
         var changes = 0
         loop.onChange = { changes += 1 }
-        loop.input = input
+        loop.run(input)
         XCTAssertEqual(loop.view.status, .asking)
         await settle()
         XCTAssertEqual(sender.asked, ["\(alarmTime)"])
@@ -110,14 +110,13 @@ final class JobWakeLoopTests: XCTestCase {
         XCTAssertEqual(loop.view.history.map(\.kind), [.alarmSet])
         XCTAssertEqual(loop.nextTurn, alarm)
         XCTAssertGreaterThan(changes, 0)
-        loop.input = input
-        loop.run()
+        loop.run(input)
         await settle()
         XCTAssertEqual(sender.asked.count, 1, "The same input and the same time bring no call")
     }
 
     func testTheLeaseIsRenewedWhileTheAlarmIsWanted() async {
-        loop.input = input
+        loop.run(input)
         await settle()
         awake += JobWake.renewEvery
         loop.run()
@@ -129,18 +128,18 @@ final class JobWakeLoopTests: XCTestCase {
     }
 
     func testSwitchingTheFeatureOffCancelsAndASilentHelperIsAStatus() async {
-        loop.input = input
+        loop.run(input)
         await settle()
         var off = input
         off.settings.wakeForJobs = false
-        loop.input = off
+        loop.run(off)
         await settle()
         XCTAssertEqual(sender.asked, ["\(alarmTime)", "0"])
         XCTAssertEqual(loop.view.status, .off)
         XCTAssertNil(loop.view.alarm)
         XCTAssertEqual(loop.view.history.map(\.kind), [.alarmCancelled, .alarmSet], "The newest first")
         sender.result = .helperNotAvailable
-        loop.input = input
+        loop.run(input)
         await settle()
         XCTAssertEqual(loop.view.status, .helperSilent)
         sender.result = .refused(.tooOften)
@@ -152,7 +151,7 @@ final class JobWakeLoopTests: XCTestCase {
 
     func testWillSleepSendsThePlanForASleepingMacBeforeItReturns() async {
         now = JobTime.date("2026-10-10 20:40")
-        loop.input = input
+        loop.run(input)
         await settle()
         XCTAssertEqual(sender.asked, ["\(nextAlarmTime)"], "Awake, the job in 20 minutes needs no alarm")
         loop.willSleep()
@@ -168,7 +167,7 @@ final class JobWakeLoopTests: XCTestCase {
 
     func testAHoldOpensAtTheAlarmAndEndsWhenTheJobIsGone() async {
         var changes = 0
-        loop.input = input
+        loop.run(input)
         await settle()
         loop.onChange = { changes += 1 }
         await wakeAtTheAlarm()
@@ -195,7 +194,7 @@ final class JobWakeLoopTests: XCTestCase {
     }
 
     func testStopEndsTheHold() async {
-        loop.input = input
+        loop.run(input)
         await settle()
         await wakeAtTheAlarm()
         loop.stopHold(id: holdID)
@@ -206,7 +205,7 @@ final class JobWakeLoopTests: XCTestCase {
     func testQuitCancelsOnceAndOnlyWithAnAlarm() async {
         loop.cancelNow()
         XCTAssertEqual(sender.asked, [])
-        loop.input = input
+        loop.run(input)
         await settle()
         loop.cancelNow()
         XCTAssertEqual(sender.asked, ["\(alarmTime)", "now 0"])
@@ -216,7 +215,7 @@ final class JobWakeLoopTests: XCTestCase {
     }
 
     func testAfterTheHelperWasReplacedTheAlarmIsSetAgain() async {
-        loop.input = input
+        loop.run(input)
         await settle()
         loop.helperReplaced()
         await settle()
@@ -225,7 +224,7 @@ final class JobWakeLoopTests: XCTestCase {
     }
 
     func testTheMemoryLastsOverARestartOfTheApp() async {
-        loop.input = input
+        loop.run(input)
         await settle()
         await wakeAtTheAlarm()
         let memory = JobWakeMemoryStore.load(from: defaults)
@@ -247,7 +246,7 @@ final class JobWakeLoopTests: XCTestCase {
         var input = JobWakeInput(readings: [JobSourceReading(source: .crontab, jobs: CrontabJobReader.jobs(line))])
         input.settings.wakeForJobs = true
         input.settings.set(true, for: try XCTUnwrap(input.readings[0].jobs.first?.id))
-        loop.input = input
+        loop.run(input)
         await settle()
         asleep += 20 * 3600
         now = JobTime.date("2026-10-11 03:14").addingTimeInterval(1)

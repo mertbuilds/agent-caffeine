@@ -51,9 +51,7 @@ final class JobWakeLoop: ObservableObject {
     /// The owner sets its timer again.
     var onChange: (() -> Void)?
 
-    var input = JobWakeInput() {
-        didSet { if input != oldValue { run() } }
-    }
+    private(set) var input = JobWakeInput()
 
     private var core: JobWake
     private var saved: JobWakeMemory
@@ -90,14 +88,17 @@ final class JobWakeLoop: ObservableObject {
 
     /// One turn. Called on every change of the input, with every sample,
     /// and at `nextTurn`.
-    func run() {
+    /// - Parameter next: what the app knows now. Nil keeps the input.
+    func run(_ next: JobWakeInput? = nil) {
+        if let next { input = next }
         turn(willSleep: false)
         look()
     }
 
     /// macOS says the Mac goes to sleep: the alarm for a Mac that sleeps
     /// is with the helper before this returns, or the wait ran out.
-    func willSleep() {
+    func willSleep(_ next: JobWakeInput? = nil) {
+        if let next { input = next }
         turn(willSleep: true)
     }
 
