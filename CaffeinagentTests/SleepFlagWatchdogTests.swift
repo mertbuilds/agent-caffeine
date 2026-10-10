@@ -497,6 +497,26 @@ final class HelperServiceTests: XCTestCase {
         XCTAssertEqual(events.list, [appleAlarm])
     }
 
+    /// A call that was under way when the app retired the helper comes
+    /// after its shutdown. An alarm set then would stay behind a helper
+    /// that left.
+    func testNoWakeAlarmIsSetAfterRetire() {
+        let exited = expectation(description: "exit")
+        let service = idleService(exited: exited)
+        service.retire {}
+        wait(for: [exited], timeout: 5)
+        var reply: String?
+        let answered = expectation(description: "answered")
+        service.setWakeAlarm(at: 1_800_003_600) { time, code in
+            reply = "\(Int(time)) \(code)"
+            answered.fulfill()
+        }
+        wait(for: [answered], timeout: 5)
+        XCTAssertEqual(reply, "0 \(WakeAlarmRefusal.notCancelled.rawValue)")
+        XCTAssertEqual(events.scheduled, [])
+        XCTAssertEqual(events.list, [])
+    }
+
     func testTheStartTakesAwayAnAlarmOfAnEarlierRun() {
         events.list = [appleAlarm, FakeWakeEvents.ours(1_800_003_600)]
         let exited = expectation(description: "exit")

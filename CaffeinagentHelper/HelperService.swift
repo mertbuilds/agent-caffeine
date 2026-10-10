@@ -118,6 +118,12 @@ final class HelperService: NSObject, NSXPCListenerDelegate, SleepFlagHelperProto
     // type of the event are constants of WakeAlarmCore and SystemWakeEvents.
     func setWakeAlarm(at time: Double, reply: @escaping (Double, Int) -> Void) {
         queue.async {
+            // After `retire` took the alarm away, a call that was under
+            // way sets none: it would stay behind a helper that left.
+            if self.retiring {
+                reply(0, WakeAlarmRefusal.notCancelled.rawValue)
+                return
+            }
             let result = self.alarm.set(at: time)
             switch result {
             case .set(let time): self.log.info("wake alarm set at \(time, privacy: .public)")
