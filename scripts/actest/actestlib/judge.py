@@ -6,6 +6,7 @@
     at end: sleepdisabled=0
     heartbeat gap from step 2 to step 3 < 15s
     log from step 2 to step 3 has no Sleep,DarkWake
+    log within 20s after alarm - 5s has AlarmWake
     log within 60s after step 4 has Sleep
     key chime is yes
     exit seven == 7
@@ -22,7 +23,7 @@ import re
 
 from . import expr, parse
 
-_REF = r"(start|end|step \d+(?: start)?)(?:\s*([+-])\s*(\d+(?:\.\d+)?[smh]?))?"
+_REF = r"(start|end|alarm|step \d+(?: start)?)(?:\s*([+-])\s*(\d+(?:\.\d+)?[smh]?))?"
 _FORMS = [
     ("within", re.compile(rf"^within (\S+) after {_REF}: (.+)$")),
     ("always", re.compile(rf"^always from {_REF} to {_REF}: (.+)$")),
@@ -62,7 +63,7 @@ def parse_check(text):
 
 def moment(evidence, name, sign=None, offset=None):
     """The time of a named moment. None when the run never got there."""
-    if name in ("start", "end"):
+    if name in ("start", "end", "alarm"):
         base = evidence.get(name)
     else:
         match = re.match(r"step (\d+)( start)?", name)
@@ -72,6 +73,20 @@ def moment(evidence, name, sign=None, offset=None):
         return None
     shift = expr.literal(offset) if offset else 0
     return base - shift if sign == "-" else base + shift
+
+
+def _kinds(line):
+    """The kind of a line of the power log, and the finer names a rule
+    can ask for: DisplayOff, DisplayOn, and AlarmWake for a wake that
+    the clock chip made."""
+    kinds = [line["kind"]]
+    if line["kind"] == "Notification" and "Display is turned off" in line["text"]:
+        kinds.append("DisplayOff")
+    if line["kind"] == "Notification" and "Display is turned on" in line["text"]:
+        kinds.append("DisplayOn")
+    if line["kind"] in ("Wake", "DarkWake") and "rtc" in line["text"].lower():
+        kinds.append("AlarmWake")
+    return kinds
 
 
 def _window(evidence, first, last):
@@ -109,7 +124,7 @@ def _judge(evidence, form, groups):
         if evidence.get("log") is None:
             return False, "the power log was not read"
         kinds = rest[1].split(",")
-        lines = [line for line in evidence["log"] if first <= line["t"] <= last and line["kind"] in kinds]
+        lines = [line for line in evidence["log"] if first <= line["t"] <= last and set(_kinds(line)) & set(kinds)]
         wanted = rest[0] is None
         said = f"{len(lines)} line{'' if len(lines) == 1 else 's'} of {rest[1]}"
         if lines:

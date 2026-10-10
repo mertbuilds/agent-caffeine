@@ -78,6 +78,14 @@ def check(facts, test=None):
         else:
             unknown("helper", "the state of the helper is not known")
 
+    if needs.get("idle"):
+        if app:
+            holding = app["decision"].get("hold")
+            add("idle", not holding, "nothing holds the Mac awake now" if not holding else f"Agent Caffeine holds now: {app['decision'].get('headline')}",
+                "Wait until no agent works, or close the agents that work. Then check again.")
+        else:
+            unknown("idle", "it is not known if an agent works now")
+
     flag = sample.get("sleepdisabled")
     if app:
         wanted = 1 if app["flag"].get("wanted") and helper == "enabled" else 0

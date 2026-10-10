@@ -17,14 +17,17 @@ WAIT = 90
 
 
 def end_child(child):
-    """Ends a process the runner started, with the command it runs."""
-    if child.poll() is not None:
-        return False
+    """Ends a process the runner started, with the command it runs: the
+    tool is the leader of a group of its own, and a tool that was killed
+    leaves its command in that group. False when nothing was left."""
+    alive = child.poll() is None
     try:
         os.killpg(child.pid, signal.SIGTERM)
+        return True
     except (OSError, AttributeError, TypeError):
-        child.terminate()
-    return True
+        if alive:
+            child.terminate()
+        return alive
 
 
 def run(session, wait=WAIT):

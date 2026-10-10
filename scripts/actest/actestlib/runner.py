@@ -1,5 +1,6 @@
 """One run of one test: the steps one at a time, a sample every second,
 the cleanup, the verdict."""
+import json
 import os
 import signal
 import sys
@@ -48,10 +49,16 @@ class Session:
         """What the runner does itself at the start of a step."""
         env = self.env
         if "write" in step:
-            self.names.update(files.write_job(self.run_dir, step.get("in_minutes", 5), env.now()))
+            self.names.update(files.write_job(self.run_dir, step.get("in_minutes", 5), env.now(), step.get("job_seconds", 20)))
+        if "alarm_in" in step:
+            self.names.update(files.alarm(step["alarm_in"], env.now()))
         if "run" in step:
             code, out = env.tool([files.render(part, self.names) for part in step["run"][1:]])
             self.commands[step["name"]] = {"code": code, "out": out[:500]}
+            try:
+                self.names[step["name"] + "_id"] = json.loads(out.splitlines()[0])["id"]
+            except (ValueError, IndexError, KeyError, TypeError):
+                pass
         if "spawn" in step:
             self.children[step["name"]] = env.spawn_tool([files.render(part, self.names) for part in step["spawn"][1:]])
             self.names["pid_" + step["name"]] = self.children[step["name"]].pid
@@ -68,11 +75,11 @@ class Session:
         self._act(step)
         kind = next((name for name in ("until", "key", "ask") if name in step), None)
         ui.page(f"{self.test['id']}   step {number} of {len(self.test['steps'])}")
-        ui.line(files.render(step["say"], self.names))
+        ui.line(files.render(step["say"], self.names, start))
         if "command" in step:
             ui.line()
             ui.line("Run this in another Terminal:")
-            ui.line("    " + files.render(step["command"], self.names))
+            ui.line("    " + files.render(step["command"], self.names, start))
         if "ask" in step:
             ui.line()
             ui.line(step["ask"])
@@ -100,7 +107,7 @@ class Session:
                 ui.status(f"waiting {waited:.0f} s   {expr.reading(step['until'], found, start)}")
             else:
                 ui.status(f"waiting {waited:.0f} s")
-            key = env.key(max(0.0, 1.0 - (env.now() - tick)))
+            key = env.key(max(0.0, self.test["every"] - (env.now() - tick)))
             if key == "s":
                 self.problem = f"the owner skipped step {number}"
                 return False
@@ -149,7 +156,7 @@ class Session:
         if self.lab:
             store.keep_lab(self.run_dir, "actest-" + test["id"])
         evidence = {
-            "start": self.start, "end": self.end, "steps": self.steps, "keys": self.keys,
+            "start": self.start, "end": self.end, "alarm": self.names.get("alarm_time"), "steps": self.steps, "keys": self.keys,
             "samples": [sample for sample in self.timeline.samples if sample["step"] >= 0],
             "commands": self.commands, "heartbeat": heartbeat.read(os.path.join(self.run_dir, "heartbeat.txt")), "log": log,
         }
@@ -163,7 +170,7 @@ class Session:
         store.write_run(self.run_dir, dict(common, **{
             "runner": VERSION, "python": sys.version.split()[0], "machine": env.command(("sysctl", "-n", "hw.model"))[1].strip(),
             "macos": env.command(("sw_vers", "-productVersion"))[1].strip(), "steps": self.steps, "keys": self.keys,
-            "commands": self.commands, "last_step_ended": self.end,
+            "commands": self.commands, "last_step_ended": self.end, "alarm": self.names.get("alarm_time"), "job": self.names.get("job_time"),
         }))
         verdict = dict(common, result=result, reason=reason, checks=results, cleanup=left)
         store.write_verdict(self.run_dir, verdict)

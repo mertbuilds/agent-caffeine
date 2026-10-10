@@ -2,6 +2,8 @@
 
     id, title, layer, area, minutes, risk, why
     heartbeat = true          a writer of time stamps runs during the test
+    every = 60                seconds between two samples (1 when left out)
+    decides = "..."           what the result of the test decides
     lab = true                a lab recording of the app binary runs too
     watch = ["sched"]         also sample `pmset -g sched` every second
     [needs]                   power, charge, helper, display, agents, wake_for_jobs
@@ -13,8 +15,13 @@
 A step ends with `until` (a condition the runner sees), `key = "enter"`
 (the owner says it is done), `ask` (a yes or no question, stored under
 `name`), or at once when it has none of them. Before it waits, a step can
-`run` or `spawn` the command line tool, `signal` a spawned one, and
-`write` a file into the folder of the run.
+`run` or `spawn` the command line tool, `signal` a spawned one, `write`
+a file into the folder of the run, and work out the time of an alarm the
+owner sets (`alarm_in`, minutes). The runner sets no alarm itself.
+
+A text can hold `{app_pid}`, `{run}`, `{clock+5}` (the time in 5
+minutes), `{job_hhmm+3}`, `{job_plist}`, `{alarm_hhmm+2}`, `{alarm_date}`
+and `{<name>_id}` for the id of a hold that a `run` step made.
 """
 import os
 import re
@@ -22,10 +29,12 @@ import tomllib
 
 from . import config, expr, judge
 
-TOP = {"id", "title", "layer", "area", "minutes", "risk", "why", "heartbeat", "lab", "watch", "needs", "probes", "steps", "checks",
-       "cleanup", "decides", "overnight"}
-NEEDS = {"power", "charge", "helper", "display", "agents", "wake_for_jobs", "app"}
-STEP = {"say", "until", "timeout", "key", "ask", "name", "run", "spawn", "signal", "write", "in_minutes", "command", "optional"}
+TOP = {"id", "title", "layer", "area", "minutes", "risk", "why", "heartbeat", "lab", "watch", "every", "needs", "probes", "steps",
+       "checks", "cleanup", "decides"}
+NEEDS = {"power", "charge", "helper", "display", "agents", "wake_for_jobs", "idle"}
+STEP = {"say", "until", "timeout", "key", "ask", "name", "run", "spawn", "signal", "write", "in_minutes", "job_seconds", "alarm_in",
+        "command", "optional"}
+MARKER = "/Library/Application Support/com.caffeinagent.app/sleep-flag-set"
 PROBE_KINDS = {"exists", "contains", "lines", "link"}
 TOOL = "agent-caffeine"
 SIGNALS = {"KILL", "STOP", "CONT", "INT", "TERM"}
@@ -40,10 +49,12 @@ class TestError(ValueError):
 
 def probe_path_allowed(path):
     """A probe reads our own files only: the skill of Agent Caffeine in a
-    skills folder, the link to the tool, the plist of the test job, and
-    what is in the folder of the run."""
+    skills folder, the link to the tool, the plist of the test job, the
+    marker of the helper, and what is in the folder of the run."""
     if path.startswith("{run}/"):
         return ".." not in path
+    if path == MARKER:
+        return True
     if not path.startswith("~/") or ".." in path:
         return False
     return (
@@ -133,6 +144,7 @@ def validate(test, path="test"):
             if name not in test["probes"]:
                 raise TestError(f"{path}: there is no probe {name}")
     test.setdefault("watch", [])
+    test.setdefault("every", 1)
     test.setdefault("heartbeat", False)
     test.setdefault("lab", False)
     return test

@@ -50,7 +50,7 @@ class BoardTests(unittest.TestCase):
         self.assertIn("Grok &lt;quiet&gt;", page)
         self.assertIn("a &lt;b&gt; reason", page)
         self.assertIn('class="never"', page)
-        self.assertNotIn("—", page)
+        self.assertNotIn(chr(8212), page)
 
 
 class StoreAndReportTests(unittest.TestCase):

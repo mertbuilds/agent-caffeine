@@ -75,6 +75,15 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(found["on"]["status"], "fail")
         self.assertEqual(found["licence"]["status"], "fail")
 
+    def test_a_test_that_needs_a_quiet_mac_waits_for_the_agents(self):
+        env = fakes.FakeEnv(lambda t: {"flag": 1, "awake": True, "state": fakes.state(hold=True, flag=True)}, build=self.expected)
+        found = items(env, {"needs": {"idle": True}})
+        self.assertEqual(found["idle"]["status"], "fail")
+        self.assertEqual(found["idle"]["text"], "Agent Caffeine holds now: working")
+        self.assertEqual(found["flag"]["status"], "pass")
+        env = fakes.FakeEnv(lambda t: {"state": fakes.state()}, build=self.expected)
+        self.assertEqual(items(env, {"needs": {"idle": True}})["idle"]["status"], "pass")
+
     def test_the_preflight_only_reads(self):
         env = fakes.FakeEnv(lambda t: {"state": fakes.state()})
         preflight.gather(env)
