@@ -97,6 +97,7 @@ Evidence labels used below:
 - [LOCAL] idle sessions keep an old `statusUpdatedAt` (seen 174,570 s old while the pid was alive).
 - [README] tuiboard issue #22: "Claude Code doesn't rewrite that file while a turn runs, so any turn longer than 5 minutes flips from live-busy to stale". **Do not put a staleness timeout on `busy`.** Use `kill(pid, 0)` and `procStart` for liveness. https://github.com/NazzarenoGiannelli/tuiboard/issues/22
 - [README] kelpie issue #12: status is `shell` when the foreground turn ended and background work still runs. https://github.com/snaka/kelpie/issues/12
+- [LOCAL] 2026-10-11, correction: `shell` means that a background command of the session is alive, not that it works. It is not `busy`, and it must not hold the Mac by itself. See section 9.
 - [UNCONFIRMED] exact meaning of `waiting` (permission, question, or both). I did not see it locally.
 - awakebar also uses this directory (`sessionId`, `bridgeSessionId`). [SRC]
 
@@ -327,7 +328,7 @@ Contradictions with the current design:
 
 Ideas worth taking:
 
-- A. Read `~/.claude/sessions/*.json` first. `busy|shell` = hold. `waiting|idle` = release. Liveness by `kill(pid,0)` + `procStart`.
+- A. Read `~/.claude/sessions/*.json` first. `busy|shell` = hold. `waiting|idle` = release. Liveness by `kill(pid,0)` + `procStart`. (2026-10-11: `shell` = hold was wrong. See section 9.)
 - B. A per-agent source ladder with freshness windows (agent-deck, AoE): reported state if fresh, else log tail, else CPU + network. Once an agent reports state, stop trusting CPU for it (agent-mode `hooked`).
 - C. Optional hook install from one catalogue (cmux `AgentHookCatalog`): config path, format, events per agent. Claude HTTP hooks can post straight to the app. Codex `PermissionRequest` and `Interrupt` hooks fill the gap the rollout leaves.
 - D. Codex passive path: `lsof` -> open rollout -> last of `task_started / task_complete / turn_aborted` (rorhcdream).
@@ -340,3 +341,46 @@ Open questions to test on this Mac:
 - Whether desktop Claude / Codex apps write the same files.
 - Whether an outside client can subscribe to the Codex app-server daemon.
 - How to find the port of an opencode TUI not started with `--port`.
+
+---
+
+## 9. `shell` kept a Mac awake for a night: the record and the rule (2026-10-11)
+
+### 9.1 What happened [LOCAL]
+
+Measured from `pmset -g log` and from the state export of the app, on the owner's Mac, night of 2026-10-10 to 2026-10-11.
+
+- The Mac was awake for 13.7 hours with the lid closed, on battery, in a bag. Charge 94 percent at 20:02, 46 percent at 09:45. The Mac was hot. The power log has no Sleep line in that time.
+- Agent Caffeine held for the whole night. The assertion text was "Agent Caffeine: Claude Code is working", and the sleep flag was on.
+- One Claude Code session had `status: "shell"` in `~/.claude/sessions/<pid>.json`. `statusUpdatedAt` was 20:47:18 and did not change again.
+- The foreground turn was over. The owner saw "API error", because the network was gone.
+- The session had one background shell task: a `zsh -c ...` child of the `claude` process, with `pnpm` below it (then `node` and `workerd`). It was a dev server that was left running.
+- The whole tree was at 0.0 percent CPU. Two of its processes had 0.33 and 0.69 seconds of CPU time in 14 hours.
+- The other children of the `claude` process were three `node` trees that started with the session: its MCP servers. They were at 0.0 percent too.
+- The reader mapped `busy` and `shell` to working. The verdict was working, reason `reportsBusy`. A reported working has no time limit, so the hold had no end.
+
+### 9.2 What `shell` means
+
+`shell` is written when the turn ends and a background command of the session is still alive. It says nothing about work. A dev server, a `tail -f` and a `sleep 3600` all keep it. It ends when the last background command ends, or when the next turn starts. Section 2.3 and point 2 of section 8 read it as "work goes on". That is true only for a command that works.
+
+`busy` is different. A turn can be silent for a long time and the file is not written again inside it. The rule "no staleness timeout on `busy`" stays.
+
+### 9.3 The rule now
+
+- The reader maps `shell` to idle with the flag `backgroundWork` ("the turn is over, background commands of this session still run"). `busy` is the only working.
+- A busy child command holds the Mac, as after any turn that ended. Busy is the existing rule for a left-over command: at least 1 percent of a core (`VerdictRules.busyChildCPUFraction`) in both halves of 10 seconds (`EvidenceCollector.childWindow`). The reason is `runningCommand`.
+- For `releaseAfterActivity` (300 seconds) after the turn ended (`statusUpdatedAt`) and after the last busy sample, the session still reads working. The reason is `backgroundWork`. This is for a build that is quiet between two steps.
+- After that the session reads idle. The reason is `backgroundIdle`, with the minutes of quiet. The policy adds no release time of its own after it.
+- A command that gets busy again makes the session working again, with the same 300 seconds after it.
+- The child commands are the ones the census already counts: each top process below the agent that is no agent, engine or helper of the catalog. An MCP server is such a child. It is not taken out by name: at rest it is not busy, and when it is busy it holds an idle session too, by the rule that was there before.
+- No output file is read. The process tree was enough for the record above.
+- A recording from before this date has `working` with `over` for `shell`. It is read as idle with the flag, so it replays by this rule.
+
+Tests: `VerdictTests` (the section "Background commands after the turn"), `LabReplayTests.testABackgroundCommandHoldsOnlyWhileItWorks` with `CaffeinagentTests/Recordings/synthetic-claude-background-shell.jsonl`, and `LabReplayTests.testAShellStatusOfThirteenHoursDoesNotHoldTheMac`.
+
+### 9.4 Not measured
+
+- Whether Claude Code also writes `shell` while a background agent or a workflow runs with no shell below it. Such work has no child process. With this rule it holds for 300 seconds after the turn and no longer. [UNCONFIRMED]
+- A background command that waits without CPU use for more than 300 seconds and then works: `sleep 600 && make`, or a test that waits for a slow server. The Mac can sleep in the wait. This is the price of the rule.
+- A dev server that uses 1 percent of a core or more at rest (a file watcher that polls). It holds without a limit, as it did before for an idle session.
+- The time between the end of the turn and the write of `shell`.
