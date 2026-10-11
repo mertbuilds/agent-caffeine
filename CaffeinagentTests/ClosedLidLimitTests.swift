@@ -374,6 +374,27 @@ final class ClosedLidLimitTests: XCTestCase {
         assertStopped(mac, .time(seconds: 3 * Self.hour))
     }
 
+    /// The level is not known when the period starts, and comes later:
+    /// the drop is counted from the first level that is known.
+    func testADropIsCountedFromTheFirstLevelThatIsKnown() throws {
+        var mac = Mac()
+        mac.limit.timeLimit = nil
+        mac.context.batteryPercent = nil
+        mac.run(600)
+        XCTAssertNotNil(mac.limit.period)
+        XCTAssertNil(mac.limit.period?.percentAtStart)
+        mac.context.batteryPercent = 80
+        mac.run(600)
+        XCTAssertEqual(mac.limit.period?.percentAtStart, 80)
+        mac.context.batteryPercent = 51
+        mac.run(600)
+        XCTAssertTrue(mac.held, "29 points")
+        XCTAssertEqual(mac.limit.period?.percentAtStart, 80, "The start level stays")
+        mac.context.batteryPercent = 50
+        _ = try XCTUnwrap(mac.runUntilReleased())
+        assertStopped(mac, .drop(points: 30))
+    }
+
     // MARK: The other stops and the other holds
 
     func testEveryOtherStopWins() {

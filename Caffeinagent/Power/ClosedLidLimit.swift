@@ -20,7 +20,7 @@ enum ClosedLidStop: Equatable {
 /// and with nothing else: a hold that pauses and starts again while the
 /// lid stays closed is the same period. The time is the total of the held
 /// time in the period, and the drop is counted from the battery level at
-/// its start.
+/// its start, or from the first level that is known in it.
 ///
 /// The time is awake time (`SampleGap.interval`), so a sleep counts for
 /// nothing. A hole between two samples that both saw the hold counts with
@@ -56,7 +56,8 @@ struct ClosedLidLimit: Equatable {
         var since: Date
         /// Seconds Agent Caffeine kept the Mac awake in this period.
         var held: TimeInterval = 0
-        /// Nil on a Mac that does not say its battery level.
+        /// The first battery level that was known in the period. Nil
+        /// while the Mac does not say its battery level.
         var percentAtStart: Int?
         var stop: ClosedLidStop?
     }
@@ -90,6 +91,7 @@ struct ClosedLidLimit: Equatable {
             if holding { period = Period(since: time.at, percentAtStart: context.batteryPercent) }
             return nil
         }
+        if current.percentAtStart == nil { current.percentAtStart = context.batteryPercent }
         if holding, let last {
             if !afterGap {
                 current.held += max(0, SampleGap.interval(from: last, to: time))
