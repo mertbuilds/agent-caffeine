@@ -271,6 +271,7 @@ final class StateAggregator: ObservableObject {
     private var sessionOwners: [ProcessIdentity: Int32] = [:]
     private let openFiles = SystemOpenFiles()
     private var safetyMonitor = SafetyMonitor()
+    private var closedLidLimit = ClosedLidLimit()
     private var noLimitWarning = NoLimitBatteryWarning()
     private var flagRequest = SleepFlagRequest()
     private var hiddenNotice: HiddenNotice?
@@ -532,7 +533,8 @@ final class StateAggregator: ObservableObject {
             onBattery: onBattery,
             helperSetUp: sleepFlag.helperStatus == .enabled,
             lidClosedWanted: settings.stayAwakeLidClosedOnBattery,
-            waitingHold: settings.waitingHold
+            waitingHold: settings.waitingHold,
+            working: decision.working(settings)
         )
         display?.willSleep()
         engine.willSleep()
@@ -807,10 +809,17 @@ final class StateAggregator: ObservableObject {
         if hasBattery != (context.batteryPercent != nil) { hasBattery = context.batteryPercent != nil }
         if onBattery != context.onBattery { onBattery = context.onBattery }
         if batteryPercent != context.batteryPercent { batteryPercent = context.batteryPercent }
-        let stop = safetyMonitor.update(context.safetyInputs, afterGap: sample.afterGap)
+        // The limits are read at each sample: the tests set one with a
+        // hidden default while the app runs.
+        let limits = settings.closedLidLimits(testSeconds: defaults.double(forKey: ClosedLidLimit.testSecondsKey))
+        closedLidLimit.timeLimit = limits.time
+        closedLidLimit.dropLimit = limits.drop
+        let lidStop = closedLidLimit.update(context, holding: power.held, at: sample.frame.time, afterGap: sample.afterGap)
+        // Heat and the battery floor come first.
+        let stop = safetyMonitor.update(context.safetyInputs, afterGap: sample.afterGap) ?? lidStop.map(SafetyStop.closedLid)
         if let begun = SafetyStop.toAnnounce(previous: engine.safety, current: stop, wasHolding: power.held) {
             testNotices.note(.safetyStop, at: sample.frame.at)
-            notify(begun.notificationText)
+            notify(begun.notificationText(working: decision.working(settings)))
         }
         let warned = noLimitWarning.update(
             context.safetyInputs, drainingOnPower: safetyMonitor.drainingOnPower, floorEnabled: settings.batteryFloorEnabled, holding: power.held
@@ -1053,7 +1062,7 @@ final class StateAggregator: ObservableObject {
             enabled: enabled, pausedUntil: pause.until, reachableUntil: reachable.until, mode: mode, entitlement: entitlement,
             decision: decision, frame: engine.frame, assertionHeld: power.held,
             helper: sleepFlag.helperStatus, setup: sleepFlag.setup, flagSet: sleepFlag.sleepDisabled,
-            lidAngle: display?.lidAngle, safety: engine.safety, gate: engine.gateCode,
+            lidAngle: display?.lidAngle, safety: engine.safety, closedLid: closedLidLimit, gate: engine.gateCode,
             wakeForJobs: jobSettings.wakeForJobs, jobs: jobWake, notices: testNotices.events, chimeAt: chimePlayedAt
         )
     }

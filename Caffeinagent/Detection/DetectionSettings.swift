@@ -25,6 +25,12 @@ struct DetectionSettings: Codable, Equatable {
     var batteryFloorPercent = SafetyMonitor.defaultBatteryFloorPercent
     /// Off: Agent Caffeine keeps the Mac awake until the battery is empty.
     var batteryFloorEnabled = true
+    /// With the lid closed on battery, a hold ends after this many hours.
+    /// `ClosedLidLimit.noLimit` is no limit. See `ClosedLidLimit`.
+    var closedLidLimitHours = ClosedLidLimit.defaultHours
+    /// And when the battery lost this many points. `ClosedLidLimit.noLimit`
+    /// is no limit.
+    var closedLidLimitDrop = ClosedLidLimit.defaultDropPoints
     var stayAwakeLidClosedOnBattery = true
     /// While Agent Caffeine keeps the Mac awake with the lid closed, the
     /// built-in display is kept dark. See `DisplayRules`.
@@ -61,6 +67,7 @@ struct DetectionSettings: Codable, Equatable {
         case releaseAfterState, releaseAfterActivity, waitingHold, weakEvidenceCap
         case batteryFloorPercent, batteryFloorEnabled, stayAwakeLidClosedOnBattery, displayOffLidClosed, dimAsLidCloses, stayAwakeForRemoteAccess, agentRules, userAgentNames
         case chimeOnLidClose, lidChimeSound
+        case closedLidLimitHours, closedLidLimitDrop
     }
 
     /// No time is shorter than a second or longer than a day.
@@ -72,7 +79,8 @@ struct DetectionSettings: Codable, Equatable {
     /// no time (below a second, or not finite) falls back to its default,
     /// one that is too long is cut, and the battery floor stays in the
     /// range the Preferences offer. A zero release time would drop the hold
-    /// between two tool calls, and a floor of 0 would never stop.
+    /// between two tool calls, and a floor of 0 would never stop. A limit
+    /// for the closed lid that the Preferences do not offer is the default.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let defaults = DetectionSettings()
@@ -88,6 +96,13 @@ struct DetectionSettings: Codable, Equatable {
         let floor = try container.decodeIfPresent(Int.self, forKey: .batteryFloorPercent) ?? defaults.batteryFloorPercent
         batteryFloorPercent = min(max(floor, Self.batteryFloorRange.lowerBound), Self.batteryFloorRange.upperBound)
         batteryFloorEnabled = try container.decodeIfPresent(Bool.self, forKey: .batteryFloorEnabled) ?? defaults.batteryFloorEnabled
+        func choice(_ key: CodingKeys, among choices: [Int], _ fallback: Int) throws -> Int {
+            guard let value = try container.decodeIfPresent(Int.self, forKey: key),
+                  value == ClosedLidLimit.noLimit || choices.contains(value) else { return fallback }
+            return value
+        }
+        closedLidLimitHours = try choice(.closedLidLimitHours, among: ClosedLidLimit.hourChoices, defaults.closedLidLimitHours)
+        closedLidLimitDrop = try choice(.closedLidLimitDrop, among: ClosedLidLimit.dropChoices, defaults.closedLidLimitDrop)
         stayAwakeLidClosedOnBattery = try container.decodeIfPresent(Bool.self, forKey: .stayAwakeLidClosedOnBattery) ?? defaults.stayAwakeLidClosedOnBattery
         displayOffLidClosed = try container.decodeIfPresent(Bool.self, forKey: .displayOffLidClosed) ?? defaults.displayOffLidClosed
         dimAsLidCloses = try container.decodeIfPresent(Bool.self, forKey: .dimAsLidCloses) ?? defaults.dimAsLidCloses

@@ -41,6 +41,12 @@ final class TestStateTests: XCTestCase {
             manualHolds: [ManualHold.timed(id: "0a1b2c3d", length: 600, reason: secret, now: at(0))],
             jobHolds: [jobHold]
         )
+        // A closed-lid period of 610 seconds that reached its limit of 600.
+        var closedLid = ClosedLidLimit()
+        closedLid.timeLimit = 600
+        let lidContext = FrameContext(onBattery: true, batteryPercent: 70, lidClosed: true)
+        _ = closedLid.update(lidContext, holding: true, at: SampleTime(at: at(-700), awake: nil))
+        _ = closedLid.update(lidContext, holding: true, at: SampleTime(at: at(-90), awake: nil))
         var notices = TestNoticeLog()
         notices.note(.waiting, at: at(-20))
         notices.note(.finished, at: at(-10))
@@ -48,7 +54,7 @@ final class TestStateTests: XCTestCase {
             at: at(1), version: "1.0.3", build: "17", bundlePath: "/Applications/agent caffeine.app", pid: 4242,
             enabled: true, pausedUntil: at(900), reachableUntil: at(1800), mode: .agentWorking, entitlement: .trial(daysLeft: 5),
             decision: decision, frame: frame, assertionHeld: true, helper: .enabled, setup: .ready, flagSet: true,
-            lidAngle: 3.04, safety: .batteryLow(percent: 20), gate: WakeGate().code, wakeForJobs: true,
+            lidAngle: 3.04, safety: .batteryLow(percent: 20), closedLid: closedLid, gate: WakeGate().code, wakeForJobs: true,
             jobs: JobWakeView(
                 status: .alarmSet(alarm), runs: [JobRun(job: job, fireAt: at(660), tooOften: false)], alarm: alarm,
                 history: [JobEvent(at: at(-5).timeIntervalSince1970, kind: .alarmSet, alarmAt: at(600).timeIntervalSince1970, job: secret, reason: nil)]
@@ -78,6 +84,9 @@ final class TestStateTests: XCTestCase {
         XCTAssertEqual(state.power, TestState.Power(source: "battery", percent: 64, charging: false))
         XCTAssertEqual(state.lid, TestState.Lid(closed: true, angle: 3))
         XCTAssertEqual(state.safety, "batteryLow")
+        XCTAssertEqual(state.closedLid, TestState.ClosedLid(
+            since: at(-700).timeIntervalSince1970, heldSeconds: 610, percentAtStart: 70, limitSeconds: 600, limitDrop: 30, stop: "closedLidTime"
+        ))
         XCTAssertEqual(state.gate, "open")
         XCTAssertEqual(state.agents, [
             TestState.Agent(id: "claude", pid: 100, role: "engine", state: "working", why: "reportsBusy", level: "state", hold: "working"),
@@ -101,6 +110,14 @@ final class TestStateTests: XCTestCase {
         XCTAssertEqual(TestState(input).decision.headline, "safetyStop")
         XCTAssertEqual(TestState(input).decision.reason, "weakCharger")
         XCTAssertTrue(TestState(input).decision.stop)
+        input.decision.headline = .safetyStop(.closedLid(.drop(points: 30)))
+        input.safety = .closedLid(.drop(points: 30))
+        XCTAssertEqual(TestState(input).decision.reason, "closedLidDrop")
+        XCTAssertEqual(TestState(input).safety, "closedLidDrop")
+        input.safety = .closedLid(.time(seconds: 3600))
+        XCTAssertEqual(TestState(input).safety, "closedLidTime")
+        input.closedLid = ClosedLidLimit()
+        XCTAssertNil(TestState(input).closedLid, "No closed-lid period")
         input.decision.headline = .notEntitled(.trialOver)
         XCTAssertEqual(TestState(input).decision.reason, "trialOver")
         input.frame = nil
@@ -138,7 +155,8 @@ final class TestStateTests: XCTestCase {
         "entitlement": ["licensed", "trial", "expired"],
         "headline": ["working"], "helper": ["enabled"], "setup": ["ready"],
         "source": ["battery", "ac", "launchd", "crontab", "hermes"],
-        "safety": ["batteryLow", "weakCharger", "tooHot"],
+        "safety": ["batteryLow", "weakCharger", "tooHot", "closedLidTime", "closedLidDrop"],
+        "stop": ["closedLidTime", "closedLidDrop"],
         "gate": ["open", "sleepAnnounced", "slept", "woke"],
         "id": ["claude", TestState.userAgentID, "0a1b2c3d"],
         "role": ["session", "engine", "helper", "maybeSession"],
@@ -153,7 +171,7 @@ final class TestStateTests: XCTestCase {
     func testTheFileHoldsNoTextOfTheUser() throws {
         let known: Set<String> = [
             "v", "at", "app", "on", "pausedUntil", "reachableUntil", "mode", "entitlement", "trialDaysLeft", "decision", "flag",
-            "power", "lid", "safety", "gate", "agents", "holds", "jobs", "notices", "chimeAt",
+            "power", "lid", "safety", "closedLid", "since", "heldSeconds", "percentAtStart", "limitSeconds", "limitDrop", "gate", "agents", "holds", "jobs", "notices", "chimeAt",
             "version", "build", "path", "pid", "hold", "headline", "stop", "assertion", "wanted", "helper", "setup", "set",
             "source", "percent", "charging", "closed", "angle", "id", "role", "state", "why", "level", "kind", "start", "end",
             "status", "found", "enabled", "alarm", "fireAt", "history",

@@ -104,6 +104,7 @@ enum HoldHeadline: Equatable {
         case .safetyStop(.batteryLow(let percent)): return "Sleeping allowed: battery at \(PanelText.percent(percent))"
         case .safetyStop(.weakCharger(let percent)): return "Sleeping allowed: weak charger, battery at \(PanelText.percent(percent))"
         case .safetyStop(.tooHot): return "Sleeping allowed: the Mac is too hot"
+        case .safetyStop(.closedLid(let stop)): return "Sleeping allowed: \(PanelText.closedLidReason(stop))"
         case .switchedOff: return "Mac can sleep: Agent Caffeine is off"
         case .paused: return "Mac can sleep: Agent Caffeine is paused"
         case .notEntitled(let reason): return reason.text
@@ -137,6 +138,16 @@ struct HoldDecision: Equatable {
     /// The job holds of "Wake for jobs" whose time is not over, the
     /// oldest first. Listed in a stop too, like the holds above.
     var jobHolds: [JobHold] = []
+}
+
+extension HoldDecision {
+    /// The agents that work and that no rule ignores, by their display
+    /// names. Nil for none.
+    func working(_ settings: DetectionSettings) -> HoldSubject? {
+        HoldSubject(names: perAgent.map(\.reading).filter {
+            $0.verdict.state == .working && settings.rule(for: $0.agentID) != .ignore
+        }.map(\.displayName))
+    }
 }
 
 struct PolicyMemory: Equatable {
@@ -240,14 +251,15 @@ enum HoldPolicy {
     /// because a pause of an app that is off means nothing. Every stop
     /// gives a decision without the sleep flag, so a pause never leaves
     /// SleepDisabled on. No entitlement means there is none to check.
+    /// The closed lid limit is named last: every other stop wins over it.
     private static func stopHeadline(
         enabled: Bool, pausedUntil: Date?, entitlement: Entitlement?, safety: SafetyStop?, now: Date
     ) -> HoldHeadline? {
-        if let safety { return .safetyStop(safety) }
+        if let safety, !safety.isLastStop { return .safetyStop(safety) }
         guard enabled else { return .switchedOff }
         if let pausedUntil, now < pausedUntil { return .paused(until: pausedUntil) }
         if case .expired(let reason)? = entitlement { return .notEntitled(reason) }
-        return nil
+        return safety.map(HoldHeadline.safetyStop)
     }
 
     /// An instance that is not among the readings is gone, and so is its hold.

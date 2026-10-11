@@ -86,6 +86,9 @@ enum PanelText {
             return (stoppedTitle, "Your charger is too weak and the battery is at \(Self.percent(percent))")
         case .safetyStop(.tooHot):
             return (stoppedTitle, "Your Mac got too hot")
+        case .safetyStop(.closedLid(let stop)):
+            let reason = closedLidReason(stop)
+            return (stoppedTitle, reason.prefix(1).uppercased() + reason.dropFirst())
         case .switchedOff:
             return (offTitle, "Your Mac sleeps as usual")
         case .paused(let until):
@@ -209,12 +212,31 @@ enum PanelText {
         "Your Mac slept at \(time(note.at, calendar: calendar, locale: locale)): \(sleepReason(note.reason))"
     }
 
+    /// "the lid was closed on battery for 3 hours", for the end of a
+    /// sentence. Under a minute only with the hidden default of the tests.
+    static func closedLidReason(_ stop: ClosedLidStop) -> String {
+        switch stop {
+        case .time(let seconds):
+            return "the lid was closed on battery for \(HumaneDuration.length(seconds: seconds) ?? HumaneDuration.counted(Int(seconds), "second"))"
+        case .drop(let points):
+            return "the battery lost \(percent(points)) with the lid closed"
+        }
+    }
+
+    /// "Claude Code was still working".
+    static func stillWorking(_ subject: HoldSubject) -> String {
+        phrase(subject, one: "was still working", many: "were still working")
+    }
+
     private static func sleepReason(_ reason: SleepReason) -> String {
         switch reason {
         case .lidClosedNoHelper: return "the lid was closed on battery and the helper is not set up"
         case .lidClosedSettingOff: return "the lid was closed on battery and staying awake with the lid closed is turned off"
         case .battery(let percent): return "the battery was at \(Self.percent(percent))"
         case .tooHot: return "your Mac got too hot"
+        case .closedLidLimit(let stop, nil): return closedLidReason(stop)
+        case .closedLidLimit(let stop, let working?):
+            return "\(closedLidReason(stop)), and \(stillWorking(working))"
         case .paused: return "Agent Caffeine was paused"
         case .notEntitled(.trialOver): return "your trial has ended"
         case .notEntitled(.unverified): return "your license was not checked for 30 days"
@@ -237,6 +259,8 @@ enum PanelText {
     static let helperExplained = "The helper is a background item of Agent Caffeine. It changes one sleep setting of macOS while Agent Caffeine keeps your Mac awake, and changes it back after."
     static let helperRemoveHere = "You can remove it here at any time."
     static let helperRemoveInSettings = "You can remove it in Settings > Battery and lid at any time."
+    static let closedLidLimitExplained = "A last stop, so a job that hangs does not empty the battery in a bag"
+    static let noLimit = "No limit"
     static let closedBagWarning = "Do not put your Mac in a closed bag while an agent works."
     static let lidChimeSwitch = "Play a sound when you close the lid and your Mac stays awake"
     static let lidChimeExplained = "You hear it only while Agent Caffeine keeps your Mac awake. No sound means your Mac goes to sleep."
@@ -307,6 +331,7 @@ enum PanelText {
     }
 
     static let startsAgainWhenCool = "Agent Caffeine starts again when your Mac is cool"
+    static let startsAgainWhenLidOpens = "Agent Caffeine starts again when you open the lid or connect power"
     static let allowHelperAgain = "Allow Agent Caffeine again in Login Items, and your Mac sleeps as usual"
     static let buyToKeepAwake = "Buy a key to keep your Mac awake"
     static let connectAndCheck = "Connect to the internet, then check again"

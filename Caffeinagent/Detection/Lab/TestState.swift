@@ -62,6 +62,21 @@ struct TestState: Codable, Equatable {
         var angle: Double?
     }
 
+    /// One closed-lid period: a hold with the lid closed on battery, until
+    /// the lid opens or power comes. See `ClosedLidLimit`.
+    struct ClosedLid: Codable, Equatable {
+        var since: TimeInterval
+        /// Seconds the app kept the Mac awake in this period.
+        var heldSeconds: TimeInterval
+        var percentAtStart: Int?
+        /// The limits in use. Nil is no limit.
+        var limitSeconds: TimeInterval?
+        var limitDrop: Int?
+        /// "closedLidTime" or "closedLidDrop", nil while the limit has
+        /// not stopped the hold.
+        var stop: String?
+    }
+
     struct Agent: Codable, Equatable {
         /// An id of the catalog, or `userAgentID`.
         var id: String
@@ -137,6 +152,8 @@ struct TestState: Codable, Equatable {
     var lid: Lid?
     /// The kind of the safety stop, nil when there is none.
     var safety: String?
+    /// Nil while there is no closed-lid period.
+    var closedLid: ClosedLid?
     /// `WakeGate.code`.
     var gate: String
     var agents: [Agent]

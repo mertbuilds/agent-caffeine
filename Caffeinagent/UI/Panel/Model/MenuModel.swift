@@ -81,7 +81,7 @@ enum MenuModel {
         case .reachable: return .reachable
         case .waitingHeld: return .attentive
         case .idle, .waitingReleased, .noAgents: return .asleep
-        case .safetyStop(.batteryLow), .safetyStop(.weakCharger): return .safetyStop(.battery)
+        case .safetyStop(.batteryLow), .safetyStop(.weakCharger), .safetyStop(.closedLid): return .safetyStop(.battery)
         case .safetyStop(.tooHot): return .safetyStop(.heat)
         case .switchedOff, .notEntitled: return .off
         case .paused: return .paused
@@ -150,6 +150,8 @@ enum MenuModel {
                 }
             case .tooHot:
                 return PanelAttention(kind: .safetyStop, text: PanelText.startsAgainWhenCool)
+            case .closedLid:
+                return PanelAttention(kind: .safetyStop, text: PanelText.startsAgainWhenLidOpens)
             }
         }
         if input.flagLeftOn {

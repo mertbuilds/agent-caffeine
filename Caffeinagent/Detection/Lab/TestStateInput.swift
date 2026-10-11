@@ -22,6 +22,8 @@ struct TestStateInput {
     var flagSet: Bool
     var lidAngle: Double?
     var safety: SafetyStop?
+    /// The closed lid limit, with its period and the limits in use.
+    var closedLid = ClosedLidLimit()
     var gate: String
     var wakeForJobs: Bool
     var jobs: JobWakeView
@@ -69,6 +71,12 @@ extension TestState {
             power: context.map { Power(source: $0.onBattery ? "battery" : "ac", percent: $0.batteryPercent, charging: $0.charging) },
             lid: context.map { Lid(closed: $0.lidClosed, angle: input.lidAngle.map { ($0 * 10).rounded() / 10 }) },
             safety: input.safety?.code,
+            closedLid: input.closedLid.period.map { period in
+                ClosedLid(
+                    since: period.since.timeIntervalSince1970, heldSeconds: period.held.rounded(), percentAtStart: period.percentAtStart,
+                    limitSeconds: input.closedLid.timeLimit, limitDrop: input.closedLid.dropLimit, stop: period.stop?.code
+                )
+            },
             gate: input.gate,
             agents: decision.perAgent.map { hold in
                 let reading = hold.reading
@@ -139,6 +147,16 @@ extension SafetyStop {
         case .batteryLow: return "batteryLow"
         case .weakCharger: return "weakCharger"
         case .tooHot: return "tooHot"
+        case .closedLid(let stop): return stop.code
+        }
+    }
+}
+
+extension ClosedLidStop {
+    var code: String {
+        switch self {
+        case .time: return "closedLidTime"
+        case .drop: return "closedLidDrop"
         }
     }
 }
