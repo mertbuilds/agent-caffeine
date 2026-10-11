@@ -1,5 +1,6 @@
 """One sample of the watches: what the Mac and the app say at one moment."""
 import json
+import os
 import plistlib
 
 from . import config, parse
@@ -49,6 +50,48 @@ def probe(env, spec, run_dir):
     if kind == "lines":
         return 0 if data is None else data.count(b"\n")
     return data is not None and spec.get("contains", "").encode() in data
+
+
+CLAUDE_STATUSES = ("busy", "shell", "waiting", "idle")
+
+
+def claude_sessions(env):
+    """Each Claude Code session by its pid: `status` and `statusUpdatedAt`
+    of `~/.claude/sessions/<pid>.json`. Nothing else of the file is
+    looked at or kept: it holds the folder and the name of the session.
+    A status that is not one of the four known words is "other"."""
+    folder = config.claude_sessions_dir()
+    found = {}
+    for name in env.names(folder):
+        if not name.endswith(".json") or not name[:-5].isdigit():
+            continue
+        data = env.read(os.path.join(folder, name))
+        try:
+            session = json.loads(data) if data else None
+        except ValueError:
+            continue
+        if not isinstance(session, dict) or not isinstance(session.get("status"), str):
+            continue
+        at = session.get("statusUpdatedAt")
+        found[int(name[:-5])] = {
+            "status": session["status"] if session["status"] in CLAUDE_STATUSES else "other",
+            # Milliseconds since the epoch.
+            "at": at / 1000 if isinstance(at, (int, float)) and not isinstance(at, bool) else None,
+        }
+    return found
+
+
+def follow(sessions, pid, since):
+    """(pid, what the sample keeps of it) of the Claude Code session a
+    run follows: the first one whose status became `shell` after the run
+    began, and from then on that one. (None, None) while there is none."""
+    if pid is None:
+        fresh = [(session["at"], number) for number, session in sessions.items()
+                 if session["status"] == "shell" and session["at"] is not None and session["at"] >= since]
+        if not fresh:
+            return None, None
+        pid = max(fresh)[1]
+    return pid, dict(sessions.get(pid, {"status": "gone", "at": None}), pid=pid)
 
 
 def take(env, test=None, run_dir="", step=0, children=None):

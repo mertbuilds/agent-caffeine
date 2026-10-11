@@ -6,6 +6,9 @@
     decides = "..."           what the result of the test decides
     lab = true                a lab recording of the app binary runs too
     watch = ["sched"]         also sample `pmset -g sched` every second
+    watch = ["claude"]        also follow one Claude Code session: the first
+                              whose status becomes `shell` after the start
+                              (`session.status`, `session.state` in expr.py)
     [needs]                   power, charge, helper, display, agents, wake_for_jobs,
                               idle (no agent works: the app holds nothing),
                               sleeps (the app does not hold: idle, paused or off)
@@ -39,6 +42,7 @@ STEP = {"say", "until", "timeout", "key", "ask", "name", "run", "spawn", "signal
         "command", "optional"}
 MARKER = "/Library/Application Support/com.caffeinagent.app/sleep-flag-set"
 PROBE_KINDS = {"exists", "contains", "lines", "link"}
+WATCHES = {"sched", "claude"}
 TOOL = "agent-caffeine"
 SIGNALS = {"KILL", "STOP", "CONT", "INT", "TERM"}
 WRITES = {"launchd-job"}
@@ -151,7 +155,9 @@ def validate(test, path="test"):
         for name in re.findall(r"held\.(\w+)", text):
             if name not in made:
                 raise TestError(f"{path}: no run step has the name {name}")
-    test.setdefault("watch", [])
+    extra = sorted(set(test.setdefault("watch", [])) - WATCHES)
+    if extra:
+        raise TestError(f"{path}: watch is of {', '.join(sorted(WATCHES))}, not {', '.join(extra)}")
     test.setdefault("every", 1)
     test.setdefault("heartbeat", False)
     test.setdefault("lab", False)

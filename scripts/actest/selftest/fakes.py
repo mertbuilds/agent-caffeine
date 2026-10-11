@@ -34,7 +34,8 @@ class FakeChild:
 class FakeEnv:
     """`world(t)` gives what is true at time t (seconds from the start):
     lid, power, charge, flag, pid, state (the dict of the app or None),
-    sched, others. `keys` maps a time to the key pressed then."""
+    sched, others, sessions (the session files of Claude Code by pid).
+    `keys` maps a time to the key pressed then."""
 
     def __init__(self, world, keys=None, export=True, switch=True, build="1.0.3 (17)", start=1_800_000_000.0):
         self.app = APP
@@ -64,7 +65,7 @@ class FakeEnv:
 
     def at(self):
         return dict({"lid": "open", "power": "ac", "charge": 100, "flag": 0, "pid": 500, "state": None, "sched": [], "others": [],
-                     "awake": False, "stopped": False, "displays": 0}, **self.world(self.t))
+                     "awake": False, "stopped": False, "displays": 0, "sessions": {}}, **self.world(self.t))
 
     def now(self):
         return self.clock
@@ -137,10 +138,17 @@ class FakeEnv:
             return plistlib.dumps({"CFBundleShortVersionString": version, "CFBundleVersion": build})
         if path == APP + "/" + config.TOOL_BINARY:
             return b"binary " + (b"--detail" if self.export else b"old") + b" binary"
+        folder = config.claude_sessions_dir() + "/"
+        if path.startswith(folder):
+            session = now["sessions"].get(path[len(folder):])
+            return json.dumps(session).encode() if session is not None else None
         return self.files.get(path)
 
     def exists(self, path):
         return path in self.files
+
+    def names(self, path):
+        return sorted(self.at()["sessions"]) if path == config.claude_sessions_dir() else []
 
     def link_target(self, path):
         return self.files.get("link:" + path)

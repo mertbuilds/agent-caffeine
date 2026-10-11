@@ -35,6 +35,12 @@ def status_file():
     return os.path.join(app_support(), ".status")
 
 
+def claude_sessions_dir():
+    """Where Claude Code keeps one file per session. The runner reads
+    `status` and `statusUpdatedAt` there and nothing else."""
+    return os.path.join(home(), ".claude/sessions")
+
+
 def evidence_root():
     """The folder of the runner. Never inside the folder of the app."""
     return os.environ.get("ACTEST_HOME") or os.path.join(home(), "Library/Application Support/Agent Caffeine Tests")

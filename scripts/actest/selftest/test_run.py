@@ -221,6 +221,72 @@ class RunTests(unittest.TestCase):
         self.assertTrue(verdict["reason"].startswith("step 2 timed out after 40 s: held.hold=true"))
         self.assertIn("FAIL   CLI-01", self.out.getvalue())
 
+    # MARK: The session of Claude Code a run follows
+
+    def shell_world(self, settles=True, other=False):
+        """A turn from 5 s to 10 s that leaves a background command, next
+        to a session that has said `shell` for 13 hours. The app reads the new
+        one as idle 300 s after the turn, or never when it does not
+        settle. `other` is a third session that works all the time."""
+        def world(t):
+            ended = t >= 10
+            sessions = {
+                "81518.json": {"status": "shell", "statusUpdatedAt": (1_800_000_000 - 47_000) * 1000, "cwd": "/Users/secret/old", "name": "Secret old"},
+                "700.json": {"status": "shell" if ended else "busy" if t >= 5 else "idle",
+                             "statusUpdatedAt": (1_800_000_000 + (10 if ended else 5 if t >= 5 else -60)) * 1000,
+                             "cwd": "/Users/secret/project", "name": "Secret name", "pid": 700},
+                "700.abc123.key": {"status": "shell", "statusUpdatedAt": 1_800_000_500_000},
+            }
+            working = t >= 5 and (t < 310 or not settles)
+            rows = [{"id": "claude", "pid": 81518, "state": "idle", "why": "backgroundIdle:783"},
+                    {"id": "claude", "pid": 700, "state": "working" if working else "idle",
+                     "why": ("backgroundWork" if working else "backgroundIdle:5") if ended else "reportsBusy",
+                     **({"hold": "working"} if working else {})}]
+            if other:
+                rows.append({"id": "claude", "pid": 900, "state": "working", "why": "reportsBusy", "hold": "working"})
+            held = working or other
+            return {"sessions": sessions, "awake": held, "flag": 1 if held else 0, "state": fakes.state(hold=held, flag=held, agents=rows)}
+        return world
+
+    def run_shell(self, **world):
+        test = catalog.load_file(os.path.join(config.TESTS_DIR, "det", "DET-CC-20.toml"))
+        env = fakes.FakeEnv(self.shell_world(**world), keys={500: "enter"})
+        return env, runner.run_test(test, env, self.ui)
+
+    def test_a_background_command_test_follows_the_session_that_ended_its_turn(self):
+        _, verdict = self.run_shell(other=True)
+        self.assertEqual(verdict["result"], "pass", verdict["reason"])
+        self.assertEqual(verdict["partial"], 1, "The rule for an idle Mac is not judged while another session works")
+        samples = store.read_timeline(os.path.join(config.runs_dir(), verdict["run"]))
+        self.assertNotIn("session", samples[0], "No session is followed before one ends its turn")
+        self.assertEqual({sample["session"]["pid"] for sample in samples if "session" in sample}, {700}, "Not the one that said shell before the start")
+        self.assertEqual(samples[-1]["session"], {"pid": 700, "status": "shell", "at": 1_800_000_010.0})
+        self.assertIn("End the `sleep 3600`", " ".join(verdict["cleanup"]["left"]))
+
+    def test_a_background_command_test_fails_when_the_app_holds_on(self):
+        _, verdict = self.run_shell(settles=False)
+        self.assertEqual(verdict["result"], "fail")
+        self.assertTrue(verdict["reason"].startswith("step 2 timed out after 400 s: session.state=working"), verdict["reason"])
+
+    def test_only_the_status_and_its_time_are_kept_of_a_session_file(self):
+        from actestlib import sampler
+        world = self.shell_world()
+        env = fakes.FakeEnv(lambda t: dict(world(t), sessions=dict(
+            world(t)["sessions"], **{"12.json": {"status": "compacting /Users/secret"}, "13.json": ["status"], "14.json": {"cwd": "/Users/secret"},
+                                     "notes.json": {"status": "busy"}})))
+        self.assertEqual(sampler.claude_sessions(env), {
+            81518: {"status": "shell", "at": 1_800_000_000.0 - 47_000},
+            700: {"status": "idle", "at": 1_800_000_000.0 - 60},
+            12: {"status": "other", "at": None},
+        })
+        _, verdict = self.run_shell()
+        self.assertEqual(verdict["result"], "pass", verdict["reason"])
+        self.assertEqual(verdict["partial"], 0)
+        run_dir = os.path.join(config.runs_dir(), verdict["run"])
+        for name in os.listdir(run_dir):
+            with open(os.path.join(run_dir, name), encoding="utf-8") as file:
+                self.assertNotIn("ecret", file.read(), name)
+
     def test_the_real_environment_refuses_what_is_not_a_read(self):
         from actestlib import env as environment
         real = environment.RealEnv.__new__(environment.RealEnv)

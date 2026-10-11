@@ -49,7 +49,7 @@ def run(session, wait=WAIT):
             session.lab.send_signal(signal.SIGINT)
             actions.append("stopped the recording")
         expectations = BUILT_IN + session.test["cleanup"]
-        watched = dict(session.test, watch=["sched"])
+        watched = dict(session.test, watch=session.test.get("watch", []) + ["sched"])
         deadline = env.now() + wait
         shown = None
         while True:

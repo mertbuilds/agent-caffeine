@@ -5,6 +5,11 @@
     time>=30s             app.running=false and sleepdisabled=0
     held.first=true       the hold that the `run` step `first` made is in
                           the list of the app, by the id the tool gave
+    session.status=shell  the status in the session file of the Claude Code
+                          session the run follows (`watch = ["claude"]`)
+    session.state=idle    what the app says of that one session, by its pid:
+                          also session.why and session.hold. session.age is
+                          the seconds since the status changed
 
 A term is `path op value`. Terms join with `and`, and groups of them with
 `or`. A path that has no value compares equal to `none` and to nothing else.
@@ -100,6 +105,24 @@ def _app(sample, rest, now):
     return _dig(app, rest.split("."))
 
 
+def _session(sample, field, now):
+    """The Claude Code session the run follows: see `sampler.follow`."""
+    session = sample.get("session")
+    if session is None:
+        return None
+    if field in ("status", "pid"):
+        return session.get(field)
+    if field == "age":
+        return now - session["at"] if session.get("at") is not None else None
+    app = sample.get("app")
+    if app is None:
+        return None
+    rows = [row for row in app.get("agents", []) if row.get("pid") == session["pid"] and row.get("id") in ("claude", "claude-desktop")]
+    if not rows:
+        return "gone" if field == "state" else None
+    return rows[0].get(field)
+
+
 def value(sample, path, since=None):
     """What a path reads in one sample. `since` is the start of the step
     or of the window, for `time`."""
@@ -124,6 +147,8 @@ def value(sample, path, since=None):
         if app is None or wanted is None:
             return None
         return any(hold.get("id") == wanted for hold in app.get("holds", []))
+    if head == "session":
+        return _session(sample, rest, now)
     if head in ("status", "probe", "child"):
         return _dig(sample.get(head), rest.split("."))
     raise ExprError(f"unknown path {path}")

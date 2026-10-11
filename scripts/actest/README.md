@@ -17,7 +17,7 @@ Python 3.11 or later, standard library only. Not shipped in the app.
 
 ## What the runner may do
 
-It reads: `pmset -g`, `pmset -g batt`, `pmset -g assertions`, `pmset -g sched`, `pmset -g log`, `ioreg`, `ps`, the state file and the status file of the app, and our own files that a test names (the skill of Agent Caffeine, the link to the tool, the marker of the helper, the test job).
+It reads: `pmset -g`, `pmset -g batt`, `pmset -g assertions`, `pmset -g sched`, `pmset -g log`, `ioreg`, `ps`, the state file and the status file of the app, and our own files that a test names (the skill of Agent Caffeine, the link to the tool, the marker of the helper, the test job). For a test with `watch = ["claude"]` it also reads two keys of each `~/.claude/sessions/<pid>.json`, `status` and `statusUpdatedAt`, and keeps nothing else of the file: not the folder and not the name of the session.
 
 It runs: `agent-caffeine` (hold, release, status, skill), its own heartbeat writer, and, for a test with `lab = true`, a lab recording with the binary of the installed app.
 
@@ -33,7 +33,7 @@ The lab recorder runs an engine of its own. What the real app decided is in `.st
 
 ## A test is a file
 
-`tests/<area>/<id>.toml`, with the ids of the test inventory. See the head of `actestlib/catalog.py` for the keys, `actestlib/expr.py` for the conditions (`lid=closed`, `app.agent[grok].state=working`, `held.first=true`) and `actestlib/judge.py` for the pass rules (`within 65s after step 2: sleepdisabled=0`).
+`tests/<area>/<id>.toml`, with the ids of the test inventory. See the head of `actestlib/catalog.py` for the keys, `actestlib/expr.py` for the conditions (`lid=closed`, `app.agent[grok].state=working`, `held.first=true`, `session.state=idle`) and `actestlib/judge.py` for the pass rules (`within 65s after step 2: sleepdisabled=0`).
 
 ## Testing while agents work
 

@@ -1,0 +1,39 @@
+id = "DET-CC-20"
+title = "A Claude Code session whose turn ended with a background command still running lets the Mac sleep"
+layer = 1
+area = "det"
+minutes = 8
+risk = "Low: one short paid turn. The `sleep 3600` stays behind until you end it."
+why = "On 2026-10-10 a dev server that was left running kept the Mac awake for 13.7 hours with the lid closed, on battery: the session file said `shell` and Agent Caffeine read it as working, with no end. A command that uses no CPU must hold for 5 minutes after the turn and no longer. The runner follows the one session whose status becomes `shell` after the start, by its pid, so other sessions can work."
+watch = ["claude"]
+checks = [
+  "at step 1: session.status=shell and session.state=working",
+  "within 360s after step 1: session.status=shell and session.state=idle",
+  "within 10s after step 2: session.hold=none",
+  "always from step 2 to step 3: session.status=shell and session.state=idle",
+  "if idle: always from step 2 + 10s to step 3: app.hold=false and app.wanted=false",
+  "info at step 1: session.why=backgroundWork",
+  "info at step 1: session.age<30",
+]
+
+[needs]
+agents = ["claude"]
+
+[[steps]]
+say = "In one Claude Code session in a terminal, send this prompt: start `sleep 3600` in the background and end your turn. Do not type in that session after it. The runner sees by itself when the turn is over."
+until = "session.status=shell and session.state=working"
+timeout = 300
+
+[[steps]]
+say = "Nothing to do. Leave that session alone. The runner waits until Agent Caffeine reads it as idle: 5 minutes after the turn ended. You can use the Mac for other things."
+until = "session.state=idle"
+timeout = 400
+
+[[steps]]
+say = "Nothing to do. The runner watches for 30 seconds."
+until = "time>=30s"
+timeout = 60
+
+[[cleanup]]
+expect = "session.status!=shell"
+tell = "End the `sleep 3600`: ask that Claude Code session to stop its background command, or close the session."

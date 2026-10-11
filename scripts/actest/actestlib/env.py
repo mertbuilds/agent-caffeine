@@ -64,6 +64,13 @@ class RealEnv:
     def exists(self, path):
         return os.path.lexists(os.path.expanduser(path))
 
+    def names(self, path):
+        """The names in a folder. Empty when it cannot be listed."""
+        try:
+            return sorted(os.listdir(os.path.expanduser(path)))
+        except OSError:
+            return []
+
     def link_target(self, path):
         try:
             return os.readlink(os.path.expanduser(path))

@@ -25,6 +25,9 @@ class Session:
         self.own = {}
         self.holds_before = sampler.holds(env)
         self.heartbeat = self.lab = None
+        # The pid of the Claude Code session that a test with
+        # `watch = ["claude"]` follows.
+        self.followed = None
         self.problem = None
         # If the Mac was idle before the first step, and what held it.
         self.idle = self.busy = None
@@ -37,6 +40,10 @@ class Session:
         found = sampler.take(self.env, test or self.test, self.run_dir, self.number if step is None else step, self.children)
         if self.own:
             found["own"] = dict(self.own)
+        if "claude" in (test or self.test).get("watch", []):
+            self.followed, session = sampler.follow(sampler.claude_sessions(self.env), self.followed, self.start)
+            if session:
+                found["session"] = session
         self.timeline.add(found)
         if found.get("app_pid") is not None:
             self.names["app_pid"] = found["app_pid"]
