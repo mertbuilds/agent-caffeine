@@ -309,6 +309,80 @@ final class LabReplayTests: XCTestCase {
         XCTAssertEqual(try LabFormat.recording(from: expected), synthetic())
     }
 
+    /// The night of 2026-10-10 (docs/research/01-oss-detection.md, section
+    /// 9), with the lid closed, on battery: a turn of Claude Code starts a
+    /// dev server and ends, and the session file says `shell` from then
+    /// on. The server is busy while it starts, and for 30 seconds more
+    /// when it builds again later. The other three commands are the MCP
+    /// servers of the session.
+    private func backgroundShell() -> LabRecording {
+        let context = FrameContext(onBattery: true, batteryPercent: 94, lidClosed: true)
+        let story = stride(from: 0.0, through: 900, by: 5).map { t -> EvidenceFrame in
+            let inTurn = t < 20
+            let busy = t < 40 || (500..<530).contains(t)
+            var claude = self.agent("claude", "Claude Code", .state, pid: 100, state: inTurn ? .working : .idle, at: t,
+                                    cpu: busy ? 60 : 0.4, commands: 4, busy: busy ? 1 : 0)
+            claude.reported?.since = self.at(inTurn ? -100 : 20)
+            claude.reported?.backgroundWork = !inTurn
+            return EvidenceFrame(at: self.at(t), agents: [claude], context: context)
+        }
+        let marks = [mark("claude", .working, at: 0), mark("claude", .idle, at: 40), mark("claude", .working, at: 500), mark("claude", .idle, at: 530)]
+        // The rule holds for `releaseAfterActivity` after the last busy
+        // sample, and the score allows `releaseAfterState` after a mark:
+        // 175 seconds more, two times.
+        return recording("synthetic-claude-background-shell", frames: story, marks: marks, budget: 350)
+    }
+
+    /// As `testSyntheticRecordingIsCurrent`.
+    func testBackgroundShellRecordingIsCurrent() throws {
+        let expected = try text(of: backgroundShell())
+        let url = Self.recordings.appendingPathComponent("synthetic-claude-background-shell.jsonl")
+        let found = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        if found != expected {
+            let fresh = FileManager.default.temporaryDirectory.appendingPathComponent("synthetic-claude-background-shell.jsonl")
+            try Data(expected.utf8).write(to: fresh)
+            XCTFail("\(url.path) is not what the timeline gives. The current one is at \(fresh.path)")
+        }
+        XCTAssertEqual(try LabFormat.recording(from: expected), backgroundShell())
+    }
+
+    func testABackgroundCommandHoldsOnlyWhileItWorks() throws {
+        let recording = try LabFormat.recording(at: Self.recordings.appendingPathComponent("synthetic-claude-background-shell.jsonl"))
+        XCTAssertEqual(recording.samples.first?.frame.context, FrameContext(onBattery: true, batteryPercent: 94, lidClosed: true))
+        for step in LabReplay.steps(of: recording) {
+            let seconds = step.at.timeIntervalSince(at(0))
+            // The last busy samples are those at 35 s and at 525 s.
+            let held = seconds < 335 || (500..<825).contains(seconds)
+            XCTAssertEqual(step.decision.hold, held, "at \(seconds) s")
+            XCTAssertEqual(step.decision.lidClosedFlag, held, "at \(seconds) s")
+            XCTAssertEqual(step.readings.first?.verdict.state, held ? .working : .idle, "at \(seconds) s")
+            XCTAssertEqual(step.readings.first?.turn?.state, seconds < 20 ? .working : .idle, "at \(seconds) s")
+        }
+        XCTAssertEqual(LabReplay.score(recording).heldSeconds, 335 + 325)
+    }
+
+    /// The incident as the app met it: `shell` for 13 hours, a pnpm tree
+    /// at 0 percent CPU, the lid closed, on battery. No hold and no sleep
+    /// flag, from the first sample on.
+    func testAShellStatusOfThirteenHoursDoesNotHoldTheMac() {
+        let context = FrameContext(onBattery: true, batteryPercent: 46, lidClosed: true)
+        let story = stride(from: 0.0, through: 600, by: 5).map { t -> EvidenceFrame in
+            var claude = self.agent("claude", "Claude Code", .state, pid: 100, state: .idle, at: t, cpu: 0, commands: 4)
+            claude.reported?.since = self.at(-13 * 3600)
+            claude.reported?.backgroundWork = true
+            return EvidenceFrame(at: self.at(t), agents: [claude], context: context)
+        }
+        let steps = LabReplay.steps(of: LabRecording(header: header("incident"), samples: story.map { LabSample(frame: $0) }))
+        XCTAssertEqual(steps.count, 121)
+        for step in steps {
+            XCTAssertFalse(step.decision.hold)
+            XCTAssertFalse(step.decision.lidClosedFlag)
+            XCTAssertEqual(step.decision.headline, .idle(.one("Claude Code")))
+            XCTAssertEqual(step.readings.first?.verdict.state, .idle)
+        }
+        XCTAssertEqual(steps.last?.readings.first?.verdict.reason, .backgroundIdle(minutes: 13 * 60 + 10))
+    }
+
     func testRecordingsStayWithinTheirBudget() throws {
         let urls = try FileManager.default.contentsOfDirectory(at: Self.recordings, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "jsonl" }

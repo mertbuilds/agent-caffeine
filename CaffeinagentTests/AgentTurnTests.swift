@@ -14,7 +14,7 @@ final class AgentTurnTests: XCTestCase {
     ) -> AgentEvidence {
         AgentEvidence(
             agentID: "claude", displayName: "Claude Code", level: .state, pid: pid, startTime: Self.processStart,
-            reported: state.map { StateReport(state: $0, since: at(since), observedAt: at(seconds), source: source, detail: nil, turnEnded: shell) },
+            reported: state.map { StateReport(state: $0, since: at(since), observedAt: at(seconds), source: source, detail: nil, backgroundWork: shell) },
             backgroundJobsWorking: jobs, childCommands: busy, busyChildCommands: busy, subtreeCPUSeconds: 0.02, sampleInterval: 5,
             hookState: hook, hookStateAt: hook.map { _ in at(seconds) }
         )
@@ -40,12 +40,16 @@ final class AgentTurnTests: XCTestCase {
     }
 
     func testClaudesShellStatusIsATurnThatEnded() {
-        let shell = reading(claude(.working, at: 0, shell: true), at: 0)
+        let shell = reading(claude(.idle, at: 0, since: -10, shell: true), at: 0)
         XCTAssertEqual(shell.verdict.state, .working)
         XCTAssertEqual(shell.turn, AgentTurn(state: .idle))
+        let quiet = reading(claude(.idle, at: 0, shell: true), at: 0)
+        XCTAssertEqual(quiet.verdict.state, .idle)
+        XCTAssertEqual(quiet.turn, AgentTurn(state: .idle))
         let state = ClaudeSessionStateReader.parse(Data(#"{"status":"shell","statusUpdatedAt":1791200000000}"#.utf8), now: at(0))
-        XCTAssertEqual(state?.report.turnEnded, true)
-        XCTAssertEqual(ClaudeSessionStateReader.parse(Data(#"{"status":"busy"}"#.utf8), now: at(0))?.report.turnEnded, false)
+        XCTAssertEqual(state?.report.backgroundWork, true)
+        XCTAssertEqual(state?.report.state, .idle)
+        XCTAssertEqual(ClaudeSessionStateReader.parse(Data(#"{"status":"busy"}"#.utf8), now: at(0))?.report.backgroundWork, false)
     }
 
     func testAHookWaitIsTheTurn() {
@@ -103,14 +107,23 @@ final class AgentTurnTests: XCTestCase {
         XCTAssertEqual(reading(claude(.working, at: 0, since: -2, source: .claudeTranscript), at: 0).turn, AgentTurn(state: .working))
     }
 
-    func testTheTurnEndedFlagIsRecordedOnlyWhenSet() throws {
-        let plain = StateReport(state: .working, since: nil, observedAt: at(0), source: .claudeSessionFile, detail: nil)
+    func testTheBackgroundWorkFlagIsRecordedOnlyWhenSet() throws {
+        let plain = StateReport(state: .idle, since: nil, observedAt: at(0), source: .claudeSessionFile, detail: nil)
         var shell = plain
-        shell.turnEnded = true
+        shell.backgroundWork = true
         let encoder = LabFormat.encoder()
         XCTAssertFalse(String(decoding: try encoder.encode(plain), as: UTF8.self).contains("over"))
         XCTAssertEqual(try LabFormat.decoder().decode(StateReport.self, from: try encoder.encode(shell)), shell)
         XCTAssertEqual(try LabFormat.decoder().decode(StateReport.self, from: try encoder.encode(plain)), plain)
+    }
+
+    /// Until 2026-10-11 the `shell` of Claude Code was recorded as a
+    /// working with the flag.
+    func testAnOlderRecordingOfShellReadsAsItIsWrittenToday() throws {
+        let old = Data(#"{"over":true,"seen":1791200000,"since":1791199990,"source":"claudeSession","state":"working"}"#.utf8)
+        XCTAssertEqual(try LabFormat.decoder().decode(StateReport.self, from: old), StateReport(
+            state: .idle, since: at(-10), observedAt: at(0), source: .claudeSessionFile, detail: nil, backgroundWork: true
+        ))
     }
 
     // MARK: Replay

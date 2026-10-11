@@ -31,9 +31,12 @@ struct StateReport: Equatable {
     var source: Source
     /// Short, user-safe reason fragment such as "running a tool". Never user content.
     var detail: String?
-    /// The turn is over and work it left behind still runs: Claude Code's
-    /// `shell`. The state is working, and the agent has answered.
-    var turnEnded = false
+    /// Idle only: the turn is over, and the agent says that background
+    /// commands of the session still run: Claude Code's `shell`. That
+    /// word has no end of its own: a dev server that was left running
+    /// keeps it for as long as the session lives. So it is no working,
+    /// and `VerdictRules` holds for it only while the commands show work.
+    var backgroundWork = false
     /// Idle only: the turn ended with an error. The error text is never
     /// read: it can hold account details.
     var failed = false

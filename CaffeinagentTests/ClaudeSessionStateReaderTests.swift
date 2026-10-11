@@ -11,7 +11,7 @@ final class ClaudeSessionStateReaderTests: XCTestCase {
     func testStatusMapping() {
         let cases: [(status: String, state: ReportedState?, detail: String?)] = [
             ("busy", .working, "in a turn"),
-            ("shell", .working, "background work running"),
+            ("shell", .idle, "turn ended, background commands run"),
             ("waiting", .waitingForUser, "waiting for you"),
             ("idle", .idle, nil),
             ("compacting", nil, nil),
@@ -22,6 +22,8 @@ final class ClaudeSessionStateReaderTests: XCTestCase {
             XCTAssertEqual(parsed?.state, state, status)
             XCTAssertEqual(parsed?.report.detail, detail, status)
             if state != nil { XCTAssertEqual(parsed?.rawStatus, status) }
+            XCTAssertEqual(parsed?.backgroundWork ?? false, status == "shell", status)
+            XCTAssertEqual(parsed?.report.backgroundWork ?? false, status == "shell", status)
         }
     }
 

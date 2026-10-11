@@ -13,6 +13,10 @@ struct ClaudeSessionState: Equatable {
     }
 
     var state: ReportedState
+    /// `status: "shell"`: the turn is over, and background commands of the
+    /// session still run. The state is idle then. See
+    /// `StateReport.backgroundWork`.
+    var backgroundWork = false
     /// The `status` string as written: `busy`, `shell`, `waiting` or `idle`.
     var rawStatus: String
     /// Not refreshed inside a long turn, and days old on an idle session.
@@ -35,13 +39,13 @@ struct ClaudeSessionState: Equatable {
     var observedAt: Date
 
     var report: StateReport {
-        StateReport(state: state, since: statusUpdatedAt, observedAt: observedAt, source: .claudeSessionFile, detail: detail, turnEnded: rawStatus == "shell")
+        StateReport(state: state, since: statusUpdatedAt, observedAt: observedAt, source: .claudeSessionFile, detail: detail, backgroundWork: backgroundWork)
     }
 
     private var detail: String? {
         switch rawStatus {
         case "busy": return "in a turn"
-        case "shell": return "background work running"
+        case "shell": return "turn ended, background commands run"
         case "waiting": return "waiting for you"
         default: return nil
         }
@@ -84,21 +88,27 @@ struct ClaudeSessionStateReader {
     /// The format is undocumented, so every key is optional except `status`
     /// (written since Claude Code 2.1.119, per other projects). `busy` and
     /// `idle` were seen on this Mac on 2.1.286 to 2.1.289, `waiting` in an
-    /// earlier measurement, and `shell` (the turn ended, background work
-    /// still runs) on 2.1.289. A session of the Claude app writes `busy`,
-    /// `waiting` and `idle` only (docs/research/09-claude-desktop.md).
+    /// earlier measurement, and `shell` (the turn ended, background
+    /// commands still run) on 2.1.289. A session of the Claude app writes
+    /// `busy`, `waiting` and `idle` only (docs/research/09-claude-desktop.md).
+    ///
+    /// `shell` is not `busy`. On 2026-10-10 a session stayed at `shell`
+    /// for 13.7 hours for a dev server at 0.0 percent CPU, and as a
+    /// working it kept a Mac awake in a bag for that long
+    /// (docs/research/01-oss-detection.md, section 9).
     nonisolated static func parse(_ data: Data, now: Date) -> ClaudeSessionState? {
         guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let status = object["status"] as? String else { return nil }
         let state: ReportedState
         switch status {
-        case "busy", "shell": state = .working
+        case "busy": state = .working
         case "waiting": state = .waitingForUser
-        case "idle": state = .idle
+        case "shell", "idle": state = .idle
         default: return nil
         }
         return ClaudeSessionState(
             state: state,
+            backgroundWork: status == "shell",
             rawStatus: status,
             statusUpdatedAt: ReportedTime.date(object["statusUpdatedAt"]) ?? ReportedTime.date(object["updatedAt"]),
             pid: (object["pid"] as? Int).flatMap(Int32.init(exactly:)),

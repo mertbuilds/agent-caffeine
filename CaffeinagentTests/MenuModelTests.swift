@@ -1088,6 +1088,8 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(PanelText.working(.runningCommand(3), seconds: 20, startSeen: true), "Running 3 commands")
         XCTAssertEqual(PanelText.working(.runningCommand(1), seconds: 12 * 60, startSeen: true), "Running 1 command for 12 minutes")
         XCTAssertEqual(PanelText.working(.backgroundJob(1), seconds: 5 * 60, startSeen: false), "Running 1 background task for 5 minutes")
+        XCTAssertEqual(PanelText.working(.backgroundWork, seconds: 20, startSeen: true), "Running a background command")
+        XCTAssertEqual(PanelText.working(.backgroundWork, seconds: 4 * 60, startSeen: true), "Running a background command for 4 minutes")
         XCTAssertEqual(PanelText.working(.alwaysWorkingByRule, seconds: 600, startSeen: true), "Always counts as working")
     }
 

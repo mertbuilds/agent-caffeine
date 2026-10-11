@@ -58,18 +58,23 @@ extension AgentRole: NameCoded {
 
 extension StateReport: Codable {
     private enum CodingKeys: String, CodingKey {
-        case state, since, observedAt = "seen", source, detail, turnEnded = "over", failed = "err"
+        case state, since, observedAt = "seen", source, detail, backgroundWork = "over", failed = "err"
     }
 
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
+        let backgroundWork = try container.decodeIfPresent(Bool.self, forKey: .backgroundWork) ?? false
+        // A recording from before 2026-10-11 has `working` with `over`
+        // for Claude Code's `shell`. It reads as it is written today, so
+        // it replays by the rule of today.
+        let state = try container.decode(ReportedState.self, forKey: .state)
         self.init(
-            state: try container.decode(ReportedState.self, forKey: .state),
+            state: backgroundWork ? .idle : state,
             since: try container.decodeIfPresent(Date.self, forKey: .since),
             observedAt: try container.decode(Date.self, forKey: .observedAt),
             source: try container.decode(Source.self, forKey: .source),
             detail: try container.decodeIfPresent(String.self, forKey: .detail),
-            turnEnded: try container.decodeIfPresent(Bool.self, forKey: .turnEnded) ?? false,
+            backgroundWork: backgroundWork,
             failed: try container.decodeIfPresent(Bool.self, forKey: .failed) ?? false
         )
     }
@@ -81,7 +86,7 @@ extension StateReport: Codable {
         try container.encode(observedAt, forKey: .observedAt)
         try container.encode(source, forKey: .source)
         try container.encodeIfPresent(detail, forKey: .detail)
-        if turnEnded { try container.encode(true, forKey: .turnEnded) }
+        if backgroundWork { try container.encode(true, forKey: .backgroundWork) }
         if failed { try container.encode(true, forKey: .failed) }
     }
 }

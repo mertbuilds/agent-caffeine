@@ -163,6 +163,89 @@ final class VerdictTests: XCTestCase {
         }
     }
 
+    // MARK: Background commands after the turn (Claude Code's `shell`)
+
+    /// Claude Code with `status: "shell"` since `since`: the turn is over
+    /// and the session says that background commands still run.
+    private func shell(at seconds: TimeInterval, since: TimeInterval, commands: Int = 1, busy: Int = 0) -> AgentEvidence {
+        let report = StateReport(state: .idle, since: at(since), observedAt: at(seconds), source: .claudeSessionFile, detail: nil, backgroundWork: true)
+        return evidence("claude", "Claude Code", .state, cpu: busy > 0 ? 180 : 0.4, reported: report, commands: commands, busy: busy)
+    }
+
+    func testShellWithABusyCommandIsWorking() {
+        let story = samples(to: 3600, every: 60) { t in self.shell(at: t, since: 0, busy: 1) }
+        XCTAssertTrue(run(story).allSatisfy { $0.verdict == self.verdict(.working, .inferredStrong, .runningCommand(1)) })
+    }
+
+    /// The release time after the turn, for a command that is quiet
+    /// between two steps. Then the session is idle.
+    func testShellWithAQuietCommandSettlesAndGoesIdle() {
+        // The second story: the only children are the MCP servers of the session.
+        for commands in [1, 3] {
+            let story = samples(to: 900) { t in self.shell(at: t, since: 0, commands: commands) }
+            for (seconds, got) in run(story) {
+                let want = seconds < 300 ? verdict(.working, .reported, .backgroundWork) : verdict(.idle, .reported, .backgroundIdle(minutes: Int(seconds / 60)))
+                XCTAssertEqual(got, want, "\(commands) commands at \(seconds) s")
+            }
+        }
+        var settings = DetectionSettings()
+        settings.releaseAfterActivity = 60
+        let short = run(samples(to: 100) { t in self.shell(at: t, since: 0) }, settings: settings)
+        XCTAssertEqual(short.first { $0.verdict.state == .idle }?.seconds, 60)
+    }
+
+    /// A build that wakes up holds again, and for the release time after it.
+    func testShellIsWorkingAgainWhenACommandIsBusyAgain() {
+        let story = samples(to: 1000) { t in self.shell(at: t, since: 0, busy: (600..<700).contains(t) ? 1 : 0) }
+        for (seconds, got) in run(story) {
+            switch seconds {
+            case ..<300: XCTAssertEqual(got, verdict(.working, .reported, .backgroundWork), "at \(seconds) s")
+            case ..<600: XCTAssertEqual(got.state, .idle, "at \(seconds) s")
+            case ..<700: XCTAssertEqual(got, verdict(.working, .inferredStrong, .runningCommand(1)), "at \(seconds) s")
+            // The last busy sample is the one at 695 s.
+            case ..<995: XCTAssertEqual(got, verdict(.working, .reported, .backgroundWork), "at \(seconds) s")
+            default: XCTAssertEqual(got, verdict(.idle, .reported, .backgroundIdle(minutes: 5)), "at \(seconds) s")
+            }
+        }
+    }
+
+    /// The night of 2026-10-10: `shell` for 13 hours, for a dev server at
+    /// 0.0 percent CPU. Idle from the first sample.
+    func testShellThatIsHoursOldWithAQuietCommandIsIdleAtOnce() {
+        let story = samples(to: 600) { t in self.shell(at: t, since: -13 * 3600, commands: 4) }
+        for (seconds, got) in run(story) {
+            XCTAssertEqual(got, verdict(.idle, .reported, .backgroundIdle(minutes: Int((13 * 3600 + seconds) / 60))), "at \(seconds) s")
+        }
+    }
+
+    /// `busy` has no such limit: a long turn does not write the file again.
+    func testBusyWithAnOldStatusTimeStaysWorking() {
+        let story = samples(to: 3600, every: 60) { t in
+            self.evidence("claude", "Claude Code", .state, cpu: 0, reported: StateReport(
+                state: .working, since: self.at(-13 * 3600), observedAt: self.at(t), source: .claudeSessionFile, detail: nil
+            ), commands: 4)
+        }
+        XCTAssertTrue(run(story).allSatisfy { $0.verdict == self.verdict(.working, .reported, .reportsBusy) })
+    }
+
+    /// A status with no time counts from when the session was first seen.
+    func testShellWithoutATimeSettlesFromTheFirstSample() {
+        let story = samples(to: 400) { t in
+            var evidence = self.shell(at: t, since: 0)
+            evidence.reported?.since = nil
+            return evidence
+        }
+        XCTAssertEqual(run(story).first { $0.verdict.state == .idle }?.seconds, 300)
+    }
+
+    /// A new prompt: the hook says working before the file does.
+    func testAFreshHookWorkingBeatsShell() {
+        var prompt = shell(at: 400, since: 0)
+        prompt.hookState = .working
+        prompt.hookStateAt = at(398)
+        XCTAssertEqual(run([(400, prompt)]).last?.verdict, verdict(.working, .reported, .reportsBusy))
+    }
+
     func testBuildEndsAfterIdle() {
         let story = samples(to: 60) { t in self.claude(.idle, at: t, cpu: t <= 30 ? 180 : 0.4, commands: 1, busy: t <= 30 ? 1 : 0) }
         for (seconds, got) in run(story) {
@@ -870,6 +953,10 @@ final class VerdictTests: XCTestCase {
             (.cpuActivity, "Using the processor"),
             (.asksPermission, "Waiting for your answer"),
             (.atPrompt, "Ready for your next message"),
+            (.backgroundWork, "Running a background command"),
+            (.backgroundIdle(minutes: 0), "Background command with no activity"),
+            (.backgroundIdle(minutes: 5), "Background command with no activity for 5 minutes"),
+            (.backgroundIdle(minutes: 780), "Background command with no activity for 13 hours"),
             (.noActivity(minutes: 0), "No activity"),
             (.noActivity(minutes: 1), "No activity for 1 minute"),
             (.noActivity(minutes: 45), "No activity for 45 minutes"),

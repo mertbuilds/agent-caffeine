@@ -223,6 +223,8 @@ extension VerdictReason {
         case .asksPermission: return "asksPermission"
         case .awaitsApproval: return "awaitsApproval"
         case .atPrompt: return "atPrompt"
+        case .backgroundWork: return "backgroundWork"
+        case .backgroundIdle(let minutes): return "backgroundIdle:\(minutes)"
         case .noActivity(let minutes): return "noActivity:\(minutes)"
         case .onlyWeakSigns(let minutes): return "onlyWeakSigns:\(minutes)"
         case .alwaysWorkingByRule: return "alwaysWorkingByRule"

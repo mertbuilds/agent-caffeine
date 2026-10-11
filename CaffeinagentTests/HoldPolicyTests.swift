@@ -52,6 +52,36 @@ final class HoldPolicyTests: XCTestCase {
         run([(0, readings)], mode: mode, enabled: enabled, entitlement: entitlement, safety: safety, settings: settings, context: context)[0].decision
     }
 
+    // MARK: Background commands after the turn
+
+    /// The verdict counted the release time for a background command that
+    /// went quiet, so the policy adds none: not then, and not when the
+    /// command ends later and the session is at its prompt.
+    func testNoReleaseTimeAfterABackgroundCommandWentQuiet() {
+        func claude(_ state: WorkState, _ reason: VerdictReason) -> AgentReading {
+            AgentReading(
+                agentID: "claude", displayName: "Claude Code", level: .state, identity: ProcessIdentity(pid: 1, startTime: 1_791_196_400),
+                verdict: AgentVerdict(state: state, confidence: .reported, reason: reason)
+            )
+        }
+        let context = FrameContext(onBattery: true, batteryPercent: 94, lidClosed: true)
+        let got = run(steps(to: 400) { t in
+            switch t {
+            case ..<300: return [claude(.working, .backgroundWork)]
+            case ..<350: return [claude(.idle, .backgroundIdle(minutes: 5))]
+            default: return [claude(.idle, .atPrompt)]
+            }
+        }, context: context)
+        for (seconds, decision) in got {
+            XCTAssertEqual(decision.hold, seconds < 300, "at \(seconds) s")
+            XCTAssertEqual(decision.lidClosedFlag, seconds < 300, "at \(seconds) s")
+            XCTAssertEqual(decision.perAgent.first?.cause, seconds < 300 ? .working : nil, "at \(seconds) s")
+        }
+        // An idle of any other kind keeps its release time.
+        let plain = run(steps(to: 200) { t in [t < 50 ? claude(.working, .reportsBusy) : claude(.idle, .atPrompt)] })
+        XCTAssertEqual(plain.first { !$0.decision.hold }?.seconds, 165)
+    }
+
     // MARK: Pause
 
     private func paused(

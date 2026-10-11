@@ -395,7 +395,7 @@ enum PanelText {
         case .alwaysWorkingByRule:
             // The rule says nothing about when work began.
             return "Always counts as working"
-        case .runningCommand, .backgroundJob:
+        case .runningCommand, .backgroundJob, .backgroundWork:
             return [reason.text, lasting].compactMap { $0 }.joined(separator: " ")
         default:
             if let lasting { return "Working \(lasting)" }

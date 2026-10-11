@@ -263,6 +263,11 @@ enum HoldPolicy {
                 instance.waitingSince = instance.waitingSince ?? now
             case .idle:
                 instance.waitingSince = nil
+                // The verdict counted the release time already, as for an
+                // agent that is judged by its activity. Without this the
+                // Mac would stay awake for `releaseAfterState` more, and
+                // again for a moment when the command ends later.
+                if case .backgroundIdle = reading.verdict.reason { instance.lastWorkingAt = nil }
             }
             next.instances[reading.identity] = instance
         }

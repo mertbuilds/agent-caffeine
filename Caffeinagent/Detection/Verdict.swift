@@ -35,6 +35,13 @@ enum VerdictReason: Equatable {
     /// Inferred, not said by the agent: see `CursorApprovalRule`.
     case awaitsApproval
     case atPrompt
+    /// The turn is over and the agent says that background commands still
+    /// run. They were busy less than the release time ago, or the turn
+    /// ended that short a time ago.
+    case backgroundWork
+    /// The agent still says that background commands run, and none of
+    /// them was busy for the release time or longer.
+    case backgroundIdle(minutes: Int)
     case noActivity(minutes: Int)
     /// CPU use was the only sign for longer than the cap.
     case onlyWeakSigns(minutes: Int)
@@ -55,6 +62,9 @@ enum VerdictReason: Equatable {
         case .asksPermission: return "Waiting for your answer"
         case .awaitsApproval: return "Waiting for your approval"
         case .atPrompt: return "Ready for your next message"
+        case .backgroundWork: return "Running a background command"
+        case .backgroundIdle(let minutes):
+            return ["Background command with no activity", HumaneDuration.lasting(minutes: minutes)].compactMap { $0 }.joined(separator: " ")
         case .noActivity(let minutes): return ["No activity", HumaneDuration.lasting(minutes: minutes)].compactMap { $0 }.joined(separator: " ")
         case .onlyWeakSigns(let minutes):
             return ["Using the processor", HumaneDuration.lasting(minutes: minutes), "with no other sign of work"].compactMap { $0 }.joined(separator: " ")
@@ -246,6 +256,10 @@ enum CursorApprovalRule {
 /// A reported state beats weak signs in both directions. A reported idle or
 /// waiting does not beat a busy command or a working background job: a turn
 /// that ended is not work that ended.
+///
+/// An idle that says "background commands still run" (Claude Code's
+/// `shell`) holds for the release time after the turn and after the last
+/// busy command, and no longer: see `backgroundVerdict`.
 enum VerdictRules {
     // All numbers below are from docs/research/04-experiments.md, 5 second
     // windows, percent of one core.
@@ -270,8 +284,9 @@ enum VerdictRules {
     // A left-over command holds only while it uses the CPU. Every idle
     // helper measured stayed at or under 0.6 percent (Claude daemon and pty
     // host 0.6, Antigravity language server 0.4, Codex engines 0.2), and a
-    // build or a test run uses many times more. An idle dev server was not
-    // measured; 1 percent is the guess between the two.
+    // build or a test run uses many times more. An idle dev server was
+    // measured on 2026-10-10 (pnpm with node and workerd below it): 0.0
+    // percent, and 0.33 and 0.69 seconds of CPU time in 14 hours.
     static let busyChildCPUFraction = 0.01
 
     /// A state file can be read in the middle of a write. The last state
@@ -377,7 +392,6 @@ enum VerdictRules {
             let failed = state == .idle && memory.lastReport?.failed == true && reportedState(memory: memory, settings: settings, now: now) == .idle
             return AgentTurn(state: state, failed: failed)
         }
-        if report?.turnEnded == true { return AgentTurn(state: .idle) }
         // The time of a transcript is its last write, not the start of the turn.
         let startsTurn = report?.source == .claudeSessionFile || report?.source == .codexRollout || report?.source == .cursorTranscript
             || report?.source == .grokEvents || report?.source == .hermesState || report?.source == .openClawState
@@ -663,7 +677,34 @@ enum VerdictRules {
         if state == .waitingForUser {
             return AgentVerdict(state: .waitingForUser, confidence: .reported, reason: .asksPermission)
         }
-        return AgentVerdict(state: .idle, confidence: .reported, reason: .atPrompt)
+        return backgroundVerdict(memory: memory, settings: settings, now: now) ?? AgentVerdict(state: .idle, confidence: .reported, reason: .atPrompt)
+    }
+
+    /// The agent is idle and says that background commands of the session
+    /// still run: Claude Code's `shell`. Nil for any other idle.
+    ///
+    /// That word alone is no work. It stands for as long as one command
+    /// lives, and a dev server lives until somebody stops it: on
+    /// 2026-10-10 it kept a Mac awake for 13.7 hours with the lid closed,
+    /// on battery (docs/research/01-oss-detection.md, section 9). A
+    /// command that is busy is seen by the rule above, as after any turn.
+    /// So this holds for the release time after the turn ended and after
+    /// the last busy command or background job, for a build that is
+    /// quiet between two steps. After that the session is idle, until a
+    /// command is busy again.
+    ///
+    /// The time of the report is not moved over a sleep (`SampleGap`): a
+    /// turn that ended before the sleep holds nothing after it.
+    private static func backgroundVerdict(memory: AgentMemory, settings: DetectionSettings, now: Date) -> AgentVerdict? {
+        guard reportedState(memory: memory, settings: settings, now: now) == .idle,
+              let report = memory.lastReport, report.backgroundWork else { return nil }
+        let turnEnded = (report.since ?? memory.firstSeenAt).map { min($0, now) }
+        let quietSince = [turnEnded, memory.lastCommandAt, memory.lastBackgroundJobAt].compactMap { $0 }.max() ?? now
+        let quiet = now.timeIntervalSince(quietSince)
+        if quiet < settings.releaseAfterActivity {
+            return AgentVerdict(state: .working, confidence: .reported, reason: .backgroundWork)
+        }
+        return AgentVerdict(state: .idle, confidence: .reported, reason: .backgroundIdle(minutes: Int(quiet / 60)))
     }
 
     // MARK: Inferred
