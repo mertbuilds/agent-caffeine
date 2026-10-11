@@ -29,6 +29,11 @@ The lab recorder runs an engine of its own. What the real app decided is in `.st
 
     defaults write com.caffeinagent.app StateForTests -bool true
 
+The state has the closed-lid period too (`app.closedLid.heldSeconds`, `app.closedLid.limitSeconds`, `app.closedLid.stop`). The smallest time limit of the closed lid limit is 1 hour, so `HOLD-30` tells the owner to set it in seconds with a second hidden default, which the app reads at every sample, and to delete it after:
+
+    defaults write com.caffeinagent.app ClosedLidLimitSecondsForTests -int 180
+    defaults delete com.caffeinagent.app ClosedLidLimitSecondsForTests
+
 `actest check` says when the installed build has no state export, and when the switch is off. `agent-caffeine status --json --detail` prints the same state. The file holds kinds, numbers and times: no name of a session, no folder, no reason of a hold, no name of a job.
 
 ## A test is a file

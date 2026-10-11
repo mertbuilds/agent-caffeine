@@ -1,0 +1,62 @@
+id = "HOLD-30"
+title = "The closed lid limit ends a hold on battery at its time, and the Mac sleeps"
+layer = 1
+area = "hold"
+minutes = 10
+risk = "The Mac is awake with the lid closed for 3 minutes. Keep it on a table, not in a bag. The first step sets a hidden default of the app and the last step deletes it: with it left in place every hold with the lid closed on battery ends after 3 minutes."
+why = "The last stop that asks no agent: on 2026-10-10 a state with no end kept the Mac awake for 13.7 hours in a bag. Whatever holds, a closed lid on battery ends the hold after a time. The smallest choice is 1 hour, so the test sets the limit to 180 seconds with a hidden default that the app reads at every sample. The limit ends every hold, so the test is the same while other agents work."
+heartbeat = true
+checks = [
+  "within 10s after step 3: app.closedLid.limitSeconds=180",
+  "heartbeat gap from step 3 to step 3 + 170s < 15s",
+  "log from step 3 to step 3 + 170s has no Sleep",
+  "always from step 3 to step 3 + 170s: sleepdisabled=1",
+  "always from step 3 to step 3 + 170s: app.hold=true",
+  "log from step 3 + 170s to step 4 has Sleep",
+  "info within 30s after step 3 + 170s: app.safety=closedLidTime",
+  "info at end: app.notice[safetyStop].age<900",
+  "key note is yes",
+  "at end: sleepdisabled=0 or app.wanted=true",
+]
+
+[needs]
+power = "battery"
+charge = 40
+helper = true
+display = "builtin"
+
+[[steps]]
+say = "Set the limit for this test in another Terminal. The runner never writes a setting of the app. Press Enter here when it is done."
+command = "defaults write com.caffeinagent.app ClosedLidLimitSecondsForTests -int 180"
+key = "enter"
+
+[[steps]]
+say = "Nothing to do. The runner starts a hold of 30 minutes and waits for the flag."
+run = ["agent-caffeine", "hold", "--for", "30m", "--json"]
+name = "hold"
+until = "held.hold=true and app.hold=true and sleepdisabled=1"
+timeout = 15
+
+[[steps]]
+say = "Close the lid now. Leave the Mac on the table. Open the lid at {clock+6}, not before."
+until = "lid=closed"
+timeout = 120
+
+[[steps]]
+say = "Open the lid at the time you were told."
+until = "lid=open"
+timeout = 900
+
+[[steps]]
+say = "Open the menu of Agent Caffeine."
+ask = "Is there a line that your Mac slept, because the lid was closed on battery for 3 minutes?"
+name = "note"
+
+[[steps]]
+say = "Delete the limit of this test in another Terminal. Press Enter here when it is done."
+command = "defaults delete com.caffeinagent.app ClosedLidLimitSecondsForTests"
+key = "enter"
+
+[[cleanup]]
+expect = "power=ac"
+tell = "Plug the charger in again. If you did not do the last step: run `defaults delete com.caffeinagent.app ClosedLidLimitSecondsForTests`."

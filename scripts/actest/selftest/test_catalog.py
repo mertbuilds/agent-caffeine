@@ -26,7 +26,7 @@ class CatalogTests(unittest.TestCase):
             self.assertEqual(found["layer"], 1, found["id"])
             self.assertGreater(found["minutes"], 0)
             self.assertTrue(found["why"], found["id"])
-        for safety in ("HELP-21", "HELP-02", "HELP-03", "HOLD-04", "LID-20", "LID-08", "DET-GEN-01", "WAKE-E01", "WAKE-E06", "CLI-10"):
+        for safety in ("HELP-21", "HELP-02", "HELP-03", "HOLD-04", "HOLD-30", "HOLD-31", "LID-20", "LID-08", "DET-GEN-01", "WAKE-E01", "WAKE-E06", "CLI-10"):
             self.assertIn(safety, tests)
         self.assertTrue(all(tests[name].get("decides") for name in ("WAKE-E01", "WAKE-E03")))
 
