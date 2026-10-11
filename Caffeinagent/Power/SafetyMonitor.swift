@@ -18,7 +18,7 @@ extension SafetyStop {
         case .weakCharger(let percent):
             return "Agent Caffeine let your Mac sleep because your charger is too weak and the battery is at \(PanelText.percent(percent))"
         case .tooHot: return "Agent Caffeine let your Mac sleep because it got too hot"
-        case .closedLid(let stop): return "Agent Caffeine let your Mac sleep because \(PanelText.closedLidReason(stop))"
+        case .closedLid(let stop): return "Agent Caffeine let your Mac sleep because \(PanelText.closedLidReason(stop, keptAwake: "it kept it awake"))"
         }
     }
 

@@ -212,12 +212,17 @@ enum PanelText {
         "Your Mac slept at \(time(note.at, calendar: calendar, locale: locale)): \(sleepReason(note.reason))"
     }
 
-    /// "the lid was closed on battery for 3 hours", for the end of a
-    /// sentence. Under a minute only with the hidden default of the tests.
-    static func closedLidReason(_ stop: ClosedLidStop) -> String {
+    /// "kept awake for 3 hours with the lid closed on battery", for the end
+    /// of a sentence. The time is the time Agent Caffeine kept the Mac
+    /// awake, not the time the lid was closed, so the words say who kept it
+    /// awake: `keptAwake` is "it kept it awake" after "because", and "Agent
+    /// Caffeine had kept it awake" after a sleep. Under a minute only with
+    /// the hidden default of the tests.
+    static func closedLidReason(_ stop: ClosedLidStop, keptAwake: String = "kept awake") -> String {
         switch stop {
         case .time(let seconds):
-            return "the lid was closed on battery for \(HumaneDuration.length(seconds: seconds) ?? HumaneDuration.counted(Int(seconds), "second"))"
+            let length = HumaneDuration.length(seconds: seconds) ?? HumaneDuration.counted(Int(seconds), "second")
+            return "\(keptAwake) for \(length) with the lid closed on battery"
         case .drop(let points):
             return "the battery lost \(percent(points)) with the lid closed"
         }
@@ -234,9 +239,9 @@ enum PanelText {
         case .lidClosedSettingOff: return "the lid was closed on battery and staying awake with the lid closed is turned off"
         case .battery(let percent): return "the battery was at \(Self.percent(percent))"
         case .tooHot: return "your Mac got too hot"
-        case .closedLidLimit(let stop, nil): return closedLidReason(stop)
-        case .closedLidLimit(let stop, let working?):
-            return "\(closedLidReason(stop)), and \(stillWorking(working))"
+        case .closedLidLimit(let stop, let working):
+            let reason = closedLidReason(stop, keptAwake: "Agent Caffeine had kept it awake")
+            return working.map { "\(reason), and \(stillWorking($0))" } ?? reason
         case .paused: return "Agent Caffeine was paused"
         case .notEntitled(.trialOver): return "your trial has ended"
         case .notEntitled(.unverified): return "your license was not checked for 30 days"

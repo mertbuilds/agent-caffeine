@@ -49,7 +49,7 @@ timeout = 900
 
 [[steps]]
 say = "Open the menu of Agent Caffeine."
-ask = "Is there a line that your Mac slept, because the lid was closed on battery for 3 minutes?"
+ask = "Is there a line that your Mac slept, because Agent Caffeine had kept it awake for 3 minutes with the lid closed on battery?"
 name = "note"
 
 [[steps]]

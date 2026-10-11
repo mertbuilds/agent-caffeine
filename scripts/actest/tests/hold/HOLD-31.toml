@@ -28,7 +28,7 @@ helper = true
 display = "builtin"
 
 [[steps]]
-say = "Open Settings > Battery and lid of Agent Caffeine. Under Closed lid limit, set \"With the lid closed on battery, stop after\" to No limit, and \"or when the battery lost\" to 15%. Press Enter here when it is done."
+say = "Open Settings > Battery and lid of Agent Caffeine. Under Closed lid limit, set \"With the lid closed on battery, keep it awake for at most\" to No limit, and \"or until the battery lost\" to 15%. Press Enter here when it is done."
 key = "enter"
 
 [[steps]]

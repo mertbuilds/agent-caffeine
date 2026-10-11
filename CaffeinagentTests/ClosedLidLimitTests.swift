@@ -420,11 +420,11 @@ final class ClosedLidLimitTests: XCTestCase {
     func testTheWordsOfTheStop() {
         let time = SafetyStop.closedLid(.time(seconds: 3 * Self.hour))
         let drop = SafetyStop.closedLid(.drop(points: 30))
-        XCTAssertEqual(time.notificationText, "Agent Caffeine let your Mac sleep because the lid was closed on battery for 3 hours")
+        XCTAssertEqual(time.notificationText, "Agent Caffeine let your Mac sleep because it kept it awake for 3 hours with the lid closed on battery")
         XCTAssertEqual(drop.notificationText, "Agent Caffeine let your Mac sleep because the battery lost 30% with the lid closed")
         XCTAssertEqual(
             time.notificationText(working: .one("Claude Code")),
-            "Agent Caffeine let your Mac sleep because the lid was closed on battery for 3 hours. Claude Code was still working"
+            "Agent Caffeine let your Mac sleep because it kept it awake for 3 hours with the lid closed on battery. Claude Code was still working"
         )
         XCTAssertEqual(
             drop.notificationText(working: .many(2)),
@@ -433,14 +433,14 @@ final class ClosedLidLimitTests: XCTestCase {
         XCTAssertEqual(time.notificationText(working: nil), time.notificationText)
         XCTAssertEqual(SafetyStop.tooHot.notificationText(working: .one("Codex")), SafetyStop.tooHot.notificationText, "Only the closed lid limit names an agent")
 
-        XCTAssertEqual(SafetyStop.closedLid(.time(seconds: Self.hour)).notificationText, "Agent Caffeine let your Mac sleep because the lid was closed on battery for 1 hour")
-        XCTAssertEqual(PanelText.closedLidReason(.time(seconds: 120)), "the lid was closed on battery for 2 minutes")
-        XCTAssertEqual(PanelText.closedLidReason(.time(seconds: 45)), "the lid was closed on battery for 45 seconds")
+        XCTAssertEqual(SafetyStop.closedLid(.time(seconds: Self.hour)).notificationText, "Agent Caffeine let your Mac sleep because it kept it awake for 1 hour with the lid closed on battery")
+        XCTAssertEqual(PanelText.closedLidReason(.time(seconds: 120)), "kept awake for 2 minutes with the lid closed on battery")
+        XCTAssertEqual(PanelText.closedLidReason(.time(seconds: 45)), "kept awake for 45 seconds with the lid closed on battery")
 
-        XCTAssertEqual(HoldHeadline.safetyStop(time).text, "Sleeping allowed: the lid was closed on battery for 3 hours")
+        XCTAssertEqual(HoldHeadline.safetyStop(time).text, "Sleeping allowed: kept awake for 3 hours with the lid closed on battery")
         XCTAssertEqual(HoldHeadline.safetyStop(drop).text, "Sleeping allowed: the battery lost 30% with the lid closed")
         let now = Date()
-        XCTAssertEqual(PanelText.headline(.safetyStop(time), now: now).subtitle, "The lid was closed on battery for 3 hours")
+        XCTAssertEqual(PanelText.headline(.safetyStop(time), now: now).subtitle, "Kept awake for 3 hours with the lid closed on battery")
         XCTAssertEqual(PanelText.headline(.safetyStop(drop), now: now).subtitle, "The battery lost 30% with the lid closed")
         XCTAssertEqual(PanelText.headline(.safetyStop(time), now: now).title, PanelText.stoppedTitle)
         XCTAssertEqual(PanelText.startsAgainWhenLidOpens, "Agent Caffeine starts again when you open the lid or connect power")
@@ -472,8 +472,8 @@ final class ClosedLidLimitTests: XCTestCase {
         XCTAssertEqual(SleepNote(snapshot), SleepNote(at: at, reason: .closedLidLimit(stop, working: .one("Claude Code"))))
 
         let cases: [(SleepReason, String)] = [
-            (.closedLidLimit(stop, working: nil), "the lid was closed on battery for 3 hours"),
-            (.closedLidLimit(stop, working: .one("Claude Code")), "the lid was closed on battery for 3 hours, and Claude Code was still working"),
+            (.closedLidLimit(stop, working: nil), "Agent Caffeine had kept it awake for 3 hours with the lid closed on battery"),
+            (.closedLidLimit(stop, working: .one("Claude Code")), "Agent Caffeine had kept it awake for 3 hours with the lid closed on battery, and Claude Code was still working"),
             (.closedLidLimit(.drop(points: 30), working: nil), "the battery lost 30% with the lid closed"),
             (.closedLidLimit(.drop(points: 30), working: .many(2)), "the battery lost 30% with the lid closed, and 2 agents were still working"),
         ]
