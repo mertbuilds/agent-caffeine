@@ -5,7 +5,7 @@ import shutil
 import tempfile
 import unittest
 
-from actestlib import catalog, config, runner, store, ui
+from actestlib import catalog, cleanup, config, runner, store, ui
 from selftest import fakes
 
 LID = {
@@ -140,6 +140,28 @@ class RunTests(unittest.TestCase):
         self.assertEqual(env.holds, [])
         self.assertIn("Open the lid.", self.out.getvalue().splitlines())
         self.assertIsNone(store.active())
+
+    def test_the_cleanup_says_when_the_test_limit_is_still_set(self):
+        env = fakes.FakeEnv(None, keys={12: "y"})
+        env.world = self.lid_world(env)
+        env.limit = 180
+        verdict = runner.run_test(catalog.validate(json.loads(json.dumps(LID))), env, self.ui)
+        delete = "Run: defaults delete com.caffeinagent.app ClosedLidLimitSecondsForTests"
+        self.assertEqual(verdict["cleanup"]["left"], [delete])
+        self.assertIn(delete, self.out.getvalue().splitlines())
+        _, clean = self.run_lid()
+        self.assertEqual(clean["cleanup"]["left"], [])
+
+    def test_abort_after_a_runner_that_is_gone_says_when_the_test_limit_is_still_set(self):
+        delete = "Still to do: Run: defaults delete com.caffeinagent.app ClosedLidLimitSecondsForTests"
+        for limit, said in ((None, False), (180, True)):
+            env = fakes.FakeEnv(lambda t: {"state": fakes.state()})
+            env.limit = limit
+            store.set_active({"test": "HOLD-30", "pid": None, "procs": {}, "holds_before": []})
+            self.assertEqual(cleanup.abort(env, self.ui, lambda pid: ""), 0)
+            self.assertEqual(delete in self.out.getvalue().splitlines(), said)
+            self.assertIsNone(store.active())
+            self.assertTrue(all(args[:2] == ("defaults", "read") for args in env.commands if args[0] == "defaults"))
 
     def test_a_step_that_never_comes_times_out(self):
         env = fakes.FakeEnv(lambda t: {"state": fakes.state()})
@@ -291,13 +313,15 @@ class RunTests(unittest.TestCase):
         from actestlib import env as environment
         real = environment.RealEnv.__new__(environment.RealEnv)
         for args in [("pmset", "-a", "disablesleep", "0"), ("pmset", "schedule", "cancelall"), ("sudo", "pmset", "-g"),
-                     ("defaults", "write", config.BUNDLE_ID, config.SWITCH_KEY, "-bool", "true"), ("kill", "-9", "1"), ("osascript", "-e", "x")]:
+                     ("defaults", "write", config.BUNDLE_ID, config.SWITCH_KEY, "-bool", "true"), ("kill", "-9", "1"), ("osascript", "-e", "x"),
+                     ("defaults", "write", config.BUNDLE_ID, config.LIMIT_KEY, "-int", "180"), ("defaults", "delete", config.BUNDLE_ID, config.LIMIT_KEY)]:
             with self.assertRaises(environment.Refused):
                 real.command(args)
 
     def test_the_runner_never_writes_a_power_setting(self):
         env, _ = self.run_lid()
-        self.assertTrue(all(args[:2] in (("pmset", "-g"),) or args[0] in ("ioreg", "ps", "sysctl", "sw_vers") for args in env.commands), set(env.commands))
+        reads = (("pmset", "-g"), ("defaults", "read"))
+        self.assertTrue(all(args[:2] in reads or args[0] in ("ioreg", "ps", "sysctl", "sw_vers") for args in env.commands), set(env.commands))
         self.assertTrue(all(call[0] in ("hold", "release", "status") for call in env.tool_calls))
 
 

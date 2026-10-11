@@ -22,6 +22,7 @@ def gather(env):
         "export": sampler.has_state_export(env),
         "switch": switch[0] == 0 and switch[1].strip() == "1",
         "holds": sampler.holds(env),
+        "limit": sampler.test_limit(env),
         "displays": displays,
         "free": env.free_bytes(),
         "timers": parse.timers(env.command(("pmset", "-g"))[1]),
@@ -107,6 +108,9 @@ def check(facts, test=None):
 
     holds = facts["holds"]
     add("holds", not holds, "no leftover hold" if not holds else f"{len(holds)} leftover hold from the command line", "Run: agent-caffeine release --all")
+    # The test of the limit sets it in its first step, and may start with it.
+    limit = facts["limit"] and (test or {}).get("id") != config.LIMIT_TEST
+    add("limit", not limit, "no leftover test limit" if not limit else "a test limit of the closed lid limit is still set", f"Run: {config.LIMIT_OFF}")
     copies = sample.get("copies", 0)
     add("recording", copies <= 1 and not facts["active"],
         "no leftover recording or test run" if copies <= 1 and not facts["active"] else "a recording or a test run is still there",

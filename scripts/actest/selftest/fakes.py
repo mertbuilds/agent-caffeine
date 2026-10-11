@@ -53,6 +53,8 @@ class FakeEnv:
         self.files = {}
         self.log_lines = []
         self.holds = []
+        # The hidden time limit of the closed lid limit, None when not set.
+        self.limit = None
         self.free = 50 << 30
         self.heartbeat_path = None
         self.beat = 0.0
@@ -116,6 +118,8 @@ class FakeEnv:
             return 0, f'  |   "AppleClamshellState" = {"Yes" if now["lid"] == "closed" else "No"}\n'
         if args[0] == "ps":
             return 0, f"{now['pid']} {APP}/Contents/MacOS/caffeinagent\n" if now["pid"] else "1 /sbin/launchd\n"
+        if args[0] == "defaults" and args[-1] == config.LIMIT_KEY:
+            return (0, f"{self.limit}\n") if self.limit is not None else (1, "")
         if args[0] == "defaults":
             return (0, "1\n") if self.switch else (1, "")
         if args[0] == "system_profiler":

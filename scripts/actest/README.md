@@ -17,7 +17,7 @@ Python 3.11 or later, standard library only. Not shipped in the app.
 
 ## What the runner may do
 
-It reads: `pmset -g`, `pmset -g batt`, `pmset -g assertions`, `pmset -g sched`, `pmset -g log`, `ioreg`, `ps`, the state file and the status file of the app, and our own files that a test names (the skill of Agent Caffeine, the link to the tool, the marker of the helper, the test job). For a test with `watch = ["claude"]` it also reads two keys of each `~/.claude/sessions/<pid>.json`, `status` and `statusUpdatedAt`, and keeps nothing else of the file: not the folder and not the name of the session.
+It reads: `pmset -g`, `pmset -g batt`, `pmset -g assertions`, `pmset -g sched`, `pmset -g log`, `ioreg`, `ps`, two hidden defaults of the app with `defaults read` (`StateForTests` and `ClosedLidLimitSecondsForTests`), the state file and the status file of the app, and our own files that a test names (the skill of Agent Caffeine, the link to the tool, the marker of the helper, the test job). For a test with `watch = ["claude"]` it also reads two keys of each `~/.claude/sessions/<pid>.json`, `status` and `statusUpdatedAt`, and keeps nothing else of the file: not the folder and not the name of the session.
 
 It runs: `agent-caffeine` (hold, release, status, skill), its own heartbeat writer, and, for a test with `lab = true`, a lab recording with the binary of the installed app.
 
@@ -33,6 +33,8 @@ The state has the closed-lid period too (`app.closedLid.heldSeconds`, `app.close
 
     defaults write com.caffeinagent.app ClosedLidLimitSecondsForTests -int 180
     defaults delete com.caffeinagent.app ClosedLidLimitSecondsForTests
+
+The app obeys it only while `StateForTests` is on, and only when it is shorter than the limit of the settings. The runner reads it and never writes it: the cleanup of a run and `actest abort` print the delete command while it is still set, and the preflight has the item "no leftover test limit" for every test but `HOLD-30`.
 
 `actest check` says when the installed build has no state export, and when the switch is off. `agent-caffeine status --json --detail` prints the same state. The file holds kinds, numbers and times: no name of a session, no folder, no reason of a hold, no name of a job.
 

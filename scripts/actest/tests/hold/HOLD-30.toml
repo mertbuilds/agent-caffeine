@@ -3,7 +3,7 @@ title = "The closed lid limit ends a hold on battery at its time, and the Mac sl
 layer = 1
 area = "hold"
 minutes = 10
-risk = "The Mac is awake with the lid closed for 3 minutes. Keep it on a table, not in a bag. The first step sets a hidden default of the app and the last step deletes it: with it left in place every hold with the lid closed on battery ends after 3 minutes."
+risk = "The Mac is awake with the lid closed for 3 minutes. Keep it on a table, not in a bag. The first step sets a hidden default of the app and the last step deletes it: with it left in place, and the switch of the tests on, every hold with the lid closed on battery ends after 3 minutes. The cleanup and the preflight say when it is still set."
 why = "The last stop that asks no agent: on 2026-10-10 a state with no end kept the Mac awake for 13.7 hours in a bag. Whatever holds, a closed lid on battery ends the hold after a time. The smallest choice is 1 hour, so the test sets the limit to 180 seconds with a hidden default that the app reads at every sample. The limit ends every hold, so the test is the same while other agents work."
 heartbeat = true
 checks = [
@@ -59,4 +59,4 @@ key = "enter"
 
 [[cleanup]]
 expect = "power=ac"
-tell = "Plug the charger in again. If you did not do the last step: run `defaults delete com.caffeinagent.app ClosedLidLimitSecondsForTests`."
+tell = "Plug the charger in again."

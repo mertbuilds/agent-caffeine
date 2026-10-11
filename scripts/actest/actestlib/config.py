@@ -5,6 +5,11 @@ import re
 BUNDLE_ID = "com.caffeinagent.app"
 SWITCH_KEY = "StateForTests"
 SWITCH_ON = f"defaults write {BUNDLE_ID} {SWITCH_KEY} -bool true"
+# The time limit of the closed lid limit in seconds. Only the owner sets
+# and deletes it, and only the test below has a step for it.
+LIMIT_KEY = "ClosedLidLimitSecondsForTests"
+LIMIT_OFF = f"defaults delete {BUNDLE_ID} {LIMIT_KEY}"
+LIMIT_TEST = "HOLD-30"
 WAKE_OWNER = "com.caffeinagent.app.wake"
 APP_NAMES = ("Agent Caffeine.app", "agent caffeine.app")
 APP_BINARY = "Contents/MacOS/caffeinagent"

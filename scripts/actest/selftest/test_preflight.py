@@ -57,6 +57,19 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(found["build"]["fix"], f"Install build {self.expected}.")
         self.assertEqual({name for name, item in found.items() if item["status"] == "unknown"}, {"helper", "agent grok", "wake for jobs"})
 
+    def test_a_leftover_test_limit_stops_every_test_but_its_own(self):
+        env = fakes.FakeEnv(lambda t: {"state": fakes.state()}, build=self.expected)
+        self.assertEqual(items(env)["limit"]["text"], "no leftover test limit")
+        self.assertEqual(items(env)["limit"]["status"], "pass")
+        env.limit = 180
+        for test in (None, {"needs": {}}, {"id": "HOLD-31", "needs": {}}):
+            found = items(env, test)
+            self.assertEqual(found["limit"]["status"], "fail", test)
+            self.assertEqual(found["limit"]["fix"], "Run: defaults delete com.caffeinagent.app ClosedLidLimitSecondsForTests")
+            self.assertIn(found["limit"], preflight.blocked(list(found.values())))
+        self.assertEqual(items(env, {"id": "HOLD-30", "needs": {}})["limit"]["status"], "pass", "Its first step sets it")
+        self.assertTrue(all(args[:2] == ("defaults", "read") for args in env.commands if args[0] == "defaults"))
+
     def test_the_needs_of_a_test_are_checked_against_the_state(self):
         rows = [{"id": "grok", "pid": 9, "state": "idle"}]
         env = fakes.FakeEnv(lambda t: {"power": "battery", "charge": 80, "state": fakes.state(agents=rows, helper="notRegistered")}, build=self.expected)

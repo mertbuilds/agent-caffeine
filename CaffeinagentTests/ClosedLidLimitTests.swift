@@ -167,6 +167,39 @@ final class ClosedLidLimitTests: XCTestCase {
         XCTAssertEqual(settings.closedLidLimits(testSeconds: 120).time, 120)
     }
 
+    /// A value that is too large must not take the last stop away.
+    func testTheHiddenDefaultOfTheTestsCannotMakeTheLimitLonger() {
+        var settings = DetectionSettings()
+        XCTAssertEqual(settings.closedLidLimits(testSeconds: 1e9).time, 3 * Self.hour)
+        XCTAssertEqual(settings.closedLidLimits(testSeconds: 3 * Self.hour + 1).time, 3 * Self.hour)
+        XCTAssertEqual(settings.closedLidLimits(testSeconds: 3 * Self.hour - 1).time, 3 * Self.hour - 1)
+        settings.closedLidLimitHours = 1
+        XCTAssertEqual(settings.closedLidLimits(testSeconds: 2 * Self.hour).time, Self.hour)
+        XCTAssertEqual(settings.closedLidLimits(testSeconds: 1e9).drop, 30, "The drop limit is as the settings have it")
+    }
+
+    /// A value that an aborted test left in place does nothing in a build
+    /// that is not under test.
+    func testTheHiddenDefaultOfTheTestsCountsOnlyWhileTheSwitchOfTheTestsIsOn() {
+        let defaults = TestDefaults()
+        XCTAssertEqual(ClosedLidLimit.testSeconds(in: defaults), 0)
+        defaults.set(180, forKey: ClosedLidLimit.testSecondsKey)
+        XCTAssertEqual(ClosedLidLimit.testSeconds(in: defaults), 0, "The switch is off")
+        XCTAssertEqual(DetectionSettings().closedLidLimits(testSeconds: ClosedLidLimit.testSeconds(in: defaults)).time, 3 * Self.hour)
+        defaults.set(false, forKey: HoldStore.stateSwitchKey)
+        XCTAssertEqual(ClosedLidLimit.testSeconds(in: defaults), 0)
+
+        defaults.set(true, forKey: HoldStore.stateSwitchKey)
+        XCTAssertEqual(ClosedLidLimit.testSeconds(in: defaults), 180)
+        XCTAssertEqual(DetectionSettings().closedLidLimits(testSeconds: ClosedLidLimit.testSeconds(in: defaults)).time, 180, "It shortens")
+        defaults.set(1e9, forKey: ClosedLidLimit.testSecondsKey)
+        XCTAssertEqual(DetectionSettings().closedLidLimits(testSeconds: ClosedLidLimit.testSeconds(in: defaults)).time, 3 * Self.hour)
+        defaults.set(-5, forKey: ClosedLidLimit.testSecondsKey)
+        XCTAssertEqual(DetectionSettings().closedLidLimits(testSeconds: ClosedLidLimit.testSeconds(in: defaults)).time, 3 * Self.hour)
+        defaults.removeObject(forKey: ClosedLidLimit.testSecondsKey)
+        XCTAssertEqual(ClosedLidLimit.testSeconds(in: defaults), 0)
+    }
+
     // MARK: One closed-lid period
 
     func testTimeAsleepDoesNotCount() throws {

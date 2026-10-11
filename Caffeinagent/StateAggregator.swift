@@ -811,7 +811,7 @@ final class StateAggregator: ObservableObject {
         if batteryPercent != context.batteryPercent { batteryPercent = context.batteryPercent }
         // The limits are read at each sample: the tests set one with a
         // hidden default while the app runs.
-        let limits = settings.closedLidLimits(testSeconds: defaults.double(forKey: ClosedLidLimit.testSecondsKey))
+        let limits = settings.closedLidLimits(testSeconds: ClosedLidLimit.testSeconds(in: defaults))
         closedLidLimit.timeLimit = limits.time
         closedLidLimit.dropLimit = limits.drop
         let lidStop = closedLidLimit.update(context, holding: power.held, at: sample.frame.time, afterGap: sample.afterGap)

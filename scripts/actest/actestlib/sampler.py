@@ -165,6 +165,12 @@ def has_state_export(env):
     return False
 
 
+def test_limit(env):
+    """True while the hidden time limit of the closed lid limit is set.
+    The runner reads it and never writes it."""
+    return env.command(("defaults", "read", config.BUNDLE_ID, config.LIMIT_KEY))[0] == 0
+
+
 def holds(env):
     """The ids of the holds from the command line, as the tool lists them."""
     answer = env.tool(["status", "--json"])

@@ -37,7 +37,17 @@ struct ClosedLidLimit: Equatable {
     /// A hidden default for the test runner: the time limit in seconds,
     /// in place of the hours of the settings. It is read at every sample,
     /// so `defaults write` from a Terminal sets it while the app runs.
+    ///
+    /// It counts only while the switch of the tests is on
+    /// (`HoldStore.stateSwitchKey`), and it can only make the limit
+    /// shorter: a value that is left over, or a large one, does not take
+    /// the last stop away.
     static let testSecondsKey = "ClosedLidLimitSecondsForTests"
+
+    /// The hidden default, 0 while the switch of the tests is off.
+    static func testSeconds(in defaults: UserDefaults) -> TimeInterval {
+        defaults.bool(forKey: HoldStore.stateSwitchKey) ? defaults.double(forKey: testSecondsKey) : 0
+    }
 
     struct Period: Equatable {
         var since: Date
@@ -87,11 +97,12 @@ struct ClosedLidLimit: Equatable {
 
 extension DetectionSettings {
     /// The limits of the settings. `testSeconds` is the hidden default
-    /// `ClosedLidLimit.testSecondsKey`, and counts when it is above zero.
+    /// (`ClosedLidLimit.testSeconds`). It counts when it is above zero,
+    /// and never makes the time limit longer than the settings have it.
     func closedLidLimits(testSeconds: TimeInterval = 0) -> (time: TimeInterval?, drop: Int?) {
         let hours = closedLidLimitHours == ClosedLidLimit.noLimit ? nil : TimeInterval(closedLidLimitHours) * 3600
         return (
-            testSeconds > 0 ? testSeconds : hours,
+            testSeconds > 0 ? min(testSeconds, hours ?? testSeconds) : hours,
             closedLidLimitDrop == ClosedLidLimit.noLimit ? nil : closedLidLimitDrop
         )
     }
