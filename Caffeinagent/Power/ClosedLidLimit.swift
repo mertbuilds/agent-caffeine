@@ -23,7 +23,10 @@ enum ClosedLidStop: Equatable {
 /// its start.
 ///
 /// The time is awake time (`SampleGap.interval`), so a sleep counts for
-/// nothing, and a hole between two samples counts for nothing either.
+/// nothing. A hole between two samples that both saw the hold counts with
+/// the time the Mac was awake in it, by the awake clock: that clock does
+/// not run in a sleep, and samples that come late all the time still
+/// reach the limit. Without the awake clock a hole counts for nothing.
 ///
 /// A stop stays for the rest of the period. Opening the lid or connecting
 /// power ends the period, and the next one starts fresh.
@@ -64,6 +67,8 @@ struct ClosedLidLimit: Equatable {
     var dropLimit: Int? = defaultDropPoints
     private(set) var period: Period?
     private var last: SampleTime?
+    /// The sample before saw the hold, in this period.
+    private var lastHolding = false
 
     /// - Parameters:
     ///   - holding: Agent Caffeine kept the Mac awake up to this sample.
@@ -74,14 +79,24 @@ struct ClosedLidLimit: Equatable {
         guard context.lidClosed, context.onBattery else {
             period = nil
             last = nil
+            lastHolding = false
             return nil
         }
-        defer { last = time }
+        defer {
+            last = time
+            lastHolding = holding
+        }
         guard var current = period else {
             if holding { period = Period(since: time.at, percentAtStart: context.batteryPercent) }
             return nil
         }
-        if holding, !afterGap, let last { current.held += max(0, SampleGap.interval(from: last, to: time)) }
+        if holding, let last {
+            if !afterGap {
+                current.held += max(0, SampleGap.interval(from: last, to: time))
+            } else if lastHolding, let before = last.awake, let after = time.awake, after > before {
+                current.held += after - before
+            }
+        }
         // Only a hold is stopped. A period that holds nothing waits.
         if current.stop == nil, holding {
             if let timeLimit, current.held >= timeLimit {

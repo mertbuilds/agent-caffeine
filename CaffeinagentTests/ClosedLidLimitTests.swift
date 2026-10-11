@@ -221,7 +221,7 @@ final class ClosedLidLimitTests: XCTestCase {
     }
 
     /// A hold that sleeps is no hold. The sample after a sleep has a hole
-    /// before it, and the hole counts for nothing, whatever the clocks say.
+    /// before it, and without the awake clock the hole counts for nothing.
     func testAHoleBetweenTwoSamplesCountsForNothing() {
         var limit = ClosedLidLimit()
         let context = FrameContext(onBattery: true, batteryPercent: 80, lidClosed: true)
@@ -232,6 +232,57 @@ final class ClosedLidLimitTests: XCTestCase {
         XCTAssertEqual(limit.period?.held, 10)
         XCTAssertNil(limit.update(context, holding: true, at: time(5 * Self.hour + 10)))
         XCTAssertEqual(limit.period?.held, 20)
+    }
+
+    /// Samples that come late all the time: every interval is 20 seconds
+    /// of awake time, so every sample has a hole before it. The held time
+    /// is not lost, and the limit comes on time.
+    func testTheLimitIsReachedOnTimeWhenEverySampleComesLate() throws {
+        var limit = ClosedLidLimit()
+        let context = FrameContext(onBattery: true, batteryPercent: 80, lidClosed: true)
+        var previous: SampleTime?
+        var stoppedAt: TimeInterval?
+        for seconds in stride(from: 0.0, through: 4 * Self.hour, by: 20) {
+            let time = SampleTime(at: Self.start.addingTimeInterval(seconds), awake: 500 + seconds)
+            let gap = SampleGap.length(from: previous, to: time)
+            XCTAssertEqual(gap, previous == nil ? nil : 20, "Every interval is a hole")
+            previous = time
+            if limit.update(context, holding: true, at: time, afterGap: gap != nil) != nil {
+                stoppedAt = seconds
+                break
+            }
+        }
+        XCTAssertEqual(try XCTUnwrap(stoppedAt), 3 * Self.hour, accuracy: 20)
+        XCTAssertEqual(limit.period?.stop, .time(seconds: 3 * Self.hour))
+    }
+
+    /// The awake clock does not run in a sleep, so a sleep between two
+    /// samples of the hold adds only what the Mac was awake around it.
+    func testARealSleepBetweenTwoSamplesAddsNothing() {
+        var limit = ClosedLidLimit()
+        let context = FrameContext(onBattery: true, batteryPercent: 80, lidClosed: true)
+        func time(_ seconds: TimeInterval, awake: TimeInterval) -> SampleTime { SampleTime(at: Self.start.addingTimeInterval(seconds), awake: awake) }
+        func update(_ time: SampleTime, holding: Bool = true, after previous: SampleTime? = nil) {
+            XCTAssertNil(limit.update(context, holding: holding, at: time, afterGap: SampleGap.length(from: previous, to: time) != nil))
+        }
+        let first = time(0, awake: 100), second = time(10, awake: 110)
+        update(first)
+        update(second, after: first)
+        XCTAssertEqual(limit.period?.held, 10)
+        // Five hours of sleep, and the awake clock stood still.
+        let third = time(5 * Self.hour, awake: 110)
+        update(third, after: second)
+        XCTAssertEqual(limit.period?.held, 10)
+        // Five more, with 3 seconds awake at its two ends.
+        let fourth = time(10 * Self.hour, awake: 113)
+        update(fourth, after: third)
+        XCTAssertEqual(limit.period?.held, 13)
+        // A hole after a sample with no hold is no held time.
+        let fifth = time(10 * Self.hour + 10, awake: 123)
+        update(fifth, holding: false, after: fourth)
+        let sixth = time(10 * Self.hour + 40, awake: 153)
+        update(sixth, after: fifth)
+        XCTAssertEqual(limit.period?.held, 13)
     }
 
     func testSeveralAgentTurnsAreOnePeriod() throws {
