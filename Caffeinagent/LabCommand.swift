@@ -74,9 +74,15 @@ enum LabCommand {
         var costs: [Double] = []
         let began = Date()
         engine.recorder = recorder
-        engine.onSample = { sample in
+        // The closed lid limit, as the app and the replay have it. The
+        // other safety stops are not in a recording.
+        var closedLid = ClosedLidLimit()
+        (closedLid.timeLimit, closedLid.dropLimit) = engine.settings.closedLidLimits()
+        engine.onSample = { [weak engine] sample in
             costs.append(sample.cost * 1000)
             say(statusLine(sample))
+            let stop = closedLid.update(sample.frame.context, holding: sample.decision.hold, at: sample.frame.time, afterGap: sample.afterGap)
+            engine?.safety = stop.map(SafetyStop.closedLid)
         }
         for number in [SIGINT, SIGTERM] {
             signal(number, SIG_IGN)

@@ -383,6 +383,38 @@ final class ClosedLidLimitTests: XCTestCase {
         assertStopped(mac, .drop(points: 30))
     }
 
+    /// The same as a recording: a session that reports "busy" with no end.
+    func testTheReplayHasTheLimit() throws {
+        let context = FrameContext(onBattery: true, batteryPercent: 94, lidClosed: true)
+        let frames = stride(from: 0.0, through: 4 * Self.hour, by: 5).map { seconds -> EvidenceFrame in
+            let at = Self.start.addingTimeInterval(seconds)
+            let claude = AgentEvidence(
+                agentID: "claude", displayName: "Claude Code", level: .state, kind: .cli, role: .session, pid: 100, startTime: 1_791_196_400,
+                reported: StateReport(state: .working, since: nil, observedAt: at, source: .claudeSessionFile, detail: nil),
+                childCommands: 0, busyChildCommands: 0, subtreeCPUSeconds: 0, sampleInterval: seconds == 0 ? 0 : 5,
+                ownsSleepAssertion: false, hasLiveSession: false
+            )
+            return EvidenceFrame(at: at, agents: [claude], context: context)
+        }
+        func recording(_ settings: DetectionSettings) -> LabRecording {
+            let header = LabHeader(
+                label: "closed-lid", startedAt: Self.start, app: "synthetic", os: "synthetic", model: "synthetic",
+                mode: AwakeMode.agentWorking.rawValue, settings: settings
+            )
+            return LabRecording(header: header, samples: frames.map { LabSample(frame: $0) })
+        }
+        let steps = LabReplay.steps(of: recording(DetectionSettings()))
+        let released = steps.first { !$0.decision.hold }
+        XCTAssertEqual(try XCTUnwrap(released).at.timeIntervalSince(Self.start), 3 * Self.hour, accuracy: 15)
+        XCTAssertEqual(released?.decision.headline, .safetyStop(.closedLid(.time(seconds: 3 * Self.hour))))
+        XCTAssertEqual(steps.last?.decision.hold, false)
+        XCTAssertEqual(LabReplay.score(recording(DetectionSettings())).heldSeconds, 3 * Self.hour, accuracy: 15)
+
+        var off = DetectionSettings()
+        off.closedLidLimitHours = ClosedLidLimit.noLimit
+        XCTAssertTrue(LabReplay.steps(of: recording(off)).allSatisfy(\.decision.hold), "With no limit the recording holds to its end")
+    }
+
     // MARK: Texts
 
     func testTheWordsOfTheStop() {
