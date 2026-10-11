@@ -752,6 +752,19 @@ struct LidClosedPreferences: View {
                 .font(.callout)
                 .foregroundStyle(.secondary)
             }
+            Section("Closed lid limit") {
+                Picker("With the lid closed on battery, stop after", selection: $settings.closedLidLimitHours) {
+                    ForEach(ClosedLidLimit.hourChoices, id: \.self) { Text(HumaneDuration.counted($0, "hour")).tag($0) }
+                    Text(PanelText.noLimit).tag(ClosedLidLimit.noLimit)
+                }
+                Picker("or when the battery lost", selection: $settings.closedLidLimitDrop) {
+                    ForEach(ClosedLidLimit.dropChoices, id: \.self) { Text(PanelText.percent($0)).tag($0) }
+                    Text(PanelText.noLimit).tag(ClosedLidLimit.noLimit)
+                }
+                Text(PanelText.closedLidLimitExplained)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+            }
             Section("Lid closed") {
                 Group {
                     Text(PanelText.lidClosedExplained)

@@ -304,6 +304,32 @@ enum PanelFixtures {
         return state(input)
     }()
 
+    /// The closed lid limit ended the hold, and the lid is still closed
+    /// on battery: seen on a second display.
+    static let closedLidStopped: PanelState = {
+        var input = Self.input(.safetyStop(.closedLid(.time(seconds: 3 * 3600))), [
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 190, label: "wiki"),
+        ])
+        input.onBattery = true
+        input.batteryPercent = 71
+        return state(input)
+    }()
+
+    /// The lid is open again after the closed lid limit let the Mac sleep.
+    static let sleptClosedLid: PanelState = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var input = Self.input(.working(.one("Claude Code")), [
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 5, label: "wiki", cause: .working),
+        ])
+        input.calendar = calendar
+        input.locale = Locale(identifier: "en_GB")
+        input.sleepNote = SleepNote(
+            at: now.addingTimeInterval(-6 * 3600), reason: .closedLidLimit(.time(seconds: 3 * 3600), working: .one("Claude Code"))
+        )
+        return state(input)
+    }()
+
     /// Every state by name, for the tests and the offscreen pictures.
     static let all: [(name: String, state: PanelState)] = [
         ("working", working), ("waiting", waiting), ("all-idle", allIdle), ("same-folder", sameFolder), ("no-agent", noAgent),
@@ -313,6 +339,7 @@ enum PanelFixtures {
         ("reachable", reachable), ("reachable-no-helper", reachableNoHelper), ("lid-closed", lidClosedNotSetUp),
         ("helper-off", helperSwitchedOff), ("helper-silent", helperNotResponding), ("trial-ending", trialEnding), ("trial-over", trialOver),
         ("slept-anyway", sleptAnyway), ("manual-holds", manualHolds), ("job-hold", jobHold), ("wake-set", wakeSet),
+        ("closed-lid-stopped", closedLidStopped), ("slept-closed-lid", sleptClosedLid),
     ]
 
     /// One agent for each mark, to check the marks.
