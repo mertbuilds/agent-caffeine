@@ -218,6 +218,17 @@ final class VerdictTests: XCTestCase {
         }
     }
 
+    /// The clock was set back while the session said `shell`: the time of
+    /// the status is an hour ahead at every sample. It is taken as unknown,
+    /// and the session counts from the first time it was seen.
+    func testShellWithAStatusTimeFromAheadOfTheClockGoesIdle() {
+        let story = samples(to: 900) { t in self.shell(at: t, since: t + 3600) }
+        for (seconds, got) in run(story) {
+            let want = seconds < 300 ? verdict(.working, .reported, .backgroundWork) : verdict(.idle, .reported, .backgroundIdle(minutes: Int(seconds / 60)))
+            XCTAssertEqual(got, want, "at \(seconds) s")
+        }
+    }
+
     /// `busy` has no such limit: a long turn does not write the file again.
     func testBusyWithAnOldStatusTimeStaysWorking() {
         let story = samples(to: 3600, every: 60) { t in

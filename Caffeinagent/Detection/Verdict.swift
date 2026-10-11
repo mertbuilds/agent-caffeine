@@ -695,10 +695,14 @@ enum VerdictRules {
     ///
     /// The time of the report is not moved over a sleep (`SampleGap`): a
     /// turn that ended before the sleep holds nothing after it.
+    ///
+    /// A time from ahead of the clock was written before the clock was
+    /// set back. It says nothing about now, so the session counts from
+    /// the first time it was seen, as one with no time.
     private static func backgroundVerdict(memory: AgentMemory, settings: DetectionSettings, now: Date) -> AgentVerdict? {
         guard reportedState(memory: memory, settings: settings, now: now) == .idle,
               let report = memory.lastReport, report.backgroundWork else { return nil }
-        let turnEnded = (report.since ?? memory.firstSeenAt).map { min($0, now) }
+        let turnEnded = (report.since.flatMap { isAhead($0, of: now) ? nil : $0 } ?? memory.firstSeenAt).map { min($0, now) }
         let quietSince = [turnEnded, memory.lastCommandAt, memory.lastBackgroundJobAt].compactMap { $0 }.max() ?? now
         let quiet = now.timeIntervalSince(quietSince)
         if quiet < settings.releaseAfterActivity {
