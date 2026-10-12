@@ -527,6 +527,39 @@ final class HotspotHopTests: XCTestCase {
         XCTAssertEqual(HotspotHop.backSignal, -70)
     }
 
+    func testAStopEndsTheStateOnTheHotspotAndItsWayBack() {
+        var mac = hopped(from: HopMac.cafe)
+        // A pause, the switch or a safety stop.
+        mac.input.stopped = true
+        mac.sample()
+        XCTAssertEqual(mac.state, .idle, "Nothing says On your iPhone hotspot during a stop")
+        mac.wifi.air.insert(HopMac.cafe)
+        mac.run(seconds: 600)
+        mac.input.stopped = false
+        mac.run(seconds: 600)
+        XCTAssertEqual(mac.state, .idle)
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot], "The way back ended with the stop")
+        XCTAssertFalse(mac.wifi.scans.contains(HopMac.cafe))
+    }
+
+    func testTheStateEndsSoonAfterTheUserPicksAnotherNetwork() {
+        var mac = hopped(from: HopMac.cafe)
+        mac.run(seconds: 30)
+        // In the Wi-Fi menu, with no break that a sample sees.
+        mac.wifi.current = "Library"
+        mac.run(seconds: HotspotHop.lookInterval + HopMac.step)
+        XCTAssertEqual(mac.state, .idle)
+        XCTAssertFalse(mac.wifi.scans.contains(HopMac.cafe), "Reading the name needs no scan")
+        // And with no agent at work.
+        mac = hopped(from: HopMac.cafe)
+        mac.input.agentHolds = false
+        mac.run(seconds: 30)
+        XCTAssertTrue(joined(mac.state))
+        mac.wifi.current = nil
+        mac.run(seconds: HotspotHop.lookInterval + HopMac.step)
+        XCTAssertEqual(mac.state, .idle)
+    }
+
     func testAMacThatLeftTheHotspotIsNotOnItAnyMore() {
         var mac = HopMac()
         mac.run(seconds: 10)

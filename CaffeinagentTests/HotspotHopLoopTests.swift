@@ -248,6 +248,33 @@ final class HotspotHopLoopTests: XCTestCase {
         XCTAssertEqual(loop.view.state.code, "joined")
     }
 
+    func testTheLineOfTheMenuGoesWithAPauseAndWithAnotherNetwork() {
+        let loop = loop()
+        loop.setOn(true)
+        loop.save(name: HopMac.hotspot, password: HopMac.password)
+        run(loop, seconds: 10)
+        loseWiFi()
+        run(loop, seconds: 20)
+        XCTAssertNotNil(loop.view.onHotspotSince)
+        let paused = HoldDecision(hold: false, lidClosedFlag: false, headline: .paused(until: Self.start.addingTimeInterval(7200)), perAgent: [])
+        XCTAssertTrue(paused.headline.isStop)
+        run(loop, seconds: 2, decision: paused)
+        XCTAssertNil(loop.view.onHotspotSince)
+        XCTAssertEqual(loop.view.state, .idle)
+        run(loop, seconds: 600, decision: paused)
+        XCTAssertNil(loop.view.onHotspotSince)
+        // A new hop, and the user picks another network.
+        parts.wifi.current = HopMac.cafe
+        parts.wifi.air.insert(HopMac.cafe)
+        run(loop, seconds: 10)
+        loseWiFi()
+        run(loop, seconds: 20)
+        XCTAssertNotNil(loop.view.onHotspotSince)
+        parts.wifi.current = "Library"
+        run(loop, seconds: 8)
+        XCTAssertNil(loop.view.onHotspotSince)
+    }
+
     func testAHoldFromTheCommandLineAloneJoinsNothing() {
         let loop = loop()
         loop.setOn(true)

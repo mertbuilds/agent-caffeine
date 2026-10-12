@@ -62,7 +62,8 @@ struct HotspotHop: Equatable {
     /// an address first. No new try before that.
     static let joinSettleTime: TimeInterval = 20
     /// While an agent works online, the name of the Wi-Fi is read this
-    /// often.
+    /// often. On the hotspot it is read as often, to see that the Mac
+    /// is still on it.
     static let lookInterval: TimeInterval = 5
     static let backInterval: TimeInterval = 120
     static let backIntervalInBag: TimeInterval = 600
@@ -74,7 +75,8 @@ struct HotspotHop: Equatable {
 
     /// What Settings, the menu and the state for the tests show.
     enum State: Equatable {
-        /// Nothing happened yet, or the Mac left the hotspot.
+        /// Nothing happened yet, the Mac left the hotspot, or a stop is
+        /// in force.
         case idle
         /// The way to the network is lost, and the lost time runs.
         case waiting
@@ -166,6 +168,8 @@ struct HotspotHop: Equatable {
     /// The last look saw `backTo` with a good signal.
     private var backSeen = false
     private var lastBackAt: TimeInterval?
+    /// When the name of the network was last read on the hotspot.
+    private var lastCheckAt: TimeInterval?
 
     /// The Mac stays awake because an agent works, waits for the user or
     /// finished a moment ago. An agent that is only open does not count,
@@ -204,11 +208,17 @@ struct HotspotHop: Equatable {
         if let hotspot, !HotspotName.matches(hotspot, name) { forget() }
         active = true
         hotspot = name
-        guard pending == nil else { return nil }
         if input.stopped {
             rest()
+            // Nothing says that the Mac is on the hotspot during a stop,
+            // and nothing takes it back from there after it.
+            if case .joined = state {
+                state = .idle
+                noWayBack()
+            }
             return nil
         }
+        guard pending == nil else { return nil }
         return input.online ? onlineStep(input, name: name, now: now) : offlineStep(input, name: name, at: time)
     }
 
@@ -259,13 +269,22 @@ struct HotspotHop: Equatable {
         return start(.join(name: name))
     }
 
-    /// On the hotspot, and online.
+    /// On the hotspot, and online. The name of the network is read every
+    /// `lookInterval`, with or without an agent: it costs no scan, and
+    /// the state ends soon after the user picked another network. The
+    /// scan for the old network comes at its own, longer interval.
     private mutating func backStep(_ input: Input, name: String, now: TimeInterval) -> Action? {
-        let every = input.lidClosed && input.onBattery ? Self.backIntervalInBag : Self.backInterval
-        if let lastBackAt, now >= lastBackAt, now - lastBackAt < every { return nil }
-        lastBackAt = now
         if !input.hopBack { backSeen = false }
-        return start(.back(hotspot: name, to: input.hopBack ? backTo : nil, seen: backSeen))
+        let every = input.lidClosed && input.onBattery ? Self.backIntervalInBag : Self.backInterval
+        let scanDue = lastBackAt.map { now < $0 || now - $0 >= every } ?? true
+        if input.hopBack, let backTo, scanDue {
+            lastBackAt = now
+            lastCheckAt = now
+            return start(.back(hotspot: name, to: backTo, seen: backSeen))
+        }
+        if let lastCheckAt, now >= lastCheckAt, now - lastCheckAt < Self.lookInterval { return nil }
+        lastCheckAt = now
+        return start(.back(hotspot: name, to: nil, seen: false))
     }
 
     private mutating func start(_ action: Action) -> Action {
@@ -332,6 +351,7 @@ struct HotspotHop: Equatable {
         self.backTo = backTo
         backSeen = false
         lastBackAt = now
+        lastCheckAt = now
         passwordFailures = 0
         lostWhileArmed = false
     }
