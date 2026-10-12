@@ -1,20 +1,26 @@
 id = "HOLD-30"
-title = "The closed lid limit ends a hold on battery at its time, and the Mac sleeps"
+title = "The closed lid limit lets go of the agent at its time, a command line hold holds on, and then the Mac sleeps"
 layer = 1
 area = "hold"
-minutes = 10
-risk = "The Mac is awake with the lid closed for 3 minutes. Keep it on a table, not in a bag. The first step sets a hidden default of the app and the last step deletes it: with it left in place, and the switch of the tests on, every hold with the lid closed on battery ends after 3 minutes. The cleanup and the preflight say when it is still set."
-why = "The last stop that asks no agent: on 2026-10-10 a state with no end kept the Mac awake for 13.7 hours in a bag. Whatever holds, a closed lid on battery ends the hold after a time. The smallest choice is 1 hour, so the test sets the limit to 180 seconds with a hidden default that the app reads at every sample. The limit ends every hold, so the test is the same while other agents work."
+minutes = 15
+risk = "The Mac is awake with the lid closed for about 8 minutes. Keep it on a table, not in a bag. The first step sets a hidden default of the app and the last step deletes it: with it left in place, and the switch of the tests on, agents stop keeping the Mac awake after 3 minutes with the lid closed on battery. The cleanup and the preflight say when it is still set."
+why = "The last stop for agents: on 2026-10-10 a state with no end kept the Mac awake for 13.7 hours in a bag. After a time with the lid closed on battery no agent session keeps the Mac awake. What was asked for from the command line holds on past the limit, to its own end. The smallest choice is 1 hour, so the test sets the limit to 180 seconds with a hidden default that the app reads at every sample. One run shows both: the agent is let go at 3 minutes while a hold of 8 minutes keeps the Mac awake, and the Mac sleeps when that hold ends, with the agent still at work."
 heartbeat = true
 checks = [
-  "within 10s after step 3: app.closedLid.limitSeconds=180",
-  "heartbeat gap from step 3 to step 3 + 170s < 15s",
-  "log from step 3 to step 3 + 170s has no Sleep",
-  "always from step 3 to step 3 + 170s: sleepdisabled=1",
-  "always from step 3 to step 3 + 170s: app.hold=true",
-  "log from step 3 + 170s to step 4 has Sleep",
-  "info within 30s after step 3 + 170s: app.safety=closedLidTime",
-  "info at end: app.notice[safetyStop].age<900",
+  "within 10s after step 5: app.closedLid.limitSeconds=180",
+  "heartbeat gap from step 5 to step 5 + 330s < 15s",
+  "log from step 5 to step 5 + 330s has no Sleep",
+  "always from step 5 to step 5 + 330s: sleepdisabled=1",
+  "always from step 5 to step 5 + 330s: app.hold=true",
+  "never from step 5 to step 5 + 160s: app.closedLid.agentsReleased=true",
+  "within 40s after step 5 + 170s: app.closedLid.agentsReleased=true and app.closedLid.stop=closedLidTime",
+  "if idle: always from step 5 + 215s to step 5 + 330s: app.headline=manualHold",
+  "never from step 5 + 215s to step 5 + 330s: app.headline=working",
+  "always from step 5 + 215s to step 5 + 330s: held.hold=true",
+  "never from step 5 to step 5 + 330s: app.notice[closedLidLimit].age<900",
+  "never from step 5 to step 6: app.safety!=none",
+  "log from step 5 + 330s to step 6 has Sleep",
+  "info at end: app.notice[closedLidLimit].age<900",
   "key note is yes",
   "at end: sleepdisabled=0 or app.wanted=true",
 ]
@@ -31,25 +37,34 @@ command = "defaults write com.caffeinagent.app ClosedLidLimitSecondsForTests -in
 key = "enter"
 
 [[steps]]
-say = "Nothing to do. The runner starts a hold of 30 minutes and waits for the flag."
-run = ["agent-caffeine", "hold", "--for", "30m", "--json"]
+say = "In any agent, send this prompt: run `sleep 900` in the shell, then say done. Press Enter here at the moment you send it."
+key = "enter"
+
+[[steps]]
+say = "Nothing to do. The runner waits until Agent Caffeine holds for the agent."
+until = "app.hold=true and app.headline=working and sleepdisabled=1"
+timeout = 40
+
+[[steps]]
+say = "Nothing to do. The runner starts a hold of 8 minutes from the command line."
+run = ["agent-caffeine", "hold", "--for", "8m", "--json"]
 name = "hold"
-until = "held.hold=true and app.hold=true and sleepdisabled=1"
+until = "held.hold=true and app.hold=true"
 timeout = 15
 
 [[steps]]
-say = "Close the lid now. Leave the Mac on the table. Open the lid at {clock+6}, not before."
+say = "Close the lid now, within one minute. Leave the Mac on the table. Open the lid at {clock+11}, not before."
 until = "lid=closed"
-timeout = 120
+timeout = 60
 
 [[steps]]
 say = "Open the lid at the time you were told."
 until = "lid=open"
-timeout = 900
+timeout = 1200
 
 [[steps]]
 say = "Open the menu of Agent Caffeine."
-ask = "Is there a line that your Mac slept, because Agent Caffeine had kept it awake for 3 minutes with the lid closed on battery?"
+ask = "Is there a line that your Mac slept, because Agent Caffeine had kept it awake for 3 minutes with the lid closed on battery, and that the agent was still working?"
 name = "note"
 
 [[steps]]

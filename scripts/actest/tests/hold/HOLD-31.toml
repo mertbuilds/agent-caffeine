@@ -1,10 +1,10 @@
 id = "HOLD-31"
-title = "Long test: the closed lid limit ends a hold when the battery lost 15%"
+title = "Long test: the closed lid limit is reached when the battery lost 15%, and a command line hold holds on"
 layer = 1
 area = "hold"
-minutes = 900
-risk = "A long test, for a night and more. The Mac is awake with the lid closed until the battery lost 15%: about 15 hours with nothing else at work, and less while an agent works. Keep it on a table, not in a bag. Start above 60%, so the battery limit does not come first."
-why = "The second half of the last stop: a hold with the lid closed on battery ends when the battery lost a number of points, whatever holds. A drop cannot be made fast without heat, so this test is long: about 3 minutes of the owner. The time limit is set to No limit for it, and the drop to its smallest choice. The limit ends every hold, so the test is the same while other agents work."
+minutes = 1100
+risk = "A long test, for a night and more. The Mac is awake with the lid closed for 18 hours, or until the battery is at the battery limit: the hold of this test is from the command line, and the closed lid limit does not stop such a hold. Keep it on a table, not in a bag. Start above 60%."
+why = "The second half of the last stop for agents: with the lid closed on battery the limit is reached when the battery lost a number of points, whoever keeps the Mac awake. A drop cannot be made fast without heat, and no agent works for a night on its own, so this test is long and holds with a command: about 3 minutes of the owner. It shows that the drop is counted under a hold from the command line, that the limit then says that agents are let go, and that the hold from the command line goes on. The time limit is set to No limit for it, and the drop to its smallest choice. HOLD-30 shows that an agent is let go."
 heartbeat = true
 every = 60
 checks = [
@@ -12,12 +12,13 @@ checks = [
   "within 3m after step 3: app.closedLid.limitSeconds=none and app.closedLid.percentAtStart>=40",
   "heartbeat gap from step 3 to step 3 + 30m < 90s",
   "always from step 3 to step 3 + 30m: app.hold=true",
-  "log from step 3 + 30m to step 4 has Sleep",
-  "never from step 3 to step 4: app.safety=batteryLow",
-  "never from step 3 to step 4: app.safety=closedLidTime",
+  "never from step 3 to step 3 + 30m: app.closedLid.agentsReleased=true",
+  "within 18h after step 3: app.closedLid.agentsReleased=true and app.closedLid.stop=closedLidDrop",
+  "never from step 3 to step 4: app.closedLid.stop=closedLidTime",
+  "never from step 3 to step 4: app.headline=agentsStopped and app.hold=true",
+  "never from step 3 to step 4: app.notice[closedLidLimit].age<600 and app.holds>=1",
   "info at step 3: charge>=0",
   "info at step 4: charge>=0",
-  "key note is yes",
   "at end: sleepdisabled=0 or app.wanted=true",
 ]
 
@@ -28,18 +29,18 @@ helper = true
 display = "builtin"
 
 [[steps]]
-say = "Open Settings > Battery and lid of Agent Caffeine. Under Closed lid limit, set \"With the lid closed on battery, keep it awake for at most\" to No limit, and \"or until the battery lost\" to 15%. Press Enter here when it is done."
+say = "Open Settings > Battery and lid of Agent Caffeine. Under Closed lid limit, set \"With the lid closed on battery, keep it awake for agents for at most\" to No limit, and \"or until the battery lost\" to 15%. Press Enter here when it is done."
 key = "enter"
 
 [[steps]]
-say = "Nothing to do. The runner starts a hold for a command that sleeps for 20 hours, and waits for the flag."
-spawn = ["agent-caffeine", "hold", "--", "sleep", "72000"]
+say = "Nothing to do. The runner starts a hold for a command that sleeps for 18 hours, and waits for the flag."
+spawn = ["agent-caffeine", "hold", "--", "sleep", "64800"]
 name = "hold"
 until = "app.hold=true and sleepdisabled=1"
 timeout = 20
 
 [[steps]]
-say = "Close the lid now and leave the Mac on the table, for the night. Do not close this Terminal. Open the lid tomorrow, not before {clock+900}."
+say = "Close the lid now and leave the Mac on the table, for the night. Do not close this Terminal. Open the lid tomorrow, not before {clock+1080}."
 until = "lid=closed"
 timeout = 300
 
@@ -47,11 +48,6 @@ timeout = 300
 say = "Open the lid at the time you were told, or later."
 until = "lid=open"
 timeout = 172800
-
-[[steps]]
-say = "Open the menu of Agent Caffeine."
-ask = "Is there a line that your Mac slept, because the battery lost 15% with the lid closed?"
-name = "note"
 
 [[steps]]
 say = "Open Settings > Battery and lid again and set the two limits back: 3 hours and 30%. Press Enter here when it is done."

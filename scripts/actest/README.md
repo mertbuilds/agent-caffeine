@@ -17,7 +17,7 @@ Python 3.11 or later, standard library only. Not shipped in the app.
 
 ## What the runner may do
 
-It reads: `pmset -g`, `pmset -g batt`, `pmset -g assertions`, `pmset -g sched`, `pmset -g log`, `ioreg`, `ps`, two hidden defaults of the app with `defaults read` (`StateForTests` and `ClosedLidLimitSecondsForTests`), the state file and the status file of the app, and our own files that a test names (the skill of Agent Caffeine, the link to the tool, the marker of the helper, the test job). For a test with `watch = ["claude"]` it also reads two keys of each `~/.claude/sessions/<pid>.json`, `status` and `statusUpdatedAt`, and keeps nothing else of the file: not the folder and not the name of the session. For a test with `watch = ["sessions"]` it reads `pid`, `kind`, `status` and `statusUpdatedAt` of each of those files and compares the pids that live in `ps` with the Claude rows of the app. It keeps a count and the pids that have no row.
+It reads: `pmset -g`, `pmset -g batt`, `pmset -g assertions`, `pmset -g sched`, `pmset -g log`, `ioreg`, `ps`, three hidden defaults of the app with `defaults read` (`StateForTests`, `ClosedLidLimitSecondsForTests` and `OfflineLimitSecondsForTests`), the state file and the status file of the app, and our own files that a test names (the skill of Agent Caffeine, the link to the tool, the marker of the helper, the test job). For a test with `watch = ["claude"]` it also reads two keys of each `~/.claude/sessions/<pid>.json`, `status` and `statusUpdatedAt`, and keeps nothing else of the file: not the folder and not the name of the session. For a test with `watch = ["sessions"]` it reads `pid`, `kind`, `status` and `statusUpdatedAt` of each of those files and compares the pids that live in `ps` with the Claude rows of the app. It keeps a count and the pids that have no row.
 
 It runs: `agent-caffeine` (hold, release, status, skill), its own heartbeat writer, and, for a test with `lab = true`, a lab recording with the binary of the installed app.
 
@@ -29,12 +29,16 @@ The lab recorder runs an engine of its own. What the real app decided is in `.st
 
     defaults write com.caffeinagent.app StateForTests -bool true
 
-The state has the closed-lid period too (`app.closedLid.heldSeconds`, `app.closedLid.limitSeconds`, `app.closedLid.stop`). The smallest time limit of the closed lid limit is 1 hour, so `HOLD-30` tells the owner to set it in seconds with a second hidden default, which the app reads at every sample, and to delete it after:
+The state has the closed-lid period too (`app.closedLid.heldSeconds`, `app.closedLid.limitSeconds`, `app.closedLid.stop`, and `app.closedLid.agentsReleased` once the limit is reached and agents are let go), and the way to the network with the offline rule (`app.network.online`, `app.network.offlineSeconds`, `app.network.limitSeconds`, `app.network.agentsReleased`). When one of the two rules let go of the agents and nothing else holds, `app.headline` is `agentsStopped` and `app.reason` is `offline`, `closedLidTime` or `closedLidDrop`.
+
+The smallest time limit of the closed lid limit is 1 hour and the smallest time of the offline rule is 5 minutes, so `HOLD-30` and `HOLD-40` tell the owner to set them in seconds with two more hidden defaults, which the app reads at every sample, and to delete them after:
 
     defaults write com.caffeinagent.app ClosedLidLimitSecondsForTests -int 180
     defaults delete com.caffeinagent.app ClosedLidLimitSecondsForTests
+    defaults write com.caffeinagent.app OfflineLimitSecondsForTests -int 60
+    defaults delete com.caffeinagent.app OfflineLimitSecondsForTests
 
-The app obeys it only while `StateForTests` is on, and only when it is shorter than the limit of the settings. The runner reads it and never writes it: the cleanup of a run and `actest abort` print the delete command while it is still set, and the preflight has the item "no leftover test limit" for every test but `HOLD-30`.
+The app obeys them only while `StateForTests` is on, and only when they are shorter than the limit of the settings. The runner reads them and never writes them: the cleanup of a run and `actest abort` print the delete command while one is still set, and the preflight has the item "no leftover test limit" for every test but the one that sets that limit. The runner changes no network setting either: in `HOLD-40` the owner turns Wi-Fi off and on, and the runner sees it in `app.network.online`.
 
 `actest check` says when the installed build has no state export, and when the switch is off. `agent-caffeine status --json --detail` prints the same state. The file holds kinds, numbers and times: no name of a session, no folder, no reason of a hold, no name of a job.
 

@@ -210,10 +210,11 @@ def has_state_export(env):
     return False
 
 
-def test_limit(env):
-    """True while the hidden time limit of the closed lid limit is set.
-    The runner reads it and never writes it."""
-    return env.command(("defaults", "read", config.BUNDLE_ID, config.LIMIT_KEY))[0] == 0
+def test_limits(env):
+    """The hidden limits of the tests that are set: the time of the
+    closed lid limit and of the offline rule. The runner reads them and
+    never writes them."""
+    return [key for key in config.LIMITS if env.command(("defaults", "read", config.BUNDLE_ID, key))[0] == 0]
 
 
 def holds(env):

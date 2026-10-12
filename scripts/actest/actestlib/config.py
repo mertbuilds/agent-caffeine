@@ -10,6 +10,15 @@ SWITCH_ON = f"defaults write {BUNDLE_ID} {SWITCH_KEY} -bool true"
 LIMIT_KEY = "ClosedLidLimitSecondsForTests"
 LIMIT_OFF = f"defaults delete {BUNDLE_ID} {LIMIT_KEY}"
 LIMIT_TEST = "HOLD-30"
+# The time of the offline rule in seconds, by the same rules.
+OFFLINE_LIMIT_KEY = "OfflineLimitSecondsForTests"
+OFFLINE_LIMIT_TEST = "HOLD-40"
+# Each hidden limit with the one test that may start while it is set.
+LIMITS = {LIMIT_KEY: LIMIT_TEST, OFFLINE_LIMIT_KEY: OFFLINE_LIMIT_TEST}
+
+
+def limit_off(key):
+    return f"defaults delete {BUNDLE_ID} {key}"
 WAKE_OWNER = "com.caffeinagent.app.wake"
 APP_NAMES = ("Agent Caffeine.app", "agent caffeine.app")
 APP_BINARY = "Contents/MacOS/caffeinagent"

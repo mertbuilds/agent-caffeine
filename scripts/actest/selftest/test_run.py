@@ -149,6 +149,11 @@ class RunTests(unittest.TestCase):
         delete = "Run: defaults delete com.caffeinagent.app ClosedLidLimitSecondsForTests"
         self.assertEqual(verdict["cleanup"]["left"], [delete])
         self.assertIn(delete, self.out.getvalue().splitlines())
+        env = fakes.FakeEnv(None, keys={12: "y"})
+        env.world = self.lid_world(env)
+        env.offline_limit = 60
+        verdict = runner.run_test(catalog.validate(json.loads(json.dumps(LID))), env, self.ui)
+        self.assertEqual(verdict["cleanup"]["left"], ["Run: defaults delete com.caffeinagent.app OfflineLimitSecondsForTests"])
         _, clean = self.run_lid()
         self.assertEqual(clean["cleanup"]["left"], [])
 
@@ -386,7 +391,9 @@ class RunTests(unittest.TestCase):
         real = environment.RealEnv.__new__(environment.RealEnv)
         for args in [("pmset", "-a", "disablesleep", "0"), ("pmset", "schedule", "cancelall"), ("sudo", "pmset", "-g"),
                      ("defaults", "write", config.BUNDLE_ID, config.SWITCH_KEY, "-bool", "true"), ("kill", "-9", "1"), ("osascript", "-e", "x"),
-                     ("defaults", "write", config.BUNDLE_ID, config.LIMIT_KEY, "-int", "180"), ("defaults", "delete", config.BUNDLE_ID, config.LIMIT_KEY)]:
+                     ("defaults", "write", config.BUNDLE_ID, config.LIMIT_KEY, "-int", "180"), ("defaults", "delete", config.BUNDLE_ID, config.LIMIT_KEY),
+                     ("defaults", "write", config.BUNDLE_ID, config.OFFLINE_LIMIT_KEY, "-int", "60"),
+                     ("defaults", "delete", config.BUNDLE_ID, config.OFFLINE_LIMIT_KEY)]:
             with self.assertRaises(environment.Refused):
                 real.command(args)
 

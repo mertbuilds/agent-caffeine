@@ -15,6 +15,8 @@ APP = {
     "jobs": {"on": True, "status": "alarmSet", "alarm": {"at": 500, "fireAt": 560}, "holds": [],
              "history": [{"kind": "alarmSet", "at": 95}, {"kind": "alarmCancelled", "at": 40}]},
     "notices": [{"kind": "waiting", "at": 98}], "chimeAt": 97,
+    "network": {"online": False, "offlineSeconds": 61, "limitSeconds": 60, "agentsReleased": True},
+    "closedLid": {"since": 10, "heldSeconds": 181, "limitSeconds": 180, "limitDrop": 30, "stop": "closedLidTime", "agentsReleased": True},
 }
 SAMPLE = {
     "t": 100, "lid": "closed", "power": "battery", "charge": 64, "sleepdisabled": 1, "app_pid": 77, "app": APP,
@@ -65,6 +67,22 @@ class ExprTests(unittest.TestCase):
         self.assertTrue(self.ok("app.notice[waiting]=1 and app.notice[finished]=0"))
         self.assertTrue(self.ok("app.chime.age<5"))
         self.assertTrue(self.ok("app.build=17"))
+
+    def test_the_network_and_the_rules_that_let_go_of_the_agents(self):
+        self.assertTrue(self.ok("app.network.online=false"))
+        self.assertTrue(self.ok("app.network.agentsReleased=true and app.network.offlineSeconds>=60"))
+        self.assertTrue(self.ok("app.network.limitSeconds=60"))
+        self.assertTrue(self.ok("app.closedLid.agentsReleased=true and app.closedLid.stop=closedLidTime"))
+        self.assertTrue(self.ok("app.closedLid.limitSeconds=180"))
+        online = dict(SAMPLE, app=dict(APP, network={"online": True, "limitSeconds": 600, "agentsReleased": False}, closedLid=None))
+        self.assertTrue(self.ok("app.network.online=true and app.network.agentsReleased=false", online))
+        self.assertTrue(self.ok("app.network.offlineSeconds=none", online))
+        self.assertTrue(self.ok("app.closedLid.agentsReleased=none", online), "No closed-lid period")
+        # A build without the fields says nothing, and that is no pass.
+        old = dict(SAMPLE, app={key: value for key, value in APP.items() if key != "network"})
+        self.assertFalse(self.ok("app.network.online=false", old))
+        self.assertFalse(self.ok("app.network.agentsReleased=true", old))
+        self.assertEqual(expr.reading("app.network.agentsReleased=true", SAMPLE), "app.network.agentsReleased=true")
 
     def test_an_agent_reads_as_its_busiest_instance(self):
         self.assertTrue(self.ok("app.agent[grok].state=working"))

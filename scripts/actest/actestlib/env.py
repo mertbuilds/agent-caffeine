@@ -20,6 +20,7 @@ READ_ONLY = {
     ("pmset", "-g"), ("pmset", "-g", "batt"), ("pmset", "-g", "assertions"), ("pmset", "-g", "sched"), ("pmset", "-g", "log"),
     ("ioreg", "-r", "-k", "AppleClamshellState", "-d", "4"), ("ps", "-axo", "pid=,comm="),
     ("defaults", "read", config.BUNDLE_ID, config.SWITCH_KEY), ("defaults", "read", config.BUNDLE_ID, config.LIMIT_KEY),
+    ("defaults", "read", config.BUNDLE_ID, config.OFFLINE_LIMIT_KEY),
     ("system_profiler", "SPDisplaysDataType", "-json"),
     ("sw_vers", "-productVersion"), ("sysctl", "-n", "hw.model"),
 }

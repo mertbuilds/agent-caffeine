@@ -1,0 +1,65 @@
+id = "HOLD-40"
+title = "Offline for the limit: agents stop holding, a command line hold does not"
+layer = 1
+area = "hold"
+minutes = 8
+risk = "Your Mac is offline for about 2 minutes: you turn Wi-Fi off and on yourself. Do it when no work needs the network. The first step sets a hidden default of the app and the last step deletes it: with it left in place, and the switch of the tests on, agents stop keeping the Mac awake after 1 minute offline. The cleanup and the preflight say when it is still set."
+why = "An agent cannot work without the internet: in a bag on the hotspot of a phone, the hotspot went away and the agent kept the Mac awake all night. With no way to the network for 10 minutes, agent sessions stop counting, and what was asked for from the command line holds on. The smallest choice is 5 minutes, so the test sets the time to 60 seconds with a hidden default that the app reads at every sample. The runner changes no network setting. The agent must run a command that uses no processor, like sleep: a busy command holds on offline."
+checks = [
+  "within 10s after step 1: app.network.limitSeconds=60",
+  "at step 3: app.network.online=true and app.network.agentsReleased=false",
+  "always from step 4 to step 6: app.hold=true",
+  "always from step 4 to step 6: held.hold=true",
+  "never from step 2 to step 4: app.network.agentsReleased=true",
+  "within 5s after step 5: app.network.agentsReleased=true and app.network.offlineSeconds>=60",
+  "if idle: always from step 5 to step 6 - 5s: app.headline=manualHold",
+  "within 15s after step 6: app.network.agentsReleased=false",
+  "within 5s after step 7: app.headline=working and app.hold=true",
+  "never from start to end: app.notice[offline].age<600",
+]
+
+[[steps]]
+say = "Set the time for this test in another Terminal. The runner never writes a setting of the app. Press Enter here when it is done."
+command = "defaults write com.caffeinagent.app OfflineLimitSecondsForTests -int 60"
+key = "enter"
+
+[[steps]]
+say = "In any agent, send this prompt: run `sleep 600` in the shell, then say done. The runner waits until Agent Caffeine holds for the agent."
+until = "app.hold=true and app.headline=working"
+timeout = 120
+
+[[steps]]
+say = "Nothing to do. The runner starts a hold of 10 minutes from the command line."
+run = ["agent-caffeine", "hold", "--for", "10m", "--json"]
+name = "hold"
+until = "held.hold=true and app.hold=true"
+timeout = 15
+
+[[steps]]
+say = "Turn Wi-Fi off in the menu bar now. Pull a network cable or a phone that shares its internet too. The runner sees when your Mac is offline."
+until = "app.network.online=false"
+timeout = 180
+
+[[steps]]
+say = "Nothing to do for about 1 minute. The runner waits until the agents stop counting. The hold from the command line must keep your Mac awake."
+until = "app.network.agentsReleased=true"
+timeout = 75
+
+[[steps]]
+say = "Turn Wi-Fi on again now. The runner sees when your Mac is online."
+until = "app.network.online=true"
+timeout = 180
+
+[[steps]]
+say = "Nothing to do. The runner waits until the agent holds again."
+until = "app.network.agentsReleased=false and app.headline=working"
+timeout = 30
+
+[[steps]]
+say = "Delete the time of this test in another Terminal. Press Enter here when it is done."
+command = "defaults delete com.caffeinagent.app OfflineLimitSecondsForTests"
+key = "enter"
+
+[[cleanup]]
+expect = "app.network.online=true"
+tell = "Turn Wi-Fi on again."

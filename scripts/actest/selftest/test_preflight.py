@@ -68,6 +68,17 @@ class PreflightTests(unittest.TestCase):
             self.assertEqual(found["limit"]["fix"], "Run: defaults delete com.caffeinagent.app ClosedLidLimitSecondsForTests")
             self.assertIn(found["limit"], preflight.blocked(list(found.values())))
         self.assertEqual(items(env, {"id": "HOLD-30", "needs": {}})["limit"]["status"], "pass", "Its first step sets it")
+        env.offline_limit = 60
+        found = items(env, {"id": "HOLD-30", "needs": {}})
+        self.assertEqual(found["limit"]["status"], "fail", "The limit of another test")
+        self.assertEqual(found["limit"]["fix"], "Run: defaults delete com.caffeinagent.app OfflineLimitSecondsForTests")
+        self.assertEqual(
+            items(env)["limit"]["fix"],
+            "Run: defaults delete com.caffeinagent.app ClosedLidLimitSecondsForTests, then: defaults delete com.caffeinagent.app OfflineLimitSecondsForTests",
+        )
+        env.limit = None
+        self.assertEqual(items(env, {"id": "HOLD-40", "needs": {}})["limit"]["status"], "pass", "Its first step sets it")
+        self.assertEqual(items(env, {"id": "HOLD-04", "needs": {}})["limit"]["status"], "fail")
         self.assertTrue(all(args[:2] == ("defaults", "read") for args in env.commands if args[0] == "defaults"))
 
     def test_the_needs_of_a_test_are_checked_against_the_state(self):

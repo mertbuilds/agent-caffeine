@@ -57,8 +57,7 @@ def run(session, wait=WAIT):
             left = [entry["tell"] for entry in expectations if not expr.holds(entry["expect"], found)]
             if [hold for hold in sampler.holds(env) if hold not in session.holds_before]:
                 left.append("Run: agent-caffeine release --all")
-            if sampler.test_limit(env):
-                left.append(f"Run: {config.LIMIT_OFF}")
+            left += [f"Run: {config.limit_off(key)}" for key in sampler.test_limits(env)]
             if not left or env.now() >= deadline:
                 break
             if left != shown:
@@ -113,8 +112,8 @@ def abort(env, ui, command_of, wait=20):
     for entry in BUILT_IN:
         if not expr.holds(entry["expect"], found):
             ui.line(f"Still to do: {entry['tell']}")
-    if sampler.test_limit(env):
-        ui.line(f"Still to do: Run: {config.LIMIT_OFF}")
+    for key in sampler.test_limits(env):
+        ui.line(f"Still to do: Run: {config.limit_off(key)}")
     run_dir = info.get("run")
     if run_dir and os.path.isdir(run_dir) and not os.path.exists(os.path.join(run_dir, "verdict.json")):
         store.write_verdict(run_dir, {"test": info.get("test"), "result": "aborted", "reason": "the runner was gone", "checks": [],
