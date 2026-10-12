@@ -21,8 +21,8 @@ enum SkillCatalog {
     /// Raised when the text of the skill changes, so a file of an older
     /// build reads as outdated. `SkillTextTests` holds the digest of the
     /// text of each version. 2: the tool is found under both names of the
-    /// app.
-    static let version = 2
+    /// app. 3: no trial is a stop, and the file names its own license.
+    static let version = 3
     static let skillName = "agent-caffeine"
     static let fileName = "SKILL.md"
     /// Every file we write holds this line after the frontmatter, and the
