@@ -12,18 +12,12 @@ A row here needs a second user account, a spare Mac or a virtual machine. The ru
 | INST-02 | Paths of a fresh install: hooks, plugin files and the link hold the capitalised path | After INST-01 |
 | INST-03 | Open from the dmg, from Downloads, from an external drive: the Move to Applications paths | The dmg, a copy in Downloads, a copy on a drive |
 | INST-04 | A move onto an existing lowercase install: one bundle, hooks and link still current | A lowercase install and a new copy in Downloads |
-| INST-05 | Sparkle update: the name of the bundle, the helper, the login item, the licence and the settings stay. Same event as HELP-15 | The older release installed with helper, hooks, login item and licence |
+| INST-05 | Sparkle update: the name of the bundle, the helper, the login item and the settings stay. Same event as HELP-15 | The older release installed with helper, hooks and login item |
 | INST-06 | Sparkle update over two versions, with the helper fallback of HELP-16 | 1.0.0 installed |
 | INST-07 | Update under a hold with the lid closed | The older release, the helper, a hold, an update waiting |
-| INST-13 | Trial start: 7 days from the first launch, said in the setup window and in Settings | A fresh user account |
-| INST-14 | Last day and end of the trial: one notification each, then no hold | A spare account or a virtual machine with the clock moved |
-| INST-15 | The clock set back gives no new trial | As INST-14 |
-| INST-16 | Buy, key mail, activate | The real checkout or the Polar sandbox |
-| INST-17 | One key on a second Mac: the limit text | A second Mac or user account |
-| INST-19 | Deactivate this Mac, activate again | A licence |
-| INST-22 | Polar cannot be reached at activation: the error text, no crash | Network off |
 | INST-23 | Open at login | A restart of the Mac |
 | INST-26 | Settings carried over by an update | The older release with changed settings |
+| INST-27 | Update from a paid 1.0.x copy (with a key, in its trial, and after its trial): holds go on, and the Keychain item and the settings of the trial are gone | A paid 1.0.x release installed in each of the three states |
 
 Left for later, because they need a release, the tap or a long wait: INST-08 to INST-12, INST-18, INST-20, INST-21, INST-24, INST-25.
 
@@ -54,4 +48,3 @@ Left for later, because they need a release, the tap or a long wait: INST-08 to 
 
 - A way to run on a second user account: the evidence folder and the state file are per user, so this works as it is.
 - Key questions with a screenshot the owner takes, stored next to the run. The runner has no such step yet.
-- For the trial rows: a build that reads its trial start from a test setting. The runner must never move the clock of the owner's Mac.

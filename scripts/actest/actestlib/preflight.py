@@ -67,11 +67,9 @@ def check(facts, test=None):
     if app:
         on = app.get("on") and app.get("pausedUntil") is None
         add("on", on or sleeps, "switched on, no pause" if on else "switched off or paused", "Switch Agent Caffeine on and end the pause.")
-        licence = app.get("entitlement") != "expired"
-        add("licence", licence, f"licence: {app.get('entitlement')}", "Enter a key, or use a Mac with a trial.")
     elif running:
         stopped = status.get("stopped")
-        add("on", stopped is False or sleeps, "no stop is in force" if stopped is False else "a stop is in force: off, paused, the licence or a safety stop",
+        add("on", stopped is False or sleeps, "no stop is in force" if stopped is False else "a stop is in force: off, paused or a safety stop",
             "Switch Agent Caffeine on and end the pause.")
 
     helper = (app or {}).get("flag", {}).get("helper")
