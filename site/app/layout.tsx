@@ -1,22 +1,12 @@
 import "./globals.css";
 import type { Metadata } from "next";
-import localFont from "next/font/local";
 import { Analytics } from "@/components/analytics";
 import { DevKnobs } from "@/components/dev-knobs";
 import { HashScroll } from "@/components/hash-scroll";
 import { Header } from "@/components/header";
 import { SendToMacPopup } from "@/components/send-to-mac-popup";
+import { suisse } from "@/lib/fonts";
 import { THEME_SCRIPT } from "@/lib/theme";
-
-const suisse = localFont({
-  src: [
-    { path: "./fonts/SuisseIntl-Regular.woff2", weight: "400", style: "normal" },
-    { path: "./fonts/SuisseIntl-Medium.woff2", weight: "500", style: "normal" },
-  ],
-  variable: "--font-suisse",
-  display: "swap",
-  adjustFontFallback: false,
-});
 
 const offer = "Free and open source.";
 

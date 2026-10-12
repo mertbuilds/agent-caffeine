@@ -13,7 +13,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-suisse)", "'Suisse Intl Fallback'", "system-ui", "sans-serif"],
+        // Without the Suisse Intl files the variable is not set (lib/fonts-fallback.ts), and the list starts at its second name.
+        sans: ["var(--font-suisse, 'Suisse Intl Fallback')", "'Suisse Intl Fallback'", "system-ui", "sans-serif"],
         mono: ["ui-monospace", "SFMono-Regular", "Menlo", "Monaco", "monospace"],
       },
       colors: {
