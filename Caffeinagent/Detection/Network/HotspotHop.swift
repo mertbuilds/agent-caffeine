@@ -40,7 +40,10 @@ import Foundation
 /// back. This is tried once: when macOS refuses, the Mac stays on the
 /// hotspot. A network the user left
 /// before the way was lost is never joined: only the one of the last
-/// look counts, and a look is at most `lookInterval` old.
+/// look counts, and a look is at most `lookInterval` old. Only a join of
+/// Agent Caffeine itself has a way back. When the user or macOS joined
+/// the hotspot, the state says "joined" and the Mac stays there: the
+/// user may have left the old network for it.
 ///
 /// Pure: the caller passes each sample and runs each action, and says
 /// how it ended. No name leaves this value but inside an `Action`.
@@ -140,8 +143,8 @@ struct HotspotHop: Equatable {
     private var tries = 0
     private var nextTryAt: TimeInterval?
     /// The way was lost while an agent held the Mac awake. When it comes
-    /// back, one look says whether the Mac is on the hotspot: macOS can
-    /// join it by itself.
+    /// back, one look says whether the Mac is on the hotspot: macOS or
+    /// the user can join it.
     private var lostWhileArmed = false
     private var checkHotspot = false
     /// The Wi-Fi of the last look, while it is not the hotspot.
@@ -270,12 +273,14 @@ struct HotspotHop: Equatable {
             // the network before it.
             guard online else { return }
             if check, let name, HotspotName.matches(name, hotspot) {
-                joined(at: time.at, now: now)
+                // The user or macOS joined it. There is no way back from
+                // here: the user may have left the old network for it.
+                joined(at: time.at, now: now, backTo: nil)
                 return
             }
             lastNetwork = name.flatMap { HotspotName.matches($0, hotspot) ? nil : $0 }
         case (.join, .joined):
-            joined(at: time.at, now: now)
+            joined(at: time.at, now: now, backTo: lastNetwork)
             nextTryAt = now + Self.joinSettleTime
         case (.join, .notFound):
             tried(now: now)
@@ -303,9 +308,11 @@ struct HotspotHop: Equatable {
         }
     }
 
-    private mutating func joined(at date: Date, now: TimeInterval) {
+    /// - Parameter backTo: where the way back goes. Only a join of Agent
+    ///   Caffeine itself has one.
+    private mutating func joined(at date: Date, now: TimeInterval, backTo: String?) {
         state = .joined(at: date)
-        backTo = lastNetwork
+        self.backTo = backTo
         lastBackAt = now
         passwordFailures = 0
         lostWhileArmed = false

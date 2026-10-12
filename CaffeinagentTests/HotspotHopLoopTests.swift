@@ -230,6 +230,24 @@ final class HotspotHopLoopTests: XCTestCase {
         XCTAssertNotNil(loop.view.onHotspotSince)
     }
 
+    func testTheUserWhoPicksTheHotspotIsNotMovedBackToTheWiFiTheyLeft() {
+        let loop = loop()
+        loop.setOn(true)
+        loop.save(name: HopMac.hotspot, password: HopMac.password)
+        run(loop, seconds: 10)
+        // An agent works on the cafe Wi-Fi, and the user clicks the
+        // hotspot in the Wi-Fi menu. The switch takes 4 seconds.
+        parts.wifi.current = nil
+        parts.online = false
+        run(loop, seconds: 4)
+        parts.wifi.current = HopMac.hotspot
+        run(loop, seconds: 300)
+        XCTAssertEqual(parts.wifi.joins, [], "Agent Caffeine joined nothing")
+        XCTAssertEqual(parts.wifi.current, HopMac.hotspot)
+        XCTAssertNotNil(loop.view.onHotspotSince)
+        XCTAssertEqual(loop.view.state.code, "joined")
+    }
+
     func testAHoldFromTheCommandLineAloneJoinsNothing() {
         let loop = loop()
         loop.setOn(true)

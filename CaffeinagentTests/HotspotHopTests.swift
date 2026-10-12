@@ -474,14 +474,31 @@ final class HotspotHopTests: XCTestCase {
         mac.sample()
         XCTAssertTrue(joined(mac.state))
         XCTAssertEqual(mac.wifi.joins, [], "Agent Caffeine joined nothing")
-        // The way back works from here too.
+        // Agent Caffeine did not take the Mac here, so it takes it nowhere.
         mac.wifi.air = [HopMac.hotspot, HopMac.cafe]
-        mac.run(seconds: 122)
-        guard case .hoppedBack = mac.state else { return XCTFail("\(mac.state.code)") }
+        mac.run(seconds: 1200)
+        XCTAssertTrue(joined(mac.state))
+        XCTAssertEqual(mac.wifi.scans, [])
+        XCTAssertEqual(mac.wifi.current, HopMac.hotspot)
     }
 
     func testAHotspotTheUserJoinedByHandIsNoHop() {
         var mac = HopMac()
+        mac.run(seconds: 10)
+        // The user clicks the hotspot in the Wi-Fi menu. The Mac is on
+        // no network for 4 seconds, and the cafe Wi-Fi stays on the air.
+        mac.wifi.current = nil
+        mac.input.online = false
+        mac.run(seconds: 4)
+        mac.wifi.current = HopMac.hotspot
+        mac.input.online = true
+        mac.run(seconds: 1200)
+        XCTAssertEqual(mac.wifi.scans, [], "No look for the Wi-Fi the user left")
+        XCTAssertEqual(mac.wifi.joins, [])
+        XCTAssertEqual(mac.wifi.current, HopMac.hotspot)
+        XCTAssertTrue(joined(mac.state), "The Mac is on the hotspot")
+        // With no break at all, nothing is said.
+        mac = HopMac()
         mac.run(seconds: 10)
         mac.wifi.current = HopMac.hotspot
         mac.run(seconds: 600)
