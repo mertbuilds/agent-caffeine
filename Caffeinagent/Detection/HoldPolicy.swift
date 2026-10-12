@@ -11,10 +11,23 @@ enum HoldCause: Equatable {
     case open
 }
 
+/// A rule that takes the agent sessions out of the decision, and nothing
+/// else: what the user or a program asked for keeps holding. That is a
+/// hold from the command line or through MCP, a job hold of "Wake for
+/// jobs", "stay reachable" and the mode "always". It is no stop
+/// (`HoldHeadline.isStop`).
+enum AgentStop: Equatable {
+    /// `OfflineRule`: the Mac has no way to the network. An agent with a
+    /// busy child command holds on.
+    case offline
+}
+
 struct AgentHold: Equatable {
     var reading: AgentReading
     /// Nil when this instance does not keep the Mac awake.
     var cause: HoldCause?
+    /// The instance would keep the Mac awake, and this rule lets it go.
+    var stopped: AgentStop?
 }
 
 /// One agent by name, or several by count.
@@ -50,6 +63,10 @@ enum HoldHeadline: Equatable {
     case idle(HoldSubject)
     case waitingReleased(HoldSubject)
     case noAgents
+    /// A rule let go of the agents that work or wait, and nothing else
+    /// keeps the Mac awake. A hold from the command line, a job hold and
+    /// "stay reachable" hold on, and are the headline then.
+    case agentsStopped(AgentStop)
     case safetyStop(SafetyStop)
     case switchedOff
     /// The user paused Agent Caffeine until this time.
@@ -58,7 +75,7 @@ enum HoldHeadline: Equatable {
     var keepsAwake: Bool {
         switch self {
         case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess, .reachable, .manualHold, .scheduledJob: return true
-        case .idle, .waitingReleased, .noAgents, .safetyStop, .switchedOff, .paused: return false
+        case .idle, .waitingReleased, .noAgents, .agentsStopped, .safetyStop, .switchedOff, .paused: return false
         }
     }
 
@@ -88,7 +105,7 @@ enum HoldHeadline: Equatable {
         // assertions of macOS and in the lab log.
         case .scheduledJob(.one): return "a scheduled job"
         case .scheduledJob(.many(let count)): return "\(count) scheduled jobs"
-        case .idle, .waitingReleased, .noAgents, .safetyStop, .switchedOff, .paused: return nil
+        case .idle, .waitingReleased, .noAgents, .agentsStopped, .safetyStop, .switchedOff, .paused: return nil
         }
     }
 
@@ -100,6 +117,7 @@ enum HoldHeadline: Equatable {
         case .idle(.many): return "Mac can sleep: all agents are idle"
         case .waitingReleased(let subject): return "Mac can sleep: \(Self.phrase(subject, one: "is waiting for you", many: "are waiting for you"))"
         case .noAgents: return "Mac can sleep: no agent is open"
+        case .agentsStopped(.offline): return "Mac can sleep: the Mac is offline, so agents do not keep it awake"
         case .safetyStop(.batteryLow(let percent)): return "Sleeping allowed: battery at \(PanelText.percent(percent))"
         case .safetyStop(.weakCharger(let percent)): return "Sleeping allowed: weak charger, battery at \(PanelText.percent(percent))"
         case .safetyStop(.tooHot): return "Sleeping allowed: the Mac is too hot"
@@ -166,9 +184,9 @@ enum HoldPolicy {
         readings: [AgentReading], memory: PolicyMemory, mode: AwakeMode, enabled: Bool, pausedUntil: Date? = nil,
         reachableUntil: Date? = nil, holds: [ManualHold] = [], jobHolds: [JobHold] = [],
         safety: SafetyStop?, settings: DetectionSettings, context: FrameContext, mayHold: Bool = true,
-        jobsMayHold: Bool? = nil, now: Date
+        jobsMayHold: Bool? = nil, agentStop: AgentStop? = nil, now: Date
     ) -> (HoldDecision, PolicyMemory) {
-        let memory = remember(readings, memory: memory, settings: settings, now: now)
+        let memory = remember(readings, memory: memory, settings: settings, agentStop: agentStop, now: now)
         // The collector looked at the holders. The time is checked here
         // again, because a decision is also made between two samples.
         let manual = holds.filter { $0.isTimely(now: now) }
@@ -176,7 +194,9 @@ enum HoldPolicy {
         // listed in a stop, and every stop below wins over it.
         let jobs = jobHolds.filter { $0.isTimely(now: now) }
         let perAgent = readings.map { reading in
-            AgentHold(reading: reading, cause: cause(of: reading, memory: memory, mode: mode, settings: settings, now: now))
+            let cause = cause(of: reading, memory: memory, mode: mode, settings: settings, now: now)
+            let stopped = cause == nil ? nil : agentStop.flatMap { stops($0, reading) ? $0 : nil }
+            return AgentHold(reading: reading, cause: stopped == nil ? cause : nil, stopped: stopped)
         }
         if let stop = stopHeadline(enabled: enabled, pausedUntil: pausedUntil, safety: safety, now: now) {
             let released = perAgent.map { AgentHold(reading: $0.reading, cause: nil) }
@@ -226,6 +246,16 @@ enum HoldPolicy {
         )
     }
 
+    /// Offline, an agent that only says it works or waits lets go. One
+    /// with a busy command holds on: a build needs no network. A command
+    /// that idles at a little CPU for ever is ended by the closed lid
+    /// limit and the battery floor.
+    private static func stops(_ stop: AgentStop, _ reading: AgentReading) -> Bool {
+        switch stop {
+        case .offline: return !reading.runsBusyCommand
+        }
+    }
+
     private static func remoteAccessHolds(settings: DetectionSettings, context: FrameContext) -> Bool {
         settings.stayAwakeForRemoteAccess && context.remoteAccessDetected && !context.onBattery
     }
@@ -256,7 +286,14 @@ enum HoldPolicy {
     }
 
     /// An instance that is not among the readings is gone, and so is its hold.
-    private static func remember(_ readings: [AgentReading], memory: PolicyMemory, settings: DetectionSettings, now: Date) -> PolicyMemory {
+    ///
+    /// While an `AgentStop` lets an instance go, the time of its last
+    /// work is not kept: when the rule ends, an agent that still works
+    /// holds at once, and one that finished in between starts no release
+    /// time.
+    private static func remember(
+        _ readings: [AgentReading], memory: PolicyMemory, settings: DetectionSettings, agentStop: AgentStop?, now: Date
+    ) -> PolicyMemory {
         var next = PolicyMemory()
         for reading in readings where settings.rule(for: reading.agentID) != .ignore {
             var instance = memory.instances[reading.identity] ?? PolicyMemory.Instance()
@@ -274,6 +311,7 @@ enum HoldPolicy {
                 // again for a moment when the command ends later.
                 if case .backgroundIdle = reading.verdict.reason { instance.lastWorkingAt = nil }
             }
+            if let agentStop, stops(agentStop, reading) { instance.lastWorkingAt = nil }
             next.instances[reading.identity] = instance
         }
         return next
@@ -323,6 +361,7 @@ enum HoldPolicy {
 
     /// What is said when nothing keeps the Mac awake.
     private static func restHeadline(_ perAgent: [AgentHold], settings: DetectionSettings) -> HoldHeadline {
+        if let stop = perAgent.lazy.compactMap(\.stopped).first { return .agentsStopped(stop) }
         let counted = perAgent.map(\.reading).filter { settings.rule(for: $0.agentID) != .ignore }
         if let waiting = HoldSubject(names: counted.filter { $0.verdict.state == .waitingForUser }.map(\.displayName)) {
             return .waitingReleased(waiting)

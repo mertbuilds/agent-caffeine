@@ -30,7 +30,8 @@ struct TestState: Codable, Equatable {
         var hold: Bool
         /// The case of `HoldHeadline`: "working", "noAgents", "paused".
         var headline: String
-        /// The kind of the safety stop, where the headline is one.
+        /// The kind of the safety stop, where the headline is one, and
+        /// "offline" where the offline rule let go of the agents.
         var reason: String?
         var stop: Bool
         /// The app holds its power assertions.
@@ -74,6 +75,17 @@ struct TestState: Codable, Equatable {
         /// "closedLidTime" or "closedLidDrop", nil while the limit has
         /// not stopped the hold.
         var stop: String?
+    }
+
+    /// The way to the network and the offline rule. See `OfflineRule`.
+    struct Network: Codable, Equatable {
+        var online: Bool
+        /// Seconds awake with no path, without a break. Nil while online.
+        var offlineSeconds: TimeInterval?
+        /// The limit in use. Nil is never.
+        var limitSeconds: TimeInterval?
+        /// The rule is on: agents do not keep the Mac awake.
+        var agentsReleased: Bool
     }
 
     struct Agent: Codable, Equatable {
@@ -150,6 +162,8 @@ struct TestState: Codable, Equatable {
     var safety: String?
     /// Nil while there is no closed-lid period.
     var closedLid: ClosedLid?
+    /// Nil until the first sample.
+    var network: Network?
     /// `WakeGate.code`.
     var gate: String
     var agents: [Agent]
@@ -175,4 +189,6 @@ enum TestNoticeKind: String, CaseIterable {
     case safetyStop
     case batteryWarning
     case hidden
+    /// The offline rule ended a hold.
+    case offline
 }

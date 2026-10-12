@@ -139,9 +139,19 @@ struct AgentReading: Equatable {
     /// verdict can be working after the turn ended, for a command or a
     /// background job that still runs. The notifications follow the turn.
     var turn: AgentTurn?
+    /// `AgentEvidence.busyChildCommands`: the verdict of an agent that
+    /// says it works does not name its commands.
+    var busyCommands = 0
+
+    /// A child command of the session uses the processor: a build or a
+    /// test. That work needs no network. See `OfflineRule`.
+    var runsBusyCommand: Bool {
+        if case .runningCommand = verdict.reason { return true }
+        return busyCommands > 0
+    }
 
     init(agentID: String, displayName: String, level: AgentDefinition.Level, kind: AgentDefinition.Kind = .cli,
-         identity: ProcessIdentity, hasLiveSession: Bool = false, verdict: AgentVerdict, turn: AgentTurn? = nil) {
+         identity: ProcessIdentity, hasLiveSession: Bool = false, verdict: AgentVerdict, turn: AgentTurn? = nil, busyCommands: Int = 0) {
         self.agentID = agentID
         self.displayName = displayName
         self.level = level
@@ -150,11 +160,13 @@ struct AgentReading: Equatable {
         self.hasLiveSession = hasLiveSession
         self.verdict = verdict
         self.turn = turn
+        self.busyCommands = busyCommands
     }
 
     init(evidence: AgentEvidence, verdict: AgentVerdict, turn: AgentTurn? = nil) {
         self.init(agentID: evidence.agentID, displayName: evidence.displayName, level: evidence.level, kind: evidence.kind,
-                  identity: evidence.identity, hasLiveSession: evidence.hasLiveSession, verdict: verdict, turn: turn)
+                  identity: evidence.identity, hasLiveSession: evidence.hasLiveSession, verdict: verdict, turn: turn,
+                  busyCommands: evidence.busyChildCommands)
     }
 }
 

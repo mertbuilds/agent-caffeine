@@ -101,6 +101,7 @@ final class DetectionEngineTests: XCTestCase {
         scheduler = FakeScheduler()
         watcher = FakeWatcher()
         state = .idle
+        offline = false
         slept = 0
         jumped = 0
         collector.next = { [unowned self] in self.sample() }
@@ -108,6 +109,8 @@ final class DetectionEngineTests: XCTestCase {
         engine = DetectionEngine(collector: collector, scheduler: scheduler, watcher: watcher, clock: clock)
     }
 
+    /// The Mac has no way to the network.
+    private var offline = false
     /// Seconds the Mac slept: time that passed and that no timer saw.
     private var slept: TimeInterval = 0
     /// Seconds the date moved with the Mac awake and no sample taken: the
@@ -121,7 +124,70 @@ final class DetectionEngineTests: XCTestCase {
         guard let state else { return EvidenceSample(frame: EvidenceFrame(at: now, agents: []), cost: 0.001) }
         let report = StateReport(state: state, since: nil, observedAt: now, source: .claudeSessionFile, detail: nil)
         let agent = AgentEvidence(agentID: "claude", displayName: "Claude Code", level: .state, pid: identity.pid, startTime: identity.startTime, reported: report)
-        return EvidenceSample(frame: EvidenceFrame(at: now, agents: [agent]), watchedFiles: ["/sessions/100.json"], roots: [identity], cost: 0.001)
+        var frame = EvidenceFrame(at: now, agents: [agent], context: FrameContext(offline: offline))
+        frame.awake = scheduler.time
+        return EvidenceSample(frame: frame, watchedFiles: ["/sessions/100.json"], roots: [identity], cost: 0.001)
+    }
+
+    // MARK: Offline
+
+    /// `OfflineRule`: the engine feeds it each sample and decides with it.
+    func testOfflineForTenMinutesAnAgentThatSaysWorkingHoldsNoLonger() {
+        state = .working
+        offline = true
+        engine.start()
+        scheduler.advance(by: 598)
+        XCTAssertTrue(engine.decision.hold)
+        XCTAssertFalse(engine.offlineRule.agentsReleased)
+        scheduler.advance(by: 4)
+        XCTAssertFalse(engine.decision.hold)
+        XCTAssertEqual(engine.decision.headline, .agentsStopped(.offline))
+        XCTAssertFalse(engine.decision.lidClosedFlag)
+        scheduler.advance(by: 13 * 3600)
+        XCTAssertFalse(engine.decision.hold, "All night")
+        // The path is back: the next sample holds, with no wait.
+        offline = false
+        scheduler.advance(by: 2)
+        XCTAssertTrue(engine.decision.hold)
+        XCTAssertEqual(engine.decision.headline, .working(.one("Claude Code")))
+    }
+
+    /// The setting counts at once, and so does the hidden default of
+    /// the tests.
+    func testTheLimitOfTheOfflineRuleFollowsTheSettings() {
+        state = .working
+        offline = true
+        engine.start()
+        scheduler.advance(by: 400)
+        XCTAssertTrue(engine.decision.hold)
+        engine.settings.offlineLimitMinutes = 5
+        XCTAssertFalse(engine.decision.hold)
+        engine.settings.offlineLimitMinutes = OfflineRule.never
+        XCTAssertTrue(engine.decision.hold)
+        engine.offlineTestSeconds = 60
+        XCTAssertFalse(engine.decision.hold)
+        XCTAssertEqual(engine.offlineRule.limit, 60)
+    }
+
+    /// The Mac slept under the rule. A wake with the display off starts
+    /// no hold, though the count of the rule starts fresh: `WakeGate`.
+    func testAfterTheReleaseADarkWakeStartsNoHold() {
+        state = .working
+        offline = true
+        engine.start()
+        scheduler.advance(by: 700)
+        XCTAssertFalse(engine.decision.hold)
+        engine.willSleep()
+        slept += 3600
+        scheduler.advance(by: 30)
+        XCTAssertFalse(engine.decision.hold)
+        XCTAssertFalse(engine.offlineRule.agentsReleased, "The count started fresh")
+        // The lid opens in a place with no network: ten minutes again.
+        engine.didWake()
+        scheduler.advance(by: 2)
+        XCTAssertTrue(engine.decision.hold)
+        scheduler.advance(by: 620)
+        XCTAssertFalse(engine.decision.hold)
     }
 
     /// A hold from the command line is sampled like an agent: it holds,

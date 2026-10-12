@@ -79,6 +79,8 @@ enum PanelText {
             return (canSleepTitle, phrase(subject, one: "is waiting for you", many: "are waiting for you"))
         case .noAgents:
             return (canSleepTitle, noAgentOpen)
+        case .agentsStopped(.offline):
+            return (canSleepTitle, offlineAgents)
         case .safetyStop(.batteryLow(let percent)):
             return (stoppedTitle, "The battery is at \(Self.percent(percent))")
         case .safetyStop(.weakCharger(let percent)):
@@ -101,6 +103,32 @@ enum PanelText {
         case .many(let count): return "\(count) agents \(many)"
         }
     }
+
+    // MARK: Offline
+
+    /// Below the headline when nothing else keeps the Mac awake, and as
+    /// the line below it when something else does. See `OfflineRule`.
+    static let offlineAgents = "Your Mac is offline, so agents do not keep it awake"
+    /// The line below an agent that works and does not keep the Mac awake.
+    static let workingOffline = "Working, but your Mac is offline"
+
+    /// "it was offline for 10 minutes", for the end of a sentence. Under
+    /// a minute only with the hidden default of the tests.
+    static func offlineReason(limit: TimeInterval) -> String {
+        let length = HumaneDuration.length(seconds: limit) ?? HumaneDuration.counted(Int(limit), "second")
+        return "it was offline for \(length)"
+    }
+
+    /// The text of the notification when the offline rule ends a hold,
+    /// with the agents that still worked.
+    static func offlineNotice(limit: TimeInterval, working: HoldSubject?) -> String {
+        let text = "Agent Caffeine let your Mac sleep because \(offlineReason(limit: limit))"
+        return working.map { "\(text). \(stillWorking($0))" } ?? text
+    }
+
+    static let offlineLimitPicker = "When your Mac is offline, stop staying awake for agents after"
+    static let offlineLimitExplained = "An agent cannot work without the internet. Command line holds and scheduled jobs are not stopped. Wi-Fi that is connected but has no internet does not count as offline."
+    static let never = "Never"
 
     // MARK: Sleep outlook
 
@@ -236,6 +264,9 @@ enum PanelText {
             let reason = closedLidReason(stop, keptAwake: "Agent Caffeine had kept it awake")
             return working.map { "\(reason), and \(stillWorking($0))" } ?? reason
         case .paused: return "Agent Caffeine was paused"
+        case .offline(let limit, let working):
+            let reason = offlineReason(limit: limit)
+            return working.map { "\(reason), and \(stillWorking($0))" } ?? reason
         case .waitedTooLong(let subject, let hold):
             let length = HumaneDuration.length(seconds: hold) ?? "a moment"
             return "\(phrase(subject, one: "waited", many: "waited")) for you longer than \(length)"

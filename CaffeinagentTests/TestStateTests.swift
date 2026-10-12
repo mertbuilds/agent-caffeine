@@ -28,7 +28,7 @@ final class TestStateTests: XCTestCase {
                 reported: StateReport(state: .working, since: nil, observedAt: at(0), source: .claudeSessionFile, detail: secret)
             ),
         ]
-        let frame = EvidenceFrame(at: at(0), agents: evidence, context: FrameContext(onBattery: true, batteryPercent: 64, lidClosed: true, charging: false))
+        let frame = EvidenceFrame(at: at(0), agents: evidence, context: FrameContext(onBattery: true, batteryPercent: 64, lidClosed: true, charging: false, offline: true))
         let job = ScheduledJob(id: "launchd:\(secret)", source: .launchd, name: secret, schedule: .calendar([]), enabled: true)
         let alarm = JobAlarm(at: at(600), fireAt: at(660), jobID: job.id, jobName: secret)
         let jobHold = JobHold(
@@ -47,6 +47,10 @@ final class TestStateTests: XCTestCase {
         let lidContext = FrameContext(onBattery: true, batteryPercent: 70, lidClosed: true)
         _ = closedLid.update(lidContext, holding: true, at: SampleTime(at: at(-700), awake: nil))
         _ = closedLid.update(lidContext, holding: true, at: SampleTime(at: at(-90), awake: nil))
+        // Offline for 610 seconds, with a limit of 600.
+        var offline = OfflineRule()
+        offline.update(offline: true, at: SampleTime(at: at(-610), awake: 100))
+        offline.update(offline: true, at: SampleTime(at: at(0), awake: 710))
         var notices = TestNoticeLog()
         notices.note(.waiting, at: at(-20))
         notices.note(.finished, at: at(-10))
@@ -54,7 +58,7 @@ final class TestStateTests: XCTestCase {
             at: at(1), version: "1.0.3", build: "17", bundlePath: "/Applications/agent caffeine.app", pid: 4242,
             enabled: true, pausedUntil: at(900), reachableUntil: at(1800), mode: .agentWorking,
             decision: decision, frame: frame, assertionHeld: true, helper: .enabled, setup: .ready, flagSet: true,
-            lidAngle: 3.04, safety: .batteryLow(percent: 20), closedLid: closedLid, gate: WakeGate().code, wakeForJobs: true,
+            lidAngle: 3.04, safety: .batteryLow(percent: 20), closedLid: closedLid, offline: offline, gate: WakeGate().code, wakeForJobs: true,
             jobs: JobWakeView(
                 status: .alarmSet(alarm), runs: [JobRun(job: job, fireAt: at(660), tooOften: false)], alarm: alarm,
                 history: [JobEvent(at: at(-5).timeIntervalSince1970, kind: .alarmSet, alarmAt: at(600).timeIntervalSince1970, job: secret, reason: nil)]
@@ -85,6 +89,7 @@ final class TestStateTests: XCTestCase {
         XCTAssertEqual(state.closedLid, TestState.ClosedLid(
             since: at(-700).timeIntervalSince1970, heldSeconds: 610, percentAtStart: 70, limitSeconds: 600, limitDrop: 30, stop: "closedLidTime"
         ))
+        XCTAssertEqual(state.network, TestState.Network(online: false, offlineSeconds: 610, limitSeconds: 600, agentsReleased: true))
         XCTAssertEqual(state.gate, "open")
         XCTAssertEqual(state.agents, [
             TestState.Agent(id: "claude", pid: 100, role: "engine", state: "working", why: "reportsBusy", level: "state", hold: "working"),
@@ -116,7 +121,14 @@ final class TestStateTests: XCTestCase {
         XCTAssertEqual(TestState(input).safety, "closedLidTime")
         input.closedLid = ClosedLidLimit()
         XCTAssertNil(TestState(input).closedLid, "No closed-lid period")
+        input.decision.headline = .agentsStopped(.offline)
+        XCTAssertEqual(TestState(input).decision.headline, "agentsStopped")
+        XCTAssertEqual(TestState(input).decision.reason, "offline")
+        XCTAssertFalse(TestState(input).decision.stop, "Other holds go on")
+        input.offline = OfflineRule()
+        XCTAssertEqual(TestState(input).network, TestState.Network(online: false, offlineSeconds: nil, limitSeconds: 600, agentsReleased: false))
         input.frame = nil
+        XCTAssertNil(TestState(input).network)
         XCTAssertNil(TestState(input).power, "Nothing is known of the Mac before the first sample")
         XCTAssertNil(TestState(input).lid)
     }
@@ -166,7 +178,7 @@ final class TestStateTests: XCTestCase {
     func testTheFileHoldsNoTextOfTheUser() throws {
         let known: Set<String> = [
             "v", "at", "app", "on", "pausedUntil", "reachableUntil", "mode", "decision", "flag",
-            "power", "lid", "safety", "closedLid", "since", "heldSeconds", "percentAtStart", "limitSeconds", "limitDrop", "gate", "agents", "holds", "jobs", "notices", "chimeAt",
+            "power", "lid", "safety", "closedLid", "since", "heldSeconds", "percentAtStart", "limitSeconds", "limitDrop", "network", "online", "offlineSeconds", "agentsReleased", "gate", "agents", "holds", "jobs", "notices", "chimeAt",
             "version", "build", "path", "pid", "hold", "headline", "stop", "assertion", "wanted", "helper", "setup", "set",
             "source", "percent", "charging", "closed", "angle", "id", "role", "state", "why", "level", "kind", "start", "end",
             "status", "found", "enabled", "alarm", "fireAt", "history",

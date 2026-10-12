@@ -76,7 +76,7 @@ enum MenuModel {
         case .working, .finishedRecently, .open, .alwaysOn, .remoteAccess, .manualHold, .scheduledJob: return .awake(wisps: 2)
         case .reachable: return .reachable
         case .waitingHeld: return .attentive
-        case .idle, .waitingReleased, .noAgents: return .asleep
+        case .idle, .waitingReleased, .noAgents, .agentsStopped: return .asleep
         case .safetyStop(.batteryLow), .safetyStop(.weakCharger), .safetyStop(.closedLid): return .safetyStop(.battery)
         case .safetyStop(.tooHot): return .safetyStop(.heat)
         case .switchedOff: return .off
@@ -164,6 +164,7 @@ enum MenuModel {
         if input.helperLost {
             return PanelAttention(kind: .helperLost, text: PanelText.helperLost, actions: [.setUpLidClosed])
         }
+        if let line = agentsStopped(input) { return line }
         // Not to be dismissed: the user asked for what the lid takes away.
         if input.reachableUntil != nil, input.pausedUntil == nil, input.onBattery, input.lidClosedNeedsSetup {
             return PanelAttention(kind: .reachableNeedsLidClosed, text: PanelText.reachableNeedsLidClosed, actions: [.setUpLidClosed])
@@ -200,6 +201,16 @@ enum MenuModel {
             level = .nearFloor
         }
         return PanelBattery(percent: shown, floor: floor, level: level)
+    }
+
+    /// A rule let go of the agents while something else keeps the Mac
+    /// awake. Nil when nothing else does: the headline says it then.
+    private static func agentsStopped(_ input: PanelInput) -> PanelAttention? {
+        if case .agentsStopped = input.decision.headline { return nil }
+        switch input.decision.perAgent.lazy.compactMap(\.stopped).first {
+        case .offline: return PanelAttention(kind: .agentsStopped, text: PanelText.offlineAgents)
+        case nil: return nil
+        }
     }
 
     /// The hint of the first time. Not for a helper that was set up
@@ -391,6 +402,13 @@ enum MenuModel {
 
     /// The phrase of a session that works or waits.
     private static func activeDetail(_ reading: AgentReading, input: PanelInput, now: Date) -> String {
+        // It works and keeps nothing awake: the line must not read as a hold.
+        if reading.verdict.state == .working {
+            switch input.decision.perAgent.first(where: { $0.reading.identity == reading.identity })?.stopped {
+            case .offline: return PanelText.workingOffline
+            case nil: break
+            }
+        }
         let seconds = input.clock.since(reading.identity).map { now.timeIntervalSince($0) }
         // An instance that was first seen in this state began before that.
         let startSeen = input.clock.before(reading.identity) != nil

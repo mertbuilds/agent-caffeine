@@ -31,6 +31,10 @@ struct DetectionSettings: Codable, Equatable {
     /// And when the battery lost this many points. `ClosedLidLimit.noLimit`
     /// is no limit.
     var closedLidLimitDrop = ClosedLidLimit.defaultDropPoints
+    /// With no way to the network for this many minutes, agents stop
+    /// keeping the Mac awake. `OfflineRule.never` is never. See
+    /// `OfflineRule`.
+    var offlineLimitMinutes = OfflineRule.defaultMinutes
     var stayAwakeLidClosedOnBattery = true
     /// While Agent Caffeine keeps the Mac awake with the lid closed, the
     /// built-in display is kept dark. See `DisplayRules`.
@@ -68,6 +72,7 @@ struct DetectionSettings: Codable, Equatable {
         case batteryFloorPercent, batteryFloorEnabled, stayAwakeLidClosedOnBattery, displayOffLidClosed, dimAsLidCloses, stayAwakeForRemoteAccess, agentRules, userAgentNames
         case chimeOnLidClose, lidChimeSound
         case closedLidLimitHours, closedLidLimitDrop
+        case offlineLimitMinutes
     }
 
     /// No time is shorter than a second or longer than a day.
@@ -80,7 +85,8 @@ struct DetectionSettings: Codable, Equatable {
     /// one that is too long is cut, and the battery floor stays in the
     /// range the Preferences offer. A zero release time would drop the hold
     /// between two tool calls, and a floor of 0 would never stop. A limit
-    /// for the closed lid that the Preferences do not offer is the default.
+    /// for the closed lid that the Preferences do not offer is the default,
+    /// and so is a time for the offline rule that they do not offer.
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         let defaults = DetectionSettings()
@@ -103,6 +109,8 @@ struct DetectionSettings: Codable, Equatable {
         }
         closedLidLimitHours = try choice(.closedLidLimitHours, among: ClosedLidLimit.hourChoices, defaults.closedLidLimitHours)
         closedLidLimitDrop = try choice(.closedLidLimitDrop, among: ClosedLidLimit.dropChoices, defaults.closedLidLimitDrop)
+        // `OfflineRule.never` is 0, as `ClosedLidLimit.noLimit` is.
+        offlineLimitMinutes = try choice(.offlineLimitMinutes, among: OfflineRule.minuteChoices, defaults.offlineLimitMinutes)
         stayAwakeLidClosedOnBattery = try container.decodeIfPresent(Bool.self, forKey: .stayAwakeLidClosedOnBattery) ?? defaults.stayAwakeLidClosedOnBattery
         displayOffLidClosed = try container.decodeIfPresent(Bool.self, forKey: .displayOffLidClosed) ?? defaults.displayOffLidClosed
         dimAsLidCloses = try container.decodeIfPresent(Bool.self, forKey: .dimAsLidCloses) ?? defaults.dimAsLidCloses

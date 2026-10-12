@@ -84,6 +84,10 @@ final class DetectionEngine: ObservableObject {
     }
     /// The wake alarm that is set, for the recording.
     var wakeAlarm: Date?
+    /// `OfflineRule.testSeconds`, read by the owner at each sample.
+    var offlineTestSeconds: TimeInterval = 0 { didSet { if offlineTestSeconds != oldValue { decideAgain() } } }
+    /// How long the Mac is offline, and whether agents still count.
+    private(set) var offlineRule = OfflineRule()
 
     /// Gets every sample while it records.
     var recorder: LabRecorder?
@@ -219,6 +223,7 @@ final class DetectionEngine: ObservableObject {
         let (readings, nextAgents) = VerdictRules.readings(for: sample.frame, memory: agentMemory, settings: settings)
         agentMemory = nextAgents
         self.readings = readings
+        offlineRule.update(offline: sample.frame.context.offline, at: sample.frame.time)
         var taken = sample.frame
         taken.jobHolds = jobHolds
         taken.wakeAlarm = wakeAlarm?.timeIntervalSince1970
@@ -253,11 +258,14 @@ final class DetectionEngine: ObservableObject {
 
     private func decide(at now: Date, context: FrameContext) {
         let mayHold = wakeGate.allowsHold(holding: heldPastGate)
+        // The limit is taken here, so a change of the setting counts at once.
+        offlineRule.limit = settings.offlineLimit(testSeconds: offlineTestSeconds)
         let (next, memory) = HoldPolicy.decide(
             readings: readings, memory: policyMemory, mode: mode, enabled: enabled, pausedUntil: pausedUntil, reachableUntil: reachableUntil,
             holds: frame?.holds ?? [], jobHolds: jobHolds, safety: safety, settings: settings, context: context,
             mayHold: mayHold,
-            jobsMayHold: wakeGate.allowsJobHold(holding: heldPastGate, windows: jobHolds.map(AlarmWindow.init), now: now), now: now
+            jobsMayHold: wakeGate.allowsJobHold(holding: heldPastGate, windows: jobHolds.map(AlarmWindow.init), now: now),
+            agentStop: offlineRule.agentsReleased ? .offline : nil, now: now
         )
         jobHoldOnly = next.hold && !mayHold
         policyMemory = memory

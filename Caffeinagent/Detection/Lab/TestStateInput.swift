@@ -23,6 +23,8 @@ struct TestStateInput {
     var safety: SafetyStop?
     /// The closed lid limit, with its period and the limits in use.
     var closedLid = ClosedLidLimit()
+    /// The offline rule, with its count and the limit in use.
+    var offline = OfflineRule()
     var gate: String
     var wakeForJobs: Bool
     var jobs: JobWakeView
@@ -70,6 +72,12 @@ extension TestState {
                 ClosedLid(
                     since: period.since.timeIntervalSince1970, heldSeconds: period.held.rounded(), percentAtStart: period.percentAtStart,
                     limitSeconds: input.closedLid.timeLimit, limitDrop: input.closedLid.dropLimit, stop: period.stop?.code
+                )
+            },
+            network: context.map {
+                Network(
+                    online: !$0.offline, offlineSeconds: input.offline.offlineFor?.rounded(), limitSeconds: input.offline.limit,
+                    agentsReleased: input.offline.agentsReleased
                 )
             },
             gate: input.gate,
@@ -191,6 +199,7 @@ extension HoldHeadline {
         case .idle: return "idle"
         case .waitingReleased: return "waitingReleased"
         case .noAgents: return "noAgents"
+        case .agentsStopped: return "agentsStopped"
         case .safetyStop: return "safetyStop"
         case .switchedOff: return "switchedOff"
         case .paused: return "paused"
@@ -198,7 +207,10 @@ extension HoldHeadline {
     }
 
     var reasonCode: String? {
-        if case .safetyStop(let stop) = self { return stop.code }
-        return nil
+        switch self {
+        case .safetyStop(let stop): return stop.code
+        case .agentsStopped(.offline): return "offline"
+        default: return nil
+        }
     }
 }

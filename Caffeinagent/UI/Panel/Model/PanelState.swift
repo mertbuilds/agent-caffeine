@@ -66,6 +66,9 @@ struct PanelAttention: Equatable {
         case helperSwitchedOff
         case helperNotResponding
         case helperLost
+        /// A rule let go of the agents, while something else keeps the
+        /// Mac awake. See `AgentStop`.
+        case agentsStopped
         /// "Stay reachable" is on, and a closed lid on battery still
         /// puts the Mac to sleep.
         case reachableNeedsLidClosed

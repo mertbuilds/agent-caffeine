@@ -76,6 +76,7 @@ struct AttentionLine: View {
         case .safetyStop, .helperSwitchedOff, .helperNotResponding, .helperLost: return "exclamationmark.triangle.fill"
         case .lidClosedNotSetUp, .reachableNeedsLidClosed: return "laptopcomputer"
         case .sleptAnyway: return "moon.zzz"
+        case .agentsStopped: return "wifi.slash"
         }
     }
 
@@ -83,7 +84,7 @@ struct AttentionLine: View {
         switch attention.kind {
         case .safetyStop, .helperNotResponding, .helperLost, .reachableNeedsLidClosed: return .orange
         case .helperSwitchedOff: return .red
-        case .lidClosedNotSetUp, .sleptAnyway: return .secondary
+        case .lidClosedNotSetUp, .sleptAnyway, .agentsStopped: return .secondary
         }
     }
 }

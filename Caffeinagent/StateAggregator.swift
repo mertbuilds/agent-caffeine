@@ -506,7 +506,8 @@ final class StateAggregator: ObservableObject {
             helperSetUp: sleepFlag.helperStatus == .enabled,
             lidClosedWanted: settings.stayAwakeLidClosedOnBattery,
             waitingHold: settings.waitingHold,
-            working: decision.working(settings)
+            working: decision.working(settings),
+            offlineLimit: engine.offlineRule.limit ?? 0
         )
         display?.willSleep()
         engine.willSleep()
@@ -763,6 +764,12 @@ final class StateAggregator: ObservableObject {
     // MARK: Engine
 
     private func apply(_ decision: HoldDecision) {
+        // The offline rule ended a hold, and nothing else keeps the Mac
+        // awake: the user is told why, once.
+        if decision.headline == .agentsStopped(.offline), self.decision.hold, let limit = engine.offlineRule.limit {
+            testNotices.note(.offline, at: Date())
+            notify(PanelText.offlineNotice(limit: limit, working: decision.working(settings)))
+        }
         self.decision = decision
         refreshRows()
         writeHoldStatus()
@@ -785,6 +792,7 @@ final class StateAggregator: ObservableObject {
         let limits = settings.closedLidLimits(testSeconds: ClosedLidLimit.testSeconds(in: defaults))
         closedLidLimit.timeLimit = limits.time
         closedLidLimit.dropLimit = limits.drop
+        engine.offlineTestSeconds = OfflineRule.testSeconds(in: defaults)
         let lidStop = closedLidLimit.update(context, holding: power.held, at: sample.frame.time, afterGap: sample.afterGap)
         // Heat and the battery floor come first.
         let stop = safetyMonitor.update(context.safetyInputs, afterGap: sample.afterGap) ?? lidStop.map(SafetyStop.closedLid)
@@ -1020,7 +1028,7 @@ final class StateAggregator: ObservableObject {
             enabled: enabled, pausedUntil: pause.until, reachableUntil: reachable.until, mode: mode,
             decision: decision, frame: engine.frame, assertionHeld: power.held,
             helper: sleepFlag.helperStatus, setup: sleepFlag.setup, flagSet: sleepFlag.sleepDisabled,
-            lidAngle: display?.lidAngle, safety: engine.safety, closedLid: closedLidLimit, gate: engine.gateCode,
+            lidAngle: display?.lidAngle, safety: engine.safety, closedLid: closedLidLimit, offline: engine.offlineRule, gate: engine.gateCode,
             wakeForJobs: jobSettings.wakeForJobs, jobs: jobWake, notices: testNotices.events, chimeAt: chimePlayedAt
         )
     }
