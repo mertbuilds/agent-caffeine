@@ -520,6 +520,58 @@ final class ClosedLidLimitTests: XCTestCase {
         assertStopped(mac, .time(seconds: 3 * Self.hour))
     }
 
+    // MARK: The notification
+
+    /// Samples for this long.
+    /// - Returns: what `AgentStop.toAnnounce` gives from each sample to
+    /// the next, with the awake seconds.
+    private func announced(_ mac: inout Mac, for seconds: TimeInterval) -> [(at: TimeInterval, stop: AgentStop)] {
+        var told: [(at: TimeInterval, stop: AgentStop)] = []
+        for _ in 0..<Int(seconds / Self.step) {
+            let previous = mac.decision
+            let current = mac.sample()
+            if let previous, let stop = AgentStop.toAnnounce(previous: previous, current: current) { told.append((mac.awake, stop)) }
+        }
+        return told
+    }
+
+    /// Only agents: one notification, when they are let go.
+    func testAgentsAloneAreToldOnceWhenTheyAreLetGo() {
+        var mac = Mac()
+        let told = announced(&mac, for: 5 * Self.hour)
+        XCTAssertEqual(told.map(\.stop), [.closedLid(.time(seconds: 3 * Self.hour))])
+        XCTAssertEqual(told.first?.at ?? 0, 3 * Self.hour, accuracy: 30)
+    }
+
+    /// A hold from the command line goes on: nothing is told at the
+    /// limit. It is told once when that hold ends, and not at the next
+    /// sample.
+    func testWithAManualHoldItIsToldOnceWhenThatHoldEnds() {
+        var mac = Mac()
+        mac.holds = [ManualHold.timed(id: "aaaa0001", length: 8 * Self.hour, reason: "render", now: Self.start)]
+        XCTAssertTrue(announced(&mac, for: 7 * Self.hour).isEmpty, "The Mac is not let go while the hold goes on")
+        XCTAssertEqual(mac.decision?.perAgent.map(\.stopped), [.closedLid(.time(seconds: 3 * Self.hour))])
+        let told = announced(&mac, for: 2 * Self.hour)
+        XCTAssertEqual(told.map(\.stop), [.closedLid(.time(seconds: 3 * Self.hour))])
+        XCTAssertEqual(told.first?.at ?? 0, 8 * Self.hour, accuracy: 30)
+        XCTAssertTrue(announced(&mac, for: 60).isEmpty, "Once")
+    }
+
+    /// The offline rule is told the same way, and a hold that ends for
+    /// another reason is not told.
+    func testOnlyARuleForAgentsThatEndsAHoldIsTold() {
+        func decision(_ headline: HoldHeadline) -> HoldDecision {
+            HoldDecision(hold: headline.keepsAwake, lidClosedFlag: false, headline: headline, perAgent: [])
+        }
+        let working = decision(.working(.one("Claude Code")))
+        XCTAssertEqual(AgentStop.toAnnounce(previous: working, current: decision(.agentsStopped(.offline))), .offline)
+        XCTAssertNil(AgentStop.toAnnounce(previous: decision(.agentsStopped(.offline)), current: decision(.agentsStopped(.offline))))
+        XCTAssertNil(AgentStop.toAnnounce(previous: decision(.noAgents), current: decision(.agentsStopped(.offline))), "No hold ended")
+        for headline in [HoldHeadline.idle(.one("Claude Code")), .noAgents, .safetyStop(.tooHot), .switchedOff, .manualHold(.one("render"))] {
+            XCTAssertNil(AgentStop.toAnnounce(previous: working, current: decision(headline)), "\(headline)")
+        }
+    }
+
     /// Its net is the battery floor: that stop ends it before its time.
     func testTheBatteryFloorEndsAManualHoldPastTheLimit() throws {
         var mac = Mac()

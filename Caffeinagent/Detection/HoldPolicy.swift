@@ -25,6 +25,17 @@ enum AgentStop: Equatable {
     case closedLid(ClosedLidStop)
 }
 
+extension AgentStop {
+    /// The rule to tell the user about, nil for none. A rule is told
+    /// once, when it ends the last hold. While another hold goes on the
+    /// Mac is not let go, so nothing is told then: the rule is told when
+    /// that hold ends.
+    static func toAnnounce(previous: HoldDecision, current: HoldDecision) -> AgentStop? {
+        guard previous.hold, case .agentsStopped(let stop) = current.headline else { return nil }
+        return stop
+    }
+}
+
 struct AgentHold: Equatable {
     var reading: AgentReading
     /// Nil when this instance does not keep the Mac awake.

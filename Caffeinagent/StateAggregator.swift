@@ -765,9 +765,8 @@ final class StateAggregator: ObservableObject {
 
     private func apply(_ decision: HoldDecision) {
         // A rule for agents ended a hold, and nothing else keeps the Mac
-        // awake: the user is told why. Not while another hold goes on:
-        // the Mac is not let go then.
-        if self.decision.hold, case .agentsStopped(let stop) = decision.headline {
+        // awake: the user is told why. See `AgentStop.toAnnounce`.
+        if let stop = AgentStop.toAnnounce(previous: self.decision, current: decision) {
             let working = decision.working(settings)
             switch stop {
             case .offline:
