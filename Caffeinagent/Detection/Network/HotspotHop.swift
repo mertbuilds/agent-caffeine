@@ -34,8 +34,11 @@ import Foundation
 /// on battery with the lid closed: a scan takes the radio off its
 /// channel for a moment and costs charge, and in a bag the old network
 /// rarely comes back. When the network is seen, the Mac joins it with
-/// no password, because macOS keeps that one. This is tried once: when
-/// macOS refuses, the Mac stays on the hotspot. A network the user left
+/// no password, because macOS keeps that one. Only a network that macOS
+/// knows as one with a WPA2 or WPA3 password counts, by its name to the
+/// letter: an open network and one that asks for a user name get no way
+/// back. This is tried once: when macOS refuses, the Mac stays on the
+/// hotspot. A network the user left
 /// before the way was lost is never joined: only the one of the last
 /// look counts, and a look is at most `lookInterval` old.
 ///

@@ -37,7 +37,7 @@ final class HotspotTextTests: XCTestCase {
         )
         XCTAssertEqual(
             PanelText.hotspotHopBackExplained,
-            "On the hotspot, your Mac looks for the Wi-Fi it lost every 2 minutes, and every 10 minutes on battery with the lid closed."
+            "On the hotspot, your Mac looks for the Wi-Fi it lost every 2 minutes, and every 10 minutes on battery with the lid closed. It does not go back to an open network or to one that asks for a user name."
         )
     }
 

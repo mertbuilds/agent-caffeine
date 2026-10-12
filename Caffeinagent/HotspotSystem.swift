@@ -22,7 +22,7 @@ final class SystemWiFi: WiFiAccess {
     private var busy = false
     /// The network of the last scan that found one. A join needs it:
     /// CoreWLAN joins what a scan gave, not a name.
-    private var found: CWNetwork?
+    private var found: (network: CWNetwork, exact: Bool)?
     private var lastError: String?
 
     /// The domain and the code of the last error of CoreWLAN, with no
@@ -44,16 +44,32 @@ final class SystemWiFi: WiFiAccess {
     }
 
     func scan(for name: String) -> WiFiScan {
+        // macOS looks for the exact bytes, so each spelling of the
+        // apostrophe gets a scan of its own.
+        scan(names: HotspotName.spellings(of: name), exact: false, keep: { _ in true }, pick: { WiFiPick.hotspot(name, among: $0) })
+    }
+
+    func scanKnown(_ name: String) -> WiFiScan {
+        guard let profile = profile(named: name) else { return .notFound }
+        let security = profile.security
+        return scan(names: [name], exact: true, keep: { $0.supportsSecurity(security) }, pick: { WiFiPick.known(name, among: $0) })
+    }
+
+    /// - Parameters:
+    ///   - exact: the network that is found has one of `names` to the
+    ///     letter. `associate` asks for the same then.
+    ///   - keep: false for a network that is not looked at.
+    private func scan(
+        names: [String], exact: Bool, keep: @escaping (CWNetwork) -> Bool, pick: @escaping ([WiFiSeen]) -> (index: Int?, scan: WiFiScan)
+    ) -> WiFiScan {
         guard let interface else { return .failed(.noWiFi) }
         let result: WiFiScan? = timed(Self.scanTimeout) { [self] in
-            // macOS looks for the exact bytes, so each spelling of the
-            // apostrophe gets a scan of its own.
             var hidden = false
             var open = false
-            for spelling in HotspotName.spellings(of: name) {
+            for name in names {
                 do {
-                    let networks = Array(try interface.scanForNetworks(withSSID: Data(spelling.utf8)))
-                    let named = networks.filter { $0.ssid != nil }
+                    let networks = Array(try interface.scanForNetworks(withSSID: Data(name.utf8)))
+                    let named = networks.filter { $0.ssid != nil && keep($0) }
                     let seen = named.map { network in
                         WiFiSeen(
                             name: network.ssid ?? "",
@@ -61,10 +77,10 @@ final class SystemWiFi: WiFiAccess {
                             security: Self.security(of: network)
                         )
                     }
-                    let pick = WiFiPick.hotspot(name, among: seen)
-                    if let index = pick.index { remember(named[index]) }
-                    switch pick.scan {
-                    case .found: return pick.scan
+                    let found = pick(seen)
+                    if let index = found.index { remember(named[index], exact: exact) }
+                    switch found.scan {
+                    case .found: return found.scan
                     case .failed: open = true
                     case .notFound: break
                     }
@@ -84,9 +100,10 @@ final class SystemWiFi: WiFiAccess {
     func associate(to name: String, password: String?) -> WiFiJoin {
         guard let interface else { return .failed(.noWiFi) }
         lock.lock()
-        let network = found
+        let found = found
         lock.unlock()
-        guard let network, network.ssid.map({ HotspotName.matches($0, name) }) ?? false else { return .failed(.other) }
+        guard let found, let ssid = found.network.ssid, found.exact ? ssid == name : HotspotName.matches(ssid, name) else { return .failed(.other) }
+        let network = found.network
         let result: WiFiJoin? = timed(Self.joinTimeout) { [self] in
             do {
                 try interface.associate(to: network, password: password)
@@ -98,9 +115,19 @@ final class SystemWiFi: WiFiAccess {
         return result ?? .failed(.timeout)
     }
 
-    func isKnown(_ name: String) -> Bool {
+    func knownSecurity(of name: String) -> WiFiSecurity? {
+        guard let profile = profile(named: name) else { return nil }
+        switch profile.security {
+        case .none: return .open
+        case .wpa2Personal, .wpaPersonalMixed, .wpa3Personal, .wpa3Transition: return .personal
+        default: return .other
+        }
+    }
+
+    /// The network macOS knows by this name, to the letter.
+    private func profile(named name: String) -> CWNetworkProfile? {
         let profiles = interface?.configuration()?.networkProfiles.array as? [CWNetworkProfile] ?? []
-        return profiles.contains { $0.ssid.map { HotspotName.matches($0, name) } ?? false }
+        return profiles.first { $0.ssid == name }
     }
 
     /// What macOS says a network takes. An open network is open even
@@ -111,9 +138,9 @@ final class SystemWiFi: WiFiAccess {
         return personal.contains { network.supportsSecurity($0) } ? .personal : .other
     }
 
-    private func remember(_ network: CWNetwork) {
+    private func remember(_ network: CWNetwork, exact: Bool) {
         lock.lock()
-        found = network
+        found = (network, exact)
         lock.unlock()
     }
 

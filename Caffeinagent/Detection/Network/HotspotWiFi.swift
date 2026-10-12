@@ -61,6 +61,14 @@ enum WiFiPick {
         }
         return (nil, named.contains { seen[$0].security == .open } ? .failed(.notSecure) : .notFound)
     }
+
+    /// The strongest network that has the name of a network macOS knows
+    /// to the letter, with no other spelling, and that takes a password.
+    static func known(_ name: String, among seen: [WiFiSeen]) -> (index: Int?, scan: WiFiScan) {
+        let safe = seen.indices.filter { seen[$0].name == name && seen[$0].security == .personal }
+        guard let best = safe.max(by: { seen[$0].sighting.rssi < seen[$1].sighting.rssi }) else { return (nil, .notFound) }
+        return (best, .found(seen[best].sighting))
+    }
 }
 
 enum WiFiScan: Equatable {
@@ -78,7 +86,8 @@ enum WiFiJoin: Equatable {
 /// The Wi-Fi of the Mac, so a test can pass any air. Every call can
 /// block for seconds and is made off the main thread.
 ///
-/// A name is matched as `HotspotName.matches` has it. Nothing here
+/// The name of the hotspot is matched as `HotspotName.matches` has it,
+/// and the name of a network macOS knows to the letter. Nothing here
 /// switches Wi-Fi on or off.
 protocol WiFiAccess {
     /// Nil on a Mac with no Wi-Fi.
@@ -89,12 +98,17 @@ protocol WiFiAccess {
     /// A scan for the hotspot with this name. Only a network that takes
     /// a password is found: see `WiFiPick`.
     func scan(for name: String) -> WiFiScan
-    /// Joins a network that a scan found.
+    /// A scan for a network macOS knows, by its name to the letter. It
+    /// is found only when it takes a password, and is of the kind macOS
+    /// knows it as.
+    func scanKnown(_ name: String) -> WiFiScan
+    /// Joins the network that the last scan found.
     /// - Parameter password: nil for a network macOS knows already: the
     ///   password of such a network is in the keychain of the system.
     func associate(to name: String, password: String?) -> WiFiJoin
-    /// The network is in the list of networks macOS knows.
-    func isKnown(_ name: String) -> Bool
+    /// The kind of the network with this name, to the letter, in the
+    /// list of networks macOS knows. Nil when it is not there.
+    func knownSecurity(of name: String) -> WiFiSecurity?
 }
 
 /// The password of the hotspot. The real store is one item in the login

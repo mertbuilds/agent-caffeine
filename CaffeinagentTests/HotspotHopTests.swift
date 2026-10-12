@@ -393,6 +393,62 @@ final class HotspotHopTests: XCTestCase {
         XCTAssertEqual(mac.wifi.current, HopMac.hotspot)
     }
 
+    /// The Mac lost this Wi-Fi and is on the hotspot.
+    private func hopped(from name: String, knownAs security: WiFiSecurity = .personal) -> HopMac {
+        var mac = HopMac()
+        mac.wifi.air = [name, HopMac.hotspot]
+        mac.wifi.known = []
+        mac.wifi.knownAs = [name: security]
+        mac.wifi.current = name
+        mac.run(seconds: 10)
+        mac.wifi.air.remove(name)
+        mac.wifi.current = nil
+        mac.input.online = false
+        mac.run(seconds: 20)
+        XCTAssertTrue(joined(mac.state))
+        return mac
+    }
+
+    func testTheWayBackGoesOnlyToTheSameNameToTheLetter() {
+        // The lost network has a straight apostrophe. Another one with
+        // the curly apostrophe is on the air, with a strong signal.
+        var mac = hopped(from: "Bob's Cafe")
+        mac.wifi.air.insert("Bob\u{2019}s Cafe")
+        mac.run(seconds: 1200)
+        XCTAssertTrue(joined(mac.state))
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot], "Another spelling is another network")
+        XCTAssertEqual(Set(mac.wifi.scans.dropFirst()), ["Bob's Cafe"], "One scan for the name as macOS gave it")
+        mac.wifi.air.insert("Bob's Cafe")
+        mac.run(seconds: 300)
+        XCTAssertEqual(mac.wifi.current, "Bob's Cafe")
+    }
+
+    func testTheWayBackNeverGoesToAnOpenNetwork() {
+        let open = WiFiSeen(name: HopMac.cafe, sighting: WiFiSighting(rssi: -30, channel: 1), security: .open)
+        // The lost network had a password. An open one with its name is
+        // on the air.
+        var mac = hopped(from: HopMac.cafe)
+        mac.wifi.others = [open]
+        mac.run(seconds: 1200)
+        XCTAssertTrue(joined(mac.state))
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot])
+        // With the real one on the air too, the real one is joined.
+        mac.wifi.air.insert(HopMac.cafe)
+        mac.run(seconds: 300)
+        XCTAssertEqual(mac.wifi.joined.map(\.security), [.personal, .personal])
+        XCTAssertEqual(mac.wifi.current, HopMac.cafe)
+        // A lost network that is open, or asks for a user name, gets no
+        // way back at all.
+        for security in [WiFiSecurity.open, .other] {
+            mac = hopped(from: HopMac.cafe, knownAs: security)
+            mac.wifi.others = [WiFiSeen(name: HopMac.cafe, sighting: WiFiSighting(rssi: -30, channel: 1), security: security)]
+            mac.run(seconds: 1200)
+            XCTAssertTrue(joined(mac.state), "\(security)")
+            XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot], "\(security)")
+            XCTAssertFalse(mac.wifi.scans.contains(HopMac.cafe), "No scan for it either: \(security)")
+        }
+    }
+
     func testAMacThatLeftTheHotspotIsNotOnItAnyMore() {
         var mac = HopMac()
         mac.run(seconds: 10)

@@ -11,7 +11,10 @@ final class FakeWiFi: WiFiAccess {
     /// More networks on the air: a second one with a name of `air`, an
     /// open one, a weak one.
     var others: [WiFiSeen] = []
+    /// The networks macOS knows, each as one with a password.
     var known: Set<String> = []
+    /// A network macOS knows as another kind.
+    var knownAs: [String: WiFiSecurity] = [:]
     /// The password each network takes. A network that is not here is
     /// joined only with no password, and only when it is known.
     var passwords: [String: String] = [:]
@@ -43,6 +46,17 @@ final class FakeWiFi: WiFiAccess {
         return pick.scan
     }
 
+    func scanKnown(_ name: String) -> WiFiScan {
+        scans.append(name)
+        found = nil
+        if let scanFailure { return .failed(scanFailure) }
+        guard let security = knownSecurity(of: name) else { return .notFound }
+        let seen = seen.filter { $0.security == security }
+        let pick = WiFiPick.known(name, among: seen)
+        found = pick.index.map { seen[$0] }
+        return pick.scan
+    }
+
     func associate(to name: String, password: String?) -> WiFiJoin {
         joins.append(name)
         joinPasswords.append(password)
@@ -52,7 +66,7 @@ final class FakeWiFi: WiFiAccess {
         if found.security != .open {
             if let right = passwords[found.name] {
                 guard password == right else { return .failed(.wrongPassword) }
-            } else if password != nil || !isKnown(found.name) {
+            } else if password != nil || knownSecurity(of: found.name) == nil {
                 return .failed(.wrongPassword)
             }
         }
@@ -61,8 +75,8 @@ final class FakeWiFi: WiFiAccess {
         return .joined
     }
 
-    func isKnown(_ name: String) -> Bool {
-        known.contains { HotspotName.matches($0, name) }
+    func knownSecurity(of name: String) -> WiFiSecurity? {
+        knownAs[name] ?? (known.contains(name) ? .personal : nil)
     }
 }
 

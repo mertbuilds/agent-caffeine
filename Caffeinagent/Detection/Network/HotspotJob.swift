@@ -42,13 +42,16 @@ enum HotspotJob {
         }
     }
 
-    /// The way back is taken only to a network macOS knows, so its
-    /// password is with macOS, and only when a scan sees it now.
+    /// The way back is taken only to a network macOS knows as one with a
+    /// password, so its password is with macOS, and only when a scan
+    /// sees it now by the same name to the letter. An open network and a
+    /// network that asks for a user name get no way back: anyone can set
+    /// up an open network with that name.
     private static func back(from hotspot: String, to old: String?, wifi: WiFiAccess) -> HotspotHop.Outcome {
         guard let current = wifi.currentNetwork(), HotspotName.matches(current, hotspot) else { return .leftHotspot }
         guard let old else { return .onHotspot }
-        guard wifi.isKnown(old) else { return .backFailed }
-        guard case .found = wifi.scan(for: old) else { return .onHotspot }
+        guard wifi.knownSecurity(of: old) == .personal else { return .backFailed }
+        guard case .found = wifi.scanKnown(old) else { return .onHotspot }
         switch wifi.associate(to: old, password: nil) {
         case .joined: return .wentBack
         case .failed: return .backFailed
