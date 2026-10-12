@@ -34,6 +34,8 @@ struct AggregatorParts {
     var jobAccess: JobSourceAccess?
     /// Nil looks for the job of no hold among the processes.
     var jobProbe: JobRunProbing?
+    /// Nil joins no hotspot and reads nothing of the Wi-Fi.
+    var hotspot: HotspotParts?
 
     static func system() -> AggregatorParts {
         AggregatorParts(
@@ -55,9 +57,25 @@ struct AggregatorParts {
             chime: SystemLidChimePlayer(),
             keyLayouts: SystemKeyLayout.inUse,
             jobAccess: SystemJobSourceAccess(),
-            jobProbe: SystemJobRunProbe()
+            jobProbe: SystemJobRunProbe(),
+            hotspot: HotspotParts(
+                wifi: SystemWiFi(), passwords: KeychainHotspotPassword(), location: SystemLocation(), path: SystemNetworkPath(),
+                autoJoin: HotspotSystemSettings.autoJoin
+            )
         )
     }
+}
+
+/// What "Join your iPhone hotspot" reaches the Mac through.
+struct HotspotParts {
+    var wifi: WiFiAccess
+    var passwords: HotspotPasswordStoring
+    var location: LocationAsking
+    /// For the look right before a join. Nil while macOS has not said
+    /// yet, which counts as online.
+    var path: NetworkPathReading
+    /// "Ask to join hotspots" of macOS.
+    var autoJoin: () -> HotspotAutoJoin?
 }
 
 /// Joins the detection engine to what it drives: the power assertions, the
@@ -220,6 +238,11 @@ final class StateAggregator: ObservableObject {
     /// The jobs that were found, the alarm that is set and the history,
     /// for Settings and the menu.
     @PublishedOnChange private(set) var jobWake = JobWakeView()
+    /// "Join your iPhone hotspot": its settings and what the last try
+    /// came to, for Settings and the menu.
+    @PublishedOnChange private(set) var hotspot = HotspotView()
+    /// "Ask to join hotspots" of macOS, read while the feature is on.
+    @PublishedOnChange private(set) var hotspotAutoJoin: HotspotAutoJoin?
 
     let sleepFlag: SleepFlagController
     let canSetUpHelper = AppRelocator.isInSystemApplications
@@ -293,6 +316,9 @@ final class StateAggregator: ObservableObject {
     /// What the store read last. Empty while the feature is off.
     private var jobReadings: [JobSourceReading] = []
     private var jobTimer: Timer?
+    /// Nil in the smoke test.
+    private let hotspotLoop: HotspotHopLoop?
+    private let readHotspotAutoJoin: () -> HotspotAutoJoin?
     private var cancellables = Set<AnyCancellable>()
     private var sigtermSource: DispatchSourceSignal?
     private static let enabledKey = "StateAggregator.enabled"
@@ -357,6 +383,13 @@ final class StateAggregator: ObservableObject {
         self.jobSettings = JobSettingsStore.load(from: defaults)
         self.jobLoop = JobWakeLoop(sender: parts.sleepFlag, probe: parts.jobProbe, defaults: defaults)
         self.jobStore = parts.jobAccess.map { JobStore(access: $0) }
+        self.hotspotLoop = parts.hotspot.map { hotspot in
+            HotspotHopLoop(
+                wifi: hotspot.wifi, passwords: hotspot.passwords, location: hotspot.location, defaults: defaults,
+                isOnline: Self.online(hotspot.path), perform: Self.hotspotPerform()
+            )
+        }
+        self.readHotspotAutoJoin = parts.hotspot?.autoJoin ?? { nil }
         safetyMonitor.batteryFloorPercent = settings.batteryFloorPercent
         safetyMonitor.batteryFloorEnabled = settings.batteryFloorEnabled
 
@@ -438,6 +471,8 @@ final class StateAggregator: ObservableObject {
         registerShortcuts()
         // The loop takes its first turn with the first sample.
         jobLoop.onChange = { [weak self] in self?.jobWakeChanged() }
+        hotspotLoop?.onChange = { [weak self] in self?.hotspotChanged() }
+        hotspotChanged()
         syncJobStore()
         DistributedNotificationCenter.default().publisher(for: SystemKeyLayout.changed)
             .receive(on: DispatchQueue.main)
@@ -485,7 +520,8 @@ final class StateAggregator: ObservableObject {
             macSleep: macSleep,
             batteryPercent: batteryPercent,
             sleepNote: sleepNote,
-            wakeAlarm: jobWake.alarm
+            wakeAlarm: jobWake.alarm,
+            hotspotSince: hotspot.onHotspotSince
         )
     }
 
@@ -855,6 +891,9 @@ final class StateAggregator: ObservableObject {
         // Sends again what did not get through.
         syncSleepFlag()
         if sample.frame.at.timeIntervalSince(lastHelperRefresh) >= Self.helperRefreshInterval { refreshHelperStatus() }
+        // With the decision of this sample: a stop or the offline rule
+        // that let go of the agents ends the tries at once.
+        hotspotLoop?.sampled(decision: decision, context: context, at: sample.frame.time)
         writeTestState()
     }
 
@@ -1039,7 +1078,7 @@ final class StateAggregator: ObservableObject {
             decision: decision, frame: engine.frame, assertionHeld: power.held,
             helper: sleepFlag.helperStatus, setup: sleepFlag.setup, flagSet: sleepFlag.sleepDisabled,
             lidAngle: display?.lidAngle, safety: engine.safety, closedLid: closedLidLimit, offline: engine.offlineRule, gate: engine.gateCode,
-            wakeForJobs: jobSettings.wakeForJobs, jobs: jobWake, notices: testNotices.events, chimeAt: chimePlayedAt
+            wakeForJobs: jobSettings.wakeForJobs, jobs: jobWake, hotspot: hotspot, notices: testNotices.events, chimeAt: chimePlayedAt
         )
     }
 
@@ -1216,6 +1255,68 @@ final class StateAggregator: ObservableObject {
         }
         RunLoop.main.add(timer, forMode: .common)
         jobTimer = timer
+    }
+
+    // MARK: Join your iPhone hotspot
+
+    /// Asked off the main thread, right before a join.
+    private nonisolated static func online(_ path: NetworkPathReading) -> () -> Bool {
+        { path.path()?.isOnline ?? true }
+    }
+
+    /// The work of the loop runs on a queue of its own: a scan and a
+    /// join block for seconds.
+    private nonisolated static func hotspotPerform() -> HotspotHopLoop.Perform {
+        let queue = DispatchQueue(label: "com.caffeinagent.app.hotspot", qos: .utility)
+        return { work, done in
+            queue.async {
+                let outcome = work()
+                DispatchQueue.main.async { MainActor.assumeIsolated { done(outcome) } }
+            }
+        }
+    }
+
+    private func hotspotChanged() {
+        guard let hotspotLoop else { return }
+        hotspot = hotspotLoop.view
+        if !hotspot.settings.on { hotspotAutoJoin = nil }
+        writeTestState()
+    }
+
+    /// The switch. Off forgets the name and the password.
+    func setHotspotOn(_ on: Bool) {
+        hotspotLoop?.setOn(on)
+        refreshHotspot()
+    }
+
+    func setHotspotHopBack(_ on: Bool) {
+        hotspotLoop?.setHopBack(on)
+    }
+
+    /// "Save": the only place that asks macOS for Location Services.
+    func saveHotspot(name: String, password: String) {
+        hotspotLoop?.save(name: name, password: password)
+        engine.requestSample()
+    }
+
+    func forgetHotspot() {
+        hotspotLoop?.forget()
+    }
+
+    /// Called when Settings opens. Nothing is read while the feature is
+    /// off.
+    func refreshHotspot() {
+        guard hotspot.settings.on else { return }
+        hotspotLoop?.refresh()
+        hotspotAutoJoin = readHotspotAutoJoin()
+    }
+
+    func openLocationSettings() {
+        if let url = HotspotSystemSettings.locationPrivacy { NSWorkspace.shared.open(url) }
+    }
+
+    func openWiFiSettings() {
+        if let url = HotspotSystemSettings.wifi { NSWorkspace.shared.open(url) }
     }
 
     // MARK: Hooks

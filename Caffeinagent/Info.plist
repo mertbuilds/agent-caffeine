@@ -30,6 +30,10 @@
 	<true/>
 	<key>NSHumanReadableCopyright</key>
 	<string>Copyright © 2026 Mert Duzgun</string>
+	<key>NSLocationUsageDescription</key>
+	<string>Agent Caffeine needs this to find your iPhone hotspot by its name. It does not read or keep your location.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Agent Caffeine needs this to find your iPhone hotspot by its name. It does not read or keep your location.</string>
 	<key>NSSupportsAutomaticTermination</key>
 	<false/>
 	<key>NSSupportsSuddenTermination</key>

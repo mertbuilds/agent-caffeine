@@ -79,6 +79,12 @@ targets:
         NSHumanReadableCopyright: "Copyright © 2026 Mert Duzgun"
         NSSupportsAutomaticTermination: false
         NSSupportsSuddenTermination: false
+        # "Join your iPhone hotspot": from macOS 14 on, macOS shows the
+        # names of Wi-Fi networks only to an app that is allowed in
+        # Location Services. Asked when the user saves a hotspot, never at
+        # launch.
+        NSLocationUsageDescription: "Agent Caffeine needs this to find your iPhone hotspot by its name. It does not read or keep your location."
+        NSLocationWhenInUseUsageDescription: "Agent Caffeine needs this to find your iPhone hotspot by its name. It does not read or keep your location."
         # Sparkle. The appcast is written by scripts/release.sh and served by
         # the site. SUPublicEDKey is the public half of the EdDSA key pair in
         # the login keychain under the account agent-caffeine, backed up in

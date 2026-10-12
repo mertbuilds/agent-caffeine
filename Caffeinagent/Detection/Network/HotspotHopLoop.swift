@@ -112,16 +112,20 @@ final class HotspotHopLoop {
     }
 
     private func run(_ action: HotspotHop.Action) {
-        let (wifi, passwords, gate, isOnline) = (wifi, passwords, gate, isOnline)
-        perform({
-            HotspotJob.run(action, wifi: wifi, password: { passwords.load() }, mayJoin: { gate.isOpen && !isOnline() })
-        }, { [weak self] outcome in
+        perform(Self.work(action, wifi: wifi, passwords: passwords, gate: gate, isOnline: isOnline), { [weak self] outcome in
             guard let self else { return }
             self.hop.finished(action, outcome, at: self.now())
             var next = self.view
             next.state = self.hop.state
             self.publish(next)
         })
+    }
+
+    /// Made outside the main actor: it runs off the main thread.
+    private nonisolated static func work(
+        _ action: HotspotHop.Action, wifi: WiFiAccess, passwords: HotspotPasswordStoring, gate: HopGate, isOnline: @escaping () -> Bool
+    ) -> () -> HotspotHop.Outcome {
+        { HotspotJob.run(action, wifi: wifi, password: { passwords.load() }, mayJoin: { gate.isOpen && !isOnline() }) }
     }
 
     private func publish(_ next: HotspotView) {
@@ -163,6 +167,8 @@ final class HotspotHopLoop {
         settings.name = name
         settings.saves += 1
         store(settings)
+        // The answer of macOS can take as long as the user takes.
+        note(.saved(location.permission))
         location.ask { [weak self] permission in
             guard let self, self.view.settings.on else { return }
             var next = self.view
