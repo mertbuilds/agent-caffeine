@@ -39,7 +39,6 @@ final class PanelBarTests: XCTestCase {
     func testIsTheBarOfTheState() {
         var paused = input()
         paused.pausedUntil = now.addingTimeInterval(3600)
-        paused.entitlement = .trial(daysLeft: 9)
         var reachable = input()
         reachable.reachableUntil = now.addingTimeInterval(3600)
         reachable.onBattery = true
@@ -75,14 +74,6 @@ final class PanelBarTests: XCTestCase {
         var reachableLonger = reachable
         reachableLonger.reachableUntil = now.addingTimeInterval(2 * 3600)
         XCTAssertNotEqual(MenuModel.bar(reachableLonger), MenuModel.bar(reachable), "Another end of \"stay reachable\"")
-
-        var trial = input()
-        trial.entitlement = .trial(daysLeft: 9)
-        XCTAssertEqual(MenuModel.bar(trial).licenseActions, [.buy, .enterKey])
-        XCTAssertNotEqual(MenuModel.bar(trial), plain)
-        var withKey = trial
-        withKey.hasLicenseKey = true
-        XCTAssertNotEqual(MenuModel.bar(withKey), MenuModel.bar(trial), "Whoever has a key is not offered one")
 
         var onBattery = input()
         onBattery.onBattery = true

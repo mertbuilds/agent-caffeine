@@ -347,7 +347,7 @@ final class CursorTimelineTests: XCTestCase {
         let (readings, memory) = VerdictRules.readings(for: sample.frame, memory: agentMemory, settings: settings)
         agentMemory = memory
         let (decision, policy) = HoldPolicy.decide(
-            readings: readings, memory: policyMemory, mode: .agentWorking, enabled: true, entitlement: nil, safety: nil,
+            readings: readings, memory: policyMemory, mode: .agentWorking, enabled: true, safety: nil,
             settings: settings, context: sample.frame.context, now: sample.frame.at
         )
         policyMemory = policy

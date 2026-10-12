@@ -6,17 +6,12 @@ enum PreferencesTab: Hashable {
     case shortcuts
     case agents
     case lidClosed
-    case license
     case about
 }
 
 struct PreferencesView: View {
     @ObservedObject var aggregator: StateAggregator
     @ObservedObject var updater: Updater
-    @State private var licenseKey: String = ""
-    @State private var confirmingDeactivate = false
-
-    private var license: LicenseManager { aggregator.license }
 
     var body: some View {
         TabView(selection: $aggregator.preferencesTab) {
@@ -77,24 +72,17 @@ struct PreferencesView: View {
             )
             .tabItem { Label("Battery and lid", systemImage: "laptopcomputer") }
             .tag(PreferencesTab.lidClosed)
-            Form { licenseSection }
-                .formStyle(.grouped)
-                .tabItem { Label("License", systemImage: "key") }
-                .tag(PreferencesTab.license)
             AboutPreferences(
                 version: AppVersion.current,
                 canCheckForUpdates: updater.canCheckForUpdates,
                 hooksOn: HookRowModel.rows(statuses: aggregator.hookStatuses).filter(\.isOn).map(\.entry),
                 helperRegistered: aggregator.sleepFlag.helperStatus != .notRegistered,
                 agentSetupOn: aggregator.agentSetup.isSetUp,
-                licensed: aggregator.entitlement == .licensed && license.record.activationID != nil,
-                busy: license.busy,
                 checkForUpdates: updater.checkForUpdates,
                 showSetup: { OnboardingWindow.show(aggregator: aggregator) },
                 turnOffHooks: { $0.forEach { aggregator.setHooks($0, on: false) } },
                 removeHelper: aggregator.removeHelper,
                 removeAgentSetup: aggregator.removeAgentSetup,
-                deactivate: { confirmingDeactivate = true },
                 showInFinder: { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) },
                 quit: { NSApp.terminate(nil) }
             )
@@ -103,14 +91,6 @@ struct PreferencesView: View {
         }
         .frame(width: 480, height: 500)
         .tint(.brand)
-        // On the window: the tabs License and About both ask it.
-        .confirmationDialog(Self.deactivateQuestion, isPresented: $confirmingDeactivate) {
-            Button("Deactivate", role: .destructive) {
-                Task { await license.deactivate() }
-            }
-        } message: {
-            Text(Self.deactivateConsequence)
-        }
         .onAppear {
             aggregator.refreshHelperStatus()
             aggregator.refreshHookStatuses()
@@ -120,122 +100,10 @@ struct PreferencesView: View {
             aggregator.refreshJobs()
         }
     }
-
-    private static let deactivateQuestion = "Deactivate Agent Caffeine on this Mac?"
-    private static let deactivateConsequence = "You can then use the key on another Mac. Agent Caffeine stops keeping this Mac awake until you activate a key again."
-
-    private var licenseSection: some View {
-        Section("License") {
-            if aggregator.entitlement == .licensed {
-                Label("Licensed", systemImage: "checkmark.seal.fill")
-                    .foregroundStyle(.green)
-                if let key = license.record.key {
-                    Text("Key ending in \(String(key.suffix(6)))")
-                        .font(.system(.callout, design: .monospaced))
-                        .foregroundStyle(.secondary)
-                }
-                if let macs = license.record.macLimit {
-                    Text(PanelText.keyRunsOn(macs: macs))
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                if let lastValidated = license.record.lastValidated {
-                    Text("Last checked \(lastValidated.formatted(.relative(presentation: .named)))")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                HStack {
-                    Button("Deactivate this Mac…") { confirmingDeactivate = true }
-                        .disabled(license.busy)
-                    if license.busy {
-                        ProgressView().controlSize(.small)
-                    }
-                    Spacer()
-                    Button("Manage in Polar") { NSWorkspace.shared.open(license.config.customerPortalURL) }
-                }
-            } else if aggregator.entitlement == .expired(.unverified) {
-                Text(ExpiredReason.unverified.text)
-                    .foregroundStyle(.orange)
-                HStack {
-                    Button("Check now") { Task { await license.checkNow() } }
-                        .disabled(license.busy)
-                    if license.busy {
-                        ProgressView().controlSize(.small)
-                    }
-                    Spacer()
-                    Button("Manage in Polar") { NSWorkspace.shared.open(license.config.customerPortalURL) }
-                }
-            } else {
-                Text(licenseStatus)
-                    .foregroundStyle(aggregator.entitlement.allowsHolding ? AnyShapeStyle(.secondary) : AnyShapeStyle(.orange))
-                TextField("License key", text: $licenseKey, prompt: Text("AGENTCAF-…"))
-                    .textFieldStyle(.roundedBorder)
-                    .font(.system(.body, design: .monospaced))
-                    .onSubmit(activate)
-                HStack {
-                    Button("Activate", action: activate)
-                        .disabled(LicenseClient.cleaned(licenseKey).isEmpty || license.busy)
-                    if license.busy {
-                        ProgressView().controlSize(.small)
-                    }
-                    Spacer()
-                    // Whoever has a key already bought one.
-                    if license.record.key == nil {
-                        Button(PanelText.title(of: .buy)) { NSWorkspace.shared.open(license.config.checkoutURL) }
-                    }
-                }
-                // The portal lists the keys of whoever bought before. The
-                // message of a full key has its own link to it.
-                if license.record.key == nil, license.message != .limitReached {
-                    Link("Bought before? Find your key", destination: license.config.customerPortalURL)
-                        .font(.callout)
-                }
-            }
-            if let message = license.message {
-                Text(message.text)
-                    .font(.callout)
-                    .foregroundStyle(.red)
-                if message == .limitReached {
-                    Link("Manage in Polar", destination: license.config.customerPortalURL)
-                        .font(.callout)
-                }
-                if message == .revoked {
-                    Link("Contact support", destination: AppLinks.contact)
-                        .font(.callout)
-                }
-            }
-            if let error = license.storageError {
-                Text("\(error.hasSuffix(".") ? error : error + ".") Agent Caffeine keeps your trial and your last license check in its preferences until it can read the Keychain again.")
-                    .font(.caption)
-                    .foregroundStyle(.red)
-            }
-        }
-        .onAppear {
-            if licenseKey.isEmpty, let key = license.record.key { licenseKey = key }
-        }
-    }
-
-    private var licenseStatus: String {
-        switch aggregator.entitlement {
-        case .trial(let daysLeft):
-            return "\(PanelText.trialStatus(daysLeft: daysLeft, end: license.trialEnd, now: Date())) \(PanelText.trialThen)"
-        case .expired(let reason):
-            return reason.text
-        case .licensed:
-            return ExpiredReason.trialOver.text
-        }
-    }
-
-    private func activate() {
-        let key = licenseKey
-        guard !LicenseClient.cleaned(key).isEmpty, !license.busy else { return }
-        Task { await license.activate(key: key) }
-    }
-
 }
 
-/// The tab About: the version, what the app sends, help, and how to
-/// remove the app with everything it added.
+/// The tab About: the version, what the app sends, the license and the
+/// source code, help, and how to remove the app with everything it added.
 struct AboutPreferences: View {
     let version: String
     var canCheckForUpdates = false
@@ -244,15 +112,11 @@ struct AboutPreferences: View {
     var helperRegistered = false
     /// The skill or the link to the command line tool is on this Mac.
     var agentSetupOn = false
-    /// This Mac holds an activation of a key.
-    var licensed = false
-    var busy = false
     var checkForUpdates: () -> Void = {}
     var showSetup: () -> Void = {}
     var turnOffHooks: ([HookCatalogEntry]) -> Void = { _ in }
     var removeHelper: () -> Void = {}
     var removeAgentSetup: () -> Void = {}
-    var deactivate: () -> Void = {}
     var showInFinder: () -> Void = {}
     var quit: () -> Void = {}
 
@@ -268,7 +132,7 @@ struct AboutPreferences: View {
                 Text("While it keeps the Mac awake, Agent Caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. For a closed lid on battery, its helper also turns on the SleepDisabled setting of macOS, and turns it off when Agent Caffeine stops or quits. With Wake for jobs on, the helper also keeps one wake time in the schedule of macOS, and takes it away when Agent Caffeine quits.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Text("Agent Caffeine checks caffeinagent.com for updates. It checks your license key with Polar. It sends the key and your Mac's model, and nothing about you or your agents.")
+                Text("Agent Caffeine checks caffeinagent.com for updates. It sends nothing about you or your agents.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 HStack(spacing: 4) {
@@ -284,6 +148,14 @@ struct AboutPreferences: View {
                     Spacer()
                     Button(PanelText.quit, action: quit)
                 }
+            }
+            Section(PanelText.freeAndOpenSource) {
+                Text(PanelText.licenseExplained)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                row(PanelText.sourceCode) { Link(PanelText.openOnGitHub, destination: AppLinks.sourceCode) }
+                row(PanelText.supportTheProject) { Link(PanelText.payWhatYouWant, destination: AppLinks.support) }
+                row(PanelText.acknowledgements) { Link(PanelText.thirdPartyNotices, destination: AppLinks.acknowledgements) }
             }
             Section("Help") {
                 row("Questions and answers") { Link("Open help", destination: AppLinks.help) }
@@ -308,11 +180,6 @@ struct AboutPreferences: View {
                     help: "This removes the skill from the skills folders of your agents, and the link in ~/.local/bin.",
                     done: !agentSetupOn
                 ) { Button("Remove", action: removeAgentSetup) }
-                step(
-                    licensed ? "Deactivate this Mac" : "No license key is active on this Mac",
-                    help: "This frees your license key for another Mac.",
-                    done: !licensed
-                ) { Button("Deactivate…", action: deactivate).disabled(busy) }
                 step(
                     "Quit Agent Caffeine and move it to the Trash",
                     help: "The app is in your Applications folder.",
@@ -917,7 +784,7 @@ private struct PreferencesPreview: View {
                 setUp: {}, remove: {}, openLoginItems: {}, removeSudoersEntry: {}
             )
             .tabItem { Label("Battery and lid", systemImage: "laptopcomputer") }
-            AboutPreferences(version: "1.0 (1)", hooksOn: HookCatalog.entries.prefix(2).map { $0 }, helperRegistered: true, licensed: true)
+            AboutPreferences(version: "1.0 (1)", hooksOn: HookCatalog.entries.prefix(2).map { $0 }, helperRegistered: true)
                 .tabItem { Label("About", systemImage: "info.circle") }
         }
         .frame(width: 480, height: 500)

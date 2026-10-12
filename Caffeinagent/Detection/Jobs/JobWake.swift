@@ -47,8 +47,8 @@ enum JobWakeStatus: Equatable {
 /// passes the times and makes the calls.
 ///
 /// - The planner is asked at every turn, so a change of a job, a setting,
-///   the power source, the battery, a stop, a pause or the license moves
-///   the alarm at once.
+///   the power source, the battery, a stop or a pause moves the alarm
+///   at once.
 /// - A new time goes to the helper at once. The same time goes again
 ///   every `renewEvery` seconds the Mac was awake: the helper takes an
 ///   alarm away that nobody asked for in 10 minutes.

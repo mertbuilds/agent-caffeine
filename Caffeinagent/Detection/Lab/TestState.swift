@@ -30,8 +30,7 @@ struct TestState: Codable, Equatable {
         var hold: Bool
         /// The case of `HoldHeadline`: "working", "noAgents", "paused".
         var headline: String
-        /// What the headline is about, where it has a kind: the safety
-        /// stop or why the license does not hold.
+        /// The kind of the safety stop, where the headline is one.
         var reason: String?
         var stop: Bool
         /// The app holds its power assertions.
@@ -142,9 +141,6 @@ struct TestState: Codable, Equatable {
     var reachableUntil: TimeInterval?
     /// `AwakeMode.rawValue`.
     var mode: String
-    /// "licensed", "trial" or "expired".
-    var entitlement: String
-    var trialDaysLeft: Int?
     var decision: Decision
     var flag: Flag
     /// Nil until the first sample.
@@ -178,6 +174,5 @@ enum TestNoticeKind: String, CaseIterable {
     case finished
     case safetyStop
     case batteryWarning
-    case trial
     case hidden
 }

@@ -44,7 +44,7 @@ final class LabRecorderTests: XCTestCase {
 
     private func decision(for frame: EvidenceFrame) -> HoldDecision {
         let (readings, _) = VerdictRules.readings(for: frame, memory: [:], settings: DetectionSettings())
-        return HoldPolicy.decide(readings: readings, memory: PolicyMemory(), mode: .agentWorking, enabled: true, entitlement: nil,
+        return HoldPolicy.decide(readings: readings, memory: PolicyMemory(), mode: .agentWorking, enabled: true,
                                  safety: nil, settings: DetectionSettings(), context: frame.context, now: frame.at).0
     }
 

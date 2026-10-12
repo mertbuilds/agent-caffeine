@@ -29,8 +29,8 @@ extension SafetyStop {
         return "\(notificationText). \(PanelText.stillWorking(working))"
     }
 
-    /// The closed lid limit is the last stop: the switch, a pause and the
-    /// license are named before it. Heat and the battery come first.
+    /// The closed lid limit is the last stop: the switch and a pause are
+    /// named before it. Heat and the battery come first.
     var isLastStop: Bool {
         if case .closedLid = self { return true }
         return false

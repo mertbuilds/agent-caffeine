@@ -184,7 +184,6 @@ final class JobPlannerTests: XCTestCase {
         let stops: [(JobPlanContext, NoAlarmReason)] = [
             (JobPlanContext(enabled: false), .switchedOff),
             (JobPlanContext(pausedUntil: at("2026-10-10 12:30")), .paused),
-            (JobPlanContext(entitlement: .expired(.trialOver)), .notEntitled),
             (JobPlanContext(safety: .tooHot), .safetyStop),
             (JobPlanContext(safety: .batteryLow(percent: 18)), .safetyStop),
             (JobPlanContext(safety: .weakCharger(percent: 18)), .safetyStop),
@@ -197,8 +196,6 @@ final class JobPlannerTests: XCTestCase {
             XCTAssertEqual(plan.nextRuns.count, 1, "The list is still there")
         }
         XCTAssertNotNil(plan(jobs, context: JobPlanContext(pausedUntil: at("2026-10-10 11:00"))).alarm, "A pause that is over")
-        XCTAssertNotNil(plan(jobs, context: JobPlanContext(entitlement: .trial(daysLeft: 1))).alarm)
-        XCTAssertNotNil(plan(jobs, context: JobPlanContext(entitlement: .licensed)).alarm)
     }
 
     func testOnBatteryThereIsNoAlarmUnlessTheUserAllowsIt() {

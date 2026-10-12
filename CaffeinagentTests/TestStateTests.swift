@@ -52,7 +52,7 @@ final class TestStateTests: XCTestCase {
         notices.note(.finished, at: at(-10))
         return TestStateInput(
             at: at(1), version: "1.0.3", build: "17", bundlePath: "/Applications/agent caffeine.app", pid: 4242,
-            enabled: true, pausedUntil: at(900), reachableUntil: at(1800), mode: .agentWorking, entitlement: .trial(daysLeft: 5),
+            enabled: true, pausedUntil: at(900), reachableUntil: at(1800), mode: .agentWorking,
             decision: decision, frame: frame, assertionHeld: true, helper: .enabled, setup: .ready, flagSet: true,
             lidAngle: 3.04, safety: .batteryLow(percent: 20), closedLid: closedLid, gate: WakeGate().code, wakeForJobs: true,
             jobs: JobWakeView(
@@ -77,8 +77,6 @@ final class TestStateTests: XCTestCase {
         XCTAssertTrue(state.on)
         XCTAssertEqual(state.pausedUntil, at(900).timeIntervalSince1970)
         XCTAssertEqual(state.mode, "agentWorking")
-        XCTAssertEqual(state.entitlement, "trial")
-        XCTAssertEqual(state.trialDaysLeft, 5)
         XCTAssertEqual(state.decision, TestState.Decision(hold: true, headline: "working", reason: nil, stop: false, assertion: true))
         XCTAssertEqual(state.flag, TestState.Flag(wanted: true, helper: "enabled", setup: "ready", set: true))
         XCTAssertEqual(state.power, TestState.Power(source: "battery", percent: 64, charging: false))
@@ -118,8 +116,6 @@ final class TestStateTests: XCTestCase {
         XCTAssertEqual(TestState(input).safety, "closedLidTime")
         input.closedLid = ClosedLidLimit()
         XCTAssertNil(TestState(input).closedLid, "No closed-lid period")
-        input.decision.headline = .notEntitled(.trialOver)
-        XCTAssertEqual(TestState(input).decision.reason, "trialOver")
         input.frame = nil
         XCTAssertNil(TestState(input).power, "Nothing is known of the Mac before the first sample")
         XCTAssertNil(TestState(input).lid)
@@ -152,7 +148,6 @@ final class TestStateTests: XCTestCase {
     private static let texts: [String: Set<String>] = [
         "version": ["1.0.3"], "build": ["17"], "path": ["/Applications/agent caffeine.app"],
         "mode": Set(AwakeMode.allCases.map(\.rawValue)),
-        "entitlement": ["licensed", "trial", "expired"],
         "headline": ["working"], "helper": ["enabled"], "setup": ["ready"],
         "source": ["battery", "ac", "launchd", "crontab", "hermes"],
         "safety": ["batteryLow", "weakCharger", "tooHot", "closedLidTime", "closedLidDrop"],
@@ -170,7 +165,7 @@ final class TestStateTests: XCTestCase {
 
     func testTheFileHoldsNoTextOfTheUser() throws {
         let known: Set<String> = [
-            "v", "at", "app", "on", "pausedUntil", "reachableUntil", "mode", "entitlement", "trialDaysLeft", "decision", "flag",
+            "v", "at", "app", "on", "pausedUntil", "reachableUntil", "mode", "decision", "flag",
             "power", "lid", "safety", "closedLid", "since", "heldSeconds", "percentAtStart", "limitSeconds", "limitDrop", "gate", "agents", "holds", "jobs", "notices", "chimeAt",
             "version", "build", "path", "pid", "hold", "headline", "stop", "assertion", "wanted", "helper", "setup", "set",
             "source", "percent", "charging", "closed", "angle", "id", "role", "state", "why", "level", "kind", "start", "end",

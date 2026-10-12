@@ -323,11 +323,11 @@ final class ManualHoldTests: XCTestCase {
 
     private func decide(
         _ holds: [ManualHold], readings: [AgentReading] = [], at seconds: TimeInterval = 0, enabled: Bool = true, pausedUntil: Date? = nil,
-        entitlement: Entitlement? = .licensed, safety: SafetyStop? = nil, settings: DetectionSettings = DetectionSettings(), mayHold: Bool = true
+        safety: SafetyStop? = nil, settings: DetectionSettings = DetectionSettings(), mayHold: Bool = true
     ) -> HoldDecision {
         HoldPolicy.decide(
             readings: readings, memory: PolicyMemory(), mode: .agentWorking, enabled: enabled, pausedUntil: pausedUntil, holds: holds,
-            entitlement: entitlement, safety: safety, settings: settings, context: FrameContext(), mayHold: mayHold, now: at(seconds)
+            safety: safety, settings: settings, context: FrameContext(), mayHold: mayHold, now: at(seconds)
         ).0
     }
 
@@ -377,7 +377,6 @@ final class ManualHoldTests: XCTestCase {
             (decide(holds, safety: .tooHot), .safetyStop(.tooHot)),
             (decide(holds, pausedUntil: at(3600)), .paused(until: at(3600))),
             (decide(holds, enabled: false), .switchedOff),
-            (decide(holds, entitlement: .expired(.trialOver)), .notEntitled(.trialOver)),
         ]
         for (decision, headline) in stops {
             XCTAssertFalse(decision.hold, "\(headline)")
@@ -407,7 +406,7 @@ final class ManualHoldTests: XCTestCase {
     func testAHoldIsNamedBeforeStayReachable() {
         let (decision, _) = HoldPolicy.decide(
             readings: [], memory: PolicyMemory(), mode: .agentWorking, enabled: true, reachableUntil: at(3600), holds: [timed()],
-            entitlement: .licensed, safety: nil, settings: DetectionSettings(), context: FrameContext(), now: at(0)
+            safety: nil, settings: DetectionSettings(), context: FrameContext(), now: at(0)
         )
         XCTAssertEqual(decision.headline, .manualHold(.one("A command")))
     }

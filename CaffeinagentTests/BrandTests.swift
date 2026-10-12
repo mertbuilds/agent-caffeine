@@ -45,7 +45,6 @@ final class BrandTests: XCTestCase {
         let machineLines = [
             "// Written by agent caffeine. Turn it off in agent caffeine > Preferences > Agents.",
             "// It tells agent caffeine when ",
-            "add[kSecAttrLabel as String] = \"agent caffeine license\"",
         ]
         for file in files {
             let source = try String(contentsOf: file, encoding: .utf8)
@@ -85,8 +84,7 @@ final class BrandTests: XCTestCase {
     }
 
     /// What does not change with the name of the bundle: the binary of the
-    /// app, the command, the first lines of the plugins the app writes and
-    /// the label of the Keychain item.
+    /// app, the command and the first lines of the plugins the app writes.
     func testTheNamesAMachineReadsDoNotChange() throws {
         let root = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
         let project = try String(contentsOf: root.appendingPathComponent("project.yml"), encoding: .utf8)
@@ -100,8 +98,6 @@ final class BrandTests: XCTestCase {
             XCTAssertTrue(HookCatalog.pluginSource(appPath: path).hasPrefix("// agent-caffeine-hook v=\(HookCatalog.pluginVersion)\n" + comment + "// It tells agent caffeine when opencode works"))
             XCTAssertTrue(HookCatalog.piExtensionSource(appPath: path).hasPrefix("// agent-caffeine-hook v=\(HookCatalog.piExtensionVersion)\n" + comment + "// It tells agent caffeine when Pi works"))
         }
-        let keychain = try String(contentsOf: root.appendingPathComponent("Caffeinagent/License/KeychainLicenseStore.swift"), encoding: .utf8)
-        XCTAssertTrue(keychain.contains("add[kSecAttrLabel as String] = \"agent caffeine license\""))
     }
 
     /// The files hold the path of the app, so each text has one form per

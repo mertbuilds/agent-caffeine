@@ -8,8 +8,6 @@ struct PanelView: View {
     let bar: PanelBar
     @Binding var enabled: Bool
     @Binding var mode: AwakeMode
-    /// A license check is under way.
-    var busy = false
     var startsExpanded = false
     /// Groups that start the other way round than their kind says.
     var startsToggled: Set<String> = []
@@ -22,9 +20,7 @@ struct PanelView: View {
             // The clock stops above the bar. A tick that reached the bar
             // would close the submenu the user has open.
             PanelClock { now in
-                PanelStateView(
-                    state: state(now), busy: busy, startsExpanded: startsExpanded, startsToggled: startsToggled, perform: perform
-                )
+                PanelStateView(state: state(now), startsExpanded: startsExpanded, startsToggled: startsToggled, perform: perform)
             }
             Divider()
             BottomBar(bar: bar, enabled: $enabled, mode: $mode, perform: perform, openPreferences: openPreferences, quit: quit)
@@ -39,7 +35,6 @@ struct PanelView: View {
 /// and the list.
 private struct PanelStateView: View {
     let state: PanelState
-    let busy: Bool
     let startsExpanded: Bool
     let startsToggled: Set<String>
     let perform: (PanelAction) -> Void
@@ -54,7 +49,7 @@ private struct PanelStateView: View {
                         .transition(.opacity)
                 }
                 if let attention = state.attention {
-                    AttentionLine(attention: attention, busy: busy, perform: perform)
+                    AttentionLine(attention: attention, perform: perform)
                         .transition(.opacity)
                 }
             }

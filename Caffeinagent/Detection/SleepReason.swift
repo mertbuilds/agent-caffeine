@@ -27,7 +27,6 @@ enum SleepReason: Equatable {
     case battery(percent: Int)
     case tooHot
     case paused
-    case notEntitled(ExpiredReason)
     case waitedTooLong(HoldSubject, hold: TimeInterval)
     /// The closed lid limit ended a hold, with the agents that still
     /// worked then.
@@ -46,7 +45,6 @@ enum SleepReason: Equatable {
         case .safetyStop(.tooHot): return .tooHot
         case .safetyStop(.closedLid(let stop)): return .closedLidLimit(stop, working: snapshot.working)
         case .paused: return .paused
-        case .notEntitled(let reason): return .notEntitled(reason)
         case .waitingReleased(let subject): return .waitedTooLong(subject, hold: snapshot.waitingHold)
         case .switchedOff, .idle, .noAgents: return nil
         case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess, .reachable, .manualHold, .scheduledJob:

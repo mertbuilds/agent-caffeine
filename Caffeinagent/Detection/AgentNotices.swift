@@ -73,7 +73,7 @@ struct AgentNoticeInput {
     /// The user touched the keyboard or the pointer a moment ago.
     var userActive = false
     var settings = AgentNoticeSettings()
-    /// False while Agent Caffeine is off, paused or without a license.
+    /// False while Agent Caffeine is off or paused.
     var active = true
 }
 
@@ -84,7 +84,7 @@ struct AgentNoticeDecision: Equatable {
         case told
         /// It waited already when the app started or the switch went on.
         case atLaunch
-        /// Agent Caffeine is off, paused or without a license.
+        /// Agent Caffeine is off or paused.
         case notActive
         /// "Only when not in front" is on and the user works in its app.
         case inFront

@@ -63,7 +63,7 @@ final class ClosedLidLimitTests: XCTestCase {
             let lidStop = limit.update(context, holding: held, at: time, afterGap: gap != nil)
             let (next, nextMemory) = HoldPolicy.decide(
                 readings: readings, memory: memory, mode: .agentWorking, enabled: enabled, reachableUntil: reachableUntil, holds: holds,
-                jobHolds: jobHolds, entitlement: .licensed, safety: otherStop ?? lidStop.map(SafetyStop.closedLid), settings: settings,
+                jobHolds: jobHolds, safety: otherStop ?? lidStop.map(SafetyStop.closedLid), settings: settings,
                 context: context, now: now
             )
             memory = nextMemory
@@ -399,17 +399,16 @@ final class ClosedLidLimitTests: XCTestCase {
 
     func testEveryOtherStopWins() {
         let lid = SafetyStop.closedLid(.time(seconds: 3 * Self.hour))
-        func decide(enabled: Bool = true, pausedUntil: Date? = nil, entitlement: Entitlement = .licensed) -> HoldHeadline {
+        func decide(enabled: Bool = true, pausedUntil: Date? = nil) -> HoldHeadline {
             HoldPolicy.decide(
                 readings: [Self.reading(.working)], memory: PolicyMemory(), mode: .agentWorking, enabled: enabled, pausedUntil: pausedUntil,
-                entitlement: entitlement, safety: lid, settings: DetectionSettings(), context: FrameContext(), now: Self.start
+                safety: lid, settings: DetectionSettings(), context: FrameContext(), now: Self.start
             ).0.headline
         }
         XCTAssertEqual(decide(), .safetyStop(lid))
         XCTAssertEqual(decide(enabled: false), .switchedOff)
         let until = Self.start.addingTimeInterval(600)
         XCTAssertEqual(decide(pausedUntil: until), .paused(until: until))
-        XCTAssertEqual(decide(entitlement: .expired(.trialOver)), .notEntitled(.trialOver))
         XCTAssertTrue(lid.isLastStop)
         for stop in [SafetyStop.batteryLow(percent: 20), .weakCharger(percent: 20), .tooHot] { XCTAssertFalse(stop.isLastStop) }
     }

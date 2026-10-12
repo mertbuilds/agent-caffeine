@@ -13,8 +13,6 @@ struct OnboardingView: View {
     let safetyNote: String
     let helper: HelperStatus
     let helperError: String?
-    /// The line about the trial on the last page. Nil with a license.
-    var trialNote: String?
     /// Nil when the app cannot open at login from where it is.
     var openAtLogin: Bool?
     var setOpenAtLogin: (Bool) -> Void = { _ in }
@@ -244,7 +242,6 @@ struct OnboardingView: View {
                 }
             }
         }
-        if let trialNote { paragraph(trialNote) }
         if openAtLogin != nil {
             Toggle(PanelText.openAtLoginInSetup, isOn: $opensAtLogin)
                 .toggleStyle(.checkbox)
@@ -282,7 +279,6 @@ private struct OnboardingContainer: View {
             safetyNote: SafetyText.stillSleeps(aggregator.settings),
             helper: aggregator.sleepFlag.helperStatus,
             helperError: aggregator.helperError,
-            trialNote: Onboarding.trialNote(aggregator.entitlement),
             openAtLogin: Onboarding.openAtLoginBox(aggregator.loginItem, firstRun: firstRun),
             setOpenAtLogin: aggregator.setOpenAtLogin,
             turnOnHooks: { entries in
@@ -359,7 +355,7 @@ private struct OnboardingPreview: View {
         OnboardingView(
             steps: [.welcome, .hooks, .agentSetup, .lidClosed, .done], foundAgents: ["Claude Code", "Codex"], hookRows: rows,
             safetyNote: SafetyText.stillSleeps(DetectionSettings()), helper: helper, helperError: nil,
-            trialNote: PanelText.trialIntro, openAtLogin: true,
+            openAtLogin: true,
             turnOnHooks: { _ in true },
             agentSetup: AgentSetupModel(snapshot: SkillSnapshot(
                 agents: SkillCatalog.entries.prefix(3).map { SkillSnapshot.Agent(entry: $0, status: .notInstalled) },

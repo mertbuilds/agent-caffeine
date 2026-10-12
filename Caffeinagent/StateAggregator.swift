@@ -8,7 +8,6 @@ import os
 @MainActor
 struct AggregatorParts {
     var defaults: UserDefaults
-    var license: LicenseManager
     var sleepFlag: SleepFlagController
     var power: PowerHolding
     var hotKeys: HotKeyRegistering
@@ -39,7 +38,6 @@ struct AggregatorParts {
     static func system() -> AggregatorParts {
         AggregatorParts(
             defaults: .standard,
-            license: LicenseManager(client: LicenseClient(), store: KeychainLicenseStore()),
             sleepFlag: SleepFlagController(),
             power: PowerKeeper(),
             hotKeys: GlobalHotKey(),
@@ -191,7 +189,6 @@ final class StateAggregator: ObservableObject {
             defaults.set(lidClosedHintDismissed, forKey: Self.lidClosedHintKey)
         }
     }
-    @PublishedOnChange private(set) var entitlement: Entitlement
     /// False on a Mac without a battery, where a closed lid needs no helper.
     @PublishedOnChange private(set) var hasBattery = true
     /// For the line of the battery in the menu.
@@ -224,7 +221,6 @@ final class StateAggregator: ObservableObject {
     /// for Settings and the menu.
     @PublishedOnChange private(set) var jobWake = JobWakeView()
 
-    let license: LicenseManager
     let sleepFlag: SleepFlagController
     let canSetUpHelper = AppRelocator.isInSystemApplications
     /// False on a Mac without a lid angle sensor, where the display cannot
@@ -262,7 +258,6 @@ final class StateAggregator: ObservableObject {
     private let sleepTimerQueue = DispatchQueue(label: "com.caffeinagent.sleep-timer", qos: .utility)
     /// The last answer, and what it was asked for.
     private var sleepTimerRead: (onBattery: Bool, at: Date, minutes: Int?)?
-    private var trialNoticesTold: Set<TrialNotice>
     /// Taken when macOS says the Mac goes to sleep, read when it wakes.
     private var sleepSnapshot: SleepSnapshot?
     private let powerContext = SystemPowerContext()
@@ -319,7 +314,6 @@ final class StateAggregator: ObservableObject {
     private static let testStateInterval: TimeInterval = 4
 
     init(parts: AggregatorParts) {
-        let license = parts.license
         let defaults = parts.defaults
         let enabled = defaults.object(forKey: Self.enabledKey) as? Bool ?? true
         let mode = defaults.string(forKey: Self.modeKey).flatMap(AwakeMode.init(rawValue:)) ?? .agentWorking
@@ -332,10 +326,8 @@ final class StateAggregator: ObservableObject {
             ? Reachable(stored: defaults.object(forKey: Self.reachableUntilKey) as? Date, now: Date()) : Reachable()
         if reachable.until == nil { defaults.removeObject(forKey: Self.reachableUntilKey) }
         let engine = DetectionEngine.system(
-            mode: mode, enabled: enabled, pausedUntil: pause.until, reachableUntil: reachable.until,
-            entitlement: license.entitlement, settings: settings
+            mode: mode, enabled: enabled, pausedUntil: pause.until, reachableUntil: reachable.until, settings: settings
         )
-        self.license = license
         self.sleepFlag = parts.sleepFlag
         self.defaults = defaults
         self.power = parts.power
@@ -349,9 +341,7 @@ final class StateAggregator: ObservableObject {
         self.sleepTimer = parts.sleepTimer
         self.assertions = parts.assertions
         self.lidChimer = LidChimer(player: parts.chime)
-        self.trialNoticesTold = TrialNoticeStore.load(from: defaults)
         self.engine = engine
-        self.entitlement = license.entitlement
         self.enabled = enabled
         self.pause = pause
         self.reachable = reachable
@@ -385,23 +375,8 @@ final class StateAggregator: ObservableObject {
         // Asks the user nothing, and puts the permission in the log.
         notifier?.readPermission()
 
-        // An expired trial goes through the same release path as switching off,
-        // so the assertions and the sleep flag both end.
-        license.$entitlement
-            .dropFirst()
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] entitlement in
-                self?.entitlement = entitlement
-                self?.engine.entitlement = entitlement
-                self?.updateJobWake()
-            }
-            .store(in: &cancellables)
-
-        // The menu and Preferences read the license and the helper's state
-        // through this object.
-        license.objectWillChange
-            .sink { [weak self] _ in self?.objectWillChange.send() }
-            .store(in: &cancellables)
+        // The menu and Preferences read the helper's state through this
+        // object.
         sleepFlag.objectWillChange
             .sink { [weak self] _ in self?.objectWillChange.send() }
             .store(in: &cancellables)
@@ -453,7 +428,6 @@ final class StateAggregator: ObservableObject {
             holdLock = HoldStore.AppLock(store: holdStore)
             writeHoldStatus()
         }
-        license.start()
         engine.start()
         updateOwnHookFiles()
         refreshHookStatuses()
@@ -487,8 +461,6 @@ final class StateAggregator: ObservableObject {
         PanelInput(
             decision: decision,
             mode: mode,
-            entitlement: entitlement,
-            hasLicenseKey: license.record.key != nil,
             labels: sessionLabels,
             hints: sessionHints,
             hosts: agentHosts.compactMapValues { $0 },
@@ -645,10 +617,9 @@ final class StateAggregator: ObservableObject {
         (reachable, pause) = (next.reachable, next.pause)
     }
 
-    /// Not while Agent Caffeine is off or may not keep the Mac awake.
-    /// "Stay reachable" ends a pause.
+    /// Not while Agent Caffeine is off. "Stay reachable" ends a pause.
     func startReachable(_ choice: ReachableChoice) {
-        guard enabled, entitlement.allowsHolding else { return }
+        guard enabled else { return }
         var next = TimedModes(pause: pause, reachable: reachable)
         next.startReachable(choice, now: Date())
         (pause, reachable) = (next.pause, next.reachable)
@@ -840,7 +811,6 @@ final class StateAggregator: ObservableObject {
             reachable = next.reachable
         }
         announceHiddenNotice()
-        announceTrial(at: sample.frame.at)
         updateMacSleep(context, at: sample.frame.at)
         announceAgents(sample)
         // After the hold of this sample is applied and its flag asked for.
@@ -907,25 +877,13 @@ final class StateAggregator: ObservableObject {
             flagLeftOn: sleepFlag.flagLeftOn,
             helperNotResponding: MenuModel.helperNotResponding(
                 notResponding: sleepFlag.setup == .notResponding, wanted: settings.stayAwakeLidClosedOnBattery, hasBattery: hasBattery
-            ),
-            entitlement: entitlement
+            )
         )
         if let begun = HiddenNotice.toAnnounce(previous: hiddenNotice, current: current, iconHidden: !showMenuBarIcon) {
             testNotices.note(.hidden, at: Date())
             notify(begun.notificationText)
         }
         hiddenNotice = current
-    }
-
-    /// The last day of the trial and its end, each told once, whether the
-    /// icon is shown or not.
-    private func announceTrial(at now: Date) {
-        guard let notice = TrialNotice.due(entitlement: entitlement, told: trialNoticesTold) else { return }
-        trialNoticesTold.insert(notice)
-        TrialNoticeStore.save(trialNoticesTold, to: defaults)
-        Notifier.log.notice("\(notice.logLine, privacy: .public)")
-        testNotices.note(.trial, at: now)
-        notify(PanelText.notification(notice, end: license.trialEnd, now: now))
     }
 
     /// An agent that waits for the user or finished, as a notification.
@@ -958,7 +916,7 @@ final class StateAggregator: ObservableObject {
             frontmostPid: away ? NSWorkspace.shared.frontmostApplication?.processIdentifier : nil,
             userActive: away && AgentOwner.userIsActive(),
             settings: notices,
-            active: enabled && pause.until == nil && entitlement.allowsHolding
+            active: enabled && pause.until == nil
         )
         // For the whole Mac at this moment, as the menu says it.
         let outlook = SleepOutlook(sample.decision, mac: macSleep, now: sample.frame.at)
@@ -1059,7 +1017,7 @@ final class StateAggregator: ObservableObject {
             build: info?["CFBundleVersion"] as? String ?? "unknown",
             bundlePath: AppInstall.running.path,
             pid: ProcessInfo.processInfo.processIdentifier,
-            enabled: enabled, pausedUntil: pause.until, reachableUntil: reachable.until, mode: mode, entitlement: entitlement,
+            enabled: enabled, pausedUntil: pause.until, reachableUntil: reachable.until, mode: mode,
             decision: decision, frame: engine.frame, assertionHeld: power.held,
             helper: sleepFlag.helperStatus, setup: sleepFlag.setup, flagSet: sleepFlag.sleepDisabled,
             lidAngle: display?.lidAngle, safety: engine.safety, closedLid: closedLidLimit, gate: engine.gateCode,
@@ -1198,7 +1156,7 @@ final class StateAggregator: ObservableObject {
         JobWakeInput(
             readings: jobReadings, settings: jobSettings,
             context: JobPlanContext(
-                enabled: enabled, pausedUntil: pause.until, entitlement: entitlement, safety: engine.safety,
+                enabled: enabled, pausedUntil: pause.until, safety: engine.safety,
                 onBattery: onBattery, batteryPercent: batteryPercent,
                 batteryFloorEnabled: settings.batteryFloorEnabled, batteryFloorPercent: settings.batteryFloorPercent
             ),

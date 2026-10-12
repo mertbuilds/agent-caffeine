@@ -334,9 +334,6 @@ final class DetectionEngineTests: XCTestCase {
         engine.safety = .tooHot
         XCTAssertEqual(engine.decision.headline, .safetyStop(.tooHot))
         engine.safety = nil
-        engine.entitlement = .expired(.trialOver)
-        XCTAssertFalse(engine.decision.hold)
-        engine.entitlement = .licensed
 
         var settings = DetectionSettings()
         settings.agentRules = ["claude": .ignore]

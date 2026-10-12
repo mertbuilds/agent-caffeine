@@ -12,7 +12,6 @@ struct TestStateInput {
     var pausedUntil: Date?
     var reachableUntil: Date?
     var mode: AwakeMode
-    var entitlement: Entitlement
     var decision: HoldDecision
     /// The last sample, nil before the first one.
     var frame: EvidenceFrame?
@@ -52,8 +51,6 @@ extension TestState {
         let context = input.frame?.context
         var roles: [Int32: AgentRole] = [:]
         for agent in input.frame?.agents ?? [] { roles[agent.pid] = agent.role }
-        var trialDaysLeft: Int?
-        if case .trial(let days) = input.entitlement { trialDaysLeft = days }
         self.init(
             at: input.at.timeIntervalSince1970,
             app: App(version: input.version, build: input.build, path: input.bundlePath, pid: input.pid),
@@ -61,8 +58,6 @@ extension TestState {
             pausedUntil: input.pausedUntil?.timeIntervalSince1970,
             reachableUntil: input.reachableUntil?.timeIntervalSince1970,
             mode: input.mode.rawValue,
-            entitlement: input.entitlement.code,
-            trialDaysLeft: trialDaysLeft,
             decision: Decision(
                 hold: decision.hold, headline: decision.headline.code, reason: decision.headline.reasonCode,
                 stop: decision.headline.isStop, assertion: input.assertionHeld
@@ -119,26 +114,6 @@ private extension AgentRole {
 
 private extension AgentDefinition.Level {
     var code: String { name(of: self) }
-}
-
-extension Entitlement {
-    var code: String {
-        switch self {
-        case .licensed: return "licensed"
-        case .trial: return "trial"
-        case .expired: return "expired"
-        }
-    }
-}
-
-extension ExpiredReason {
-    var code: String {
-        switch self {
-        case .trialOver: return "trialOver"
-        case .unverified: return "unverified"
-        case .activationRemoved: return "activationRemoved"
-        }
-    }
 }
 
 extension SafetyStop {
@@ -219,15 +194,11 @@ extension HoldHeadline {
         case .safetyStop: return "safetyStop"
         case .switchedOff: return "switchedOff"
         case .paused: return "paused"
-        case .notEntitled: return "notEntitled"
         }
     }
 
     var reasonCode: String? {
-        switch self {
-        case .safetyStop(let stop): return stop.code
-        case .notEntitled(let reason): return reason.code
-        default: return nil
-        }
+        if case .safetyStop(let stop) = self { return stop.code }
+        return nil
     }
 }

@@ -8,25 +8,18 @@ enum HiddenNotice: Equatable {
     /// The helper is enabled and gives no answer, so the lid closed on
     /// battery puts the Mac to sleep.
     case helperNotResponding
-    case licenseExpired(ExpiredReason)
 
     var notificationText: String {
         switch self {
         case .helperSwitchedOff: return "Your Mac cannot sleep. Allow Agent Caffeine again in System Settings > General > Login Items."
         case .helperNotResponding: return PanelText.helperNotResponding
-        case .licenseExpired(.trialOver): return "Agent Caffeine cannot keep your Mac awake because your trial has ended"
-        case .licenseExpired(.unverified): return "Agent Caffeine cannot keep your Mac awake because your license was not checked for 30 days"
-        case .licenseExpired(.activationRemoved): return "Agent Caffeine cannot keep your Mac awake because this Mac is no longer activated"
         }
     }
 
     /// One at a time, in the order of the menu: the helper comes first.
-    /// The end of the trial has a notification of its own, with the icon
-    /// shown too. See `TrialNotice`.
-    static func current(flagLeftOn: Bool, helperNotResponding: Bool, entitlement: Entitlement) -> HiddenNotice? {
+    static func current(flagLeftOn: Bool, helperNotResponding: Bool) -> HiddenNotice? {
         if flagLeftOn { return .helperSwitchedOff }
         if helperNotResponding { return .helperNotResponding }
-        if case .expired(let reason) = entitlement, reason != .trialOver { return .licenseExpired(reason) }
         return nil
     }
 

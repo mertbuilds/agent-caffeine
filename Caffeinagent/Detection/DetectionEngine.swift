@@ -63,8 +63,6 @@ final class DetectionEngine: ObservableObject {
     /// Nil when the user did not ask the Mac to stay reachable. The owner
     /// clears it when the time ends.
     var reachableUntil: Date? { didSet { if reachableUntil != oldValue { decideAgain() } } }
-    /// Nil means there is no license to check.
-    var entitlement: Entitlement? { didSet { if entitlement != oldValue { decideAgain() } } }
     /// New agent names need a new look at the process table.
     var settings: DetectionSettings {
         didSet {
@@ -119,7 +117,7 @@ final class DetectionEngine: ObservableObject {
     init(
         collector: EvidenceCollecting, scheduler: DetectionScheduling, watcher: DetectionWatching,
         mode: AwakeMode = .agentWorking, enabled: Bool = true, pausedUntil: Date? = nil, reachableUntil: Date? = nil,
-        entitlement: Entitlement? = nil, settings: DetectionSettings = DetectionSettings(), safety: SafetyStop? = nil,
+        settings: DetectionSettings = DetectionSettings(), safety: SafetyStop? = nil,
         clock: AwakeClock = .system
     ) {
         self.collector = collector
@@ -130,24 +128,23 @@ final class DetectionEngine: ObservableObject {
         self.enabled = enabled
         self.pausedUntil = pausedUntil
         self.reachableUntil = reachableUntil
-        self.entitlement = entitlement
         self.settings = settings
         self.safety = safety
         decision = HoldPolicy.decide(
             readings: [], memory: PolicyMemory(), mode: mode, enabled: enabled, pausedUntil: pausedUntil, reachableUntil: reachableUntil,
-            entitlement: entitlement, safety: safety, settings: settings, context: FrameContext(), now: Date()
+            safety: safety, settings: settings, context: FrameContext(), now: Date()
         ).0
     }
 
     /// The engine that reads this Mac.
     static func system(
         mode: AwakeMode = .agentWorking, enabled: Bool = true, pausedUntil: Date? = nil, reachableUntil: Date? = nil,
-        entitlement: Entitlement? = nil, settings: DetectionSettings = DetectionSettings(), safety: SafetyStop? = nil
+        settings: DetectionSettings = DetectionSettings(), safety: SafetyStop? = nil
     ) -> DetectionEngine {
         DetectionEngine(
             collector: EvidenceCollector(), scheduler: DispatchDetectionScheduler(), watcher: SystemDetectionWatcher(),
             mode: mode, enabled: enabled, pausedUntil: pausedUntil, reachableUntil: reachableUntil,
-            entitlement: entitlement, settings: settings, safety: safety
+            settings: settings, safety: safety
         )
     }
 
@@ -258,7 +255,7 @@ final class DetectionEngine: ObservableObject {
         let mayHold = wakeGate.allowsHold(holding: heldPastGate)
         let (next, memory) = HoldPolicy.decide(
             readings: readings, memory: policyMemory, mode: mode, enabled: enabled, pausedUntil: pausedUntil, reachableUntil: reachableUntil,
-            holds: frame?.holds ?? [], jobHolds: jobHolds, entitlement: entitlement, safety: safety, settings: settings, context: context,
+            holds: frame?.holds ?? [], jobHolds: jobHolds, safety: safety, settings: settings, context: context,
             mayHold: mayHold,
             jobsMayHold: wakeGate.allowsJobHold(holding: heldPastGate, windows: jobHolds.map(AlarmWindow.init), now: now), now: now
         )

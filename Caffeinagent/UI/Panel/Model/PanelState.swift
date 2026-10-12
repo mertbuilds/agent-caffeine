@@ -17,7 +17,7 @@ enum HeroPose: Equatable {
     case attentive
     /// On, and the Mac can sleep.
     case asleep
-    /// Switched off, or the license does not allow a hold.
+    /// Switched off.
     case off
     /// Paused by the user. Drawn like `asleep`: it starts again by itself,
     /// so the grey of `off` would be wrong.
@@ -33,10 +33,6 @@ enum HeroPose: Equatable {
 enum PanelAction: Equatable {
     case openLoginItems
     case tryHelperAgain
-    case buy
-    case enterKey
-    case checkLicense
-    case activateAgain
     case setUpLidClosed
     case dismissLidClosedHint
     case pause(PauseChoice)
@@ -70,7 +66,6 @@ struct PanelAttention: Equatable {
         case helperSwitchedOff
         case helperNotResponding
         case helperLost
-        case license
         /// "Stay reachable" is on, and a closed lid on battery still
         /// puts the Mac to sleep.
         case reachableNeedsLidClosed
@@ -304,7 +299,7 @@ struct PanelState: Equatable {
     /// dismisses it.
     var sleepNote: PanelAttention?
     /// Nil on wall power, on a Mac without a battery, and while agent
-    /// caffeine is off, paused or without a license.
+    /// caffeine is off or paused.
     var battery: PanelBattery?
     /// "Wakes at 09:14 for backup", while a wake alarm of "Wake for
     /// jobs" is set. Nil when none is.
@@ -318,8 +313,6 @@ struct PanelState: Equatable {
     var emptyText: String?
     /// A link below `emptyText`.
     var emptyAction: PanelAction?
-    /// License items of the gear menu.
-    var licenseActions: [PanelAction] = []
     /// "Paused until 15:30" for the bar at the bottom. Nil when not paused.
     var pausedLabel: String?
     /// "Reachable until 18:30" for the bar at the bottom. Nil when not on.
@@ -358,8 +351,6 @@ struct PanelBar: Equatable {
     var reachableActions: [PanelAction] = []
     /// What "stay reachable" costs, below its choices. Only on battery.
     var reachableCost: String?
-    /// License items of the gear menu.
-    var licenseActions: [PanelAction] = []
 }
 
 extension PanelBar {
@@ -367,7 +358,7 @@ extension PanelBar {
     init(_ state: PanelState, enabled: Bool, mode: AwakeMode) {
         self.init(
             enabled: enabled, mode: mode, pausedLabel: state.pausedLabel, reachableLabel: state.reachableLabel,
-            reachableActions: state.reachableActions, reachableCost: state.reachableCost, licenseActions: state.licenseActions
+            reachableActions: state.reachableActions, reachableCost: state.reachableCost
         )
     }
 }
@@ -414,9 +405,6 @@ struct StateClock: Equatable {
 struct PanelInput: Equatable {
     var decision: HoldDecision
     var mode: AwakeMode = .agentWorking
-    var entitlement: Entitlement = .licensed
-    /// Whoever has a key already bought one.
-    var hasLicenseKey = false
     /// The project folder of each session that works or waits.
     var labels: [ProcessIdentity: String] = [:]
     /// What tells sessions with the same name and folder apart.

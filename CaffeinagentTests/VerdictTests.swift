@@ -378,7 +378,7 @@ final class VerdictTests: XCTestCase {
             memory = next
             let (decision, nextPolicy) = HoldPolicy.decide(
                 readings: [AgentReading(evidence: sample.evidence, verdict: verdict)], memory: policy, mode: .agentWorking, enabled: true,
-                entitlement: .licensed, safety: nil, settings: settings, context: FrameContext(), now: now
+                safety: nil, settings: settings, context: FrameContext(), now: now
             )
             policy = nextPolicy
             return (sample.seconds, verdict, decision.hold)

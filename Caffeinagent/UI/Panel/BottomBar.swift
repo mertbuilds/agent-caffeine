@@ -49,9 +49,6 @@ struct BottomBar: View, Equatable {
 
             Menu {
                 Button(PanelText.preferences, action: openPreferences)
-                ForEach(bar.licenseActions, id: \.title) { action in
-                    Button(action == .buy ? PanelText.buyInMenu : action.title) { perform(action) }
-                }
                 Divider()
                 Button(PanelText.help) { perform(.openHelp) }
                 Button(PanelText.quit, action: quit)

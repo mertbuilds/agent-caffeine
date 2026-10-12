@@ -81,7 +81,7 @@ final class JobTextTests: XCTestCase {
     /// Every line of the feature, to check the style of all of them.
     private var allLines: [String] {
         let reasons: [NoAlarmReason] = [
-            .safetyStop, .switchedOff, .paused, .notEntitled, .onBattery, .batteryFloorOff, .batteryUnknown, .batteryLow, .dailyLimit,
+            .safetyStop, .switchedOff, .paused, .onBattery, .batteryFloorOff, .batteryUnknown, .batteryLow, .dailyLimit,
             .noJobSwitchedOn, .noRunKnown, .tooFarAhead,
         ]
         let refusals: [WakeAlarmRefusal] = [.notATime, .tooSoon, .tooFar, .tooOften, .notScheduled, .notConfirmed, .notCancelled, .unknown]
@@ -184,7 +184,7 @@ final class JobTextTests: XCTestCase {
     private func decide(_ jobs: [JobHold], pausedUntil: Date? = nil, readings: [AgentReading] = []) -> HoldDecision {
         HoldPolicy.decide(
             readings: readings, memory: PolicyMemory(), mode: .agentWorking, enabled: true, pausedUntil: pausedUntil, jobHolds: jobs,
-            entitlement: .licensed, safety: nil, settings: DetectionSettings(), context: FrameContext(), now: now
+            safety: nil, settings: DetectionSettings(), context: FrameContext(), now: now
         ).0
     }
 

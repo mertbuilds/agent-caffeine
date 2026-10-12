@@ -227,12 +227,6 @@ targets:
       - Caffeinagent/Models/AwakeMode.swift
       - Caffeinagent/Models/AppVersion.swift
       - Caffeinagent/Models/PublishedOnChange.swift
-      - Caffeinagent/License/Entitlement.swift
-      - Caffeinagent/License/LicenseClient.swift
-      - Caffeinagent/License/LicenseConfig.swift
-      - Caffeinagent/License/LicenseManager.swift
-      - Caffeinagent/License/LicenseStore.swift
-      - Caffeinagent/License/TrialNotice.swift
       # The state of "open at login", without SMAppService.
       - Caffeinagent/LoginItem.swift
       # Where the app runs from. The alerts are never shown by a test.
