@@ -168,6 +168,10 @@ final class EvidenceCollector: EvidenceCollecting {
     private var previousRows: [ProcessIdentity: ProcessInfoRow] = [:]
     private var childWindows: [ProcessIdentity: [CPUSample]] = [:]
     private var sessionFiles = FileCache<ClaudeSessionState>()
+    private var claudeSessionListing: (at: Date, pids: Set<Int32>)?
+    /// The processes of the sample that is being collected that only
+    /// their session file made a session.
+    private var adoptedPIDs: Set<Int32> = []
     private var jobFiles = FileCache<ClaudeJobState>()
     private var transcripts = FileCache<ClaudeTranscriptReader.TailParse>()
     private var rolloutTails: CodexRolloutTracker
@@ -229,7 +233,8 @@ final class EvidenceCollector: EvidenceCollecting {
         guard let snapshot = sources.census.snapshot() ?? unreadableTable(time: time, started: started) else {
             return lastSample ?? EvidenceSample(frame: EvidenceFrame(at: now, agents: []))
         }
-        let matches = currentMatches(in: snapshot, userNames: userNames)
+        var matches = currentMatches(in: snapshot, userNames: userNames)
+        adoptClaudeSessions(in: snapshot, matches: &matches, now: now)
         let instances = sources.catalog.instances(in: snapshot, matches: matches)
         let asserting = instances.isEmpty ? [] : sources.assertions.assertingPIDs()
         // The CPU a process used before and after a sleep, over an interval
@@ -440,6 +445,35 @@ final class EvidenceCollector: EvidenceCollecting {
         return matches
     }
 
+    /// A second way to a Claude Code session, which needs no name and no
+    /// path of the process: a live process that no matcher knows and that
+    /// has a session file `~/.claude/sessions/<pid>.json` which fits its
+    /// start time (`ClaudeSessionState.isOfProcess`). Claude Code alone
+    /// writes that file, under its own pid. So a session stays seen when
+    /// a new version changes its name or its arguments, or when neither
+    /// can be read (docs/research/01-oss-detection.md, section 10).
+    ///
+    /// A process that a matcher knows keeps its match, also a helper. The
+    /// role is that of a spare, so a warm spare stays out
+    /// (`fillClaude`). A new file is found by the next listing, up to
+    /// `listingAge` late.
+    private func adoptClaudeSessions(in snapshot: [ProcessInfoRow], matches: inout [Int32: AgentMatch], now: Date) {
+        adoptedPIDs.removeAll(keepingCapacity: true)
+        guard let definition = sources.catalog.definitions.first(where: { $0.id == "claude" }) else { return }
+        let reader = sources.claudeSessions
+        if claudeSessionListing.map({ now.timeIntervalSince($0.at) >= Self.listingAge || $0.at > now }) ?? true {
+            claudeSessionListing = (now, reader.pids())
+        }
+        guard let pids = claudeSessionListing?.pids, !pids.isEmpty else { return }
+        for row in snapshot where matches[row.pid] == nil && pids.contains(row.pid) {
+            let path = reader.fileURL(forPid: row.pid).path
+            guard let state = sessionFiles.value(at: path, read: { reader.state(forPid: row.pid, now: now) })?.value,
+                  state.isOfProcess(startedAt: row.startTime) else { continue }
+            matches[row.pid] = AgentMatch(definition: definition, role: .helperMaybeSession)
+            adoptedPIDs.insert(row.pid)
+        }
+    }
+
     // MARK: Per agent
 
     /// Nil for an instance that is no agent after all: a warm Claude spare.
@@ -453,6 +487,8 @@ final class EvidenceCollector: EvidenceCollecting {
             role: instance.role == .helperMaybeSession ? .session : instance.role,
             pid: instance.rootPID, startTime: instance.rootStartTime
         )
+        evidence.executableGone = instance.rows.first?.executableGone ?? false
+        evidence.adoptedBySessionFile = adoptedPIDs.contains(instance.rootPID)
         if Self.isClaudeApp(instance) {
             // Chat and Cowork write no state that says what they do.
             evidence.level = .activity

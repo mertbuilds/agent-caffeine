@@ -52,6 +52,45 @@ final class ClaudeSessionStateReaderTests: XCTestCase {
         ))
     }
 
+    /// The two start times of a file, as on 2.1.286 to 2.1.296: the
+    /// process of this file started 1790845119 (08:58:39 UTC), and
+    /// `startedAt` is 2 seconds later.
+    func testStartTimesSayWhichProcessTheFileIsOf() throws {
+        let start: TimeInterval = 1_790_845_119.48
+        let both = try XCTUnwrap(ClaudeSessionStateReader.parse(session(status: "busy", extra: #","startedAt":1790845121236,"procStart":"Thu Oct  1 08:58:39 2026""#), now: now))
+        XCTAssertEqual(both.startedAt, Date(timeIntervalSince1970: 1_790_845_121.236))
+        XCTAssertEqual(both.processStartedAt, Date(timeIntervalSince1970: 1_790_845_119))
+        let cases: [(name: String, extra: String, start: TimeInterval, fits: Bool)] = [
+            ("both times", #","startedAt":1790845121236,"procStart":"Thu Oct  1 08:58:39 2026""#, start, true),
+            ("the start of the process only", #","procStart":"Thu Oct  1 08:58:39 2026""#, start, true),
+            ("the start of the session only", #","startedAt":1790845121236"#, start, true),
+            ("a spare that took its job hours after it started", #","startedAt":1790859521236"#, start, true),
+            ("a process start in a form that is not known", #","startedAt":1790845121236,"procStart":"2026-10-01 11:58:39""#, start, true),
+            ("neither time", "", start, false),
+            ("times of the wrong type", #","startedAt":"soon","procStart":7"#, start, false),
+            // The file of a process that crashed, and its pid went to a
+            // process that started a day later.
+            ("a file from before the process", #","startedAt":1790845121236,"procStart":"Thu Oct  1 08:58:39 2026""#, start + 86400, false),
+            ("a file from 3 seconds before the process", #","startedAt":1790845121236"#, 1_790_845_124.3, false),
+            ("another process start and no session start", #","procStart":"Thu Oct  1 08:58:49 2026""#, start, false),
+        ]
+        for testCase in cases {
+            let parsed = try XCTUnwrap(ClaudeSessionStateReader.parse(session(status: "busy", extra: testCase.extra), now: now), testCase.name)
+            XCTAssertEqual(parsed.isOfProcess(startedAt: testCase.start), testCase.fits, testCase.name)
+        }
+    }
+
+    func testPidsOfTheFolder() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent("claude-pids-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        for name in ["4242.json", "17.json", "notes.json", "99.json.tmp", "-5.txt", ".json"] {
+            try Data("{}".utf8).write(to: directory.appendingPathComponent(name))
+        }
+        XCTAssertEqual(ClaudeSessionStateReader(sessionsDirectory: directory).pids(), [4242, 17])
+        XCTAssertEqual(ClaudeSessionStateReader(sessionsDirectory: directory.appendingPathComponent("none")).pids(), [])
+    }
+
     func testKinds() {
         let cases: [(json: String, kind: ClaudeSessionState.Kind?)] = [
             (#"{"status":"idle","kind":"interactive"}"#, .interactive),

@@ -36,7 +36,26 @@ struct ClaudeSessionState: Equatable {
     /// `name`: the session's own name. It can come from what the user
     /// typed, so it is for the menu only and never part of a report.
     var name: String?
+    /// `startedAt`: when the session wrote its file first, a few seconds
+    /// after its process started.
+    var startedAt: Date?
+    /// `procStart`: the start of the process, to the second.
+    var processStartedAt: Date?
     var observedAt: Date
+
+    /// Seconds between the start of a process and what its file says of it.
+    static let startTolerance: TimeInterval = 2
+
+    /// True when the file can be the file of a process that started at
+    /// `start`, in seconds since the epoch. A process that crashed leaves
+    /// its file, and the pid can go to another process later: that one
+    /// started after everything the file says. False for a file with
+    /// neither time.
+    func isOfProcess(startedAt start: TimeInterval) -> Bool {
+        if let processStartedAt, abs(processStartedAt.timeIntervalSince1970 - start) <= Self.startTolerance { return true }
+        if let startedAt { return startedAt.timeIntervalSince1970 >= start - Self.startTolerance }
+        return false
+    }
 
     var report: StateReport {
         StateReport(state: state, since: statusUpdatedAt, observedAt: observedAt, source: .claudeSessionFile, detail: detail, backgroundWork: backgroundWork)
@@ -74,6 +93,12 @@ struct ClaudeSessionStateReader {
 
     func report(forPid pid: Int32, now: Date = Date()) -> StateReport? {
         state(forPid: pid, now: now)?.report
+    }
+
+    /// The pids that have a file, alive or not. No file is read.
+    func pids() -> Set<Int32> {
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: sessionsDirectory.path)) ?? []
+        return Set(names.compactMap { name in name.hasSuffix(".json") ? Int32(name.dropLast(5)) : nil })
     }
 
     /// Every readable session file. Files of dead processes are included.
@@ -119,9 +144,21 @@ struct ClaudeSessionStateReader {
             version: object["version"] as? String,
             entrypoint: object["entrypoint"] as? String,
             name: SessionHint.cleaned(name: object["name"] as? String),
+            startedAt: ReportedTime.date(object["startedAt"]),
+            processStartedAt: (object["procStart"] as? String).flatMap(processStart.date(from:)),
             observedAt: now
         )
     }
+
+    /// `procStart` as seen on 2.1.286 to 2.1.296: "Mon Oct  5 11:21:50
+    /// 2026", in UTC.
+    nonisolated private static let processStart: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "EEE MMM d HH:mm:ss yyyy"
+        return formatter
+    }()
 
     nonisolated private static func kind(_ object: [String: Any]) -> ClaudeSessionState.Kind? {
         if let spare = object["spare"], !(spare is NSNull), spare as? Bool != false { return .spare }

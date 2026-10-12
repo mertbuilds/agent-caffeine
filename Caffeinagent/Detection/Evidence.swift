@@ -142,6 +142,12 @@ struct AgentEvidence: Codable, Equatable {
     /// (`HookStateFile.summary`). The verdict does not compare the time
     /// of the hook state with the time of the report again.
     var hookStateBySession: Bool
+    /// The file of the agent's binary is gone, as after an update of the
+    /// agent: `ProcessInfoRow.executableGone` of the root process.
+    var executableGone: Bool
+    /// No matcher of the catalog knew the process. Its Claude Code session
+    /// file made it a session: `EvidenceCollector.adoptClaudeSessions`.
+    var adoptedBySessionFile: Bool
 
     init(
         agentID: String, displayName: String, level: AgentDefinition.Level, kind: AgentDefinition.Kind = .cli,
@@ -149,7 +155,8 @@ struct AgentEvidence: Codable, Equatable {
         reported: StateReport? = nil, backgroundJobsWorking: Int = 0, childCommands: Int = 0, busyChildCommands: Int = 0,
         subtreeCPUSeconds: Double = 0, sampleInterval: TimeInterval = 0, energyNanojoules: UInt64? = nil,
         logicalWriteBytes: UInt64? = nil, fileActivityAt: Date? = nil, ownsSleepAssertion: Bool = false,
-        hasLiveSession: Bool = false, hookState: ReportedState? = nil, hookStateAt: Date? = nil, hookStateBySession: Bool = false
+        hasLiveSession: Bool = false, hookState: ReportedState? = nil, hookStateAt: Date? = nil, hookStateBySession: Bool = false,
+        executableGone: Bool = false, adoptedBySessionFile: Bool = false
     ) {
         self.agentID = agentID
         self.displayName = displayName
@@ -172,6 +179,8 @@ struct AgentEvidence: Codable, Equatable {
         self.hookState = hookState
         self.hookStateAt = hookStateAt
         self.hookStateBySession = hookStateBySession
+        self.executableGone = executableGone
+        self.adoptedBySessionFile = adoptedBySessionFile
     }
 
     var identity: ProcessIdentity { ProcessIdentity(pid: pid, startTime: startTime) }
@@ -192,6 +201,7 @@ struct AgentEvidence: Codable, Equatable {
         case subtreeCPUSeconds = "cpu", sampleInterval = "dt", energyNanojoules = "nj", logicalWriteBytes = "wr"
         case fileActivityAt = "file", ownsSleepAssertion = "pwr", hasLiveSession = "live"
         case hookState = "hook", hookStateAt = "hookAt", hookStateBySession = "hookSes"
+        case executableGone = "gone", adoptedBySessionFile = "adopt"
     }
 
     init(from decoder: Decoder) throws {
@@ -217,6 +227,8 @@ struct AgentEvidence: Codable, Equatable {
         hookState = try container.decodeIfPresent(ReportedState.self, forKey: .hookState)
         hookStateAt = try container.decodeIfPresent(Date.self, forKey: .hookStateAt)
         hookStateBySession = try container.decodeIfPresent(Bool.self, forKey: .hookStateBySession) ?? false
+        executableGone = try container.decodeIfPresent(Bool.self, forKey: .executableGone) ?? false
+        adoptedBySessionFile = try container.decodeIfPresent(Bool.self, forKey: .adoptedBySessionFile) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -242,6 +254,8 @@ struct AgentEvidence: Codable, Equatable {
         try container.encodeIfPresent(hookState, forKey: .hookState)
         try container.encodeIfPresent(hookStateAt, forKey: .hookStateAt)
         if hookStateBySession { try container.encode(true, forKey: .hookStateBySession) }
+        if executableGone { try container.encode(true, forKey: .executableGone) }
+        if adoptedBySessionFile { try container.encode(true, forKey: .adoptedBySessionFile) }
     }
 }
 

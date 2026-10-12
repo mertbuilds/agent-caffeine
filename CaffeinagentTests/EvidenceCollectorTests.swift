@@ -316,6 +316,116 @@ final class EvidenceCollectorTests: XCTestCase {
         XCTAssertEqual(second.frame.agents[1].sampleInterval, 2, "The spare was a known process before it was claimed")
     }
 
+    // MARK: Claude Code whose binary is gone
+
+    private let claudeLink = "/Users/me/.local/bin/claude"
+
+    private func decisions(of samples: [EvidenceSample]) -> [LabStep] {
+        let header = LabHeader(label: "test", startedAt: base, app: "test", os: "test", model: "test",
+                               mode: AwakeMode.agentWorking.rawValue, settings: DetectionSettings())
+        return LabReplay.steps(of: LabRecording(header: header, samples: samples.map { LabSample(frame: $0.frame) }))
+    }
+
+    /// 2026-10-12 (docs/research/01-oss-detection.md, section 10): an
+    /// update deleted the files of 2.1.286 and 2.1.289 while a session
+    /// and a background session of them worked. The kernel gave no path
+    /// for them, the census left them out, no row said them and the Mac
+    /// could sleep. The rows are what the census gives now.
+    func testWorkingSessionsOfADeletedVersionAreSeenAndHold() throws {
+        let gone = "/Users/me/.local/share/claude/versions/2.1.289"
+        func old(_ pid: Int32, ppid: Int32 = 1, path: String, args: [String]) -> Row {
+            .fixture(pid, ppid: ppid, start: processStart, path: path, args: args, gone: true)
+        }
+        census.rows = [
+            old(69479, path: claudeLink, args: ["claude", "--dangerously-skip-permissions"]),
+            old(93968, path: claudeLink, args: ["claude", "--dangerously-skip-permissions"]),
+            old(20909, ppid: 93968, path: claudeLink, args: [claudeLink, "daemon", "run"]),
+            old(20930, ppid: 20909, path: gone, args: ["claude bg-pty-host", "--bg-pty-host", "/tmp/x.pty.sock"]),
+            old(20946, ppid: 20930, path: gone, args: ["claude bg-spare", "--bg-spare", "/tmp/x.claim.sock"]),
+            old(21510, ppid: 20909, path: gone, args: ["claude bg-pty-host", "--bg-pty-host", "/tmp/y.pty.sock"]),
+            old(21523, ppid: 21510, path: gone, args: ["claude bg-spare", "--bg-spare", "/tmp/y.claim.sock"]),
+            claude(78397),
+        ]
+        try writeSession(69479, status: "busy")
+        try writeSession(93968, status: "idle")
+        try write(#"{"pid":20946,"kind":"bg","status":"busy","jobId":"job-1"}"#, to: "sessions/20946.json")
+        try write(#"{"state":"working","inFlight":{"tasks":1}}"#, to: "jobs/job-1/state.json")
+        try writeSession(21523, status: "idle", extra: #","spare":{"id":"e5f57e77"}"#)
+        try writeSession(78397, status: "idle")
+
+        let samples = [sample(at: 0), sample(at: 5)]
+        for sample in samples {
+            XCTAssertEqual(sample.frame.agents.map(\.pid), [69479, 93968, 20946, 78397], "The warm spare of the deleted version stays out")
+            XCTAssertEqual(sample.frame.agents.map(\.reported?.state), [.working, .idle, .working, .idle])
+            XCTAssertEqual(sample.frame.agents.map(\.executableGone), [true, true, true, false])
+            XCTAssertEqual(sample.frame.agents.map(\.adoptedBySessionFile), [false, false, false, false])
+            XCTAssertEqual(sample.frame.agents.map(\.backgroundJobsWorking), [0, 0, 1, 0])
+            XCTAssertEqual(sample.frame.agents.map(\.agentID), ["claude", "claude", "claude", "claude"])
+        }
+        for step in decisions(of: samples) {
+            XCTAssertTrue(step.decision.hold)
+            XCTAssertEqual(step.readings.map(\.verdict.state), [.working, .idle, .working, .idle])
+            XCTAssertEqual(step.decision.headline.text, "Awake: 2 agents are working")
+        }
+        let line = String(decoding: try LabFormat.line(LabLine(frame: samples[1].frame)), as: UTF8.self)
+        XCTAssertEqual(line.components(separatedBy: #""gone":true"#).count - 1, 3, "A recording says whose binary is gone")
+    }
+
+    /// The second way to a session: no matcher knows the process, and its
+    /// session file fits its start time.
+    func testASessionFileMakesAnUnknownProcessASession() throws {
+        let started = Int((processStart + 4) * 1000)
+        let stale = Int((processStart - 86400) * 1000)
+        func unknown(_ pid: Int32, ppid: Int32 = 1) -> Row {
+            .fixture(pid, ppid: ppid, start: processStart, path: "/Users/me/.local/share/claude/next/3.0.1", args: ["3.0.1", "--new-flag"])
+        }
+        func file(_ pid: Int32, _ fields: String) throws {
+            try write(#"{"pid":\#(pid),\#(fields)}"#, to: "sessions/\(pid).json")
+        }
+        census.rows = [
+            .fixture(10, path: "/bin/zsh", args: ["-zsh"]),
+            unknown(100, ppid: 10), .fixture(101, ppid: 100, start: processStart, path: "/bin/zsh", args: ["zsh", "-c", "make"]),
+            unknown(200), unknown(300), unknown(400), unknown(500), unknown(600), unknown(700),
+            .fixture(800, start: processStart, path: "/bin/zsh", args: ["-zsh"]),
+            claude(900, args: ["claude", "daemon", "run"]),
+        ]
+        try file(100, #""kind":"interactive","status":"busy","startedAt":\#(started)"#)
+        try file(200, #""kind":"bg","status":"busy","jobId":"job-1","startedAt":\#(started)"#)
+        try write(#"{"state":"working","inFlight":{"tasks":1}}"#, to: "jobs/job-1/state.json")
+        // A warm spare, a file with no time, a file of a process that had
+        // the pid before, a file of another pid and no file.
+        try file(300, #""kind":"bg","status":"idle","spare":{"id":"e5f57e77"},"startedAt":\#(started)"#)
+        try file(400, #""kind":"interactive","status":"busy""#)
+        try file(500, #""kind":"interactive","status":"busy","startedAt":\#(stale)"#)
+        try write(#"{"pid":601,"kind":"interactive","status":"busy","startedAt":\#(started)}"#, to: "sessions/600.json")
+        try file(800, #""kind":"interactive","status":"busy","startedAt":\#(stale)"#)
+        // A helper that a matcher knows stays a helper.
+        try file(900, #""kind":"interactive","status":"busy","startedAt":\#(started)"#)
+
+        let first = sample(at: 0)
+        XCTAssertEqual(first.frame.agents.map(\.pid), [100, 200])
+        XCTAssertEqual(first.frame.agents.map(\.agentID), ["claude", "claude"])
+        XCTAssertEqual(first.frame.agents.map(\.role), [.session, .session])
+        XCTAssertEqual(first.frame.agents.map(\.reported?.state), [.working, .working])
+        XCTAssertEqual(first.frame.agents.map(\.adoptedBySessionFile), [true, true])
+        XCTAssertEqual(first.frame.agents.map(\.backgroundJobsWorking), [0, 1])
+        XCTAssertEqual(first.frame.agents.map(\.childCommands), [1, 0])
+        XCTAssertTrue(decisions(of: [first]).allSatisfy(\.decision.hold))
+
+        // The spare takes a job, and the folder is listed again after
+        // `listingAge` for the file that is new.
+        try file(300, #""kind":"bg","status":"busy","startedAt":\#(started)"#)
+        try file(700, #""kind":"interactive","status":"idle","startedAt":\#(started)"#)
+        XCTAssertEqual(sample(at: 2).frame.agents.map(\.pid), [100, 200, 300])
+        let later = sample(at: 6)
+        XCTAssertEqual(later.frame.agents.map(\.pid), [100, 200, 300, 700])
+        XCTAssertEqual(later.frame.agents.map(\.reported?.state), [.working, .working, .working, .idle])
+
+        // The session ends and removes its file.
+        try FileManager.default.removeItem(at: root.appendingPathComponent("sessions/100.json"))
+        XCTAssertEqual(sample(at: 12).frame.agents.map(\.pid), [200, 300, 700])
+    }
+
     func testUnreadableSessionFileKeepsTheInstance() throws {
         census.rows = [claude(31, args: ["claude bg-spare", "--bg-spare", "/tmp/x.claim.sock"])]
         try write(#"{"pid":31,"kind":"bg","sta"#, to: "sessions/31.json")
