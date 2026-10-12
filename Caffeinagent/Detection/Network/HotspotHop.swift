@@ -24,6 +24,11 @@ import Foundation
 /// loss, after the Mac was online again, has its tries back, and so has
 /// a new save.
 ///
+/// It never joins the hotspot a second time by itself. When the path is
+/// lost while the Mac is on the hotspot, the user clicked Disconnect or
+/// the phone went out of reach: nothing says which, so nothing is
+/// joined. The next join needs a loss on another network, or a new save.
+///
 /// What it cannot do. An iPhone shows its hotspot for about 90 seconds
 /// after the last device left, and only macOS itself can wake it, over
 /// Bluetooth. A scan may find nothing: the state says "not found" then.
@@ -163,6 +168,13 @@ struct HotspotHop: Equatable {
     /// The Wi-Fi of the last look, while it is not the hotspot.
     private var lastNetwork: String?
     private var lookedAt: TimeInterval?
+    /// The last that is known says that the Mac is on the hotspot: a
+    /// join of Agent Caffeine, or a look that read its name. A path that
+    /// is lost there starts no join.
+    private var onHotspot = false
+    /// Agent Caffeine joined the hotspot, and no sample saw a path since:
+    /// the phone gave none yet. This is no loss on the hotspot.
+    private var awaitingPath = false
     /// Where the way back goes.
     private var backTo: String?
     /// The last look saw `backTo` with a good signal.
@@ -199,6 +211,7 @@ struct HotspotHop: Equatable {
             saves = input.saves
             passwordFailures = 0
             nextTryAt = nil
+            onHotspot = false
         }
         guard input.on, let name = HotspotName.cleaned(input.name) else {
             forget()
@@ -227,6 +240,7 @@ struct HotspotHop: Equatable {
         nextTryAt = nil
         // Refusals of an older loss do not count against the next one.
         passwordFailures = 0
+        awaitingPath = false
         if case .joined = state { return backStep(input, name: name, now: now) }
         if state == .waiting { state = .idle }
         if lostWhileArmed {
@@ -251,6 +265,9 @@ struct HotspotHop: Equatable {
             rest()
             return nil
         }
+        // The path was lost on the hotspot. The user left it, or the
+        // phone is out of reach: nothing is joined, and nothing is said.
+        if onHotspot, !awaitingPath { return nil }
         lostWhileArmed = true
         guard let lostFor = lost.offlineFor, lostFor >= Self.lostTime else {
             state = .waiting
@@ -307,7 +324,8 @@ struct HotspotHop: Equatable {
             // A look that ended after the way was lost says nothing of
             // the network before it.
             guard online else { return }
-            if check, let name, HotspotName.matches(name, hotspot) {
+            onHotspot = name.map { HotspotName.matches($0, hotspot) } ?? false
+            if check, onHotspot {
                 // The user or macOS joined it. There is no way back from
                 // here: the user may have left the old network for it.
                 joined(at: time.at, now: now, backTo: nil)
@@ -316,6 +334,7 @@ struct HotspotHop: Equatable {
             lastNetwork = name.flatMap { HotspotName.matches($0, hotspot) ? nil : $0 }
         case (.join, .joined):
             joined(at: time.at, now: now, backTo: lastNetwork)
+            awaitingPath = true
             nextTryAt = now + Self.joinSettleTime
         case (.join, .notFound):
             tried(now: now)
@@ -332,9 +351,11 @@ struct HotspotHop: Equatable {
             if to != nil { backSeen = false }
         case (.back, .leftHotspot):
             state = .idle
+            onHotspot = false
             noWayBack()
         case (.back, .wentBack):
             state = .hoppedBack(at: time.at)
+            onHotspot = false
             noWayBack()
         case (.back, .backFailed):
             // Once is enough: a join that fails can cost the hotspot too.
@@ -354,6 +375,7 @@ struct HotspotHop: Equatable {
         lastCheckAt = now
         passwordFailures = 0
         lostWhileArmed = false
+        onHotspot = true
     }
 
     private mutating func noWayBack() {

@@ -560,6 +560,59 @@ final class HotspotHopTests: XCTestCase {
         XCTAssertEqual(mac.state, .idle)
     }
 
+    // MARK: Leaving the hotspot
+
+    func testAPathThatIsLostOnTheHotspotStartsNoSecondJoin() {
+        var mac = hopped(from: HopMac.cafe)
+        mac.run(seconds: 30)
+        // The user clicks Disconnect in the Wi-Fi menu, or the phone is
+        // out of reach: nothing says which. The phone stays on the air.
+        mac.wifi.current = nil
+        mac.input.online = false
+        mac.run(seconds: 30)
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot], "No second join")
+        mac.run(seconds: 1200)
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot])
+        XCTAssertEqual(mac.wifi.scans.count, 1, "And no scan")
+        // A loss from another network is a new hop.
+        mac.wifi.air.insert(HopMac.cafe)
+        mac.wifi.current = HopMac.cafe
+        mac.input.online = true
+        mac.run(seconds: 10)
+        XCTAssertEqual(mac.state, .idle)
+        mac.loseWiFi()
+        mac.run(seconds: 20)
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot, HopMac.hotspot])
+        XCTAssertTrue(joined(mac.state))
+    }
+
+    func testANewSaveLetsTheMacJoinAgainAfterItLeftTheHotspot() {
+        var mac = hopped(from: HopMac.cafe)
+        mac.run(seconds: 30)
+        mac.wifi.current = nil
+        mac.input.online = false
+        mac.run(seconds: 60)
+        XCTAssertEqual(mac.wifi.joins.count, 1)
+        mac.input.saves += 1
+        mac.run(seconds: 4)
+        XCTAssertEqual(mac.wifi.joins.count, 2)
+    }
+
+    func testALossOnAHotspotTheUserJoinedStartsNoJoin() {
+        // By hand and with no break: the state says nothing, and a look
+        // saw the name.
+        var mac = HopMac()
+        mac.run(seconds: 10)
+        mac.wifi.current = HopMac.hotspot
+        mac.run(seconds: 10)
+        mac.wifi.current = nil
+        mac.input.online = false
+        mac.run(seconds: 600)
+        XCTAssertEqual(mac.wifi.joins, [])
+        XCTAssertEqual(mac.wifi.scans, [])
+        XCTAssertEqual(mac.state, .idle, "Nothing says that the Mac looks for the hotspot")
+    }
+
     func testAMacThatLeftTheHotspotIsNotOnItAnyMore() {
         var mac = HopMac()
         mac.run(seconds: 10)

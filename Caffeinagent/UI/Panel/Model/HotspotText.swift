@@ -20,6 +20,7 @@ extension PanelText {
     static let hotspotTitle = "Join your iPhone hotspot (Beta)"
     static let hotspotSwitch = "Join your iPhone hotspot when Wi-Fi is lost"
     static let hotspotExplained = "When Wi-Fi is lost while an agent works, your Mac joins this hotspot. This uses the data and the battery of your phone."
+    static let hotspotLeaves = "If you leave the hotspot, your Mac does not join it again by itself."
     static let hotspotName = "Hotspot name"
     static let hotspotNamePrompt = "The name of your iPhone"
     static let hotspotPassword = "Password"

@@ -35,6 +35,9 @@ struct HotspotPreferences: View {
                     }
                 }
                 limit
+                Text(PanelText.hotspotLeaves)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 4) {
                     Toggle(PanelText.hotspotHopBack, isOn: Binding(get: { hotspot.settings.hopBack }, set: setHopBack))
                     Text(PanelText.hotspotHopBackExplained)
