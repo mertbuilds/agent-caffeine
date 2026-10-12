@@ -28,6 +28,20 @@ final class LaunchArgumentsTests: XCTestCase {
             (["--display-probe", "7200"], .refused("--display-probe")),
             (["--display-probe"], .refused("--display-probe")),
             (["--display", "8"], .refused("--display")),
+            // The probe of the hotspot joins only when it is told to.
+            (["--hotspot-probe", "Mert\u{2019}s iPhone"], .hotspotProbe(HotspotProbeOptions(name: "Mert\u{2019}s iPhone"))),
+            (["--hotspot-probe", " Pixel 9 ", "--seconds", "180"], .hotspotProbe(HotspotProbeOptions(name: "Pixel 9", seconds: 180))),
+            (["--hotspot-probe", "Pixel 9", "--join"], .hotspotProbe(HotspotProbeOptions(name: "Pixel 9", join: true))),
+            (["--hotspot-probe", "Pixel 9", "--seconds", "30", "--join"], .hotspotProbe(HotspotProbeOptions(name: "Pixel 9", join: true, seconds: 30))),
+            (["--hotspot-probe"], .refused("--hotspot-probe")),
+            (["--hotspot-probe", "  "], .refused("--hotspot-probe")),
+            (["--hotspot-probe", "--join"], .refused("--hotspot-probe")),
+            (["--hotspot-probe", "Pixel 9", "--seconds"], .refused("--hotspot-probe")),
+            (["--hotspot-probe", "Pixel 9", "--seconds", "0"], .refused("--hotspot-probe")),
+            (["--hotspot-probe", "Pixel 9", "--seconds", "7200"], .refused("--hotspot-probe")),
+            (["--hotspot-probe", "Pixel 9", "--power", "on"], .refused("--hotspot-probe")),
+            (["--hotspot-probe", "Pixel 9", "hunter2"], .refused("--hotspot-probe")),
+            (["--hotspot", "Pixel 9"], .refused("--hotspot")),
             // What a hook entry or a script could pass by mistake.
             (["claude", "Stop", "v=1"], .refused("claude")),
             (["hook", "claude", "Stop"], .refused("hook")),
@@ -129,6 +143,7 @@ final class LaunchArgumentsTests: XCTestCase {
             (.smokeTest(seconds: 8), false, .runSmokeTest(seconds: 8)),
             (.smokeTest(seconds: 8), true, .runSmokeTest(seconds: 8)),
             (.displayProbe(seconds: 60), true, .runDisplayProbe(seconds: 60)),
+            (.hotspotProbe(HotspotProbeOptions(name: "Pixel 9")), true, .runHotspotProbe(HotspotProbeOptions(name: "Pixel 9"))),
             (.refused("-h"), false, .refuse("-h")),
             (.refused("claude"), true, .refuse("claude")),
         ]

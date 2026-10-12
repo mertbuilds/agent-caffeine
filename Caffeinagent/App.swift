@@ -72,6 +72,8 @@ enum Main {
             CaffeinagentApp.main()
         case .runDisplayProbe(let seconds):
             DisplayProbe.run(seconds: seconds)
+        case .runHotspotProbe(let options):
+            HotspotProbe.run(options)
         case .refuse(let argument):
             FileHandle.standardError.write(Data("Unknown argument \(argument). The app starts without arguments.\n".utf8))
             exit(1)

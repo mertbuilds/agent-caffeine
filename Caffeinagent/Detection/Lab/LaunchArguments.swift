@@ -15,6 +15,9 @@ enum LaunchArguments {
         /// `--display-probe <seconds>`: prints what the lid and the
         /// displays do, and starts no app. See `DisplayProbe`.
         case displayProbe(seconds: TimeInterval)
+        /// `--hotspot-probe <name> [--join] [--seconds N]`: prints what a
+        /// scan for one hotspot sees, and starts no app. See `HotspotProbe`.
+        case hotspotProbe(HotspotProbeOptions)
         /// Not a launch of the app and not a known command.
         case refused(String)
     }
@@ -30,6 +33,31 @@ enum LaunchArguments {
 
     static let displayProbeOption = "--display-probe"
     static let displayProbeSeconds: ClosedRange<TimeInterval> = 1...3600
+
+    static let hotspotProbeOption = "--hotspot-probe"
+    static let hotspotProbeSeconds: ClosedRange<TimeInterval> = 1...3600
+
+    /// What stands after `--hotspot-probe`: the name, then `--join` and
+    /// `--seconds N` in any order. Nil for anything else.
+    static func hotspotProbe(_ rest: [String]) -> HotspotProbeOptions? {
+        guard let first = rest.first, !first.hasPrefix("--"), let name = HotspotName.cleaned(first) else { return nil }
+        var options = HotspotProbeOptions(name: name)
+        var index = 1
+        while index < rest.count {
+            switch rest[index] {
+            case "--join":
+                options.join = true
+                index += 1
+            case "--seconds":
+                guard index + 1 < rest.count, let seconds = TimeInterval(rest[index + 1]), hotspotProbeSeconds.contains(seconds) else { return nil }
+                options.seconds = seconds
+                index += 2
+            default:
+                return nil
+            }
+        }
+        return options
+    }
 
     /// `arguments` starts with the path of the binary. A system option
     /// has at most one value.
@@ -48,6 +76,10 @@ enum LaunchArguments {
             }
             return .displayProbe(seconds: seconds)
         }
+        if let index = rest.firstIndex(of: hotspotProbeOption) {
+            guard let options = hotspotProbe(Array(rest[(index + 1)...])) else { return .refused(hotspotProbeOption) }
+            return .hotspotProbe(options)
+        }
         var index = 0
         while index < rest.count {
             let argument = rest[index]
@@ -56,6 +88,16 @@ enum LaunchArguments {
         }
         return .app
     }
+}
+
+/// What `--hotspot-probe` was asked for.
+struct HotspotProbeOptions: Equatable {
+    /// The name of the hotspot to look for. The probe prints no other
+    /// network name.
+    var name: String
+    /// Join the hotspot once, when a scan first finds it.
+    var join = false
+    var seconds: TimeInterval = 60
 }
 
 /// A plain launch starts the app only when no other copy runs: a start
@@ -108,6 +150,7 @@ enum Reopen {
         case runLab
         case runSmokeTest(seconds: TimeInterval)
         case runDisplayProbe(seconds: TimeInterval)
+        case runHotspotProbe(HotspotProbeOptions)
         case refuse(String)
         case start
         /// Another copy runs: this one asks it to show Preferences, then
@@ -125,6 +168,7 @@ enum Reopen {
         case .lab: return .runLab
         case .smokeTest(let seconds): return .runSmokeTest(seconds: seconds)
         case .displayProbe(let seconds): return .runDisplayProbe(seconds: seconds)
+        case .hotspotProbe(let options): return .runHotspotProbe(options)
         case .refused(let argument): return .refuse(argument)
         case .app:
             return anotherCopyRuns ? .askRunningCopy : .start
