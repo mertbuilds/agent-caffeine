@@ -8,8 +8,9 @@ import Foundation
 /// from a fixed list in the code. The only texts from outside are the
 /// path of the bundle and the id of a hold from the command line, which
 /// is letters and digits. No name of a session, no title, no folder, no
-/// project, no terminal, no reason of a hold, no name of a job and no
-/// text of a notification has a field here. Add no field of type String
+/// project, no terminal, no reason of a hold, no name of a job, no name
+/// of a Wi-Fi network, no password and no text of a notification has a
+/// field here. Add no field of type String
 /// that takes its value from anything but an enum of the app.
 struct TestState: Codable, Equatable {
     static let currentVersion = 1
@@ -146,6 +147,21 @@ struct TestState: Codable, Equatable {
         var history: [Event]
     }
 
+    /// "Join your iPhone hotspot". The name of the hotspot and its
+    /// password have no field here, and no other network name has one.
+    struct Hotspot: Codable, Equatable {
+        /// The switch of the feature.
+        var on: Bool
+        /// A name and a password are saved.
+        var configured: Bool
+        /// `HotspotHop.State.code`: "idle", "waiting", "scanning",
+        /// "joined", "notFound", "hoppedBack", or "failed:" and a
+        /// `HopFailure`.
+        var state: String
+        /// When the last try ended. Nil while none did.
+        var since: TimeInterval?
+    }
+
     var v = TestState.currentVersion
     /// Seconds since the epoch, as every time here.
     var at: TimeInterval
@@ -172,6 +188,7 @@ struct TestState: Codable, Equatable {
     var agents: [Agent]
     var holds: [Hold]
     var jobs: Jobs
+    var hotspot = Hotspot(on: false, configured: false, state: "idle")
     /// The last notifications that were sent, the newest first.
     var notices: [Event]
     /// When the lid chime played last.

@@ -54,6 +54,12 @@ final class TestStateTests: XCTestCase {
         var notices = TestNoticeLog()
         notices.note(.waiting, at: at(-20))
         notices.note(.finished, at: at(-10))
+        // On the hotspot. Its name is a text of the user.
+        var hotspot = HotspotView()
+        hotspot.settings.on = true
+        hotspot.settings.name = "\(secret)\u{2019}s iPhone"
+        hotspot.settings.passwordSaved = true
+        hotspot.state = .joined(at: at(-40))
         return TestStateInput(
             at: at(1), version: "1.0.3", build: "17", bundlePath: "/Applications/agent caffeine.app", pid: 4242,
             enabled: true, pausedUntil: at(900), reachableUntil: at(1800), mode: .agentWorking,
@@ -63,7 +69,7 @@ final class TestStateTests: XCTestCase {
                 status: .alarmSet(alarm), runs: [JobRun(job: job, fireAt: at(660), tooOften: false)], alarm: alarm,
                 history: [JobEvent(at: at(-5).timeIntervalSince1970, kind: .alarmSet, alarmAt: at(600).timeIntervalSince1970, job: secret, reason: nil)]
             ),
-            notices: notices.events, chimeAt: at(-3)
+            hotspot: hotspot, notices: notices.events, chimeAt: at(-3)
         )
     }
 
@@ -102,6 +108,7 @@ final class TestStateTests: XCTestCase {
         XCTAssertEqual(state.jobs.alarm, TestState.Alarm(at: at(600).timeIntervalSince1970, fireAt: at(660).timeIntervalSince1970, source: "launchd"))
         XCTAssertEqual(state.jobs.holds.map(\.source), ["launchd"])
         XCTAssertEqual(state.jobs.history, [TestState.Event(kind: "alarmSet", at: at(-5).timeIntervalSince1970)])
+        XCTAssertEqual(state.hotspot, TestState.Hotspot(on: true, configured: true, state: "joined", since: at(-40).timeIntervalSince1970))
         XCTAssertEqual(state.notices.map(\.kind), ["finished", "waiting"], "The newest first")
         XCTAssertEqual(state.chimeAt, at(-3).timeIntervalSince1970)
         XCTAssertEqual(try JSONDecoder().decode(TestState.self, from: XCTUnwrap(state.encoded())), state)
@@ -167,7 +174,7 @@ final class TestStateTests: XCTestCase {
         "gate": ["open", "sleepAnnounced", "slept", "woke"],
         "id": ["claude", TestState.userAgentID, "0a1b2c3d"],
         "role": ["session", "engine", "helper", "maybeSession"],
-        "state": ["working", "waiting", "idle"],
+        "state": ["working", "waiting", "idle", "joined"],
         "why": ["reportsBusy", "noActivity:3"],
         "level": ["state", "activity", "generic"],
         "hold": ["working", "waiting", "finished", "open"],
@@ -178,7 +185,7 @@ final class TestStateTests: XCTestCase {
     func testTheFileHoldsNoTextOfTheUser() throws {
         let known: Set<String> = [
             "v", "at", "app", "on", "pausedUntil", "reachableUntil", "mode", "decision", "flag",
-            "power", "lid", "safety", "closedLid", "since", "heldSeconds", "percentAtStart", "limitSeconds", "limitDrop", "network", "online", "offlineSeconds", "agentsReleased", "gate", "agents", "holds", "jobs", "notices", "chimeAt",
+            "power", "lid", "safety", "closedLid", "since", "heldSeconds", "percentAtStart", "limitSeconds", "limitDrop", "network", "online", "offlineSeconds", "agentsReleased", "gate", "agents", "holds", "jobs", "hotspot", "configured", "notices", "chimeAt",
             "version", "build", "path", "pid", "hold", "headline", "stop", "assertion", "wanted", "helper", "setup", "set",
             "source", "percent", "charging", "closed", "angle", "id", "role", "state", "why", "level", "kind", "start", "end",
             "status", "found", "enabled", "alarm", "fireAt", "history",
@@ -203,6 +210,33 @@ final class TestStateTests: XCTestCase {
         let text = String(decoding: try XCTUnwrap(state.encoded()), as: UTF8.self)
         XCTAssertFalse(text.localizedCaseInsensitiveContains(Self.secret))
         XCTAssertFalse(text.contains("/Users/"))
+    }
+
+    /// Of the hotspot the file has the switch, whether one is set up,
+    /// and the kind and the time of the state. Its name, its password
+    /// and the name of the Wi-Fi that was lost have no field.
+    func testTheHotspotHasNoNameInTheFile() throws {
+        var input = fullInput()
+        let time = at(-40)
+        let states: [HotspotHop.State] = [.idle, .waiting, .scanning, .joined(at: time), .notFound(at: time), .hoppedBack(at: time)]
+            + HopFailure.allCases.map { .failed($0, at: time) }
+        let codes = ["idle", "waiting", "scanning", "joined", "notFound", "hoppedBack"] + HopFailure.allCases.map { "failed:\($0.rawValue)" }
+        for (state, code) in zip(states, codes) {
+            input.hotspot.state = state
+            let file = TestState(input)
+            XCTAssertEqual(file.hotspot.state, code)
+            XCTAssertEqual(file.hotspot.since, state.since?.timeIntervalSince1970)
+            let hotspot = try XCTUnwrap(object(file)["hotspot"] as? [String: Any])
+            XCTAssertEqual(Set(hotspot.keys).subtracting(["since"]), ["on", "configured", "state"])
+            let text = String(decoding: try XCTUnwrap(file.encoded()), as: UTF8.self)
+            XCTAssertFalse(text.localizedCaseInsensitiveContains(Self.secret))
+            XCTAssertFalse(text.contains("iPhone"))
+        }
+        input.hotspot = HotspotView()
+        XCTAssertEqual(TestState(input).hotspot, TestState.Hotspot(on: false, configured: false, state: "idle", since: nil))
+        input.hotspot.settings.on = true
+        input.hotspot.settings.name = Self.secret
+        XCTAssertEqual(TestState(input).hotspot.configured, false, "A name with no password is no hotspot")
     }
 
     /// No field of the file can take a text from outside: the model has

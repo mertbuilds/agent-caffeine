@@ -28,6 +28,9 @@ struct TestStateInput {
     var gate: String
     var wakeForJobs: Bool
     var jobs: JobWakeView
+    /// "Join your iPhone hotspot". Only its switch, whether a hotspot
+    /// is set up, and the kind and the time of its state are taken.
+    var hotspot = HotspotView()
     var notices: [TestState.Event] = []
     var chimeAt: Date?
 }
@@ -102,6 +105,10 @@ extension TestState {
                 },
                 holds: decision.jobHolds.map { JobHoldRow(source: $0.source.rawValue, start: $0.start, fireAt: $0.fireAt, end: $0.end) },
                 history: input.jobs.history.prefix(Self.historyLength).map { Event(kind: $0.kind.rawValue, at: $0.at) }
+            ),
+            hotspot: Hotspot(
+                on: input.hotspot.settings.on, configured: input.hotspot.settings.isSetUp,
+                state: input.hotspot.state.code, since: input.hotspot.state.since?.timeIntervalSince1970
             ),
             notices: input.notices,
             chimeAt: input.chimeAt?.timeIntervalSince1970
