@@ -19,7 +19,9 @@ import Foundation
 /// ones `retryDelays` after the try before, then one every `retryEvery`,
 /// for as long as the agents count. The offline rule runs on as it is
 /// (`OfflineRule`): after its limit the agents count no more, the tries
-/// end and the Mac can sleep. A password the hotspot refused
+/// end and the Mac can sleep. The tries of one loss end `tryLimit` after
+/// the first one in any case, and the state keeps what the last try came
+/// to. A password the hotspot refused
 /// `passwordTries` times is not tried again in the same loss: the next
 /// loss, after the Mac was online again, has its tries back, and so has
 /// a new save.
@@ -77,6 +79,11 @@ struct HotspotHop: Equatable {
     /// and each change cuts the agent off.
     static let backSignal = -70
     static let passwordTries = 2
+    /// Awake seconds from the first try of one loss to its last. An
+    /// agent with a busy command, and the offline rule on "Never", count
+    /// for as long as the Mac is offline: without this the Mac would
+    /// scan once a minute for ever.
+    static let tryLimit: TimeInterval = 30 * 60
 
     /// What Settings, the menu and the state for the tests show.
     enum State: Equatable {
@@ -160,6 +167,8 @@ struct HotspotHop: Equatable {
     private var passwordFailures = 0
     private var tries = 0
     private var nextTryAt: TimeInterval?
+    /// The awake time of the first try of this loss.
+    private var triesBegan: TimeInterval?
     /// The way was lost while an agent held the Mac awake. When it comes
     /// back, one look says whether the Mac is on the hotspot: macOS or
     /// the user can join it.
@@ -211,6 +220,7 @@ struct HotspotHop: Equatable {
             saves = input.saves
             passwordFailures = 0
             nextTryAt = nil
+            triesBegan = nil
             onHotspot = false
         }
         guard input.on, let name = HotspotName.cleaned(input.name) else {
@@ -238,6 +248,7 @@ struct HotspotHop: Equatable {
     private mutating func onlineStep(_ input: Input, name: String, now: TimeInterval) -> Action? {
         tries = 0
         nextTryAt = nil
+        triesBegan = nil
         // Refusals of an older loss do not count against the next one.
         passwordFailures = 0
         awaitingPath = false
@@ -282,6 +293,10 @@ struct HotspotHop: Equatable {
         }
         if passwordFailures >= Self.passwordTries { return nil }
         if let nextTryAt, now < nextTryAt { return nil }
+        // A clock that went back starts the count again.
+        let began = triesBegan.flatMap { $0 <= now ? $0 : nil } ?? now
+        triesBegan = began
+        if now - began > Self.tryLimit { return nil }
         state = .scanning
         return start(.join(name: name))
     }

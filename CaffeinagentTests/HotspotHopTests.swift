@@ -284,6 +284,33 @@ final class HotspotHopTests: XCTestCase {
         guard case .notFound = mac.state else { return XCTFail("The last result stays: \(mac.state.code)") }
     }
 
+    func testTheTriesOfOneLossEndAfterHalfAnHour() {
+        // An agent with a busy command, or the offline rule on Never:
+        // the agents count for as long as the Mac is offline.
+        var mac = HopMac()
+        mac.wifi.air = []
+        mac.loseWiFi()
+        mac.run(seconds: 4 * 3600)
+        let first = try? XCTUnwrap(mac.tryTimes.first)
+        let last = try? XCTUnwrap(mac.tryTimes.last)
+        XCTAssertLessThanOrEqual((last ?? 0) - (first ?? 0), HotspotHop.tryLimit)
+        XCTAssertGreaterThan((last ?? 0) - (first ?? 0), HotspotHop.tryLimit - 62)
+        XCTAssertEqual(HotspotHop.tryLimit, 1800)
+        guard case .notFound(let at) = mac.state else { return XCTFail("\(mac.state.code)") }
+        XCTAssertLessThan(at.timeIntervalSince(HopMac.start), 1900, "The line says when the last try was")
+        // A sleep gives no new tries: the loss is the same.
+        let tries = mac.tryTimes.count
+        mac.sleep(3600)
+        mac.run(seconds: 600)
+        XCTAssertEqual(mac.tryTimes.count, tries)
+        // The next loss has its own half hour.
+        mac.input.online = true
+        mac.run(seconds: 10)
+        mac.input.online = false
+        mac.run(seconds: 20)
+        XCTAssertEqual(mac.tryTimes.count, tries + 1)
+    }
+
     func testAPathThatComesBackByItselfEndsTheTries() {
         var mac = HopMac()
         mac.loseWiFi()
