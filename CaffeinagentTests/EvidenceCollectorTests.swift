@@ -426,6 +426,57 @@ final class EvidenceCollectorTests: XCTestCase {
         XCTAssertEqual(sample(at: 12).frame.agents.map(\.pid), [200, 300, 700])
     }
 
+    /// `procStart` as Claude Code writes it, in UTC.
+    private func procStart(_ start: TimeInterval) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "EEE MMM d HH:mm:ss yyyy"
+        return formatter.string(from: Date(timeIntervalSince1970: start))
+    }
+
+    /// A container or a synced folder can write into the sessions folder
+    /// with the pids of its own pid space. Pid 312 of this Mac started 5
+    /// days ago and is no agent. The file `312.json` is of a process that
+    /// started a minute ago somewhere else.
+    func testASessionFileOfAnotherPidSpaceAdoptsNothing() throws {
+        let old = processStart - 432_000
+        let other = base.timeIntervalSince1970 - 60
+        let times = #""startedAt":\#(Int((other + 2) * 1000)),"procStart":"\#(procStart(other))""#
+        func unknown(_ pid: Int32, start: TimeInterval) -> Row {
+            .fixture(pid, start: start, path: "/usr/libexec/trustd", args: ["trustd"])
+        }
+        census.rows = [unknown(312, start: old), unknown(313, start: old), unknown(314, start: other), unknown(315, start: other)]
+        try write(#"{"pid":312,"kind":"interactive","status":"busy","pidDomain":"linux",\#(times)}"#, to: "sessions/312.json")
+        try write(#"{"pid":313,"kind":"interactive","status":"busy",\#(times)}"#, to: "sessions/313.json")
+        try write(#"{"pid":314,"kind":"interactive","status":"busy","pidDomain":"linux",\#(times)}"#, to: "sessions/314.json")
+        try write(#"{"pid":315,"kind":"interactive","status":"busy","pidDomain":"darwin",\#(times)}"#, to: "sessions/315.json")
+
+        let samples = [sample(at: 0), sample(at: 6)]
+        for sample in samples {
+            XCTAssertEqual(sample.frame.agents.map(\.pid), [315], "Only the file of this pid space that fits the start of its process")
+        }
+        census.rows.removeLast()
+        XCTAssertFalse(decisions(of: [sample(at: 12)]).contains(where: \.decision.hold), "No hold for a file of another process")
+    }
+
+    /// A process that a matcher knows does not take the state of a file
+    /// that is of another process either.
+    func testAMatchedSessionDoesNotTakeTheStateOfAFileOfAnotherProcess() throws {
+        let times = #""startedAt":\#(Int((processStart + 2) * 1000)),"procStart":"\#(procStart(processStart))""#
+        let later = #""startedAt":\#(Int((processStart + 302) * 1000)),"procStart":"\#(procStart(processStart + 300))""#
+        census.rows = [claude(100), claude(200), claude(300), claude(400, args: ["claude bg-spare", "--bg-spare", "/tmp/x.claim.sock"])]
+        try writeSession(100, status: "busy", extra: #","pidDomain":"linux",\#(times)"#)
+        try writeSession(200, status: "busy", extra: ",\(later)")
+        let own = try writeSession(300, status: "busy", extra: #","pidDomain":"darwin",\#(times)"#)
+        try write(#"{"pid":400,"kind":"bg","status":"busy","pidDomain":"linux",\#(times)}"#, to: "sessions/400.json")
+
+        let sample = sample(at: 0)
+        XCTAssertEqual(sample.frame.agents.map(\.pid), [100, 200, 300], "A spare with a file of another process has no job")
+        XCTAssertEqual(sample.frame.agents.map(\.reported?.state), [nil, nil, .working])
+        XCTAssertEqual(sample.watchedFiles, [own])
+    }
+
     func testUnreadableSessionFileKeepsTheInstance() throws {
         census.rows = [claude(31, args: ["claude bg-spare", "--bg-spare", "/tmp/x.claim.sock"])]
         try write(#"{"pid":31,"kind":"bg","sta"#, to: "sessions/31.json")

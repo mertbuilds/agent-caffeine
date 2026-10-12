@@ -41,10 +41,15 @@ struct ClaudeSessionState: Equatable {
     var startedAt: Date?
     /// `procStart`: the start of the process, to the second.
     var processStartedAt: Date?
+    /// `pidDomain`: the pid space of the pid, `darwin` on a Mac. A
+    /// container or a synced folder can write a file into the folder with
+    /// a pid of its own pid space.
+    var pidDomain: String?
     var observedAt: Date
 
     /// Seconds between the start of a process and what its file says of it.
     static let startTolerance: TimeInterval = 2
+    static let ownPidDomain = "darwin"
 
     /// True when the file can be the file of a process that started at
     /// `start`, in seconds since the epoch. A process that crashed leaves
@@ -52,9 +57,24 @@ struct ClaudeSessionState: Equatable {
     /// started after everything the file says. False for a file with
     /// neither time.
     func isOfProcess(startedAt start: TimeInterval) -> Bool {
-        if let processStartedAt, abs(processStartedAt.timeIntervalSince1970 - start) <= Self.startTolerance { return true }
+        fits(start) ?? false
+    }
+
+    /// True when the file says that it is of another process. A file with
+    /// neither time says nothing.
+    func isOfAnotherProcess(startedAt start: TimeInterval) -> Bool {
+        fits(start) == false
+    }
+
+    /// Nil when the file says nothing. The start of the process decides
+    /// alone when the file has it: it is the start time of the kernel, to
+    /// the second. The start of the session is later by any time, so
+    /// every older process fits it, and it counts only without the other.
+    private func fits(_ start: TimeInterval) -> Bool? {
+        if let pidDomain, pidDomain != Self.ownPidDomain { return false }
+        if let processStartedAt { return abs(processStartedAt.timeIntervalSince1970 - start) <= Self.startTolerance }
         if let startedAt { return startedAt.timeIntervalSince1970 >= start - Self.startTolerance }
-        return false
+        return nil
     }
 
     var report: StateReport {
@@ -146,6 +166,7 @@ struct ClaudeSessionStateReader {
             name: SessionHint.cleaned(name: object["name"] as? String),
             startedAt: ReportedTime.date(object["startedAt"]),
             processStartedAt: (object["procStart"] as? String).flatMap(processStart.date(from:)),
+            pidDomain: object["pidDomain"] as? String,
             observedAt: now
         )
     }

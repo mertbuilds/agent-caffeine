@@ -73,6 +73,13 @@ final class ClaudeSessionStateReaderTests: XCTestCase {
             ("a file from before the process", #","startedAt":1790845121236,"procStart":"Thu Oct  1 08:58:39 2026""#, start + 86400, false),
             ("a file from 3 seconds before the process", #","startedAt":1790845121236"#, 1_790_845_124.3, false),
             ("another process start and no session start", #","procStart":"Thu Oct  1 08:58:49 2026""#, start, false),
+            // A file of another pid space, with the pid of a process of
+            // this Mac that started 5 days before: the start of the process
+            // decides alone, and the later session start says nothing.
+            ("another process start and a session start after the process", #","startedAt":1790845121236,"procStart":"Thu Oct  1 08:58:39 2026""#, start - 432_000, false),
+            ("this pid space", #","startedAt":1790845121236,"procStart":"Thu Oct  1 08:58:39 2026","pidDomain":"darwin""#, start, true),
+            ("another pid space", #","startedAt":1790845121236,"procStart":"Thu Oct  1 08:58:39 2026","pidDomain":"linux""#, start, false),
+            ("another pid space and the start of the session only", #","startedAt":1790845121236,"pidDomain":"linux""#, start, false),
         ]
         for testCase in cases {
             let parsed = try XCTUnwrap(ClaudeSessionStateReader.parse(session(status: "busy", extra: testCase.extra), now: now), testCase.name)

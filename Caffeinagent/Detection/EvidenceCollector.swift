@@ -552,6 +552,9 @@ final class EvidenceCollector: EvidenceCollecting {
             let path = sources.claudeSessions.fileURL(forPid: row.pid).path
             let reader = sources.claudeSessions
             guard let hit = sessionFiles.value(at: path, read: { reader.state(forPid: row.pid, now: now) }) else { continue }
+            // A file that a process with this pid left before, or a file
+            // of another pid space, is as no file.
+            if let state = hit.value, state.isOfAnotherProcess(startedAt: row.startTime) { continue }
             found = (hit.value, path)
             break
         }
