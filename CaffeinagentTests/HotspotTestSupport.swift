@@ -26,7 +26,7 @@ final class FakeWiFi: WiFiAccess {
     /// The network each join that worked went to.
     private(set) var joined: [WiFiSeen] = []
     /// The network of the last scan that found one.
-    private var found: WiFiSeen?
+    private let found = FoundNetwork<WiFiSeen>()
 
     func power() -> Bool? { powered }
 
@@ -38,22 +38,22 @@ final class FakeWiFi: WiFiAccess {
 
     func scan(for name: String) -> WiFiScan {
         scans.append(name)
-        found = nil
+        found.forget()
         if let scanFailure { return .failed(scanFailure) }
         let seen = seen
         let pick = WiFiPick.hotspot(name, among: seen)
-        found = pick.index.map { seen[$0] }
+        if let index = pick.index { found.keep(seen[index]) }
         return pick.scan
     }
 
     func scanKnown(_ name: String) -> WiFiScan {
         scans.append(name)
-        found = nil
+        found.forget()
         if let scanFailure { return .failed(scanFailure) }
         guard let security = knownSecurity(of: name) else { return .notFound }
         let seen = seen.filter { $0.security == security }
         let pick = WiFiPick.known(name, among: seen)
-        found = pick.index.map { seen[$0] }
+        if let index = pick.index { found.keep(seen[index]) }
         return pick.scan
     }
 
@@ -61,7 +61,7 @@ final class FakeWiFi: WiFiAccess {
         joins.append(name)
         joinPasswords.append(password)
         if let joinFailure { return .failed(joinFailure) }
-        guard let found, HotspotName.matches(found.name, name) else { return .failed(.other) }
+        guard let found = found.take(), HotspotName.matches(found.name, name) else { return .failed(.other) }
         // An open network takes anyone, with any password.
         if found.security != .open {
             if let right = passwords[found.name] {

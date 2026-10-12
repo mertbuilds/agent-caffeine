@@ -97,6 +97,37 @@ enum WiFiScan: Equatable {
     case failed(HopFailure)
 }
 
+/// The network a scan found, kept for the one join that follows. It
+/// holds the name of a network and the address of its base station, so
+/// it is not kept longer: `take` gives it once, and the next scan starts
+/// with none.
+final class FoundNetwork<Network>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var network: Network?
+
+    func keep(_ network: Network) {
+        lock.lock()
+        self.network = network
+        lock.unlock()
+    }
+
+    func forget() {
+        lock.lock()
+        network = nil
+        lock.unlock()
+    }
+
+    /// The network, which is forgotten with this call.
+    func take() -> Network? {
+        lock.lock()
+        defer {
+            network = nil
+            lock.unlock()
+        }
+        return network
+    }
+}
+
 enum WiFiJoin: Equatable {
     case joined
     case failed(HopFailure)

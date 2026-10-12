@@ -22,7 +22,7 @@ final class SystemWiFi: WiFiAccess {
     private var busy = false
     /// The network of the last scan that found one. A join needs it:
     /// CoreWLAN joins what a scan gave, not a name.
-    private var found: (network: CWNetwork, exact: Bool)?
+    private let found = FoundNetwork<(network: CWNetwork, exact: Bool)>()
     private var lastError: String?
 
     /// The domain and the code of the last error of CoreWLAN, with no
@@ -62,8 +62,9 @@ final class SystemWiFi: WiFiAccess {
     private func scan(
         names: [String], exact: Bool, keep: @escaping (CWNetwork) -> Bool, pick: @escaping ([WiFiSeen]) -> (index: Int?, scan: WiFiScan)
     ) -> WiFiScan {
+        found.forget()
         guard let interface else { return .failed(.noWiFi) }
-        let result: WiFiScan? = timed(Self.scanTimeout) { [self] in
+        let result: (scan: WiFiScan, network: CWNetwork?)? = timed(Self.scanTimeout) { [self] in
             var hidden = false
             var open = false
             for name in names {
@@ -77,10 +78,9 @@ final class SystemWiFi: WiFiAccess {
                             security: Self.security(of: network)
                         )
                     }
-                    let found = pick(seen)
-                    if let index = found.index { remember(named[index], exact: exact) }
-                    switch found.scan {
-                    case .found: return found.scan
+                    let picked = pick(seen)
+                    switch picked.scan {
+                    case .found: return (picked.scan, picked.index.map { named[$0] })
                     case .failed: open = true
                     case .notFound: break
                     }
@@ -88,21 +88,21 @@ final class SystemWiFi: WiFiAccess {
                     // joined, because nothing says that it is the hotspot.
                     if networks.contains(where: { $0.ssid == nil }) { hidden = true }
                 } catch {
-                    return .failed(failure(of: error, joining: false))
+                    return (.failed(failure(of: error, joining: false)), nil)
                 }
             }
-            if open { return .failed(.notSecure) }
-            return hidden ? .failed(.noPermission) : .notFound
+            if open { return (.failed(.notSecure), nil) }
+            return (hidden ? .failed(.noPermission) : .notFound, nil)
         }
-        return result ?? .failed(.timeout)
+        // A scan that ended after its time limit keeps nothing.
+        guard let result else { return .failed(.timeout) }
+        if let network = result.network { found.keep((network, exact)) }
+        return result.scan
     }
 
     func associate(to name: String, password: String?) -> WiFiJoin {
         guard let interface else { return .failed(.noWiFi) }
-        lock.lock()
-        let found = found
-        lock.unlock()
-        guard let found, let ssid = found.network.ssid, found.exact ? ssid == name : HotspotName.matches(ssid, name) else { return .failed(.other) }
+        guard let found = found.take(), let ssid = found.network.ssid, found.exact ? ssid == name : HotspotName.matches(ssid, name) else { return .failed(.other) }
         let network = found.network
         let result: WiFiJoin? = timed(Self.joinTimeout) { [self] in
             do {
@@ -136,12 +136,6 @@ final class SystemWiFi: WiFiAccess {
         if network.supportsSecurity(.none) { return .open }
         let personal: [CWSecurity] = [.wpa2Personal, .wpaPersonalMixed, .wpa3Personal, .wpa3Transition]
         return personal.contains { network.supportsSecurity($0) } ? .personal : .other
-    }
-
-    private func remember(_ network: CWNetwork, exact: Bool) {
-        lock.lock()
-        found = (network, exact)
-        lock.unlock()
     }
 
     /// See `HopFailure.of(coreWLAN:joining:)`.

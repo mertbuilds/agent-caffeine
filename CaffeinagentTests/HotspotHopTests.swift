@@ -689,6 +689,28 @@ final class HotspotHopTests: XCTestCase {
         XCTAssertEqual(Set(states.map(\.code)).count, states.count)
     }
 
+    func testTheNetworkOfAScanIsKeptForOneJoinOnly() {
+        let found = FoundNetwork<String>()
+        XCTAssertNil(found.take())
+        found.keep(HopMac.hotspot)
+        XCTAssertEqual(found.take(), HopMac.hotspot)
+        XCTAssertNil(found.take(), "Given once")
+        found.keep(HopMac.hotspot)
+        found.forget()
+        XCTAssertNil(found.take())
+        // The fake air keeps it the same way: a second join needs a scan.
+        let wifi = FakeWiFi()
+        wifi.air = [HopMac.hotspot]
+        wifi.passwords = [HopMac.hotspot: HopMac.password]
+        XCTAssertEqual(wifi.scan(for: HopMac.hotspot), .found(WiFiSighting(rssi: -52, channel: 6)))
+        XCTAssertEqual(wifi.associate(to: HopMac.hotspot, password: HopMac.password), .joined)
+        XCTAssertEqual(wifi.associate(to: HopMac.hotspot, password: HopMac.password), .failed(.other))
+        XCTAssertEqual(wifi.scan(for: HopMac.hotspot), .found(WiFiSighting(rssi: -52, channel: 6)))
+        wifi.air = []
+        XCTAssertEqual(wifi.scan(for: HopMac.hotspot), .notFound)
+        XCTAssertEqual(wifi.associate(to: HopMac.hotspot, password: HopMac.password), .failed(.other), "A scan that found nothing forgets the one before")
+    }
+
     /// The files of the feature that are compiled into the tests write
     /// no log and print nothing: a name cannot get out that way.
     func testTheCoreWritesNoLog() throws {
