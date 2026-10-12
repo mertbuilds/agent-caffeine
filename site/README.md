@@ -11,7 +11,7 @@ The site reads them over HTTPS with no credentials. Set `MAC_FILES_ORIGIN` to an
 - Set it for the build. `next.config.js` reads it when the site is built and rewrites `/mac/*` to `${MAC_FILES_ORIGIN}/mac/*`. A build without it has no `/mac/` route.
 - Set it for the running site too. The server reads `${MAC_FILES_ORIGIN}/mac/latest.json` (revalidated every hour) to decide whether the page shows the download button.
 
-Without it the page shows only the buy button. The same happens while `latest.json` cannot be read, and the server log then says why.
+Without it the page says that the download is not ready yet, and the header links to the source code. The same happens while `latest.json` cannot be read, and the server log then says why. The page never shows a price.
 
 To see the page with a download while none is published, put `NEXT_PUBLIC_FAKE_RELEASE=1` in `.env.development.local`. The dev server then shows a sample release whose link goes nowhere. A production build ignores it.
 

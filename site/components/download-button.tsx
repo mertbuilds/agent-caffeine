@@ -21,6 +21,11 @@ export function TryFree({ small = false }: { small?: boolean }) {
   return <WithAppleMark small={small}>Try free for macOS</WithAppleMark>;
 }
 
+/** What stands in the place of a download button while no release can be read. It never names a price. */
+export function DownloadNotReady() {
+  return <p className="text-muted">The download is not ready yet</p>;
+}
+
 export function DownloadButton({
   release,
   placement,

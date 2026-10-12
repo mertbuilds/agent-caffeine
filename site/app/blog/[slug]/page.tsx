@@ -1,14 +1,14 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BuyButton } from "@/components/buy-button";
+import { BuyButton, PILL, SIZES } from "@/components/buy-button";
 import { PRICE } from "@/lib/pricing";
 import { DownloadButton, TryFree } from "@/components/download-button";
 import { Footer } from "@/components/footer";
 import { JsonLd } from "@/components/json-ld";
 import { formatDate, getPost, getPosts } from "@/lib/blog";
 import { getLatestRelease } from "@/lib/release";
-import { AUTHOR, ORGANIZATION, SITE_URL } from "@/lib/site";
+import { AUTHOR, ORGANIZATION, REPO_URL, SITE_URL } from "@/lib/site";
 
 type Props = { params: Promise<{ slug: string }> };
 
@@ -118,13 +118,13 @@ export default async function BlogPost({ params }: Props) {
             We built Agent Caffeine to keep a Mac awake while coding agents work, also with
             the lid closed.{" "}
             {release === null
-              ? `${PRICE} once. macOS 13 or later, Apple silicon and Intel.`
+              ? "Free and open source. macOS 13 or later, Apple silicon and Intel."
               : `Free for 7 days, then ${PRICE} once. macOS 13 or later, Apple silicon and Intel.`}
           </p>
           {release === null ? (
-            <BuyButton placement="blog" size="small">
-              Buy for {PRICE}
-            </BuyButton>
+            <a href={REPO_URL} className={`${PILL} bg-fg text-bg ${SIZES.small}`}>
+              Source code
+            </a>
           ) : (
             <div className="flex shrink-0 items-center gap-4">
               <DownloadButton release={release} placement="blog" size="small">

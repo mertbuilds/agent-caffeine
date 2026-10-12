@@ -5,12 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { BuyButton } from "@/components/buy-button";
-import { PRICE } from "@/lib/pricing";
+import { PILL, SIZES } from "@/components/buy-button";
 import { DownloadButton, WithAppleMark } from "@/components/download-button";
 import { SiteMenu } from "@/components/site-menu";
 import { morph } from "@/lib/morph";
 import type { Release } from "@/lib/release";
+import { REPO_URL } from "@/lib/site";
 
 /**
  * How far down the page the pill takes over, and how far back up the open
@@ -40,7 +40,7 @@ function morphName(name: string) {
 
 /**
  * The name and the way home at the left, the home page's sections in the
- * middle, and the buy or download at the right. The link of the section in
+ * middle, and the download at the right, or the source code while there is no download. The link of the section in
  * view takes the text's own colour. Once the page has
  * run a little way under it, the items gather into a pill in the middle, the
  * mark alone for the name, and open back out near the top. A window too
@@ -173,9 +173,9 @@ export function SiteHeader({ release }: { release: Release | null }) {
         <span className="inline-flex items-center gap-2 justify-self-end">
           {release === null ? (
             <span {...morphName("header-primary")} className="inline-flex">
-              <BuyButton placement="header" size="compact">
-                Buy for {PRICE}
-              </BuyButton>
+              <a href={REPO_URL} className={`${PILL} bg-fg text-bg ${SIZES.compact}`}>
+                Source code
+              </a>
             </span>
           ) : (
             <span {...morphName("header-primary")} className="inline-flex">

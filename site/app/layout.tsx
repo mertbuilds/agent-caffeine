@@ -6,8 +6,6 @@ import { DevKnobs } from "@/components/dev-knobs";
 import { HashScroll } from "@/components/hash-scroll";
 import { Header } from "@/components/header";
 import { SendToMacPopup } from "@/components/send-to-mac-popup";
-import { PRICE } from "@/lib/pricing";
-import { getLatestRelease } from "@/lib/release";
 import { THEME_SCRIPT } from "@/lib/theme";
 
 const suisse = localFont({
@@ -20,39 +18,37 @@ const suisse = localFont({
   adjustFontFallback: false,
 });
 
-/** The free trial is in the descriptions only while there is a download to start it with. */
-export async function generateMetadata(): Promise<Metadata> {
-  const offer = (await getLatestRelease()) === null ? `${PRICE} once.` : `Free for 7 days, then ${PRICE} once.`;
-  return {
-    metadataBase: new URL("https://caffeinagent.com"),
-    alternates: { canonical: "/" },
-    title: "Agent Caffeine · Keep your Mac awake while AI agents work",
+const offer = "Free and open source.";
+
+export const metadata: Metadata = {
+  metadataBase: new URL("https://caffeinagent.com"),
+  alternates: { canonical: "/" },
+  title: "Agent Caffeine · Keep your Mac awake while AI agents work",
+  description:
+    `Agent Caffeine keeps your Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are done. ${offer}`,
+  openGraph: {
+    title: "Agent Caffeine",
     description:
-      `Agent Caffeine keeps your Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are done. ${offer}`,
-    openGraph: {
-      title: "Agent Caffeine",
-      description:
-        `Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. ${offer}`,
-      type: "website",
-      url: "/",
-      images: [
-        {
-          url: "/og.png",
-          width: 1200,
-          height: 630,
-          alt: "Agent Caffeine. Close your lid, come back to finished work",
-        },
-      ],
-    },
-    twitter: {
-      card: "summary_large_image",
-      title: "Agent Caffeine",
-      description:
-        `Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. ${offer}`,
-      images: ["/og.png"],
-    },
-  };
-}
+      `Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. ${offer}`,
+    type: "website",
+    url: "/",
+    images: [
+      {
+        url: "/og.png",
+        width: 1200,
+        height: 630,
+        alt: "Agent Caffeine. Close your lid, come back to finished work",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Agent Caffeine",
+    description:
+      `Keep your Mac awake while AI agents work. Agent-aware sleep prevention for macOS. ${offer}`,
+    images: ["/og.png"],
+  },
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (

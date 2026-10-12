@@ -1,6 +1,5 @@
 import { AgentIcon } from "@/components/agent-icons";
-import { BuyButton } from "@/components/buy-button";
-import { DownloadButton, TryFree } from "@/components/download-button";
+import { DownloadButton, DownloadNotReady, TryFree } from "@/components/download-button";
 import { GridTexture } from "@/components/grid-texture";
 import { HeroScene } from "@/components/hero-scene";
 import { agents, markedAgents } from "@/lib/agents";
@@ -44,16 +43,15 @@ function WorksWith() {
 }
 
 function Cta({ release }: { release: Release | null }) {
-  return release === null ? (
-    <div className="flex flex-col items-center gap-3 lg:items-start">
-      <BuyButton placement="hero">Buy for {PRICE}</BuyButton>
-      <p className="text-sm text-muted">Pay once. No subscription · macOS 13 or later, Apple silicon and Intel</p>
-    </div>
-  ) : (
+  return (
     <div className="flex flex-col items-center gap-4 lg:items-start">
-      <DownloadButton release={release} placement="hero">
-        <TryFree />
-      </DownloadButton>
+      {release === null ? (
+        <DownloadNotReady />
+      ) : (
+        <DownloadButton release={release} placement="hero">
+          <TryFree />
+        </DownloadButton>
+      )}
       <ul className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-sm text-muted lg:justify-start">
         <li className="flex items-center gap-1.5">
           <svg {...GLYPH} height="10.5" viewBox="0 0 12 10.5">
