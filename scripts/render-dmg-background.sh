@@ -8,10 +8,10 @@
 # change to the html and commit the result.
 #
 # It needs Google Chrome (or CHROME pointed at any Chromium) and, for the real
-# typeface, the two Suisse Intl files in scripts/fonts. When that folder is
-# empty the files are copied from the attentionawareness repo next to this one
-# (packages/ui/fonts, where its `pnpm fonts` puts them). scripts/fonts is
-# gitignored.
+# typeface, the two Suisse Intl files in scripts/fonts. Suisse Intl is a
+# commercial typeface, so the files are not in this repo and scripts/fonts is
+# gitignored. Copy your licensed files there, or point FONT_SOURCE at a folder
+# that holds them.
 
 set -euo pipefail
 
@@ -23,18 +23,17 @@ if [ ! -x "$CHROME" ]; then
   exit 1
 fi
 
-FONT_SOURCE="${FONT_SOURCE:-/Users/you/code/mertbuilds/attentionawareness/packages/ui/fonts}"
+FONT_SOURCE="${FONT_SOURCE:-}"
 FACES="SuisseIntl-Regular.woff2 SuisseIntl-Medium.woff2"
 for face in $FACES; do
-  if [ ! -f "fonts/$face" ] && [ -f "$FONT_SOURCE/$face" ]; then
+  if [ ! -f "fonts/$face" ] && [ -n "$FONT_SOURCE" ] && [ -f "$FONT_SOURCE/$face" ]; then
     mkdir -p fonts
     cp "$FONT_SOURCE/$face" "fonts/$face"
   fi
   if [ ! -f "fonts/$face" ]; then
     echo "error: fonts/$face is missing, so the picture would be set in the" >&2
-    echo "       system font. it was not found in $FONT_SOURCE either." >&2
-    echo "       run \`pnpm fonts\` in the attentionawareness repo, or copy the" >&2
-    echo "       file into scripts/fonts." >&2
+    echo "       system font. copy the file into scripts/fonts, or set" >&2
+    echo "       FONT_SOURCE to the folder that holds it." >&2
     exit 1
   fi
 done
