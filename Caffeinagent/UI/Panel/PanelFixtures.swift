@@ -14,6 +14,7 @@ enum PanelFixtures {
         var label: String?
         var cause: HoldCause?
         var hint: SessionHint?
+        var stopped: AgentStop?
     }
 
     static func input(_ headline: HoldHeadline, _ agents: [Agent] = []) -> PanelInput {
@@ -29,7 +30,7 @@ enum PanelFixtures {
                     agentID: agent.id, displayName: agent.name, level: .state, identity: identity,
                     verdict: AgentVerdict(state: agent.state, confidence: .reported, reason: agent.reason)
                 ),
-                cause: agent.cause
+                cause: agent.cause, stopped: agent.stopped
             ))
         }
         var clock = StateClock()
@@ -318,6 +319,27 @@ enum PanelFixtures {
         return state(input)
     }()
 
+    /// Offline for the time of the offline rule: the agent works and
+    /// keeps nothing awake.
+    static let offline = state(input(.agentsStopped(.offline), [
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 48, label: "blog", stopped: .offline),
+        Agent(id: "codex", name: "Codex", minutes: 40),
+    ]))
+
+    /// The same, and a hold from the command line keeps the Mac awake.
+    static let offlineWithHold: PanelState = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var input = Self.input(.manualHold(.one("deploy")), [
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 48, label: "blog", stopped: .offline),
+            Agent(id: "codex", name: "Codex", minutes: 40),
+        ])
+        input.decision.manualHolds = [ManualHold.timed(id: "0a1b2c3d", length: 2 * 3600, reason: "deploy", now: now.addingTimeInterval(-600))]
+        input.calendar = calendar
+        input.locale = Locale(identifier: "en_GB")
+        return state(input)
+    }()
+
     /// Every state by name, for the tests and the offscreen pictures.
     static let all: [(name: String, state: PanelState)] = [
         ("working", working), ("waiting", waiting), ("all-idle", allIdle), ("same-folder", sameFolder), ("no-agent", noAgent),
@@ -328,6 +350,7 @@ enum PanelFixtures {
         ("helper-off", helperSwitchedOff), ("helper-silent", helperNotResponding),
         ("slept-anyway", sleptAnyway), ("manual-holds", manualHolds), ("job-hold", jobHold), ("wake-set", wakeSet),
         ("closed-lid-stopped", closedLidStopped), ("slept-closed-lid", sleptClosedLid),
+        ("offline", offline), ("offline-with-hold", offlineWithHold),
     ]
 
     /// One agent for each mark, to check the marks.

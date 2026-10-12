@@ -270,6 +270,15 @@ struct GeneralPreferences: View {
                     "While an agent is waiting for you", $settings.waitingHold,
                     help: "Your Mac stays awake this long while an agent is waiting for your answer. After that Agent Caffeine lets it sleep, unless another agent is working."
                 )
+                VStack(alignment: .leading, spacing: 4) {
+                    Picker(PanelText.offlineLimitPicker, selection: $settings.offlineLimitMinutes) {
+                        ForEach(OfflineRule.minuteChoices, id: \.self) { Text(HumaneDuration.counted($0, "minute")).tag($0) }
+                        Text(PanelText.never).tag(OfflineRule.never)
+                    }
+                    Text(PanelText.offlineLimitExplained)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
             }
             Section {
                 Toggle(PanelText.openAtLogin, isOn: Binding(get: { loginItem.isOn }, set: setOpenAtLogin))

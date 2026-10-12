@@ -53,6 +53,8 @@ struct PanelPreview: View {
 #Preview("Helper switched off") { PanelPreview(state: PanelFixtures.helperSwitchedOff, mode: .always) }
 #Preview("Helper gives no answer") { PanelPreview(state: PanelFixtures.helperNotResponding) }
 #Preview("Slept under an agent") { PanelPreview(state: PanelFixtures.sleptAnyway) }
+#Preview("Offline, agents only") { PanelPreview(state: PanelFixtures.offline) }
+#Preview("Offline, with a hold from the command line") { PanelPreview(state: PanelFixtures.offlineWithHold) }
 
 #Preview("Robot poses") {
     HStack(spacing: 16) {
