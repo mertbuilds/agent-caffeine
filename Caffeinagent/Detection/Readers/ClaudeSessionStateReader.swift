@@ -115,9 +115,10 @@ struct ClaudeSessionStateReader {
         state(forPid: pid, now: now)?.report
     }
 
-    /// The pids that have a file, alive or not. No file is read.
-    func pids() -> Set<Int32> {
-        let names = (try? FileManager.default.contentsOfDirectory(atPath: sessionsDirectory.path)) ?? []
+    /// The pids that have a file, alive or not. No file is read. Nil when
+    /// the folder cannot be listed, which does not say that it is empty.
+    func pids() -> Set<Int32>? {
+        guard let names = try? FileManager.default.contentsOfDirectory(atPath: sessionsDirectory.path) else { return nil }
         return Set(names.compactMap { name in name.hasSuffix(".json") ? Int32(name.dropLast(5)) : nil })
     }
 

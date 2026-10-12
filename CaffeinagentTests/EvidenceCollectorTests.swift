@@ -485,6 +485,75 @@ final class EvidenceCollectorTests: XCTestCase {
         XCTAssertNil(sample.frame.agents.first?.reported)
     }
 
+    /// A session that only its file made a session is not gone when the
+    /// file is read in the middle of a write: the row would leave the
+    /// frame, and the memory and the hold of the session with it.
+    func testAnAdoptedSessionStaysWhileItsFileIsWritten() throws {
+        let fields = #""kind":"interactive","status":"busy","startedAt":\#(Int((processStart + 4) * 1000))"#
+        census.rows = [.fixture(100, start: processStart, path: "/Users/me/.local/share/claude/next/3.0.1", args: ["3.0.1", "--new-flag"])]
+        let path = try write(#"{"pid":100,\#(fields)}"#, to: "sessions/100.json")
+        let first = sample(at: 0)
+        XCTAssertEqual(first.frame.agents.map(\.reported?.state), [.working])
+
+        try write(#"{"pid":100,"kind":"interactive","sta"#, to: "sessions/100.json")
+        let cut = sample(at: 2)
+        XCTAssertEqual(cut.frame.agents.map(\.pid), [100])
+        XCTAssertEqual(cut.frame.agents.map(\.adoptedBySessionFile), [true])
+        XCTAssertEqual(cut.frame.agents.map(\.role), [.session])
+        XCTAssertNil(cut.frame.agents.first?.reported)
+        XCTAssertEqual(cut.watchedFiles, [path])
+        // Also when the folder is listed again.
+        let later = sample(at: 6)
+        XCTAssertEqual(later.frame.agents.map(\.pid), [100])
+        XCTAssertEqual(decisions(of: [first, cut, later]).map(\.decision.hold), [true, true, true])
+
+        try write(#"{"pid":100,\#(fields)}"#, to: "sessions/100.json")
+        XCTAssertEqual(sample(at: 8).frame.agents.map(\.reported?.state), [.working])
+
+        // The session ends and removes its file.
+        try FileManager.default.removeItem(atPath: path)
+        XCTAssertEqual(sample(at: 10).frame.agents.map(\.pid), [])
+        // A file that is cut makes no session of a process that was none.
+        try write(#"{"pid":100,"kind":"interactive","sta"#, to: "sessions/100.json")
+        XCTAssertEqual(sample(at: 16).frame.agents.map(\.pid), [])
+    }
+
+    /// A process that has the pid of an adopted session and another start
+    /// is another process.
+    func testAnAdoptedSessionIsRememberedByItsStartToo() throws {
+        func unknown(start: TimeInterval) -> Row {
+            .fixture(100, start: start, path: "/Users/me/.local/share/claude/next/3.0.1", args: ["3.0.1", "--new-flag"])
+        }
+        census.rows = [unknown(start: processStart)]
+        try write(#"{"pid":100,"kind":"interactive","status":"busy","startedAt":\#(Int((processStart + 4) * 1000))}"#, to: "sessions/100.json")
+        XCTAssertEqual(sample(at: 0).frame.agents.map(\.pid), [100])
+        census.rows = [unknown(start: processStart + 1)]
+        try write(#"{"pid":100,"kind":"interactive","sta"#, to: "sessions/100.json")
+        XCTAssertEqual(sample(at: 2).frame.agents.map(\.pid), [])
+    }
+
+    /// A folder that cannot be listed for a moment is not an empty folder.
+    func testAFailedListingOfTheSessionsKeepsThePreviousOne() throws {
+        let fields = #""kind":"interactive","status":"busy","startedAt":\#(Int((processStart + 4) * 1000))"#
+        func unknown(_ pid: Int32) -> Row {
+            .fixture(pid, start: processStart, path: "/Users/me/.local/share/claude/next/3.0.1", args: ["3.0.1", "--new-flag"])
+        }
+        census.rows = [unknown(100), unknown(200)]
+        try write(#"{"pid":100,\#(fields)}"#, to: "sessions/100.json")
+        try write(#"{"pid":200,"kind":"interactive","sta"#, to: "sessions/200.json")
+        XCTAssertEqual(sample(at: 0).frame.agents.map(\.pid), [100])
+
+        // The files can be read and the folder cannot be listed.
+        let folder = root.appendingPathComponent("sessions").path
+        try FileManager.default.setAttributes([.posixPermissions: 0o300], ofItemAtPath: folder)
+        defer { try? FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: folder) }
+        XCTAssertNil(sources.claudeSessions.pids())
+        try write(#"{"pid":200,\#(fields)}"#, to: "sessions/200.json")
+        let sample = sample(at: 6)
+        XCTAssertEqual(sample.frame.agents.map(\.pid), [100, 200])
+        XCTAssertEqual(sample.frame.agents.map(\.reported?.state), [.working, .working])
+    }
+
     /// A status this build does not know is no state. It must not read as
     /// idle: the verdict then goes by the signs of activity.
     func testUnknownClaudeStatusIsNoState() throws {

@@ -95,7 +95,7 @@ final class ClaudeSessionStateReaderTests: XCTestCase {
             try Data("{}".utf8).write(to: directory.appendingPathComponent(name))
         }
         XCTAssertEqual(ClaudeSessionStateReader(sessionsDirectory: directory).pids(), [4242, 17])
-        XCTAssertEqual(ClaudeSessionStateReader(sessionsDirectory: directory.appendingPathComponent("none")).pids(), [])
+        XCTAssertNil(ClaudeSessionStateReader(sessionsDirectory: directory.appendingPathComponent("none")).pids(), "A folder that cannot be listed is not an empty folder")
     }
 
     func testKinds() {

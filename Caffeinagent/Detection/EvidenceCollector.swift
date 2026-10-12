@@ -172,6 +172,10 @@ final class EvidenceCollector: EvidenceCollecting {
     /// The processes of the sample that is being collected that only
     /// their session file made a session.
     private var adoptedPIDs: Set<Int32> = []
+    /// The same sessions of the last sample. Kept, so a file that is read
+    /// in the middle of a write does not take the session out of the
+    /// frame for one sample, and its memory and its hold with it.
+    private var adoptedSessions: Set<ProcessIdentity> = []
     private var jobFiles = FileCache<ClaudeJobState>()
     private var transcripts = FileCache<ClaudeTranscriptReader.TailParse>()
     private var rolloutTails: CodexRolloutTracker
@@ -456,21 +460,32 @@ final class EvidenceCollector: EvidenceCollecting {
     /// A process that a matcher knows keeps its match, also a helper. The
     /// role is that of a spare, so a warm spare stays out
     /// (`fillClaude`). A new file is found by the next listing, up to
-    /// `listingAge` late.
+    /// `listingAge` late. A listing that failed keeps the one before.
+    ///
+    /// A session that was adopted stays one while its process lives and
+    /// its file is there, also when the file cannot be read for a sample.
+    /// It goes when the file is gone, or says that it is of another
+    /// process.
     private func adoptClaudeSessions(in snapshot: [ProcessInfoRow], matches: inout [Int32: AgentMatch], now: Date) {
         adoptedPIDs.removeAll(keepingCapacity: true)
+        let known = adoptedSessions
+        adoptedSessions.removeAll(keepingCapacity: true)
         guard let definition = sources.catalog.definitions.first(where: { $0.id == "claude" }) else { return }
         let reader = sources.claudeSessions
         if claudeSessionListing.map({ now.timeIntervalSince($0.at) >= Self.listingAge || $0.at > now }) ?? true {
-            claudeSessionListing = (now, reader.pids())
+            claudeSessionListing = (now, reader.pids() ?? claudeSessionListing?.pids ?? [])
         }
-        guard let pids = claudeSessionListing?.pids, !pids.isEmpty else { return }
-        for row in snapshot where matches[row.pid] == nil && pids.contains(row.pid) {
+        let pids = claudeSessionListing?.pids ?? []
+        guard !pids.isEmpty || !known.isEmpty else { return }
+        for row in snapshot where matches[row.pid] == nil {
+            let wasAdopted = known.contains(row.identity)
+            guard wasAdopted || pids.contains(row.pid) else { continue }
             let path = reader.fileURL(forPid: row.pid).path
-            guard let state = sessionFiles.value(at: path, read: { reader.state(forPid: row.pid, now: now) })?.value,
-                  state.isOfProcess(startedAt: row.startTime) else { continue }
+            guard let hit = sessionFiles.value(at: path, read: { reader.state(forPid: row.pid, now: now) }) else { continue }
+            guard hit.value?.isOfProcess(startedAt: row.startTime) ?? wasAdopted else { continue }
             matches[row.pid] = AgentMatch(definition: definition, role: .helperMaybeSession)
             adoptedPIDs.insert(row.pid)
+            adoptedSessions.insert(row.identity)
         }
     }
 
