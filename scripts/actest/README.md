@@ -17,7 +17,7 @@ Python 3.11 or later, standard library only. Not shipped in the app.
 
 ## What the runner may do
 
-It reads: `pmset -g`, `pmset -g batt`, `pmset -g assertions`, `pmset -g sched`, `pmset -g log`, `ioreg`, `ps`, two hidden defaults of the app with `defaults read` (`StateForTests` and `ClosedLidLimitSecondsForTests`), the state file and the status file of the app, and our own files that a test names (the skill of Agent Caffeine, the link to the tool, the marker of the helper, the test job). For a test with `watch = ["claude"]` it also reads two keys of each `~/.claude/sessions/<pid>.json`, `status` and `statusUpdatedAt`, and keeps nothing else of the file: not the folder and not the name of the session.
+It reads: `pmset -g`, `pmset -g batt`, `pmset -g assertions`, `pmset -g sched`, `pmset -g log`, `ioreg`, `ps`, two hidden defaults of the app with `defaults read` (`StateForTests` and `ClosedLidLimitSecondsForTests`), the state file and the status file of the app, and our own files that a test names (the skill of Agent Caffeine, the link to the tool, the marker of the helper, the test job). For a test with `watch = ["claude"]` it also reads two keys of each `~/.claude/sessions/<pid>.json`, `status` and `statusUpdatedAt`, and keeps nothing else of the file: not the folder and not the name of the session. For a test with `watch = ["sessions"]` it reads `pid`, `kind`, `status` and `statusUpdatedAt` of each of those files and compares the pids that live in `ps` with the Claude rows of the app. It keeps a count and the pids that have no row.
 
 It runs: `agent-caffeine` (hold, release, status, skill), its own heartbeat writer, and, for a test with `lab = true`, a lab recording with the binary of the installed app.
 

@@ -34,7 +34,8 @@ class FakeChild:
 class FakeEnv:
     """`world(t)` gives what is true at time t (seconds from the start):
     lid, power, charge, flag, pid, state (the dict of the app or None),
-    sched, others, sessions (the session files of Claude Code by pid).
+    sched, others, sessions (the session files of Claude Code by pid),
+    alive (the pids of other processes that live).
     `keys` maps a time to the key pressed then."""
 
     def __init__(self, world, keys=None, export=True, switch=True, build="1.0.3 (17)", start=1_800_000_000.0):
@@ -67,7 +68,7 @@ class FakeEnv:
 
     def at(self):
         return dict({"lid": "open", "power": "ac", "charge": 100, "flag": 0, "pid": 500, "state": None, "sched": [], "others": [],
-                     "awake": False, "stopped": False, "displays": 0, "sessions": {}}, **self.world(self.t))
+                     "awake": False, "stopped": False, "displays": 0, "sessions": {}, "alive": []}, **self.world(self.t))
 
     def now(self):
         return self.clock
@@ -117,7 +118,8 @@ class FakeEnv:
         if args[0] == "ioreg":
             return 0, f'  |   "AppleClamshellState" = {"Yes" if now["lid"] == "closed" else "No"}\n'
         if args[0] == "ps":
-            return 0, f"{now['pid']} {APP}/Contents/MacOS/caffeinagent\n" if now["pid"] else "1 /sbin/launchd\n"
+            others = "".join(f"{pid} claude\n" for pid in now["alive"])
+            return 0, (f"{now['pid']} {APP}/Contents/MacOS/caffeinagent\n" if now["pid"] else "1 /sbin/launchd\n") + others
         if args[0] == "defaults" and args[-1] == config.LIMIT_KEY:
             return (0, f"{self.limit}\n") if self.limit is not None else (1, "")
         if args[0] == "defaults":

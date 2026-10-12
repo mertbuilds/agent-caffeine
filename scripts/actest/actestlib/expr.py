@@ -10,6 +10,9 @@
     session.state=idle    what the app says of that one session, by its pid:
                           also session.why and session.hold. session.age is
                           the seconds since the status changed
+    sessions.unseen=0     the live Claude Code sessions that have no row of
+                          the app (`watch = ["sessions"]`), and sessions.live,
+                          how many live ones there are
 
 A term is `path op value`. Terms join with `and`, and groups of them with
 `or`. A path that has no value compares equal to `none` and to nothing else.
@@ -149,6 +152,9 @@ def value(sample, path, since=None):
         return any(hold.get("id") == wanted for hold in app.get("holds", []))
     if head == "session":
         return _session(sample, rest, now)
+    if head == "sessions":
+        found = _dig(sample.get("sessions"), rest.split("."))
+        return len(found) if isinstance(found, list) else found
     if head in ("status", "probe", "child"):
         return _dig(sample.get(head), rest.split("."))
     raise ExprError(f"unknown path {path}")

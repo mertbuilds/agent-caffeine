@@ -42,7 +42,7 @@ def status_file():
 
 def claude_sessions_dir():
     """Where Claude Code keeps one file per session. The runner reads
-    `status` and `statusUpdatedAt` there and nothing else."""
+    `pid`, `kind`, `status` and `statusUpdatedAt` there and nothing else."""
     return os.path.join(home(), ".claude/sessions")
 
 

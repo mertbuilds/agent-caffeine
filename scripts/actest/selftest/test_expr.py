@@ -41,6 +41,18 @@ class ExprTests(unittest.TestCase):
         self.assertTrue(self.ok("probe.skill_claude=true and probe.job_lines>=3"))
         self.assertTrue(self.ok("child.hold=running"))
 
+    def test_the_sessions_that_the_app_does_not_see(self):
+        seen = dict(SAMPLE, sessions={"live": 3, "unseen": []})
+        self.assertTrue(self.ok("sessions.unseen=0 and sessions.live>=1", seen))
+        missed = dict(SAMPLE, sessions={"live": 3, "unseen": [20946, 69479]})
+        self.assertTrue(self.ok("sessions.unseen=2", missed))
+        self.assertFalse(self.ok("sessions.unseen=0", missed))
+        self.assertEqual(expr.reading("sessions.unseen=0", missed), "sessions.unseen=2")
+        # Without the state of the app nobody knows, and that is no pass.
+        for sample in (SAMPLE, dict(SAMPLE, sessions=None)):
+            self.assertFalse(self.ok("sessions.unseen=0", sample))
+            self.assertFalse(self.ok("sessions.live>=1", sample))
+
     def test_the_state_of_the_app(self):
         self.assertTrue(self.ok("app.running=true and app.state=true"))
         self.assertTrue(self.ok("app.hold=true"))

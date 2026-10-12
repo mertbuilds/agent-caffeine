@@ -9,6 +9,8 @@
     watch = ["claude"]        also follow one Claude Code session: the first
                               whose status becomes `shell` after the start
                               (`session.status`, `session.state` in expr.py)
+    watch = ["sessions"]      also compare every live Claude Code session with
+                              the rows of the app (`sessions.unseen`)
     [needs]                   power, charge, helper, display, agents, wake_for_jobs,
                               idle (no agent works: the app holds nothing),
                               sleeps (the app does not hold: idle, paused or off)
@@ -42,7 +44,7 @@ STEP = {"say", "until", "timeout", "key", "ask", "name", "run", "spawn", "signal
         "command", "optional"}
 MARKER = "/Library/Application Support/com.caffeinagent.app/sleep-flag-set"
 PROBE_KINDS = {"exists", "contains", "lines", "link"}
-WATCHES = {"sched", "claude"}
+WATCHES = {"sched", "claude", "sessions"}
 TOOL = "agent-caffeine"
 SIGNALS = {"KILL", "STOP", "CONT", "INT", "TERM"}
 WRITES = {"launchd-job"}

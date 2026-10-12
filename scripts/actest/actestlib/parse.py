@@ -78,6 +78,16 @@ def app_pids(text, app_path):
     return pids
 
 
+def pids(text):
+    """`ps -axo pid=,comm=`: the pid of every process that lives."""
+    found = set()
+    for line in text.splitlines():
+        parts = line.split(None, 1)
+        if parts and parts[0].isdigit():
+            found.add(int(parts[0]))
+    return found
+
+
 def external_displays(profile):
     """`system_profiler SPDisplaysDataType -json`, parsed: how many
     displays are not the built-in one."""

@@ -55,13 +55,15 @@ def probe(env, spec, run_dir):
 CLAUDE_STATUSES = ("busy", "shell", "waiting", "idle")
 
 
-def claude_sessions(env):
-    """Each Claude Code session by its pid: `status` and `statusUpdatedAt`
-    of `~/.claude/sessions/<pid>.json`. Nothing else of the file is
-    looked at or kept: it holds the folder and the name of the session.
-    A status that is not one of the four known words is "other"."""
+# A session that is new, or whose status just changed, has this long to
+# get its row: the app needs a sample to see it.
+SESSION_GRACE = 15
+
+
+def _session_files(env):
+    """(pid, file) of each `~/.claude/sessions/<pid>.json` that has a
+    status. The caller keeps the few keys it may read and nothing else."""
     folder = config.claude_sessions_dir()
-    found = {}
     for name in env.names(folder):
         if not name.endswith(".json") or not name[:-5].isdigit():
             continue
@@ -70,15 +72,55 @@ def claude_sessions(env):
             session = json.loads(data) if data else None
         except ValueError:
             continue
-        if not isinstance(session, dict) or not isinstance(session.get("status"), str):
+        if isinstance(session, dict) and isinstance(session.get("status"), str):
+            yield int(name[:-5]), session
+
+
+def _status_time(session):
+    """`statusUpdatedAt`, in seconds. The file has milliseconds."""
+    at = session.get("statusUpdatedAt")
+    return at / 1000 if isinstance(at, (int, float)) and not isinstance(at, bool) else None
+
+
+def claude_sessions(env):
+    """Each Claude Code session by its pid: `status` and `statusUpdatedAt`
+    of `~/.claude/sessions/<pid>.json`. Nothing else of the file is
+    looked at or kept: it holds the folder and the name of the session.
+    A status that is not one of the four known words is "other"."""
+    return {
+        pid: {"status": session["status"] if session["status"] in CLAUDE_STATUSES else "other", "at": _status_time(session)}
+        for pid, session in _session_files(env)
+    }
+
+
+def seen_sessions(env, alive, state):
+    """Every live Claude Code session against the rows of the app, for a
+    test with `watch = ["sessions"]`. Of each session file the keys
+    `pid`, `kind`, `status` and `statusUpdatedAt` are read, and the sample
+    keeps a count and pids only.
+
+    A session counts when its process lives (`alive`, the pids of `ps`)
+    and it is `interactive`, or `bg` and not idle: a warm spare of the
+    daemon is `bg` and idle, and is no session. It is `unseen` when no
+    Claude row of the app has its pid and its status is older than
+    SESSION_GRACE. A file that a dead session left, whose pid went to
+    another process, reads as unseen too: the runner may not read the
+    start time that would tell. None without the state of the app."""
+    if state is None:
+        return None
+    rows = {row.get("pid") for row in state.get("agents", []) if row.get("id") in ("claude", "claude-desktop")}
+    live, unseen = 0, []
+    for pid, session in _session_files(env):
+        if pid not in alive or session.get("pid", pid) != pid:
             continue
-        at = session.get("statusUpdatedAt")
-        found[int(name[:-5])] = {
-            "status": session["status"] if session["status"] in CLAUDE_STATUSES else "other",
-            # Milliseconds since the epoch.
-            "at": at / 1000 if isinstance(at, (int, float)) and not isinstance(at, bool) else None,
-        }
-    return found
+        kind = session.get("kind")
+        if kind != "interactive" and not (kind == "bg" and session["status"] != "idle"):
+            continue
+        live += 1
+        at = _status_time(session)
+        if pid not in rows and (at is None or env.now() - at >= SESSION_GRACE):
+            unseen.append(pid)
+    return {"live": live, "unseen": sorted(unseen)}
 
 
 def follow(sessions, pid, since):
@@ -97,7 +139,8 @@ def follow(sessions, pid, since):
 def take(env, test=None, run_dir="", step=0, children=None):
     """The sample at this moment."""
     app_path = getattr(env, "app", None)
-    pids = parse.app_pids(env.command(("ps", "-axo", "pid=,comm="))[1], app_path)
+    processes = env.command(("ps", "-axo", "pid=,comm="))[1]
+    pids = parse.app_pids(processes, app_path)
     state = app_state(env, pids)
     # A lab recording runs the same binary: the state names the app.
     pid = state["app"]["pid"] if state else (pids[0] if pids else None)
@@ -116,6 +159,8 @@ def take(env, test=None, run_dir="", step=0, children=None):
         # The owners of other apps are not kept.
         known = (config.WAKE_OWNER, "pmset")
         sample["sched"] = [{"kind": event["kind"], "owner": event["owner"] if event["owner"] in known else "other"} for event in events]
+    if test and "sessions" in test.get("watch", []):
+        sample["sessions"] = seen_sessions(env, parse.pids(processes), state)
     if test and test.get("probes"):
         sample["probe"] = {name: probe(env, spec, run_dir) for name, spec in test["probes"].items()}
     if children:

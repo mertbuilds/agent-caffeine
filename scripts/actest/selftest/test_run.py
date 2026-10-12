@@ -309,6 +309,78 @@ class RunTests(unittest.TestCase):
             with open(os.path.join(run_dir, name), encoding="utf-8") as file:
                 self.assertNotIn("ecret", file.read(), name)
 
+    # MARK: Every live session of Claude Code
+
+    def seen_world(self, rows=(69479, 20946, 78397), late=None):
+        """The Mac of 2026-10-12: a session and a background session of
+        deleted versions work, one session is idle, the daemon has a
+        warm spare, and a session that crashed left its file. `late` is
+        a session that starts at 5 s and gets its row that many seconds
+        after, or never."""
+        def world(t):
+            old = (1_800_000_000 - 3600) * 1000
+            sessions = {
+                "69479.json": {"pid": 69479, "kind": "interactive", "status": "busy", "statusUpdatedAt": old, "cwd": "/Users/secret/a", "name": "Secret"},
+                "20946.json": {"pid": 20946, "kind": "bg", "status": "busy", "statusUpdatedAt": old, "jobId": "secret-job"},
+                "78397.json": {"pid": 78397, "kind": "interactive", "status": "idle", "statusUpdatedAt": old},
+                "21523.json": {"pid": 21523, "kind": "bg", "status": "idle", "statusUpdatedAt": old, "spare": {"id": "secret"}},
+                "555.json": {"pid": 555, "kind": "interactive", "status": "busy", "statusUpdatedAt": old},
+                "600.json": {"pid": 601, "kind": "interactive", "status": "busy", "statusUpdatedAt": old},
+                "700.json": {"pid": 700, "kind": "daemon", "status": "busy", "statusUpdatedAt": old},
+                "notes.json": {"status": "busy"},
+            }
+            alive = [69479, 20946, 78397, 21523, 600, 700]
+            seen = list(rows)
+            if late is not None and t >= 5:
+                sessions["800.json"] = {"pid": 800, "kind": "interactive", "status": "busy", "statusUpdatedAt": (1_800_000_000 + 5) * 1000}
+                alive.append(800)
+                if late >= 0 and t >= 5 + late:
+                    seen.append(800)
+            agents = [{"id": "claude", "pid": pid, "state": "working", "why": "reportsBusy", "hold": "working"} for pid in seen]
+            agents.append({"id": "codex", "pid": 555, "state": "idle"})
+            return {"sessions": sessions, "alive": alive, "awake": True, "flag": 1, "state": fakes.state(hold=True, flag=True, agents=agents)}
+        return world
+
+    def run_seen(self, **world):
+        test = catalog.load_file(os.path.join(config.TESTS_DIR, "det", "DET-CC-21.toml"))
+        self.assertEqual(catalog.when(test), "any time")
+        env = fakes.FakeEnv(self.seen_world(**world))
+        verdict = runner.run_test(test, env, self.ui)
+        return verdict, store.read_timeline(os.path.join(config.runs_dir(), verdict["run"]))
+
+    def test_every_live_session_with_a_row_passes(self):
+        verdict, samples = self.run_seen()
+        self.assertEqual(verdict["result"], "pass", verdict["reason"])
+        self.assertEqual(verdict["partial"], 0)
+        self.assertEqual({json.dumps(sample["sessions"]) for sample in samples}, {'{"live": 3, "unseen": []}'},
+                         "The spare, the dead one, the file of another pid and the kind that is not known do not count")
+        run_dir = os.path.join(config.runs_dir(), verdict["run"])
+        for name in os.listdir(run_dir):
+            with open(os.path.join(run_dir, name), encoding="utf-8") as file:
+                self.assertNotIn("ecret", file.read(), name)
+
+    def test_working_sessions_with_no_row_fail_with_their_pids(self):
+        verdict, samples = self.run_seen(rows=(78397,))
+        self.assertEqual(verdict["result"], "fail")
+        self.assertIn("sessions.unseen=2", verdict["reason"])
+        self.assertEqual(samples[0]["sessions"], {"live": 3, "unseen": [20946, 69479]})
+
+    def test_a_new_session_has_some_seconds_to_get_its_row(self):
+        verdict, samples = self.run_seen(late=8)
+        self.assertEqual(verdict["result"], "pass", verdict["reason"])
+        self.assertEqual(samples[-1]["sessions"], {"live": 4, "unseen": []})
+        verdict, samples = self.run_seen(late=-1)
+        self.assertEqual(verdict["result"], "fail")
+        self.assertEqual([sample["sessions"]["unseen"] for sample in samples if sample["t"] - samples[0]["t"] in (6, 19, 20)], [[], [], [800]])
+
+    def test_without_the_state_of_the_app_no_session_counts_as_seen(self):
+        from actestlib import sampler
+        world = self.seen_world()
+        env = fakes.FakeEnv(lambda t: dict(world(t), state=None))
+        self.assertIsNone(sampler.take(env, {"watch": ["sessions"]})["sessions"])
+        self.assertNotIn("sessions", sampler.take(env, {"watch": ["claude"]}))
+        self.assertEqual(sampler.take(fakes.FakeEnv(world), {"watch": ["sessions"]})["sessions"], {"live": 3, "unseen": []})
+
     def test_the_real_environment_refuses_what_is_not_a_read(self):
         from actestlib import env as environment
         real = environment.RealEnv.__new__(environment.RealEnv)

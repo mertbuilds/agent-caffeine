@@ -53,7 +53,7 @@ class CatalogTests(unittest.TestCase):
         wrong = [
             (test(id="help3"), "is not like HELP-03"),
             (test(extra=1), "unknown key extra"),
-            (test(watch=["claude", "mail"]), "watch is of claude, sched, not mail"),
+            (test(watch=["claude", "mail"]), "watch is of claude, sched, sessions, not mail"),
             (test(checks=["within 65s after step 5: sleepdisabled=0"]), "there is no step 5"),
             (test(checks=["key glow is yes"]), "no step has the name glow"),
             (test(checks=["sometimes: lid=open"]), "cannot read the rule"),

@@ -1,0 +1,18 @@
+id = "DET-CC-21"
+title = "Every live Claude Code session is seen"
+layer = 1
+area = "det"
+minutes = 1
+risk = "None. The runner only reads."
+why = "On 2026-10-12 two Claude Code sessions worked and Agent Caffeine had no row for them: an update of Claude Code had deleted the files of their versions, and the app left out a process whose binary was gone. The Mac could sleep while they worked. The runner takes each `~/.claude/sessions/<pid>.json` whose process lives. Each one that is `interactive`, or `bg` and not idle, must have a Claude row of the app with its pid. A warm spare of the daemon is `bg` and idle, and is no session. A session that is new has 15 seconds to get its row. Old sessions make this test worth more: do not close or restart any session for it. The test needs nothing from the owner."
+watch = ["sessions"]
+checks = [
+  "always from start to end: sessions.unseen=0",
+  "at end: sessions.live>=1",
+  "info at end: app.agent[claude].count>=1",
+]
+
+[[steps]]
+say = "Nothing to do. The runner compares the live Claude Code sessions with the rows of Agent Caffeine for 30 seconds. One Claude Code session must be open."
+until = "time>=30s"
+timeout = 60
