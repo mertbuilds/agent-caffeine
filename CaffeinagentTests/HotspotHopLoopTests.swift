@@ -210,7 +210,7 @@ final class HotspotHopLoopTests: XCTestCase {
         XCTAssertGreaterThan(changes, 3)
         // The cafe is on the air again: the Mac goes back.
         parts.wifi.air.insert(HopMac.cafe)
-        run(loop, seconds: 124)
+        run(loop, seconds: 244)
         guard case .hoppedBack = loop.view.state else { return XCTFail(loop.view.state.code) }
         XCTAssertNil(loop.view.onHotspotSince)
         XCTAssertEqual(parts.wifi.current, HopMac.cafe)

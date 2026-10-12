@@ -33,7 +33,8 @@ import Foundation
 /// for that network every `backInterval`, and every `backIntervalInBag`
 /// on battery with the lid closed: a scan takes the radio off its
 /// channel for a moment and costs charge, and in a bag the old network
-/// rarely comes back. When the network is seen, the Mac joins it with
+/// rarely comes back. When the network is seen with a signal of
+/// `backSignal` or better on two looks in a row, the Mac joins it with
 /// no password, because macOS keeps that one. Only a network that macOS
 /// knows as one with a WPA2 or WPA3 password counts, by its name to the
 /// letter: an open network and one that asks for a user name get no way
@@ -63,6 +64,10 @@ struct HotspotHop: Equatable {
     static let lookInterval: TimeInterval = 5
     static let backInterval: TimeInterval = 120
     static let backIntervalInBag: TimeInterval = 600
+    /// The weakest signal of the old network, in dBm, that the Mac goes
+    /// back to. At the edge of a network the Mac would go to and fro,
+    /// and each change cuts the agent off.
+    static let backSignal = -70
     static let passwordTries = 2
 
     /// What Settings, the menu and the state for the tests show.
@@ -110,8 +115,10 @@ struct HotspotHop: Equatable {
         /// Scan for the hotspot and join it.
         case join(name: String)
         /// On the hotspot: is the Mac still on it, and is the old
-        /// network back. `to` nil only asks the first.
-        case back(hotspot: String, to: String?)
+        /// network back. `to` nil only asks the first. `seen` says that
+        /// the look before saw the old network with a good signal: only
+        /// then is it joined.
+        case back(hotspot: String, to: String?, seen: Bool)
     }
 
     enum Outcome: Equatable {
@@ -123,6 +130,8 @@ struct HotspotHop: Equatable {
         /// joined.
         case pathBack
         case onHotspot
+        /// The old network has a good signal. Nothing was joined yet.
+        case sawOld
         /// The Mac is on another network, or on none.
         case leftHotspot
         case wentBack
@@ -152,6 +161,8 @@ struct HotspotHop: Equatable {
     private var lookedAt: TimeInterval?
     /// Where the way back goes.
     private var backTo: String?
+    /// The last look saw `backTo` with a good signal.
+    private var backSeen = false
     private var lastBackAt: TimeInterval?
 
     /// The Mac stays awake because an agent works, waits for the user or
@@ -249,7 +260,8 @@ struct HotspotHop: Equatable {
         let every = input.lidClosed && input.onBattery ? Self.backIntervalInBag : Self.backInterval
         if let lastBackAt, now >= lastBackAt, now - lastBackAt < every { return nil }
         lastBackAt = now
-        return start(.back(hotspot: name, to: input.hopBack ? backTo : nil))
+        if !input.hopBack { backSeen = false }
+        return start(.back(hotspot: name, to: input.hopBack ? backTo : nil, seen: backSeen))
     }
 
     private mutating func start(_ action: Action) -> Action {
@@ -291,18 +303,19 @@ struct HotspotHop: Equatable {
             state = .failed(failure, at: time.at)
         case (.join, .pathBack):
             if state == .scanning { state = .idle }
+        case (.back, .sawOld):
+            backSeen = true
+        case (.back(_, let to, _), .onHotspot):
+            if to != nil { backSeen = false }
         case (.back, .leftHotspot):
             state = .idle
-            backTo = nil
-            lastNetwork = nil
+            noWayBack()
         case (.back, .wentBack):
             state = .hoppedBack(at: time.at)
-            backTo = nil
-            lastNetwork = nil
+            noWayBack()
         case (.back, .backFailed):
             // Once is enough: a join that fails can cost the hotspot too.
-            backTo = nil
-            lastNetwork = nil
+            noWayBack()
         default:
             break
         }
@@ -313,9 +326,16 @@ struct HotspotHop: Equatable {
     private mutating func joined(at date: Date, now: TimeInterval, backTo: String?) {
         state = .joined(at: date)
         self.backTo = backTo
+        backSeen = false
         lastBackAt = now
         passwordFailures = 0
         lostWhileArmed = false
+    }
+
+    private mutating func noWayBack() {
+        backTo = nil
+        backSeen = false
+        lastNetwork = nil
     }
 
     private mutating func tried(now: TimeInterval) {

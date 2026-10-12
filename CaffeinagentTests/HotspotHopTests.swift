@@ -294,6 +294,8 @@ final class HotspotHopTests: XCTestCase {
         XCTAssertEqual(mac.wifi.joins.count, 1)
         mac.wifi.air.insert(HopMac.cafe)
         mac.run(seconds: 122)
+        XCTAssertEqual(mac.wifi.joins.count, 1, "The first look that sees it joins nothing yet")
+        mac.run(seconds: 120)
         guard case .hoppedBack = mac.state else { return XCTFail("\(mac.state.code)") }
         XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot, HopMac.cafe])
         XCTAssertEqual(mac.wifi.joinPasswords, [HopMac.password, nil], "macOS has the password of a network it knows")
@@ -447,6 +449,34 @@ final class HotspotHopTests: XCTestCase {
             XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot], "\(security)")
             XCTAssertFalse(mac.wifi.scans.contains(HopMac.cafe), "No scan for it either: \(security)")
         }
+    }
+
+    func testTheWayBackWaitsForAGoodSignalOnTwoLooksInARow() {
+        func cafe(_ rssi: Int) -> [WiFiSeen] {
+            [WiFiSeen(name: HopMac.cafe, sighting: WiFiSighting(rssi: rssi, channel: 11), security: .personal)]
+        }
+        /// Runs until the next look for the old network ended.
+        func look(_ mac: inout HopMac, _ rssi: Int) {
+            mac.wifi.others = cafe(rssi)
+            let before = mac.wifi.scans.count
+            while mac.wifi.scans.count == before { mac.sample() }
+        }
+        // At the edge of the old network: it is seen, and it is weak.
+        var mac = hopped(from: HopMac.cafe)
+        mac.wifi.others = cafe(HotspotHop.backSignal - 1)
+        mac.run(seconds: 1200)
+        XCTAssertTrue(joined(mac.state))
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot], "A weak network is not joined")
+        // Good, weak, good: not two in a row.
+        look(&mac, -60)
+        look(&mac, -80)
+        look(&mac, HotspotHop.backSignal)
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot])
+        XCTAssertTrue(joined(mac.state))
+        look(&mac, HotspotHop.backSignal)
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot, HopMac.cafe])
+        guard case .hoppedBack = mac.state else { return XCTFail("\(mac.state.code)") }
+        XCTAssertEqual(HotspotHop.backSignal, -70)
     }
 
     func testAMacThatLeftTheHotspotIsNotOnItAnyMore() {

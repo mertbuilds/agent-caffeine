@@ -18,8 +18,8 @@ enum HotspotJob {
             return .network(wifi.currentNetwork())
         case .join(let name):
             return join(name, wifi: wifi, password: password, mayJoin: mayJoin)
-        case .back(let hotspot, let old):
-            return back(from: hotspot, to: old, wifi: wifi)
+        case .back(let hotspot, let old, let seen):
+            return back(from: hotspot, to: old, seen: seen, wifi: wifi)
         }
     }
 
@@ -46,12 +46,14 @@ enum HotspotJob {
     /// password, so its password is with macOS, and only when a scan
     /// sees it now by the same name to the letter. An open network and a
     /// network that asks for a user name get no way back: anyone can set
-    /// up an open network with that name.
-    private static func back(from hotspot: String, to old: String?, wifi: WiFiAccess) -> HotspotHop.Outcome {
+    /// up an open network with that name. A weak signal is no way back,
+    /// and the first look with a good signal joins nothing yet.
+    private static func back(from hotspot: String, to old: String?, seen: Bool, wifi: WiFiAccess) -> HotspotHop.Outcome {
         guard let current = wifi.currentNetwork(), HotspotName.matches(current, hotspot) else { return .leftHotspot }
         guard let old else { return .onHotspot }
         guard wifi.knownSecurity(of: old) == .personal else { return .backFailed }
-        guard case .found = wifi.scanKnown(old) else { return .onHotspot }
+        guard case .found(let sighting) = wifi.scanKnown(old), sighting.rssi >= HotspotHop.backSignal else { return .onHotspot }
+        guard seen else { return .sawOld }
         switch wifi.associate(to: old, password: nil) {
         case .joined: return .wentBack
         case .failed: return .backFailed
