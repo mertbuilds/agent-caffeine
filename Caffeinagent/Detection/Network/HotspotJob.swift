@@ -28,6 +28,9 @@ enum HotspotJob {
         guard let power = wifi.power() else { return .failed(.noWiFi) }
         // Agent Caffeine never switches Wi-Fi on.
         guard power else { return .failed(.wifiOff) }
+        // On the hotspot with no path: a second join would only cut the
+        // Mac off while the phone gives it an address.
+        if let current = wifi.currentNetwork(), HotspotName.matches(current, name) { return .onHotspot }
         guard let password = password(), !password.isEmpty else { return .failed(.noPassword) }
         switch wifi.scan(for: name) {
         case .notFound: return .notFound

@@ -66,7 +66,9 @@ struct HotspotHop: Equatable {
     /// The wait after every later try.
     static let retryEvery: TimeInterval = 60
     /// After a join the path needs a moment: the Mac asks the phone for
-    /// an address first. No new try before that.
+    /// an address first. No new try before that, and none before the
+    /// schedule has one. A try reads the name of the network first, and
+    /// joins nothing while the Mac is on the hotspot.
     static let joinSettleTime: TimeInterval = 20
     /// While an agent works online, the name of the Wi-Fi is read this
     /// often. On the hotspot it is read as often, to see that the Mac
@@ -145,6 +147,7 @@ struct HotspotHop: Equatable {
         /// A way to the network came back before the join. Nothing was
         /// joined.
         case pathBack
+        /// The Mac is on the hotspot. Nothing was joined.
         case onHotspot
         /// The old network has a good signal. Nothing was joined yet.
         case sawOld
@@ -297,7 +300,8 @@ struct HotspotHop: Equatable {
         let began = triesBegan.flatMap { $0 <= now ? $0 : nil } ?? now
         triesBegan = began
         if now - began > Self.tryLimit { return nil }
-        state = .scanning
+        // Joined, with no path yet: the state stays until a try says more.
+        if case .joined = state {} else { state = .scanning }
         return start(.join(name: name))
     }
 
@@ -350,7 +354,12 @@ struct HotspotHop: Equatable {
         case (.join, .joined):
             joined(at: time.at, now: now, backTo: lastNetwork)
             awaitingPath = true
-            nextTryAt = now + Self.joinSettleTime
+            tried(now: now)
+            nextTryAt = max(nextTryAt ?? now, now + Self.joinSettleTime)
+        case (.join, .onHotspot):
+            tried(now: now)
+            // Not by a join of Agent Caffeine: there is no way back.
+            if state == .scanning { joined(at: time.at, now: now, backTo: nil) }
         case (.join, .notFound):
             tried(now: now)
             state = .notFound(at: time.at)

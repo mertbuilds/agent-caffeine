@@ -343,17 +343,50 @@ final class HotspotHopTests: XCTestCase {
         XCTAssertEqual(mac.state, .idle)
     }
 
-    func testJoinedWithNoPathIsTriedAgainAfterTheSettleTime() {
+    func testOnTheHotspotWithNoPathNothingIsJoinedASecondTime() {
         var mac = HopMac()
         mac.loseWiFi()
         mac.run(seconds: 18)
         XCTAssertTrue(joined(mac.state))
         // The phone has the Mac on its hotspot and gives it no path.
         mac.input.online = false
-        mac.run(seconds: 18)
-        XCTAssertEqual(mac.wifi.joins.count, 1)
-        mac.run(seconds: 4)
-        XCTAssertEqual(mac.wifi.joins.count, 2)
+        mac.run(seconds: 600)
+        XCTAssertEqual(mac.wifi.joins.count, 1, "The Mac is on the hotspot")
+        XCTAssertEqual(mac.wifi.scans.count, 1)
+        XCTAssertTrue(joined(mac.state))
+        // The path comes: the Mac is on the hotspot as after any join.
+        mac.input.online = true
+        mac.run(seconds: 10)
+        XCTAssertTrue(joined(mac.state))
+    }
+
+    func testAJoinThatDoesNotHoldIsTriedAgainOnTheSchedule() {
+        var mac = HopMac()
+        mac.loseWiFi()
+        for _ in 0..<200 {
+            // Each join works, and the Mac is off the hotspot at once.
+            if mac.input.online {
+                mac.input.online = false
+                mac.wifi.current = nil
+            }
+            mac.sample()
+        }
+        let waits = zip(mac.tryTimes, mac.tryTimes.dropFirst()).map { $1 - $0 }
+        XCTAssertEqual(Array(waits.prefix(5)), [20, 20, 40, 60, 60], "The settle time first, then the schedule")
+        XCTAssertEqual(mac.wifi.joins.count, mac.tryTimes.count)
+    }
+
+    func testAMacThatIsOnTheHotspotWithNoPathIsNotJoinedToIt() {
+        // The user joined the hotspot by hand a moment ago, and the phone
+        // gives no path. No look read the name yet.
+        var mac = HopMac()
+        mac.wifi.current = HopMac.hotspot
+        mac.input.online = false
+        mac.run(seconds: 600)
+        XCTAssertEqual(mac.wifi.joins, [], "Never a join while the Mac is on the hotspot")
+        XCTAssertEqual(mac.wifi.scans, [])
+        XCTAssertEqual(mac.actions.count, 1, "One try read the name, and that was all")
+        XCTAssertTrue(joined(mac.state))
     }
 
     // MARK: The way back
