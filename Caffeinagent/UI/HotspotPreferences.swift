@@ -27,8 +27,12 @@ struct HotspotPreferences: View {
             }
             if hotspot.settings.on {
                 fields
-                TimelineView(.everyMinute) { context in
-                    if let status = PanelText.hotspotStatus(hotspot, now: context.date) { statusLine(status) }
+                // No row while there is nothing to say. The line names
+                // the day of a result that is not of today.
+                if PanelText.hotspotStatus(hotspot, now: Date()) != nil {
+                    TimelineView(.everyMinute) { context in
+                        if let status = PanelText.hotspotStatus(hotspot, now: context.date) { statusLine(status) }
+                    }
                 }
                 limit
                 VStack(alignment: .leading, spacing: 4) {

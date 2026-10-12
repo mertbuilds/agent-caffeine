@@ -54,12 +54,15 @@ struct HotspotLine: View {
             Image(systemName: "wifi")
                 .imageScale(.small)
                 .accessibilityHidden(true)
+            // Longer than the line of the battery: the time goes to a
+            // second line and is never cut.
             Text(text)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .font(.callout)
         .monospacedDigit()
         .foregroundStyle(.secondary)
-        .lineLimit(1)
+        .lineLimit(2)
     }
 }
 

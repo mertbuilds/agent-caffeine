@@ -113,6 +113,10 @@ final class HotspotTextTests: XCTestCase {
         XCTAssertNil(MenuModel.state(input, now: now).hotspotLine)
         input.hotspotSince = at("2026-10-10 14:02")
         XCTAssertEqual(MenuModel.state(input, now: now).hotspotLine, "On your iPhone hotspot since 14:02")
+        XCTAssertEqual(PanelFixtures.onHotspot.hotspotLine, "On your iPhone hotspot since 06:01")
+        XCTAssertEqual(PanelFixtures.onHotspot.pose, .awake(wisps: 2), "The headline stays the one of the agent")
+        XCTAssertNil(PanelFixtures.onHotspot.attention)
+        XCTAssertTrue(PanelFixtures.all.filter { $0.name != "on-hotspot" }.allSatisfy { $0.state.hotspotLine == nil })
     }
 
     func testTheLineIsThereOnlyWhileTheMacIsOnlineOnTheHotspot() {

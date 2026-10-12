@@ -43,6 +43,7 @@ struct PanelPreview: View {
 #Preview("Holds from the command line") { PanelPreview(state: PanelFixtures.manualHolds) }
 #Preview("A scheduled job runs") { PanelPreview(state: PanelFixtures.jobHold) }
 #Preview("A wake is set") { PanelPreview(state: PanelFixtures.wakeSet) }
+#Preview("On the iPhone hotspot") { PanelPreview(state: PanelFixtures.onHotspot) }
 #Preview("Safety stop") { PanelPreview(state: PanelFixtures.safetyStop) }
 #Preview("Too hot") { PanelPreview(state: PanelFixtures.tooHot) }
 #Preview("On battery") { PanelPreview(state: PanelFixtures.onBattery) }

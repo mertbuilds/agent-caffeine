@@ -219,6 +219,20 @@ enum PanelFixtures {
         return state(input)
     }()
 
+    /// An agent works on the hotspot of the iPhone, since the Wi-Fi was
+    /// lost 12 minutes ago.
+    static let onHotspot: PanelState = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var input = Self.input(.working(.one("Claude Code")), [
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 48, label: "blog", cause: .working),
+        ])
+        input.hotspotSince = now.addingTimeInterval(-12 * 60)
+        input.calendar = calendar
+        input.locale = Locale(identifier: "en_GB")
+        return state(input)
+    }()
+
     static let safetyStop: PanelState = {
         var input = Self.input(.safetyStop(.batteryLow(percent: 20)), [
             Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 48, label: "blog"),
@@ -369,7 +383,7 @@ enum PanelFixtures {
         ("helper-off", helperSwitchedOff), ("helper-silent", helperNotResponding),
         ("slept-anyway", sleptAnyway), ("manual-holds", manualHolds), ("job-hold", jobHold), ("wake-set", wakeSet),
         ("closed-lid-stopped", closedLidStopped), ("closed-lid-with-hold", closedLidWithHold), ("slept-closed-lid", sleptClosedLid),
-        ("offline", offline), ("offline-with-hold", offlineWithHold),
+        ("offline", offline), ("offline-with-hold", offlineWithHold), ("on-hotspot", onHotspot),
     ]
 
     /// One agent for each mark, to check the marks.
