@@ -383,6 +383,54 @@ final class LabReplayTests: XCTestCase {
         XCTAssertEqual(steps.last?.readings.first?.verdict.reason, .backgroundIdle(minutes: 13 * 60 + 10))
     }
 
+    /// 2026-10-12 (docs/research/01-oss-detection.md, section 10): a
+    /// session and a background session of Claude Code work, and an
+    /// update deleted the files of their versions. Each frame says
+    /// `gone` for them. Before that date the frames of such a time had
+    /// no agent at all, so a replay of them proves nothing: this is what
+    /// the app records now.
+    private func deletedVersion() -> LabRecording {
+        let context = FrameContext(onBattery: true, batteryPercent: 80, lidClosed: true)
+        let story = stride(from: 0.0, through: 400, by: 5).map { t -> EvidenceFrame in
+            var session = self.agent("claude", "Claude Code", .state, pid: 100, state: t < 120 ? .working : .idle, at: t, cpu: t < 120 ? 3 : 0.4)
+            var background = self.agent("claude", "Claude Code", .state, pid: 200, state: t < 200 ? .working : .idle, at: t, cpu: t < 200 ? 3 : 0.4)
+            background.backgroundJobsWorking = t < 200 ? 1 : 0
+            session.executableGone = true
+            background.executableGone = true
+            return EvidenceFrame(at: self.at(t), agents: [session, background], context: context)
+        }
+        let marks = [mark("claude:100", .working, at: 0), mark("claude:200", .working, at: 0), mark("claude:100", .idle, at: 120), mark("claude:200", .idle, at: 200)]
+        return recording("synthetic-claude-deleted-version", frames: story, marks: marks, budget: 0)
+    }
+
+    /// As `testSyntheticRecordingIsCurrent`.
+    func testDeletedVersionRecordingIsCurrent() throws {
+        let expected = try text(of: deletedVersion())
+        let url = Self.recordings.appendingPathComponent("synthetic-claude-deleted-version.jsonl")
+        let found = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        if found != expected {
+            let fresh = FileManager.default.temporaryDirectory.appendingPathComponent("synthetic-claude-deleted-version.jsonl")
+            try Data(expected.utf8).write(to: fresh)
+            XCTFail("\(url.path) is not what the timeline gives. The current one is at \(fresh.path)")
+        }
+        XCTAssertEqual(try LabFormat.recording(from: expected), deletedVersion())
+    }
+
+    func testSessionsOfADeletedVersionHoldWhileTheyWork() throws {
+        let recording = try LabFormat.recording(at: Self.recordings.appendingPathComponent("synthetic-claude-deleted-version.jsonl"))
+        XCTAssertEqual(recording.samples.first?.frame.agents.map(\.executableGone), [true, true])
+        for step in LabReplay.steps(of: recording) {
+            let seconds = step.at.timeIntervalSince(at(0))
+            XCTAssertEqual(step.readings.map(\.verdict.state), [seconds < 120 ? .working : .idle, seconds < 200 ? .working : .idle], "at \(seconds) s")
+            if seconds < 200 {
+                XCTAssertTrue(step.decision.hold, "at \(seconds) s")
+                XCTAssertTrue(step.decision.lidClosedFlag, "at \(seconds) s")
+            }
+            if seconds < 120 { XCTAssertEqual(step.decision.headline.text, "Awake: 2 agents are working") }
+        }
+        XCTAssertFalse(try XCTUnwrap(LabReplay.steps(of: recording).last).decision.hold)
+    }
+
     func testRecordingsStayWithinTheirBudget() throws {
         let urls = try FileManager.default.contentsOfDirectory(at: Self.recordings, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension == "jsonl" }
