@@ -20,7 +20,9 @@ import Foundation
 /// for as long as the agents count. The offline rule runs on as it is
 /// (`OfflineRule`): after its limit the agents count no more, the tries
 /// end and the Mac can sleep. A password the hotspot refused
-/// `passwordTries` times is not tried again until the user saves again.
+/// `passwordTries` times is not tried again in the same loss: the next
+/// loss, after the Mac was online again, has its tries back, and so has
+/// a new save.
 ///
 /// What it cannot do. An iPhone shows its hotspot for about 90 seconds
 /// after the last device left, and only macOS itself can wake it, over
@@ -93,7 +95,7 @@ struct HotspotHop: Equatable {
         /// The name of the hotspot. Nil while none is set up.
         var name: String?
         /// How often the user saved a name and a password. A new save
-        /// gives a refused password its tries back.
+        /// gives a refused password its tries back at once.
         var saves = 0
         var hopBack = true
         /// See `HotspotHop.agentHolds`.
@@ -213,6 +215,8 @@ struct HotspotHop: Equatable {
     private mutating func onlineStep(_ input: Input, name: String, now: TimeInterval) -> Action? {
         tries = 0
         nextTryAt = nil
+        // Refusals of an older loss do not count against the next one.
+        passwordFailures = 0
         if case .joined = state { return backStep(input, name: name, now: now) }
         if state == .waiting { state = .idle }
         if lostWhileArmed {

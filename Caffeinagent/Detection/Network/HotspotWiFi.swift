@@ -21,6 +21,25 @@ enum HopFailure: String, Equatable, CaseIterable {
     case other
 }
 
+extension HopFailure {
+    /// What an error of CoreWLAN (`CWErr`) means. Only the two errors of
+    /// the key itself count as a refused password. A handshake that
+    /// timed out does not: a weak signal gives that one too, and the
+    /// next try can work.
+    /// - Parameter joining: false for a scan, which sends no password.
+    static func of(coreWLAN code: Int, joining: Bool) -> HopFailure {
+        switch code {
+        // kCWInvalidPMKErr and kCWChallengeFailureErr.
+        case -3924, -3912: return joining ? .wrongPassword : .other
+        // kCWOperationNotPermittedErr.
+        case -3930: return .noPermission
+        // kCWTimeoutErr and kCWSupplicantTimeoutErr.
+        case -3905, -3925: return .timeout
+        default: return .other
+        }
+    }
+}
+
 /// A network a scan saw.
 struct WiFiSighting: Equatable {
     /// The signal in dBm.

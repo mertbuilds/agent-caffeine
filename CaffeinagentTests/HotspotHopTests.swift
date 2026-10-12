@@ -1,3 +1,4 @@
+import CoreWLAN
 import XCTest
 
 /// "Join your iPhone hotspot": `HotspotHop` with `HotspotJob`, against a
@@ -115,6 +116,53 @@ final class HotspotHopTests: XCTestCase {
         mac.run(seconds: 4)
         XCTAssertTrue(joined(mac.state))
         XCTAssertEqual(mac.wifi.joins.count, 3)
+    }
+
+    func testARefusedPasswordGetsItsTriesBackWhenTheMacWasOnlineAgain() {
+        var mac = HopMac()
+        mac.run(seconds: 10)
+        // One refusal, then the Wi-Fi is back for an hour.
+        mac.loseWiFi()
+        mac.wifi.joinFailure = .wrongPassword
+        mac.run(seconds: 20)
+        XCTAssertEqual(mac.wifi.joins.count, 1)
+        mac.wifi.air.insert(HopMac.cafe)
+        mac.wifi.current = HopMac.cafe
+        mac.input.online = true
+        mac.run(seconds: 3600)
+        // One refusal in the next loss, and then the hotspot is fine.
+        mac.loseWiFi()
+        mac.run(seconds: 20)
+        XCTAssertEqual(mac.wifi.joins.count, 2)
+        guard case .failed(.wrongPassword, _) = mac.state else { return XCTFail("\(mac.state.code)") }
+        mac.wifi.joinFailure = nil
+        mac.run(seconds: 12)
+        XCTAssertTrue(joined(mac.state), "Each loss has its own tries")
+        XCTAssertEqual(mac.wifi.joins.count, 3)
+    }
+
+    func testAJoinThatTimesOutIsNoRefusedPassword() {
+        var mac = HopMac()
+        mac.loseWiFi()
+        mac.wifi.joinFailure = .timeout
+        mac.run(seconds: 400)
+        guard case .failed(.timeout, _) = mac.state else { return XCTFail("\(mac.state.code)") }
+        XCTAssertGreaterThan(mac.wifi.joins.count, HotspotHop.passwordTries + 2, "It is tried again on the schedule")
+        mac.wifi.joinFailure = nil
+        mac.run(seconds: 62)
+        XCTAssertTrue(joined(mac.state))
+    }
+
+    func testOnlyAnErrorOfTheKeyCountsAsARefusedPassword() {
+        XCTAssertEqual(HopFailure.of(coreWLAN: CWErr.cwInvalidPMKErr.rawValue, joining: true), .wrongPassword)
+        XCTAssertEqual(HopFailure.of(coreWLAN: CWErr.cwChallengeFailureErr.rawValue, joining: true), .wrongPassword)
+        XCTAssertEqual(HopFailure.of(coreWLAN: CWErr.cwInvalidPMKErr.rawValue, joining: false), .other, "A scan sends no password")
+        // A weak signal gives this one: the hotspot said nothing of the password.
+        XCTAssertEqual(HopFailure.of(coreWLAN: CWErr.cwSupplicantTimeoutErr.rawValue, joining: true), .timeout)
+        XCTAssertEqual(HopFailure.of(coreWLAN: CWErr.cwTimeoutErr.rawValue, joining: true), .timeout)
+        XCTAssertEqual(HopFailure.of(coreWLAN: CWErr.cwOperationNotPermittedErr.rawValue, joining: false), .noPermission)
+        XCTAssertEqual(HopFailure.of(coreWLAN: CWErr.cwAssociationDeniedErr.rawValue, joining: true), .other)
+        XCTAssertEqual(HopFailure.of(coreWLAN: CWErr.cwapFullErr.rawValue, joining: true), .other)
     }
 
     func testWithoutThePermissionNothingIsScanned() {

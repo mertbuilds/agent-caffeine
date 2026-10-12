@@ -144,21 +144,14 @@ final class SystemWiFi: WiFiAccess {
         lock.unlock()
     }
 
-    /// Which error of CoreWLAN a refused password gives is not written
-    /// down by Apple. These three are the ones of the key exchange.
+    /// See `HopFailure.of(coreWLAN:joining:)`.
     private func failure(of error: Error, joining: Bool) -> HopFailure {
         let error = error as NSError
         lock.lock()
         lastError = "\(error.domain) \(error.code)"
         lock.unlock()
         guard error.domain == CWErrorDomain else { return .other }
-        switch error.code {
-        case CWErr.cwInvalidPMKErr.rawValue, CWErr.cwSupplicantTimeoutErr.rawValue, CWErr.cwChallengeFailureErr.rawValue:
-            return joining ? .wrongPassword : .other
-        case CWErr.cwOperationNotPermittedErr.rawValue: return .noPermission
-        case CWErr.cwTimeoutErr.rawValue: return .timeout
-        default: return .other
-        }
+        return HopFailure.of(coreWLAN: error.code, joining: joining)
     }
 
     /// Nil when the time ran out, and when an earlier call still hangs.
