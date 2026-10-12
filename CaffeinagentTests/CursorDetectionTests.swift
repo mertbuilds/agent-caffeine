@@ -81,7 +81,7 @@ final class CursorTranscriptReaderTests: XCTestCase {
         XCTAssertEqual(CursorTranscriptReader.slug(forWorkspace: "/Users/me/My Project (2)/"), "Users-me-My-Project-2")
         XCTAssertEqual(CursorTranscriptReader.slug(forWorkspace: "/tmp/a__b--c"), "tmp-a-b-c")
         XCTAssertEqual(CursorTranscriptReader.slug(forWorkspace: "/Users/me/caf\u{e9}"), "Users-me-caf")
-        XCTAssertEqual(CursorTranscriptReader.label(forSlug: "Users-me-code-wiki"), "wiki")
+        XCTAssertEqual(CursorTranscriptReader.label(forSlug: "Users-me-code-blog"), "blog")
         XCTAssertEqual(CursorTranscriptReader.label(forSlug: "Users-me-code-my-app"), "app", "The end of the name: a slug cannot be turned back")
         XCTAssertNil(CursorTranscriptReader.label(forSlug: "empty-window"))
         XCTAssertNil(CursorTranscriptReader.label(forSlug: ""))
@@ -100,11 +100,11 @@ final class CursorTranscriptReaderTests: XCTestCase {
         let a = "0b8d6a34-7a3f-4c53-9f0e-2f6f4d1c9a11", b = "5e0f2c1d-9a4b-4e7a-8c3d-1b2a3c4d5e6f"
         try write("empty-window/agent-transcripts/\(a)/\(a).jsonl", age: 10)
         try write("empty-window/agent-transcripts/\(a)/subagents/\(b).jsonl", age: 1)
-        try write("Users-me-code-wiki/agent-transcripts/\(b).jsonl", age: 100)
+        try write("Users-me-code-blog/agent-transcripts/\(b).jsonl", age: 100)
         try write("Users-me-code-old/agent-transcripts/\(b)/\(b).jsonl", age: 90_000)
-        try write("Users-me-code-wiki/terminals/1.jsonl", age: 1)
+        try write("Users-me-code-blog/terminals/1.jsonl", age: 1)
         let files = CursorTranscriptReader(projectsDirectory: root).recentFiles(now: now)
-        XCTAssertEqual(files.map(\.projectSlug), ["empty-window", "Users-me-code-wiki"], "Newest first, none older than a day")
+        XCTAssertEqual(files.map(\.projectSlug), ["empty-window", "Users-me-code-blog"], "Newest first, none older than a day")
         XCTAssertEqual(files.map(\.sessionID), [a, b])
         XCTAssertEqual(CursorTranscriptReader(projectsDirectory: root.appendingPathComponent("none")).recentFiles(now: now), [])
     }
@@ -442,7 +442,7 @@ final class CursorTimelineTests: XCTestCase {
     func testAssertionDropIsAWaitThatIsHeldAndThenReleased() throws {
         XCTAssertTrue(CursorApprovalRule.enabled)
         let settle = Int(CursorApprovalRule.settle)
-        try write([Line.user, Line.tool], chat: chatA, slug: "Users-me-code-wiki", at: 0)
+        try write([Line.user, Line.tool], chat: chatA, slug: "Users-me-code-blog", at: 0)
         assertions.pids = [500]
         XCTAssertEqual(run(0...29).reading?.verdict.state, .working)
         // Cursor asks for an approval and gives up its wake lock.
@@ -454,7 +454,7 @@ final class CursorTimelineTests: XCTestCase {
         XCTAssertEqual(waits.reading?.verdict.reason.text, "Waiting for your approval")
         XCTAssertEqual(waits.reading?.turn, AgentTurn(state: .waitingForUser))
         XCTAssertEqual(waits.decision.headline, .waitingHeld(.one("Cursor")))
-        XCTAssertEqual(waits.sample.sessionHints.values.first?.name, "wiki")
+        XCTAssertEqual(waits.sample.sessionHints.values.first?.name, "blog")
         // The inputs are in the frame.
         XCTAssertEqual(waits.evidence?.reported?.source, .cursorTranscript)
         XCTAssertEqual(waits.evidence?.reported?.state, .working)
@@ -475,7 +475,7 @@ final class CursorTimelineTests: XCTestCase {
         let approved = step(TimeInterval(waitStart + 322))
         XCTAssertEqual(approved.reading?.verdict, AgentVerdict(state: .working, confidence: .reported, reason: .reportsBusy))
         XCTAssertTrue(approved.decision.hold)
-        try write([Line.user, Line.tool, Line.ended], chat: chatA, slug: "Users-me-code-wiki", at: TimeInterval(waitStart + 330))
+        try write([Line.user, Line.tool, Line.ended], chat: chatA, slug: "Users-me-code-blog", at: TimeInterval(waitStart + 330))
         assertions.pids = []
         census.rows = cursor()
         run((waitStart + 323)...(waitStart + 340))
@@ -548,7 +548,7 @@ final class CursorTimelineTests: XCTestCase {
     }
 
     func testTwoConversationsAndOneEnds() throws {
-        try write([Line.user], chat: chatA, slug: "Users-me-code-wiki", at: 0)
+        try write([Line.user], chat: chatA, slug: "Users-me-code-blog", at: 0)
         try write([Line.user], chat: chatB, slug: "Users-me-code-site", at: 2)
         assertions.pids = [500]
         let both = run(0...10)
@@ -558,10 +558,10 @@ final class CursorTimelineTests: XCTestCase {
 
         try write([Line.user, Line.ended], chat: chatB, slug: "Users-me-code-site", at: 11)
         run(11...40) { step, second in XCTAssertEqual(step.reading?.verdict.state, .working, "\(second)") }
-        XCTAssertEqual(step(41).sample.sessionHints.values.first?.name, "wiki")
+        XCTAssertEqual(step(41).sample.sessionHints.values.first?.name, "blog")
         XCTAssertTrue(told.isEmpty, "The app still works")
 
-        try write([Line.user, Line.ended], chat: chatA, slug: "Users-me-code-wiki", at: 42)
+        try write([Line.user, Line.ended], chat: chatA, slug: "Users-me-code-blog", at: 42)
         assertions.pids = []
         XCTAssertEqual(run(42...50).reading?.verdict.state, .idle)
         XCTAssertEqual(told.map(\.notice.kind), [.finished])
@@ -652,7 +652,7 @@ final class CursorTimelineTests: XCTestCase {
             XCTAssertTrue(HookCommand.record(agent: "cursor", event: "beforeSubmitPrompt", input: Array(#"{"conversation_id":"\#(chat)"}"#.utf8), chain: chain, directory: hooks, now: at(seconds)))
         }
         func fail(_ chat: String, at seconds: TimeInterval) throws {
-            try write([failed], chat: chat, slug: "projects/Users-me-code-wiki", at: seconds)
+            try write([failed], chat: chat, slug: "projects/Users-me-code-blog", at: seconds)
         }
 
         prompt(chatA, at: 0)
@@ -688,7 +688,7 @@ final class CursorTimelineTests: XCTestCase {
         sources.now = { [unowned self] in self.base.addingTimeInterval(self.seconds) }
         collector = EvidenceCollector(sources: sources)
         let chain: [Row] = [.fixture(600, ppid: 510, path: "/bin/sh", args: ["sh", "-c", "hook"]), census.rows[1], census.rows[0]]
-        let slug = "projects/Users-me-code-wiki"
+        let slug = "projects/Users-me-code-blog"
         func hook(_ event: String, _ chat: String, at seconds: TimeInterval) {
             XCTAssertTrue(HookCommand.record(agent: "cursor", event: event, input: Array(#"{"conversation_id":"\#(chat)"}"#.utf8), chain: chain, directory: hooks, now: at(seconds)))
         }

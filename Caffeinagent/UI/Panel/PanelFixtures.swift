@@ -65,7 +65,7 @@ enum PanelFixtures {
     ]
 
     static let working = state(input(.working(.many(2)), [
-        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 12, label: "wiki", cause: .working),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 12, label: "blog", cause: .working),
         Agent(id: "claude", name: "Claude Code", state: .working, reason: .runningCommand(3), minutes: 3, label: "site", cause: .working),
     ] + manyIdle))
 
@@ -83,10 +83,10 @@ enum PanelFixtures {
 
     /// Sessions of one agent in one folder, and an agent with a long name.
     static let sameFolder = state(input(.working(.many(3)), [
-        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 14, label: "wiki", cause: .working, hint: SessionHint(name: "wiki-1d", terminal: "ttys001")),
-        Agent(id: "claude", name: "Claude Code", state: .working, reason: .backgroundJob(1), minutes: 89, label: "wiki", cause: .working, hint: SessionHint(name: "speaker-grille-spacing")),
-        Agent(id: "claude", name: "Claude Code", state: .waitingForUser, reason: .asksPermission, minutes: 89, label: "wiki", hint: SessionHint(terminal: "ttys004")),
-        Agent(id: "claude", name: "Claude Code", state: .waitingForUser, reason: .asksPermission, minutes: 0.2, label: "wiki"),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 14, label: "blog", cause: .working, hint: SessionHint(name: "blog-1d", terminal: "ttys001")),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .backgroundJob(1), minutes: 89, label: "blog", cause: .working, hint: SessionHint(name: "sidebar-layout-spacing")),
+        Agent(id: "claude", name: "Claude Code", state: .waitingForUser, reason: .asksPermission, minutes: 89, label: "blog", hint: SessionHint(terminal: "ttys004")),
+        Agent(id: "claude", name: "Claude Code", state: .waitingForUser, reason: .asksPermission, minutes: 0.2, label: "blog"),
         Agent(id: "user:tool", name: "twenty-character-cli", state: .working, reason: .runningCommand(12), minutes: 89, label: "caffeinagent", cause: .working),
         Agent(id: "user:other", name: "twenty-character-two", minutes: 0.2),
         Agent(id: "codex", name: "Codex", minutes: 13),
@@ -96,9 +96,9 @@ enum PanelFixtures {
 
     /// Three sessions of one agent at work, and its idle ones.
     static let grouped = state(input(.working(.many(3)), [
-        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 6.5, label: "wiki", cause: .working, hint: SessionHint(name: "wiki-6e", terminal: "ttys001")),
-        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 6.4, label: "wiki", cause: .working, hint: SessionHint(name: "speaker-grille-spacing", terminal: "ttys002")),
-        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 6.3, label: "wiki", cause: .working, hint: SessionHint(name: "wiki-1d", terminal: "ttys003")),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 6.5, label: "blog", cause: .working, hint: SessionHint(name: "blog-6e", terminal: "ttys001")),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 6.4, label: "blog", cause: .working, hint: SessionHint(name: "sidebar-layout-spacing", terminal: "ttys002")),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 6.3, label: "blog", cause: .working, hint: SessionHint(name: "blog-1d", terminal: "ttys003")),
     ] + idleClaude + [
         Agent(id: "codex", name: "Codex", minutes: 6),
         Agent(id: "antigravity", name: "Antigravity", minutes: 13 * 60),
@@ -106,7 +106,7 @@ enum PanelFixtures {
 
     /// Sessions that wait next to sessions that work.
     static let mixed = state(input(.working(.many(2)), [
-        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 14, label: "wiki", cause: .working, hint: SessionHint(name: "wiki-6e")),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 14, label: "blog", cause: .working, hint: SessionHint(name: "blog-6e")),
         Agent(id: "claude", name: "Claude Code", state: .working, reason: .runningCommand(3), minutes: 3, label: "site", cause: .working),
         Agent(id: "claude", name: "Claude Code", state: .waitingForUser, reason: .asksPermission, minutes: 0.2, label: "notes", cause: .waitingForUser),
         Agent(id: "codex", name: "Codex", state: .waitingForUser, reason: .asksPermission, minutes: 3, label: "website", cause: .waitingForUser),
@@ -116,7 +116,7 @@ enum PanelFixtures {
 
     /// Only idle sessions. The user can open the first group.
     static let idleGroups = state(input(.idle(.many(11)), (1...10).map {
-        Agent(id: "claude", name: "Claude Code", minutes: Double($0) * 7, hint: SessionHint(name: $0 % 3 == 0 ? nil : "wiki-\($0)e", terminal: "ttys00\($0)"))
+        Agent(id: "claude", name: "Claude Code", minutes: Double($0) * 7, hint: SessionHint(name: $0 % 3 == 0 ? nil : "blog-\($0)e", terminal: "ttys00\($0)"))
     } + [
         Agent(id: "codex", name: "Codex", minutes: 6, hint: SessionHint(terminal: "ttys011")),
         Agent(id: "codex", name: "Codex", minutes: 50, hint: SessionHint(terminal: "ttys012")),
@@ -125,14 +125,14 @@ enum PanelFixtures {
 
     /// A session with a name of 40 characters, and one that asks.
     static let longLabel = state(input(.working(.many(2)), [
-        Agent(id: "claude", name: "Claude Code", state: .working, reason: .runningCommand(3), minutes: 3, label: "wiki", cause: .working, hint: SessionHint(name: "rewrite-the-onboarding-flow-for-new-team")),
-        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 6, label: "wiki", cause: .working, hint: SessionHint(name: "wiki-6e")),
-        Agent(id: "claude", name: "Claude Code", state: .waitingForUser, reason: .asksPermission, minutes: 3, label: "wiki", cause: .waitingForUser, hint: SessionHint(name: "speaker-grille-spacing")),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .runningCommand(3), minutes: 3, label: "blog", cause: .working, hint: SessionHint(name: "rewrite-the-onboarding-flow-for-new-team")),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 6, label: "blog", cause: .working, hint: SessionHint(name: "blog-6e")),
+        Agent(id: "claude", name: "Claude Code", state: .waitingForUser, reason: .asksPermission, minutes: 3, label: "blog", cause: .waitingForUser, hint: SessionHint(name: "sidebar-layout-spacing")),
         Agent(id: "codex", name: "Codex", minutes: 6),
     ]))
 
     static let off = state(input(.switchedOff, [
-        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 12, label: "wiki"),
+        Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 12, label: "blog"),
         Agent(id: "codex", name: "Codex", minutes: 40),
     ]))
 
@@ -145,7 +145,7 @@ enum PanelFixtures {
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let until = Pause.deadline(for: choice, now: now, calendar: calendar)
         var input = Self.input(.paused(until: until), [
-            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 12, label: "wiki"),
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 12, label: "blog"),
             Agent(id: "codex", name: "Codex", minutes: 40),
         ])
         input.pausedUntil = until
@@ -220,7 +220,7 @@ enum PanelFixtures {
 
     static let safetyStop: PanelState = {
         var input = Self.input(.safetyStop(.batteryLow(percent: 20)), [
-            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 48, label: "wiki"),
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 48, label: "blog"),
             Agent(id: "codex", name: "Codex", minutes: 40),
         ])
         input.settings.batteryFloorPercent = 20
@@ -234,7 +234,7 @@ enum PanelFixtures {
     static let onBatteryNearFloor = onBattery(percent: 27)
     static let onBatteryStopped: PanelState = {
         var input = Self.input(.safetyStop(.batteryLow(percent: 19)), [
-            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 82, label: "wiki"),
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 82, label: "blog"),
             Agent(id: "codex", name: "Codex", minutes: 40),
         ])
         input.onBattery = true
@@ -247,7 +247,7 @@ enum PanelFixtures {
 
     private static func onBattery(percent: Int, floorEnabled: Bool = true) -> PanelState {
         var input = Self.input(.working(.one("Claude Code")), [
-            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 82, label: "wiki", cause: .working),
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 82, label: "blog", cause: .working),
             Agent(id: "codex", name: "Codex", minutes: 40),
         ])
         input.onBattery = true
@@ -258,7 +258,7 @@ enum PanelFixtures {
 
     static let lidClosedNotSetUp: PanelState = {
         var input = Self.input(.working(.one("Claude Code")), [
-            Agent(id: "claude", name: "Claude Code", state: .working, reason: .backgroundJob(1), minutes: 100, label: "wiki", cause: .working),
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .backgroundJob(1), minutes: 100, label: "blog", cause: .working),
         ])
         input.lidClosedNeedsSetup = true
         return state(input)
@@ -273,7 +273,7 @@ enum PanelFixtures {
 
     static let helperNotResponding: PanelState = {
         var input = Self.input(.working(.one("Claude Code")), [
-            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 12, label: "wiki", cause: .working),
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 12, label: "blog", cause: .working),
         ])
         input.helperNotResponding = true
         return state(input)
@@ -284,7 +284,7 @@ enum PanelFixtures {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         var input = Self.input(.working(.one("Claude Code")), [
-            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 5, label: "wiki", cause: .working),
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 5, label: "blog", cause: .working),
         ])
         input.calendar = calendar
         input.locale = Locale(identifier: "en_GB")
@@ -296,7 +296,7 @@ enum PanelFixtures {
     /// on battery: seen on a second display.
     static let closedLidStopped: PanelState = {
         var input = Self.input(.safetyStop(.closedLid(.time(seconds: 3 * 3600))), [
-            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 190, label: "wiki"),
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 190, label: "blog"),
         ])
         input.onBattery = true
         input.batteryPercent = 71
@@ -308,7 +308,7 @@ enum PanelFixtures {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         var input = Self.input(.working(.one("Claude Code")), [
-            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 5, label: "wiki", cause: .working),
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 5, label: "blog", cause: .working),
         ])
         input.calendar = calendar
         input.locale = Locale(identifier: "en_GB")

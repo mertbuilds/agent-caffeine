@@ -168,9 +168,9 @@ struct PanelRow: Equatable, Identifiable {
     /// A title up to this long fits the menu on one line.
     static let titleFit = 36
 
-    /// "Claude Code · wiki". With a distinction the agent's name gives
+    /// "Claude Code · blog". With a distinction the agent's name gives
     /// way when the line would not fit, because the mark already shows
-    /// the agent: "wiki · speaker-grille-spacing".
+    /// the agent: "blog · sidebar-layout-spacing".
     var title: String {
         let full = ([name] + place).joined(separator: " · ")
         guard distinction != nil, full.count > Self.titleFit else { return full }
@@ -178,17 +178,17 @@ struct PanelRow: Equatable, Identifiable {
     }
 
     /// The folder and the distinction. A session name that begins with
-    /// the folder says both: "wiki-1d".
+    /// the folder says both: "blog-1d".
     private var place: [String] {
         guard let distinction else { return label.map { [$0] } ?? [] }
         guard let label else { return [distinction] }
         let rest = distinction.lowercased().hasPrefix(label.lowercased()) ? distinction.dropFirst(label.count) : nil
-        // "wiki-1d" in the folder "wiki", and not "about" in the folder "a".
+        // "blog-1d" in the folder "blog", and not "about" in the folder "a".
         if let rest, rest.first.map({ !$0.isLetter && !$0.isNumber }) ?? true { return [distinction] }
         return [label, distinction]
     }
 
-    /// "Claude Code, wiki, working for 12 minutes".
+    /// "Claude Code, blog, working for 12 minutes".
     var accessibilityLabel: String {
         let spoken = detail.prefix(1).lowercased() + detail.dropFirst()
         return ([name] + place + [spoken]).joined(separator: ", ")
@@ -210,7 +210,7 @@ struct PanelChild: Equatable, Identifiable {
     /// with no app to go to.
     var goTo: PanelAction?
 
-    /// "wiki-6e, working for 6 minutes".
+    /// "blog-6e, working for 6 minutes".
     var accessibilityLabel: String {
         guard let detail else { return label }
         return "\(label), \(detail.prefix(1).lowercased() + detail.dropFirst())"

@@ -29,7 +29,7 @@ final class RemoteAccessDetectorTests: XCTestCase {
             ("mcp command in a terminal", [terminal(["mcp", "list"])], Settings(atStartup: true), false),
             ("flag on a headless run", [terminal(["-p", "x", "--rc"])], Settings(), false),
             ("flag without a terminal", [noTerminal(["--rc"])], Settings(), false),
-            ("an SDK session next to a real one", [noTerminal(["--input-format", "stream-json"]), terminal(["--resume", "a56c"])], Settings(atStartup: true), true),
+            ("an SDK session next to a real one", [noTerminal(["--input-format", "stream-json"]), terminal(["--resume", "7c1e"])], Settings(atStartup: true), true),
         ]
         for c in cases {
             XCTAssertEqual(RemoteAccessDetector.claudeRemoteControl(sessions: c.sessions, settings: c.settings), c.expected, c.name)

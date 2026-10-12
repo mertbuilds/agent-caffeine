@@ -46,11 +46,11 @@ final class AgentNoticesTests: XCTestCase {
 
     func testWaitingIsToldOnceAfterTheDebounce() {
         XCTAssertEqual(sample(0, [reading(1, .working)]), [])
-        XCTAssertEqual(sample(10, [reading(1, .waitingForUser)], labels: [1: "wiki-6e"]), [])
+        XCTAssertEqual(sample(10, [reading(1, .waitingForUser)], labels: [1: "blog-6e"]), [])
         XCTAssertEqual(sample(12, [reading(1, .waitingForUser)]), [], "Not yet 3 seconds")
         let told = sample(14, [reading(1, .waitingForUser)])
         XCTAssertEqual(kinds(told), [.waiting])
-        XCTAssertEqual(told.first?.sessions.map(\.label), ["wiki-6e"])
+        XCTAssertEqual(told.first?.sessions.map(\.label), ["blog-6e"])
         XCTAssertEqual(sample(16, [reading(1, .waitingForUser)]), [], "Once")
         XCTAssertEqual(sample(600, [reading(1, .waitingForUser)]), [])
     }
@@ -132,12 +132,12 @@ final class AgentNoticesTests: XCTestCase {
 
     func testFinishedIsTold() {
         _ = sample(0, [reading(1, .idle)])
-        _ = sample(10, [reading(1, .working)], labels: [1: "wiki"])
+        _ = sample(10, [reading(1, .working)], labels: [1: "blog"])
         XCTAssertEqual(sample(100, [reading(1, .idle)]), [], "Held for the others that may finish with it")
         let told = sample(102, [reading(1, .idle)])
         XCTAssertEqual(kinds(told), [.finished])
         XCTAssertEqual(told.first?.sessions.first?.workedFor, 90)
-        XCTAssertEqual(told.first?.sessions.first?.label, "wiki")
+        XCTAssertEqual(told.first?.sessions.first?.label, "blog")
         XCTAssertEqual(sample(104, [reading(1, .idle)]), [])
     }
 
@@ -535,7 +535,7 @@ final class AgentNoticesTests: XCTestCase {
 
     // MARK: Words
 
-    private func session(label: String? = "wiki-6e", workedFor: TimeInterval? = nil, pid: Int32 = 7, owner: Int32? = 500) -> AgentNotice.Session {
+    private func session(label: String? = "blog-6e", workedFor: TimeInterval? = nil, pid: Int32 = 7, owner: Int32? = 500) -> AgentNotice.Session {
         AgentNotice.Session(
             identity: identity(pid), agentID: "claude", displayName: "Claude Code", label: label, ownerPid: owner,
             workedFor: workedFor
@@ -546,7 +546,7 @@ final class AgentNoticesTests: XCTestCase {
         let notice = AgentNotice(kind: .waiting, sessions: [session()])
         let content = AgentNoticeText.content(notice, outlook: .letsGo(after: 296, then: .unknown), now: start.addingTimeInterval(4))
         XCTAssertEqual(content.title, "Claude Code is waiting for you")
-        XCTAssertEqual(content.subtitle, "wiki-6e")
+        XCTAssertEqual(content.subtitle, "blog-6e")
         XCTAssertEqual(content.body, "Agent Caffeine keeps your Mac awake for 5 more minutes")
         XCTAssertTrue(content.sound)
         XCTAssertEqual(content.thread, "agent-claude")
@@ -566,7 +566,7 @@ final class AgentNoticesTests: XCTestCase {
     func testWaitingWordsWithTheLidClosedOnBattery() {
         let notice = AgentNotice(kind: .waiting, sessions: [session()])
         let content = AgentNoticeText.content(notice, outlook: .sleeps(after: 296), now: start.addingTimeInterval(4))
-        XCTAssertEqual(content.subtitle, "wiki-6e")
+        XCTAssertEqual(content.subtitle, "blog-6e")
         XCTAssertEqual(content.body, "Your Mac sleeps in 5 minutes")
     }
 
@@ -574,7 +574,7 @@ final class AgentNoticesTests: XCTestCase {
         let notice = AgentNotice(kind: .finished, sessions: [session(workedFor: 82 * 60)])
         let content = AgentNoticeText.content(notice, outlook: .sleeps(after: 300), now: start)
         XCTAssertEqual(content.title, "Claude Code finished")
-        XCTAssertEqual(content.subtitle, "wiki-6e")
+        XCTAssertEqual(content.subtitle, "blog-6e")
         XCTAssertEqual(content.body, "After 1 hour 22 minutes")
         XCTAssertTrue(content.sound)
         XCTAssertEqual(content.thread, "agent-claude")
@@ -587,7 +587,7 @@ final class AgentNoticesTests: XCTestCase {
         failed.failed = true
         let stopped = AgentNoticeText.content(AgentNotice(kind: .finished, sessions: [failed]), outlook: .silent, now: start)
         XCTAssertEqual(stopped.title, "Claude Code stopped with an error")
-        XCTAssertEqual(stopped.subtitle, "wiki-6e")
+        XCTAssertEqual(stopped.subtitle, "blog-6e")
         XCTAssertEqual(stopped.key, "finished-7-5", "The same notification as a finish")
     }
 

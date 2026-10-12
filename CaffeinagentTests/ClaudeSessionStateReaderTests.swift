@@ -28,9 +28,9 @@ final class ClaudeSessionStateReaderTests: XCTestCase {
     }
 
     func testSessionName() throws {
-        let named = try XCTUnwrap(ClaudeSessionStateReader.parse(session(status: "busy", extra: #","name":" wiki-1d\n","nameSource":"derived""#), now: now))
-        XCTAssertEqual(named.name, "wiki-1d")
-        XCTAssertNil(named.report.detail?.range(of: "wiki-1d"), "A report never carries the name")
+        let named = try XCTUnwrap(ClaudeSessionStateReader.parse(session(status: "busy", extra: #","name":" blog-1d\n","nameSource":"derived""#), now: now))
+        XCTAssertEqual(named.name, "blog-1d")
+        XCTAssertNil(named.report.detail?.range(of: "blog-1d"), "A report never carries the name")
         XCTAssertNil(ClaudeSessionStateReader.parse(session(status: "busy"), now: now)?.name)
         XCTAssertNil(ClaudeSessionStateReader.parse(session(status: "busy", extra: #","name":7"#), now: now)?.name)
     }

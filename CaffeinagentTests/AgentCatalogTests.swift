@@ -26,7 +26,7 @@ final class AgentCatalogTests: XCTestCase {
             ("claude resume", claudeBinary, ["claude", "--dangerously-skip-permissions", "--resume", "7c1e4a90-2b6d-4f38-9e15-0a3d5c7b9e24"], "claude", .session),
             ("claude headless by full path", claudeBinary, ["/Users/me/.local/bin/claude", "-p", "--model", "sonnet", "say hi"], "claude", .session),
             ("claude with a rewritten argv", claudeBinary, ["2.1.289"], "claude", .session),
-            ("claude daemon supervisor", claudeBinary, ["/Users/me/.local/bin/claude", "daemon", "run", "--origin", "transient", "--spawned-by", "{\"label\":\"claude\",\"cwd\":\"/Users/me/wiki\",\"pid\":93968}"], "claude", .helper),
+            ("claude daemon supervisor", claudeBinary, ["/Users/me/.local/bin/claude", "daemon", "run", "--origin", "transient", "--spawned-by", "{\"label\":\"claude\",\"cwd\":\"/Users/me/blog\",\"pid\":93968}"], "claude", .helper),
             ("claude pty host", claudeBinary, ["claude", "bg-pty-host", "--bg-pty-host", "/tmp/cc-daemon-501/03c1f701/spare/025596a1.pty.sock", "200", "50", "--", claudeBinary, "--bg-spare", "/tmp/cc-daemon-501/03c1f701/spare/025596a1.claim.sock"], "claude", .helper),
             ("claude spare, claimed or warm", claudeBinary, ["claude", "bg-spare", "--bg-spare", "/tmp/cc-daemon-501/03c1f701/spare/17dea89c.claim.sock"], "claude", .helperMaybeSession),
             // As KERN_PROCARGS2 gives them: the title is one argv[0].
@@ -123,7 +123,7 @@ final class AgentCatalogTests: XCTestCase {
             // daemon starts its hosts and spares with the versioned path.
             ("claude session", link, ["claude", "--dangerously-skip-permissions"], "claude", .session),
             ("claude session by full path", link, [link, "-p", "say hi"], "claude", .session),
-            ("claude session started with the versioned path", gone, ["claude", "--resume", "a56cc820"], "claude", .session),
+            ("claude session started with the versioned path", gone, ["claude", "--resume", "7c1e4a90"], "claude", .session),
             ("claude spare, claimed or warm", gone, ["claude bg-spare", "--bg-spare", "/tmp/cc-daemon-501/03c1f701/spare/17dea89c.claim.sock"], "claude", .helperMaybeSession),
             ("claude pty host", gone, ["claude bg-pty-host", "--bg-pty-host", "/tmp/x.pty.sock", "200", "50", "--", gone, "--bg-spare", "/tmp/x.claim.sock"], "claude", .helper),
             ("claude daemon supervisor", link, [link, "daemon", "run", "--origin", "transient"], "claude", .helper),
@@ -410,7 +410,7 @@ final class AgentCatalogTests: XCTestCase {
             .fixture(33002, ppid: 33001, path: "/usr/bin/xcodebuild", args: ["xcodebuild", "test"]),
             .fixture(21510, ppid: 20909, path: claudeBinary, args: hostArgs),
             .fixture(21523, ppid: 21510, path: claudeBinary, args: spareArgs),
-            .fixture(2422, ppid: 2514, path: "/Users/me/.local/share/claude/versions/2.1.288", args: ["claude", "--resume", "a56cc820"], tty: 0x1000_0001),
+            .fixture(2422, ppid: 2514, path: "/Users/me/.local/share/claude/versions/2.1.288", args: ["claude", "--resume", "7c1e4a90"], tty: 0x1000_0001),
         ]
         let instances = catalog.instances(in: snapshot)
         XCTAssertEqual(ids(instances), ["claude:93968", "claude:20946", "claude:21523", "claude:2422"])

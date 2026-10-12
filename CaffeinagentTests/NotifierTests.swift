@@ -37,7 +37,7 @@ final class NotifierTests: XCTestCase {
 
     private func content(_ kind: AgentNoticeKind, pid: Int32 = 7, after seconds: TimeInterval) -> AgentNoticeContent {
         let session = AgentNotice.Session(
-            identity: ProcessIdentity(pid: pid, startTime: 5), agentID: "claude", displayName: "Claude Code", label: "wiki", ownerPid: 500,
+            identity: ProcessIdentity(pid: pid, startTime: 5), agentID: "claude", displayName: "Claude Code", label: "blog", ownerPid: 500,
             workedFor: kind == .finished ? 90 : nil
         )
         return AgentNoticeText.content(AgentNotice(kind: kind, sessions: [session]), outlook: .silent, now: start.addingTimeInterval(seconds))
@@ -66,7 +66,7 @@ final class NotifierTests: XCTestCase {
         XCTAssertEqual(center.removed, [center.requests[0].identifier], "The older one about the same session and kind leaves Notification Center")
         XCTAssertEqual(center.requests.map { deliveries[$0.identifier] }, [.delivered, .delivered, .delivered, .delivered])
         XCTAssertEqual(center.requests[0].content.title, "Claude Code finished")
-        XCTAssertEqual(center.requests[0].content.subtitle, "wiki")
+        XCTAssertEqual(center.requests[0].content.subtitle, "blog")
         XCTAssertNil(center.requests[0].trigger)
     }
 

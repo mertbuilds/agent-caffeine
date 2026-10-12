@@ -7,7 +7,7 @@ final class PanelBarTests: XCTestCase {
     private let now = PanelFixtures.now
 
     private func input(_ agents: [PanelFixtures.Agent] = [
-        .init(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 12, label: "wiki", cause: .working),
+        .init(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 12, label: "blog", cause: .working),
         .init(id: "codex", name: "Codex", minutes: 25),
     ]) -> PanelInput {
         PanelFixtures.input(.working(.one("Claude Code")), agents)
@@ -26,7 +26,7 @@ final class PanelBarTests: XCTestCase {
         // Another sample: an agent more, another state, folder and clock.
         var second = input([
             .init(id: "claude", name: "Claude Code", state: .waitingForUser, reason: .asksPermission, minutes: 1, label: "site", cause: .waitingForUser),
-            .init(id: "codex", name: "Codex", state: .working, reason: .runningCommand(3), minutes: 40, label: "wiki", cause: .working),
+            .init(id: "codex", name: "Codex", state: .working, reason: .runningCommand(3), minutes: 40, label: "blog", cause: .working),
             .init(id: "gemini", name: "Gemini CLI", minutes: 300),
         ])
         second.onBattery = false
