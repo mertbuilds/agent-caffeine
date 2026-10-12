@@ -19,6 +19,7 @@ It needs macOS 13 or later, on Apple silicon or Intel. The app updates itself fr
 - It lets the Mac sleep when the battery is low and when the Mac gets too hot. With the lid closed on battery it stops staying awake for agents after 3 hours awake or a loss of 30 points of charge.
 - A script or an agent can ask for the Mac to stay awake with the command line tool `agent-caffeine`, or through its MCP server.
 - "Wake for jobs" (off by default) wakes the Mac for a scheduled job and keeps it awake while the job runs.
+- "Join your iPhone hotspot" (beta, off by default) joins the hotspot of your iPhone when the Mac loses its Wi-Fi while an agent works.
 
 ## Limits
 
@@ -28,6 +29,7 @@ It needs macOS 13 or later, on Apple silicon or Intel. The app updates itself fr
 - A Mac that stays awake in a bag gets warm and uses its battery. The battery limit (20% by default) and the heat stop are there for that, and they end a hold whatever asked for it. The closed lid limit is there for agents: it lets go of every agent session, and not of what you asked for from the command line or of the mode "Always". Work that needs the Mac awake stops then.
 - The display may still sleep. Agent Caffeine keeps the Mac awake, not the screen.
 - "Wake for jobs" sets no wake time on battery unless you allow it, and cannot see a Mac that is unplugged while it sleeps.
+- "Join your iPhone hotspot" finds the hotspot only while the phone shows it. An iPhone stops showing it about 90 seconds after the last device left. See its section.
 - There is no warranty. See the license.
 
 ## What it does, in detail
@@ -153,9 +155,25 @@ Builds before the helper used a sudoers entry for `pmset -b disablesleep`. The a
 - "Show history" lists the last 50 events with their time: alarm set, refused or taken away, the wake, the job seen and ended, and how a hold ended.
 - The rules are in `Caffeinagent/Detection/Jobs/`: `JobPlanner.swift` (which alarm), `JobWake.swift` (the loop), `JobHold.swift` (the hold) and `JobRunProbe.swift` (how a job is found among the processes). The alarm window of the wake gate is in `Caffeinagent/Detection/WakeGate.swift`.
 
+## Join your iPhone hotspot (Beta)
+
+"Join your iPhone hotspot" (Settings > General, off by default) is for the moment you leave a cafe with the lid closed: when the Mac loses its Wi-Fi while an agent works, it joins the hotspot of your iPhone, so the agent stays online. It is a beta: read the limits before you rely on it.
+
+- Setup: switch it on, type the name of the hotspot (the name of your iPhone) and its password, and click "Save". The name is kept in the settings of the app and the password in your login Keychain. Switching it off forgets both. A straight apostrophe and the curly one of iOS ("Mert’s iPhone") count as the same name.
+- Location Services: from macOS 14 on, macOS shows the names of Wi-Fi networks only to an app you allowed in Location Services, so "Save" asks for it. Agent Caffeine needs it to find the hotspot by its name and reads no location. It is asked by "Save" and never at launch. The join runs in the app and not in the helper: a root daemon cannot get this permission.
+- When it joins: the feature is on, a hotspot is saved, the Mac stays awake for an agent that works, waits for you or finished a moment ago, no stop is in force, Wi-Fi is switched on, and macOS has reported no usable way to the network for 15 seconds of awake time without a break. A hold from the command line, a scheduled job, "stay reachable" and the mode "Always" start no join by themselves. Agent Caffeine never joins while the Mac has a way to the network, and asks once more right before the join, so a network that works is never left for the hotspot. It never switches Wi-Fi on or off.
+- How it joins: a scan for the name of the hotspot, then a join with the saved password, through CoreWLAN, the public framework of macOS. When that does not work it tries again 10, 20 and 40 seconds later and then once a minute, for as long as the agents count. The offline rule runs on unchanged: after its limit (10 minutes by default) the agents count no more, the tries end and the Mac can sleep. A password that the hotspot refused twice is not tried again until you save again.
+- The way back: the Wi-Fi the Mac was on when the way was lost is kept in memory only. While the Mac is on the hotspot, it looks for that network every 2 minutes, and every 10 minutes on battery with the lid closed, because each scan costs charge. When it is seen, the Mac joins it with no password, since macOS keeps that one. This is tried once: when macOS refuses, the Mac stays on the hotspot. Only the network of the moment of the loss counts, read at most 5 seconds before, so a network you left by hand earlier is never joined. Settings has a switch for the way back.
+- What you see: Settings has a status line with the last result ("Joined at 14:02", "Did not find the hotspot at 14:02"), and the menu has one quiet line while the Mac is on the hotspot ("On your iPhone hotspot since 14:02"). There is no notification for a join. When no join works, the offline rule and its notification say what became of the Mac.
+- **Limits.** An iPhone shows its hotspot for about 90 seconds after the last device left, and only macOS itself is known to wake it, over Bluetooth. A scan of Agent Caffeine may find nothing while the phone sits locked in a pocket: this is not measured yet, and neither is a join with the lid closed and the screen locked. From macOS 26 on, "Ask to join hotspots: Automatic" in the Wi-Fi settings lets macOS join the hotspot by itself, and Settings shows whether it is set. When macOS joins it, Agent Caffeine shows the same line and takes the same way back. On the hotspot everything on the Mac uses the data and the battery of your phone, not only the agent. "Joined" means the Mac is on the hotspot, not that the phone has a way to the internet: Agent Caffeine sends no request to find out. A turn of an agent that failed while the Mac was offline is not started again. Which error macOS gives for a wrong password is not written down by Apple, so a wrong password can show as "Could not join the hotspot".
+- Measuring: `caffeinagent --hotspot-probe "<name>" [--join] [--seconds N]` (the binary in `Contents/MacOS` of the app) prints once per second whether a scan sees the hotspot, with the signal and the channel, what macOS says about Location Services, whether Wi-Fi is on and whether the Mac has a way to the network. Without `--join` it only reads. With `--join` it asks for the password, which is not shown and not stored, and joins the hotspot once. It prints no network name but the one you gave, and it never switches Wi-Fi on or off.
+- The rules are in `Caffeinagent/Detection/Network/`: `HotspotHop.swift` (when to join and when to go back), `HotspotJob.swift` (the scan and the join) and `HotspotHopLoop.swift` (the settings and the loop). The calls into macOS are in `Caffeinagent/HotspotSystem.swift`.
+
 ## Privacy
 
 Agent Caffeine makes one kind of network request: it asks caffeinagent.com for updates, once a day and when you press "Check for updates…". It sends nothing about you or your agents, and it has no analytics. What it reads of an agent (its state, the name of its session for the menu) stays on the Mac.
+
+"Join your iPhone hotspot" asks for Location Services only because macOS shows the names of Wi-Fi networks with it. Agent Caffeine reads no location and keeps none. The name of your hotspot is in the settings of the app and its password in your login Keychain. No network name and no password is logged, recorded or sent, and the state for the tests has neither.
 
 ## Build from source
 
