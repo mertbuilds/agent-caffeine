@@ -40,8 +40,8 @@ targets:
     platform: macOS
     sources:
       - Caffeinagent
-      # The license texts of what the app bundles, and the notices that name
-      # each component. Both land in Contents/Resources.
+      # The license of the app, the license texts of what it bundles, and the
+      # notices that name each component. Both land in Contents/Resources.
       - path: Resources/Licenses
         type: folder
       - path: THIRD_PARTY_NOTICES.md
@@ -76,7 +76,7 @@ targets:
         CFBundleIconName: AppIcon
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         LSUIElement: true
-        NSHumanReadableCopyright: "Copyright © 2026"
+        NSHumanReadableCopyright: "Copyright © 2026 Mert Duzgun"
         NSSupportsAutomaticTermination: false
         NSSupportsSuddenTermination: false
         # Sparkle. The appcast is written by scripts/release.sh and served by
