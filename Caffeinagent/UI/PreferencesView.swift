@@ -84,7 +84,7 @@ struct PreferencesView: View {
                 hooksOn: HookRowModel.rows(statuses: aggregator.hookStatuses).filter(\.isOn).map(\.entry),
                 helperRegistered: aggregator.sleepFlag.helperStatus != .notRegistered,
                 agentSetupOn: aggregator.agentSetup.isSetUp,
-                hotspotSaved: aggregator.hotspot.settings.on,
+                hotspotSaved: aggregator.hotspot.somethingSaved,
                 checkForUpdates: updater.checkForUpdates,
                 showSetup: { OnboardingWindow.show(aggregator: aggregator) },
                 turnOffHooks: { $0.forEach { aggregator.setHooks($0, on: false) } },

@@ -44,6 +44,11 @@ struct HotspotPreferences: View {
                 Text(PanelText.hotspotForgets)
                     .font(.callout)
                     .foregroundStyle(.secondary)
+            } else if hotspot.saveNote == .removeFailed {
+                // Off, and the password is still in the Keychain.
+                Text(PanelText.hotspotSaveNote(.removeFailed))
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
         }
         .onAppear { name = hotspot.settings.name ?? "" }

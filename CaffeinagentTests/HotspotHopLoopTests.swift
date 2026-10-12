@@ -188,6 +188,34 @@ final class HotspotHopLoopTests: XCTestCase {
         XCTAssertEqual(parts.wifi.scans, [])
     }
 
+    func testAPasswordTheKeychainDidNotRemoveIsStillSaidToBeSaved() {
+        let loop = loop()
+        loop.setOn(true)
+        loop.save(name: HopMac.hotspot, password: HopMac.password)
+        parts.passwords.refusesRemove = true
+        loop.setOn(false)
+        XCTAssertEqual(parts.passwords.password, HopMac.password, "The Keychain kept it")
+        XCTAssertFalse(loop.view.settings.on, "The switch is off all the same")
+        XCTAssertNil(loop.view.settings.name)
+        XCTAssertTrue(loop.view.settings.passwordSaved)
+        XCTAssertTrue(loop.view.somethingSaved, "About still has Forget")
+        XCTAssertEqual(loop.view.saveNote, .removeFailed)
+        XCTAssertTrue(HotspotSettingsStore.load(from: parts.defaults).passwordSaved, "And after the next start")
+        loseWiFi()
+        run(loop, seconds: 60)
+        XCTAssertEqual(parts.wifi.scans, [], "Off is off")
+        loop.setOn(true)
+        XCTAssertNil(loop.view.saveNote)
+        XCTAssertFalse(loop.view.settings.isSetUp, "The name is gone")
+        // "Forget" again, and the Keychain lets go.
+        parts.passwords.refusesRemove = false
+        loop.forget()
+        XCTAssertNil(parts.passwords.password)
+        XCTAssertFalse(loop.view.settings.passwordSaved)
+        XCTAssertFalse(loop.view.somethingSaved)
+        XCTAssertNil(loop.view.saveNote)
+    }
+
     // MARK: The loop
 
     func testTheLoopJoinsTheHotspotWithThePasswordOfTheKeychain() {

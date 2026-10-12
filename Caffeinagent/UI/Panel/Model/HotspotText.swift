@@ -56,6 +56,7 @@ extension PanelText {
         switch note {
         case .incomplete: return "Type the name and the password of your hotspot"
         case .keychainFailed: return "Agent Caffeine could not save the password in your Keychain"
+        case .removeFailed: return "Agent Caffeine could not remove the password from your Keychain. Try again."
         case .saved(.allowed): return "Saved. Agent Caffeine can see the names of Wi-Fi networks."
         case .saved(.notNeeded): return "Saved"
         case .saved(.notAsked): return "Saved. Allow Location when macOS asks, so Agent Caffeine can find the hotspot by its name."

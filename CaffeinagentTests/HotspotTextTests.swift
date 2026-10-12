@@ -103,6 +103,7 @@ final class HotspotTextTests: XCTestCase {
             "Saved. Allow Location when macOS asks, so Agent Caffeine can find the hotspot by its name."
         )
         XCTAssertEqual(PanelText.hotspotSaveNote(.saved(.denied)), "Saved. Location permission is off, so Agent Caffeine cannot find the hotspot.")
+        XCTAssertEqual(PanelText.hotspotSaveNote(.removeFailed), "Agent Caffeine could not remove the password from your Keychain. Try again.")
     }
 
     // MARK: Menu
@@ -151,7 +152,7 @@ final class HotspotTextTests: XCTestCase {
             PanelText.onHotspotSince(time, calendar: calendar, locale: locale),
         ]
         lines += states.compactMap { status($0) }
-        lines += [HotspotSaveNote.incomplete, .keychainFailed, .saved(.allowed), .saved(.notAsked), .saved(.denied), .saved(.notNeeded)]
+        lines += [HotspotSaveNote.incomplete, .keychainFailed, .removeFailed, .saved(.allowed), .saved(.notAsked), .saved(.denied), .saved(.notNeeded)]
             .map(PanelText.hotspotSaveNote)
         XCTAssertGreaterThan(lines.count, 35)
         for line in lines {

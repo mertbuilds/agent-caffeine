@@ -5,6 +5,8 @@ enum HotspotSaveNote: Equatable {
     /// The name or the password is missing.
     case incomplete
     case keychainFailed
+    /// The Keychain did not remove the password. It is still there.
+    case removeFailed
     /// Saved, and what macOS says about the names of Wi-Fi networks.
     case saved(LocationPermission)
 }
@@ -18,6 +20,10 @@ struct HotspotView: Equatable {
     var online = true
     var permission = LocationPermission.notAsked
     var saveNote: HotspotSaveNote?
+
+    /// The feature is on, or a password is still in the Keychain: there
+    /// is something to forget.
+    var somethingSaved: Bool { settings.on || settings.passwordSaved }
 
     /// Since when the Mac is on the hotspot because of a hop, for the
     /// line in the menu.
@@ -143,7 +149,9 @@ final class HotspotHopLoop {
         guard on else { return forget() }
         var settings = view.settings
         settings.on = true
-        store(settings)
+        var next = view
+        next.saveNote = nil
+        store(settings, in: next)
     }
 
     func setHopBack(_ on: Bool) {
@@ -179,15 +187,19 @@ final class HotspotHopLoop {
     }
 
     /// Takes the name and the password away, and switches the feature
-    /// off. The Mac stays on the network it is on.
+    /// off. The Mac stays on the network it is on. When the Keychain
+    /// does not remove the password, the settings go on saying that one
+    /// is saved, with a line, so the user can try again.
     func forget() {
-        passwords.remove()
+        let removed = passwords.remove()
         gate.set(false)
         var settings = HotspotSettings()
         // A later save is a new one for the rules.
         settings.saves = view.settings.saves
+        settings.passwordSaved = !removed
         var next = HotspotView()
         next.online = view.online
+        if !removed { next.saveNote = .removeFailed }
         store(settings, in: next)
     }
 

@@ -84,6 +84,7 @@ final class FakeWiFi: WiFiAccess {
 final class FakePasswordStore: HotspotPasswordStoring {
     var password: String?
     var refusesSave = false
+    var refusesRemove = false
     private(set) var loads = 0
 
     func save(_ password: String) -> Bool {
@@ -98,6 +99,7 @@ final class FakePasswordStore: HotspotPasswordStoring {
     }
 
     func remove() -> Bool {
+        guard !refusesRemove else { return false }
         password = nil
         return true
     }
