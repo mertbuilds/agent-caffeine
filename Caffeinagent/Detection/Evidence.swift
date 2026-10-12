@@ -271,15 +271,21 @@ struct FrameContext: Codable, Equatable {
     var remoteAccessDetected = false
     /// macOS says the battery charges. See `SafetyInputs.charging`.
     var charging = false
+    /// The Mac has no way to the network: `NetworkPath.isOnline` is false.
+    /// A line without it is online, so an older recording replays as
+    /// online.
+    var offline = false
 
     init(onBattery: Bool = false, batteryPercent: Int? = nil, lidClosed: Bool = false,
-         thermalState: Int = ProcessInfo.ThermalState.nominal.rawValue, remoteAccessDetected: Bool = false, charging: Bool = false) {
+         thermalState: Int = ProcessInfo.ThermalState.nominal.rawValue, remoteAccessDetected: Bool = false, charging: Bool = false,
+         offline: Bool = false) {
         self.onBattery = onBattery
         self.batteryPercent = batteryPercent
         self.lidClosed = lidClosed
         self.thermalState = thermalState
         self.remoteAccessDetected = remoteAccessDetected
         self.charging = charging
+        self.offline = offline
     }
 
     /// An unknown thermal value reads as nominal.
@@ -294,6 +300,7 @@ struct FrameContext: Codable, Equatable {
 
     private enum CodingKeys: String, CodingKey {
         case onBattery = "bat", batteryPercent = "pct", lidClosed = "lid", thermalState = "heat", remoteAccessDetected = "remote", charging = "chg"
+        case offline = "off"
     }
 
     init(from decoder: Decoder) throws {
@@ -304,6 +311,7 @@ struct FrameContext: Codable, Equatable {
         thermalState = try container.decodeIfPresent(Int.self, forKey: .thermalState) ?? ProcessInfo.ThermalState.nominal.rawValue
         remoteAccessDetected = try container.decodeIfPresent(Bool.self, forKey: .remoteAccessDetected) ?? false
         charging = try container.decodeIfPresent(Bool.self, forKey: .charging) ?? false
+        offline = try container.decodeIfPresent(Bool.self, forKey: .offline) ?? false
     }
 
     func encode(to encoder: Encoder) throws {
@@ -314,6 +322,7 @@ struct FrameContext: Codable, Equatable {
         if thermalState != ProcessInfo.ThermalState.nominal.rawValue { try container.encode(thermalState, forKey: .thermalState) }
         if remoteAccessDetected { try container.encode(true, forKey: .remoteAccessDetected) }
         if charging { try container.encode(true, forKey: .charging) }
+        if offline { try container.encode(true, forKey: .offline) }
     }
 }
 

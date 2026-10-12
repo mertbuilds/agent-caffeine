@@ -78,6 +78,8 @@ final class EvidenceCollector: EvidenceCollecting {
         var assertions: PowerAssertionListing
         var power: PowerContextReading
         var openFiles: OpenFileListing
+        /// Nil reads no network path, and the Mac counts as online.
+        var network: NetworkPathReading?
         var catalog = AgentCatalog.standard
         var claudeSessions = ClaudeSessionStateReader()
         var claudeJobs = ClaudeJobStateReader()
@@ -116,6 +118,7 @@ final class EvidenceCollector: EvidenceCollecting {
             sources.holdDirectory = HoldStore.directory()
             sources.claudeSettings = URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent(".claude/settings.json")
             sources.awakeSeconds = SampleGap.awakeSeconds
+            sources.network = SystemNetworkPath()
             return sources
         }
     }
@@ -350,9 +353,9 @@ final class EvidenceCollector: EvidenceCollecting {
         }
         sample.frame.at = time.at
         sample.frame.awake = time.awake
-        // The battery and the heat do not wait for the table. Phone access
-        // is read from the table, so it stays as it was.
-        var context = sources.power.context()
+        // The battery, the heat and the network do not wait for the table.
+        // Phone access is read from the table, so it stays as it was.
+        var context = powerAndNetwork()
         context.remoteAccessDetected = sample.frame.context.remoteAccessDetected
         sample.frame.context = context
         for index in sample.frame.agents.indices {
@@ -366,8 +369,15 @@ final class EvidenceCollector: EvidenceCollecting {
         return nil
     }
 
-    private func context(snapshot: [ProcessInfoRow], matches: [Int32: AgentMatch]) -> FrameContext {
+    /// A path macOS has not told yet counts as online.
+    private func powerAndNetwork() -> FrameContext {
         var context = sources.power.context()
+        context.offline = !(sources.network?.path()?.isOnline ?? true)
+        return context
+    }
+
+    private func context(snapshot: [ProcessInfoRow], matches: [Int32: AgentMatch]) -> FrameContext {
+        var context = powerAndNetwork()
         context.remoteAccessDetected = remoteAccessProbe() || claudeRemoteControl(snapshot: snapshot, matches: matches)
         return context
     }

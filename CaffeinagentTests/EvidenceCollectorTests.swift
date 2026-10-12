@@ -16,6 +16,11 @@ private final class FakePower: PowerContextReading {
     func context() -> FrameContext { value }
 }
 
+private final class FakeNetwork: NetworkPathReading {
+    var value: NetworkPath?
+    func path() -> NetworkPath? { value }
+}
+
 private final class FakeOpenFiles: OpenFileListing {
     var files: [Int32: [String]] = [:]
     var directories: [Int32: String] = [:]
@@ -161,6 +166,23 @@ final class EvidenceCollectorTests: XCTestCase {
         for word in ["secret", "plan the", "launch"] { XCTAssertFalse(frame.contains(word), frame) }
         XCTAssertFalse(String(describing: sample).contains("secret"))
         XCTAssertFalse(String(reflecting: sample.sessionHints).contains("secret"))
+    }
+
+    /// The frame says offline only for a path that macOS told and that
+    /// reaches nothing. With no reader, and before macOS says a path, the
+    /// Mac counts as online.
+    func testTheNetworkPathComesWithTheContext() {
+        XCTAssertFalse(sample(at: 0).frame.context.offline, "No reader")
+        let network = FakeNetwork()
+        sources.network = network
+        setUpCollector()
+        XCTAssertFalse(sample(at: 2).frame.context.offline, "macOS has not said yet")
+        network.value = NetworkPath(satisfied: true, interfaces: [NetworkPath.Interface(kind: .wifi, name: "en0")])
+        XCTAssertFalse(sample(at: 4).frame.context.offline)
+        network.value = NetworkPath(satisfied: false, interfaces: [])
+        XCTAssertTrue(sample(at: 6).frame.context.offline)
+        network.value = NetworkPath(satisfied: true, interfaces: [NetworkPath.Interface(kind: .other, name: "utun3")])
+        XCTAssertTrue(sample(at: 8).frame.context.offline, "The tunnel of a VPN alone")
     }
 
     func testRemoteAccessComesFromTheHook() {
