@@ -1,9 +1,8 @@
 import { AgentIcon } from "@/components/agent-icons";
-import { DownloadButton, DownloadNotReady, TryFree } from "@/components/download-button";
+import { DownloadButton, DownloadForMac, DownloadNotReady } from "@/components/download-button";
 import { GridTexture } from "@/components/grid-texture";
 import { HeroScene } from "@/components/hero-scene";
 import { agents, markedAgents } from "@/lib/agents";
-import { PRICE } from "@/lib/pricing";
 import { getLatestRelease, type Release } from "@/lib/release";
 
 const SHOWN = markedAgents.slice(0, 7);
@@ -49,7 +48,7 @@ function Cta({ release }: { release: Release | null }) {
         <DownloadNotReady />
       ) : (
         <DownloadButton release={release} placement="hero">
-          <TryFree />
+          <DownloadForMac />
         </DownloadButton>
       )}
       <ul className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-sm text-muted lg:justify-start">
@@ -57,12 +56,8 @@ function Cta({ release }: { release: Release | null }) {
           <svg {...GLYPH} height="10.5" viewBox="0 0 12 10.5">
             <path d="M.75 3h10.5v2.5H.75zM1.75 5.5v4.25h8.5V5.5M6 3v6.75M6 3C4.6 3 3.4 2.6 3.4 1.7c0-.6.45-.95.95-.95C5.5.75 6 2 6 3Zm0 0c1.4 0 2.6-.4 2.6-1.3 0-.6-.45-.95-.95-.95C6.5.75 6 2 6 3Z" />
           </svg>
-          Free for 7 days
+          Free and open source
         </li>
-        <li aria-hidden="true" className="-translate-y-[0.09em]">
-          ·
-        </li>
-        <li>Then {PRICE} once</li>
         <li aria-hidden="true" className="hidden -translate-y-[0.09em] sm:block">
           ·
         </li>

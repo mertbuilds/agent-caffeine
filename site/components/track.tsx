@@ -1,10 +1,7 @@
 "use client";
 
-import Link from "next/link";
 import { useSyncExternalStore, type ReactNode } from "react";
-import { checkoutUrlWith } from "@/lib/attribution";
 import { downloadLink } from "@/lib/download";
-import type { Plan } from "@/lib/pricing";
 import { isMacDevice, openSendToMac } from "@/lib/send-to-mac";
 import { rememberedUtm, track, type Placement } from "@/lib/track";
 
@@ -17,36 +14,9 @@ function onServer(): null {
 }
 
 /**
- * A link to a plan's checkout. The click is counted with the plan and its price.
- * The server's link is the plain checkout link. On the live site the browser then adds the visitor's source to it.
- */
-export function BuyCta({
-  plan,
-  placement,
-  className,
-  children,
-}: {
-  plan: Plan;
-  placement: Placement;
-  className?: string;
-  children: ReactNode;
-}) {
-  const utm = useSyncExternalStore(subscribe, rememberedUtm, onServer);
-  return (
-    <Link
-      href={utm === null ? plan.checkoutUrl : checkoutUrlWith(plan.checkoutUrl, utm)}
-      onClick={() => track("buy_click", { plan: plan.id, price: plan.price, placement })}
-      className={className}
-    >
-      {children}
-    </Link>
-  );
-}
-
-/**
  * A link to the dmg, by way of `/download`, where the server counts it. `href` is the dmg itself:
  * it tells a sample release, which has no file, from a real one. The click is also counted in
- * the browser with where it sits, to set trial starts beside buys.
+ * the browser with where it sits.
  *
  * The link is the same for everyone, so it works with no script. Off a Mac, where the app cannot
  * run, a click starts no download: it opens the popup that sends the link on to a Mac

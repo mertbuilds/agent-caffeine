@@ -1,15 +1,20 @@
 import Image from "next/image";
-import { DownloadButton, TryFree } from "@/components/download-button";
-import { PlanCard } from "@/components/plan-card";
+import Link from "next/link";
+import { DownloadButton, DownloadForMac, DownloadNotReady } from "@/components/download-button";
+import { BRAND_VARIANTS } from "@/components/pill";
 import { getLatestRelease } from "@/lib/release";
+import { REPO_URL } from "@/lib/site";
 
 const GRID_LINE = "rgba(255, 255, 255, 0.07)";
 
-export async function Pricing() {
+/**
+ * The blue card that says what the app costs: nothing. Its id stays `pricing`,
+ * because the paid versions of the app open the page at `/#pricing`.
+ */
+export async function Free() {
   const release = await getLatestRelease();
   return (
     <section id="pricing" className="mx-auto w-full max-w-[1120px] scroll-mt-20">
-      <h2 className="sr-only">Pricing</h2>
       <div className="relative mx-auto mt-14 max-w-[880px] rounded-[20px] bg-gradient-to-br from-brand-light to-brand-deep text-white shadow-[0_32px_64px_-32px_rgba(27,85,194,0.55)] dark:shadow-[0_0_0_1px_rgba(255,255,255,0.16)] md:mt-10">
         <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
           <div
@@ -33,15 +38,32 @@ export async function Pricing() {
               className="relative size-[120px] rotate-[5deg] drop-shadow-[0_18px_22px_rgba(6,24,74,0.5)] md:size-[200px] lg:size-[260px]"
             />
           </div>
-          <PlanCard
-            download={
-              release === null ? null : (
-                <DownloadButton release={release} placement="pricing" variant="brand">
-                  <TryFree />
-                </DownloadButton>
-              )
-            }
-          />
+          <div className="flex flex-col items-center gap-8 md:items-start">
+            <div className="flex flex-col items-center gap-4 md:items-start">
+              <h2 className="text-balance text-[2.5rem] font-medium leading-[1.05] tracking-[-0.02em] md:text-6xl">
+                Free and open source
+              </h2>
+              {/* A line may end only where a sentence ends. */}
+              <p className="text-lg">Every&nbsp;feature&nbsp;is&nbsp;free. No&nbsp;account,&nbsp;no&nbsp;card</p>
+            </div>
+            <div className="flex flex-col items-center gap-5 md:items-start">
+              <div className="flex flex-wrap items-center justify-center gap-3 md:justify-start">
+                {release === null ? (
+                  <DownloadNotReady className="basis-full" />
+                ) : (
+                  <DownloadButton release={release} placement="pricing" variant="brand">
+                    <DownloadForMac />
+                  </DownloadButton>
+                )}
+                <a href={REPO_URL} className={BRAND_VARIANTS.brandOutline("large")}>
+                  Source code
+                </a>
+              </div>
+              <Link href="/support" className="text-sm focus-visible:outline-white">
+                Support the project
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </section>

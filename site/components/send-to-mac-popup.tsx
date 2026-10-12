@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useId, useRef, useState, useSyncExternalStore } from "react";
-import { PILL, SIZES } from "@/components/buy-button";
+import { PILL, SIZES } from "@/components/pill";
 import { SEND_LINK, type Opener, closeSendToMac, sendToMacOpener, subscribeSendToMac } from "@/lib/send-to-mac";
 
 /** How long the copy button says the link is copied, in milliseconds. */

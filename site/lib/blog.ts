@@ -2,7 +2,6 @@ import fs from "node:fs";
 import path from "node:path";
 import matter from "gray-matter";
 import { marked } from "marked";
-import { PRICE } from "@/lib/pricing";
 
 export type Post = {
   slug: string;
@@ -68,8 +67,7 @@ function readPosts(): Post[] {
     .readdirSync(DIR)
     .filter((file) => file.endsWith(".md"))
     .map((file) => {
-      // A post names the price as {{price}}, so it follows lib/pricing.ts.
-      const { data, content } = matter(fs.readFileSync(path.join(DIR, file), "utf8").replaceAll("{{price}}", PRICE));
+      const { data, content } = matter(fs.readFileSync(path.join(DIR, file), "utf8"));
       return {
         slug: file.replace(/\.md$/, ""),
         title: text(data, "title", file),

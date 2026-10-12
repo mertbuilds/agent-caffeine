@@ -5,7 +5,7 @@ import { ThemeSwitch } from "@/components/theme-switch";
 import { DownloadCta } from "@/components/track";
 import { getPosts } from "@/lib/blog";
 import { getLatestRelease } from "@/lib/release";
-import { CONTACT_EMAIL } from "@/lib/site";
+import { CONTACT_EMAIL, REPO_URL } from "@/lib/site";
 
 const LINK =
   "text-muted no-underline transition-colors duration-quick ease-smooth-out hover:text-fg motion-reduce:transition-none";
@@ -56,15 +56,10 @@ export async function Footer() {
           {release === null ? null : (
             <li>
               <DownloadCta href={release.href} filename={release.filename} placement="footer" className={LINK}>
-                Try free for macOS
+                Download for macOS
               </DownloadCta>
             </li>
           )}
-          <li>
-            <Link href="/#pricing" className={LINK}>
-              Pricing
-            </Link>
-          </li>
           <li>
             <Link href="/#faq" className={LINK}>
               FAQ
@@ -77,17 +72,22 @@ export async function Footer() {
           </li>
           <li>
             <a
-              href="https://polar.sh/mertbuilds/portal"
+              href={REPO_URL}
               target="_blank"
               rel="noreferrer"
               className={`${LINK} inline-flex items-center gap-1`}
             >
-              Your purchases
+              Source code
               <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden>
                 <path d="M1.5 6.5l5-5M2.5 1.5h4v4" />
               </svg>
               <span className="sr-only"> (opens in a new tab)</span>
             </a>
+          </li>
+          <li>
+            <Link href="/support" className={LINK}>
+              Support
+            </Link>
           </li>
         </Column>
         <Column title="Read" className="col-span-2 sm:col-span-1">

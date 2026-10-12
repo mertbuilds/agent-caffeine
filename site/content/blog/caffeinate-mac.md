@@ -2,7 +2,7 @@
 title: "The caffeinate command on Mac: every option, with examples"
 description: "caffeinate is a built-in macOS command that stops your Mac from sleeping. Every flag, timeouts, the lid-closed limit, and how to use it with coding agents."
 date: "2026-10-05"
-updated: "2026-10-08"
+updated: "2026-10-12"
 faq:
   - q: "Does caffeinate work on a Mac?"
     a: "Yes. `caffeinate` is part of macOS and lives at `/usr/bin/caffeinate`. Open Terminal, type `caffeinate`, and your Mac will not idle sleep until you press Ctrl+C."
@@ -211,7 +211,7 @@ Both work. Both fail in two ways:
 
 There is also a cost the other way: a wrapped agent holds the Mac awake while it sits idle at its prompt, waiting for you.
 
-That is why we built [Agent Caffeine](/), a menu bar app that does this automatically. It detects more than 40 coding agents, and reads from Claude Code and Codex whether they work, wait for you or are idle. It keeps the Mac awake in one of three modes: always, while an agent is open, or while an agent is working. A closed lid on the power adapter works from the start. On battery it needs a small helper that you allow once. It has a 7-day free trial, then costs {{price}} once, and needs macOS 13 or later. If caffeinate in a tab works for you, keep using it.
+That is why we built [Agent Caffeine](/), a menu bar app that does this automatically. It detects more than 40 coding agents, and reads from Claude Code and Codex whether they work, wait for you or are idle. It keeps the Mac awake in one of three modes: always, while an agent is open, or while an agent is working. A closed lid on the power adapter works from the start. On battery it needs a small helper that you allow once. It is free and open source, and needs macOS 13 or later. If caffeinate in a tab works for you, keep using it.
 
 If you would rather click than type, our guides to [Amphetamine for Mac](/blog/amphetamine-mac) and to the [Caffeine app for Mac](/blog/caffeine-mac) cover two menu bar apps that do this, and our guide on [how to stop a Mac from sleeping](/blog/stop-mac-from-sleeping) covers the settings in macOS.
 

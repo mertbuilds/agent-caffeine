@@ -3,7 +3,7 @@ import { CONTACT_EMAIL, PRIVACY_UPDATED } from "@/lib/site";
 
 export const metadata = legalMetadata(
   "Privacy",
-  "What Agent Caffeine, its purchase and this website collect: no telemetry in the app, Polar for payments, self-hosted analytics with no cookies.",
+  "What Agent Caffeine and this website collect: no telemetry in the app, Polar for voluntary support payments, self-hosted analytics with no cookies.",
   "/privacy"
 );
 
@@ -11,9 +11,9 @@ export default function Privacy() {
   return (
     <LegalPage title="Privacy" updated={PRIVACY_UPDATED}>
       <p>
-        Agent Caffeine is made and sold by me, Mert Duzgun, an individual based in Antalya, Türkiye.
-        I am responsible for the data on this page. Here is what the app, a purchase and this website
-        collect, and why.
+        Agent Caffeine is made by me, Mert Duzgun, an individual based in Antalya, Türkiye. I am
+        responsible for the data on this page. Here is what the app and this website collect, and
+        why.
       </p>
 
       <h2>The app</h2>
@@ -36,32 +36,28 @@ export default function Privacy() {
         holds the state and the name of the event, and nothing you or the agent typed. When you
         switch better detection off, Agent Caffeine removes its lines again.
       </p>
-      <p>It makes two kinds of network request:</p>
-      <ul>
-        <li>
-          Updates. About once a day it asks caffeinagent.com for the update feed, and when you
-          agree to an update it downloads it from there. These requests carry what every download
-          request carries, such as your IP address and a user agent with the app&apos;s name and
-          version. They carry nothing that identifies you.
-        </li>
-        <li>
-          License. When you enter a key, the app sends it to Polar with your Mac&apos;s model (for
-          example &quot;MacBookPro18,3&quot;), never the computer&apos;s name. Polar answers with an
-          activation id. About once a day the app sends the key and that activation id to check that
-          the key is still good, and it sends them once more when you deactivate the Mac. During the
-          free trial the app sends nothing to Polar.
-        </li>
-      </ul>
-
-      <h2>Buying</h2>
       <p>
-        Payments go through <a href="https://polar.sh">Polar</a>, the merchant of record: Polar
-        collects the payment, handles tax and sends the invoice. At checkout Polar collects your
-        email address, name, billing country and payment details.
+        It makes one kind of network request: updates. About once a day it asks caffeinagent.com
+        for the update feed, and when you agree to an update it downloads it from there. These
+        requests carry what every download request carries, such as your IP address and a user
+        agent with the app&apos;s name and version. They carry nothing that identifies you.
       </p>
       <p>
-        From Polar I receive your email address, name, country and what you bought. I use them to
-        send your license key and to answer support. I never see your card number.
+        Versions before 1.1.0 were sold and needed a key. Such a version still sends its key and
+        an activation id to <a href="https://polar.sh">Polar</a> about once a day, until you update
+        it. From version 1.1.0 the app has no key and sends nothing to Polar.
+      </p>
+
+      <h2>Support</h2>
+      <p>
+        The app is free. If you choose to support it, the payment goes through{" "}
+        <a href="https://polar.sh">Polar</a>, the merchant of record: Polar collects the payment,
+        handles tax and sends the invoice. At checkout Polar collects your email address, name,
+        billing country and payment details.
+      </p>
+      <p>
+        From Polar I receive your email address, name, country and the amount. I never see your
+        card number. The same is true for a purchase made before the app became free.
       </p>
 
       <h2>This website</h2>
@@ -83,8 +79,7 @@ export default function Privacy() {
       <p>
         If the link that brought you here names its source (for example{" "}
         <code>utm_source</code>), your browser keeps that source until you close the tab. The page
-        view carries it, and the checkout link passes it to Polar, so I can see which link led to
-        an order.
+        view and the download count carry it, so I can see which link led to a download.
       </p>
       <p>
         If you pick a light or dark theme, the choice is kept in your browser&apos;s local storage.
@@ -100,7 +95,8 @@ export default function Privacy() {
 
       <h2>How long I keep it, and your rights</h2>
       <p>
-        I keep purchase records for as long as the law requires for bookkeeping. You can ask me to
+        I keep the records of support payments, and of purchases and refunds from before the app
+        became free, for as long as the law requires for bookkeeping. You can ask me to
         see, correct or delete what I hold about you. I do not sell your data, and I do not share it
         beyond the services named on this page.
       </p>

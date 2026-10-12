@@ -2,7 +2,7 @@
 title: "Caffeine for Mac: the app, the command and what to use today"
 description: "Caffeine for Mac can mean the menu bar app with the coffee cup, the caffeinate command, or any keep-awake tool. Where to get each one, and which one fits you."
 date: "2026-10-08"
-updated: "2026-10-08"
+updated: "2026-10-12"
 faq:
   - q: "Is there still a Caffeine app for Mac?"
     a: "Yes. The Caffeine app with the coffee cup is maintained again. Version 1.6.4 is on caffeine-app.net, and was released on April 20, 2026. Version 1.6.4 needs macOS 14.6 or later. For an older macOS, the site offers an older version: choose your macOS there."
@@ -106,7 +106,7 @@ This works, and it is free. It has three limits:
 
 [Agent Caffeine](/) is our app for this part. It sits in the menu bar and finds the agents by itself, so there is nothing to type. It reads from Claude Code and Codex whether they work, wait for you or are idle. It keeps the Mac awake while an agent works, for 5 minutes when one waits for your answer, and then lets the Mac sleep. It also holds a closed lid: on the power adapter from the start, and on battery with a small helper that you allow once. On battery it stops at 20% by default.
 
-It has a 7-day free trial, then costs {{price}} once, and needs macOS 13 or later. If `caffeinate -i claude` does the job for you, keep it.
+It is free and open source, and needs macOS 13 or later. If `caffeinate -i claude` does the job for you, keep it.
 
 ## What to use today
 
@@ -120,7 +120,7 @@ If you only want the Mac to stay awake, choose by your need:
 | Rules, for example "while a display is connected" | Amphetamine | Free |
 | Lid closed at a desk with a monitor | Clamshell mode | Built in |
 | Lid closed on battery | `sudo pmset -a disablesleep 1` | Built in |
-| Awake only while coding agents work | Agent Caffeine | {{price}} once |
+| Awake only while coding agents work | Agent Caffeine | Free |
 
 For most people a built-in way is enough. Our guide on [how to stop a Mac from sleeping](/blog/stop-mac-from-sleeping) has the steps for each setting. The `pmset` command in the table stays on until you turn it off, so read the lid guide linked above before you use it.
 

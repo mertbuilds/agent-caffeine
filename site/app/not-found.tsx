@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { PILL, SIZES } from "@/components/buy-button";
+import { PILL, SIZES } from "@/components/pill";
 import { Footer } from "@/components/footer";
 
 export const metadata: Metadata = { title: "Page not found · Agent Caffeine" };

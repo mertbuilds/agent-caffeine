@@ -12,7 +12,7 @@ function jump() {
 }
 
 /**
- * A page opened at a section, as the app's buy and help links open it, lands
+ * A page opened at a section, as the app's links open it, lands
  * there at once. A glide on load is stopped half way when the page hydrates,
  * so jumps are eased (app/globals.css) only from here on. The page can still
  * grow above the section while fonts and pictures land, so the jump is made

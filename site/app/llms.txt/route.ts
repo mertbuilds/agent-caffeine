@@ -1,12 +1,8 @@
 import { agentsMoreThan } from "@/lib/agents";
 import { getPosts } from "@/lib/blog";
-import { PLANS, PRICE, dollars, macs } from "@/lib/pricing";
-import { CONTACT_EMAIL, SITE_URL } from "@/lib/site";
+import { CONTACT_EMAIL, REPO_URL, SITE_URL } from "@/lib/site";
 
 export const dynamic = "force-static";
-
-/** "A license key for 1 Mac costs $19." for each plan on offer. */
-const KEYS = PLANS.map((plan) => `A license key for ${macs(plan)} costs ${dollars(plan)}.`).join(" ");
 
 /** One line per guide: the title as a link, then what it covers. */
 const GUIDES = getPosts()
@@ -15,7 +11,7 @@ const GUIDES = getPosts()
 
 const TEXT = `# Agent Caffeine
 
-> Agent Caffeine is a macOS menu bar app that keeps a Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are idle or wait for you. It has a 7-day free trial, then costs ${PRICE} once, and runs on macOS 13 or later (Apple silicon and Intel).
+> Agent Caffeine is a macOS menu bar app that keeps a Mac awake while AI coding agents work, also with the lid closed, and lets it sleep when they are idle or wait for you. It is free and open source (AGPL-3.0), and runs on macOS 13 or later (Apple silicon and Intel).
 
 - Detects more than ${agentsMoreThan} coding agents (Claude Code, Codex, Cursor, opencode, Gemini CLI and others). Claude Code, Codex and Cursor report their own state (working, waiting for you, or idle), and Agent Caffeine reads it on the Mac. It also watches the commands an agent started, so a build that is still busy keeps the Mac awake. Other agents are judged by signs of work, such as a running command or a write to the session file.
 - An agent that waits for your answer keeps the Mac awake for 5 minutes, then the Mac can sleep. Idle sessions do not keep it awake in the default mode. The times can be changed in Settings.
@@ -31,18 +27,20 @@ const TEXT = `# Agent Caffeine
 - A command line tool and an MCP server. \`agent-caffeine hold -- <command>\` keeps the Mac awake while the command runs and ends with its exit code. \`agent-caffeine hold --for 2h\` keeps it awake for a time (1 hour by default, 12 hours at most), and \`agent-caffeine release\` ends that. \`agent-caffeine mcp\` is an MCP server on stdio with the tools \`hold_awake\`, \`release\` and \`status\`. "Set up for agents" in Settings adds a skill to the agents on the Mac, so an agent asks by itself before a long command: asked to render an animation, it runs \`agent-caffeine hold --reason "Blender render" -- blender -b scene.blend -a\`. Each hold has a line in the menu with "Stop". A low battery, heat, a pause and the switch still let the Mac sleep.
 - Keyboard shortcuts that work in every app. By default Control+Option+Command+C turns Agent Caffeine on or off, and Control+Option+Command+P pauses it for 1 hour. You can choose other keys.
 - The menu bar icon can be hidden. The app keeps the Mac awake the same way without it.
-- A 7-day free trial with every feature. It starts the first time the app opens and needs no account, no card and no key. After 7 days the app stops keeping the Mac awake until a license key is entered. The app and its settings stay.
-- ${KEYS} Each is a one-time purchase with lifetime updates and no subscription. Deactivate a Mac in the app or in your Polar purchases to move the key to another.
+- Free and open source under the GNU Affero General Public License, version 3 (AGPL-3.0-only). Every feature is in the app, with no account, no card and no key. Source code: ${REPO_URL}
+- Versions before 1.1.0 were sold. From version 1.1.0 the app is free and needs no key, and every earlier payment is refunded.
 - The app updates itself: it checks caffeinagent.com for updates and installs them when you agree.
-- No telemetry and no analytics. It reads the process list, the state and session files of Claude Code, Codex and Cursor in \`~/.claude\`, \`~/.codex\` and \`~/.cursor/projects\`, and the battery level and lid angle, all on your own Mac. Its only network calls are the update check to caffeinagent.com and the license key check with Polar, which sends the key and the Mac's model. Nothing about you or your agents leaves the Mac.
-- Sold by Mert Duzgun, an individual based in Antalya, Türkiye. Polar (polar.sh) is the merchant of record: it takes the payment, handles tax and sends the invoice. All sales are final, since the full app is free to try for 7 days first. Contact: ${CONTACT_EMAIL}.
+- No telemetry and no analytics. It reads the process list, the state and session files of Claude Code, Codex and Cursor in \`~/.claude\`, \`~/.codex\` and \`~/.cursor/projects\`, and the battery level and lid angle, all on your own Mac. Its only network call is the update check to caffeinagent.com. Nothing about you or your agents leaves the Mac.
+- Made by Mert Duzgun, an individual based in Antalya, Türkiye. Support is voluntary, at an amount you choose: ${SITE_URL}/support. Polar (polar.sh) handles that payment. Contact: ${CONTACT_EMAIL}.
 
 ## Links
 
-- [Home](${SITE_URL}/): examples of long jobs, the agents it finds, features, a demo, price, questions
+- [Home](${SITE_URL}/): examples of long jobs, the agents it finds, features, a demo, questions
 - [Compare](${SITE_URL}/compare): Agent Caffeine next to Adrafinil, Hold My Lid, LidRun, Clamshell and Amphetamine, with the price first and a source for each tool
-- [Privacy](${SITE_URL}/privacy): what the app, a purchase and the website collect
-- [Terms](${SITE_URL}/terms): license, trial, payment, refunds and liability
+- [Source code](${REPO_URL}): the app's code on GitHub, under the AGPL-3.0
+- [Support](${SITE_URL}/support): pay what you want to support the work
+- [Privacy](${SITE_URL}/privacy): what the app and the website collect
+- [Terms](${SITE_URL}/terms): the license, support payments, no warranty and liability
 
 ## Guides
 

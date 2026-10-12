@@ -2,7 +2,7 @@
 title: "Amphetamine for Mac: closed-display mode and alternatives"
 description: "What the free Amphetamine app does on a Mac, how its closed-display mode works, what Power Protect and Amphetamine Enhancer are, and when another tool fits."
 date: "2026-10-08"
-updated: "2026-10-08"
+updated: "2026-10-12"
 faq:
   - q: "Is Amphetamine for Mac free?"
     a: "Yes. Amphetamine is free on the Mac App Store. Its description says: \"No catch. Amphetamine is 100% free.\" It also lists \"No advertisements\" and \"No in-app purchases\"."
@@ -125,7 +125,7 @@ For these needs we would not send you to any other tool, and not to ours.
 | Awake for one command or a set time | `caffeinate` | Built in |
 | One click, nothing else | KeepingYouAwake or Caffeine | Free |
 | Rules and closed-display mode | Amphetamine | Free |
-| Awake only while coding agents work | Agent Caffeine | {{price}} once |
+| Awake only while coding agents work | Agent Caffeine | Free |
 
 ### Built-in settings
 
@@ -157,7 +157,7 @@ Caffeine is the app with the coffee cup in the menu bar. Click the cup and the M
 
 Amphetamine can keep the Mac awake "while a specific app is running". A terminal with an agent in it runs all day, also while the agent sits idle or waits for your answer. Agent Caffeine reads from Claude Code and Codex whether they work, wait for you or are idle, and it knows more than 40 agents. It keeps the Mac awake while one works, also with the lid closed, and stops at a battery level, 20% by default, and when the Mac gets too hot.
 
-It has a 7-day free trial, then costs {{price}} once, and needs macOS 13 or later. If you do not run coding agents, Amphetamine is the better choice.
+It is free and open source, and needs macOS 13 or later. If you do not run coding agents, Amphetamine is the better choice.
 
 <!-- faq -->
 

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { PILL, SIZES } from "@/components/buy-button";
+import { PILL, SIZES } from "@/components/pill";
 import { DownloadButton, WithAppleMark } from "@/components/download-button";
 import { SiteMenu } from "@/components/site-menu";
 import { morph } from "@/lib/morph";
@@ -26,7 +26,6 @@ const SECTIONS = [
   { hash: "#agents", ids: ["agents"], label: "Agents", name: "header-agents" },
   { hash: "#features", ids: ["features", "small-things"], label: "Features", name: "header-features" },
   { hash: "#demo", ids: ["demo"], label: "Demo", name: "header-demo" },
-  { hash: "#pricing", ids: ["pricing"], label: "Pricing", name: "header-pricing" },
   { hash: "#faq", ids: ["faq"], label: "FAQ", name: "header-faq" },
 ] as const;
 

@@ -7,12 +7,11 @@ import { Footer } from "@/components/footer";
 import { JsonLd } from "@/components/json-ld";
 import { formatDate } from "@/lib/blog";
 import { CHECKED_ON, OURS, TOOLS, type ToolId } from "@/lib/compare";
-import { PRICE_LIST } from "@/lib/pricing";
 import { AUTHOR, ORGANIZATION, SITE_URL } from "@/lib/site";
 
 const title = "Agent Caffeine vs Adrafinil, Hold My Lid, LidRun and others";
 const description =
-  "Agent Caffeine next to Adrafinil, Hold My Lid, LidRun, Clamshell and Amphetamine: price, lid closed on battery, agent state and safety stops. With sources.";
+  "Agent Caffeine next to Adrafinil, Hold My Lid, LidRun, Clamshell and Amphetamine: price, open source, lid closed on battery, agent state and safety stops. With sources.";
 
 export const metadata: Metadata = {
   title,
@@ -54,7 +53,7 @@ const RIVALS: Record<Exclude<ToolId, "ours">, ReactNode> = {
         waits for.
       </p>
       <p>
-        If you want a free tool and your agent is on that list, Adrafinil does the job. It needs macOS 26.4 or
+        If your agent is on that list, Adrafinil does the job. It needs macOS 26.4 or
         later. Its pages state a chime when you close the lid while it keeps the Mac awake, as Agent Caffeine
         has, and a summary when you open the lid. They do not state a notification when an agent finishes.
       </p>
@@ -75,7 +74,7 @@ const RIVALS: Record<Exclude<ToolId, "ours">, ReactNode> = {
         sends a notification when your agents finish.
       </p>
       <p>
-        If you want a key for 3 Macs for about half of what we ask for 1 Mac, pick Hold My Lid. Its pages do
+        If you want a mode that works only while the Mac is plugged in, pick Hold My Lid. Its pages do
         not state a stop for heat, a state for an agent that waits for you, or whether the closed lid on
         battery needs a helper.
       </p>
@@ -132,7 +131,7 @@ const RIVALS: Record<Exclude<ToolId, "ours">, ReactNode> = {
         is running. The latest version on the listing is 5.3.2, from November 10, 2023.
       </p>
       <p>
-        If you want a free tool for more than agents, such as downloads, a presentation or a Mac that must
+        If you want a tool for more than agents, such as downloads, a presentation or a Mac that must
         stay awake on one network, pick Amphetamine. We wrote more about it in{" "}
         <Link href="/blog/amphetamine-mac">our guide to Amphetamine</Link>.
       </p>
@@ -159,11 +158,11 @@ export default function ComparePage() {
       <article className="mx-auto flex w-full min-w-0 max-w-[680px] flex-col gap-10">
         <div className="article">
           <div>
-            <h2>What you get for the price</h2>
+            <h2>What is in one app</h2>
             <p>
-              Agent Caffeine costs {PRICE_LIST}, paid once, after a 7-day free trial. Every other tool on this
-              page costs less. Two are free, and one has a free plan for the lid open. Many of them also keep a Mac awake with the lid closed on
-              battery, read the hooks of an agent, or stop for a low battery or heat.
+              Agent Caffeine is free and open source. Two other tools on this page are free too, one of them
+              open source, and one has a free plan for the lid open. Many of them also keep a Mac awake with
+              the lid closed on battery, read the hooks of an agent, or stop for a low battery or heat.
             </p>
             <p>
               What we put together in one app: the state of each agent, also when it waits for you, the closed

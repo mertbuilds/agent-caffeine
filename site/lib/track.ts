@@ -1,5 +1,4 @@
 import { parseUtm, utmFrom, type Utm } from "@/lib/attribution";
-import type { Plan } from "@/lib/pricing";
 
 /** The hosts the live site is served on. A preview or a local run never sends an event. */
 const LIVE_HOSTS = ["caffeinagent.com", "www.caffeinagent.com"];
@@ -19,8 +18,6 @@ export type TrackEvents = {
   download_click: { placement: Placement };
   /** A download button pressed off a Mac: the popup opened and no download started. */
   download_blocked_not_mac: { placement: Placement };
-  plan_select: { plan: Plan["id"] };
-  buy_click: { plan: Plan["id"]; price: number; placement: Placement };
   /** The first time in a page view that a visitor touches the menu bar simulator. */
   simulator_use: { control: string };
   /** A question of the home page opened, by its `id` in `lib/faq.tsx`. */
@@ -43,7 +40,7 @@ export function rememberUtm() {
       sessionStorage.setItem(UTM_STORE, JSON.stringify(utmFrom(window.location.search)));
     }
   } catch {
-    // No storage, as in some private windows: the checkout link then names the site as the source.
+    // No storage, as in some private windows: the tags are then read from the address of each page.
   }
 }
 

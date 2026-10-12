@@ -1,11 +1,10 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { BuyButton, PILL, SIZES } from "@/components/buy-button";
-import { PRICE } from "@/lib/pricing";
-import { DownloadButton, TryFree } from "@/components/download-button";
+import { DownloadButton, DownloadForMac } from "@/components/download-button";
 import { Footer } from "@/components/footer";
 import { JsonLd } from "@/components/json-ld";
+import { PILL, SIZES } from "@/components/pill";
 import { formatDate, getPost, getPosts } from "@/lib/blog";
 import { getLatestRelease } from "@/lib/release";
 import { AUTHOR, ORGANIZATION, REPO_URL, SITE_URL } from "@/lib/site";
@@ -116,24 +115,16 @@ export default async function BlogPost({ params }: Props) {
         <aside className="flex flex-col items-start gap-5 rounded-lg border border-border bg-surface px-6 py-8 sm:flex-row sm:items-center sm:justify-between">
           <p className="text-pretty leading-relaxed">
             We built Agent Caffeine to keep a Mac awake while coding agents work, also with
-            the lid closed.{" "}
-            {release === null
-              ? "Free and open source. macOS 13 or later, Apple silicon and Intel."
-              : `Free for 7 days, then ${PRICE} once. macOS 13 or later, Apple silicon and Intel.`}
+            the lid closed. Free and open source. macOS 13 or later, Apple silicon and Intel.
           </p>
           {release === null ? (
             <a href={REPO_URL} className={`${PILL} bg-fg text-bg ${SIZES.small}`}>
               Source code
             </a>
           ) : (
-            <div className="flex shrink-0 items-center gap-4">
-              <DownloadButton release={release} placement="blog" size="small">
-                <TryFree small />
-              </DownloadButton>
-              <BuyButton placement="blog" variant="text">
-                Buy for {PRICE}
-              </BuyButton>
-            </div>
+            <DownloadButton release={release} placement="blog" size="small">
+              <DownloadForMac small />
+            </DownloadButton>
           )}
         </aside>
       </article>

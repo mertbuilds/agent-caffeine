@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import { PRICE } from "@/lib/pricing";
 
 export const metadata: Metadata = { robots: { index: false, follow: false } };
 
@@ -38,7 +37,7 @@ export default function OgImage() {
             finished work
           </span>
         </h1>
-        <p className="text-[34px] leading-none text-[#a3a3a3]">Free for 7 days, then {PRICE} once</p>
+        <p className="text-[34px] leading-none text-[#a3a3a3]">Free and open source</p>
       </div>
       <img
         alt=""
