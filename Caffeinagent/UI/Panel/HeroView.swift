@@ -34,9 +34,32 @@ struct HeroView: View {
                     WakeLine(text: wakeLine)
                         .transition(.opacity)
                 }
+                if let hotspotLine = state.hotspotLine {
+                    HotspotLine(text: hotspotLine)
+                        .transition(.opacity)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
+    }
+}
+
+/// "On your iPhone hotspot since 14:02" on one quiet line below the
+/// headline, like the line of the battery.
+struct HotspotLine: View {
+    let text: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 5) {
+            Image(systemName: "wifi")
+                .imageScale(.small)
+                .accessibilityHidden(true)
+            Text(text)
+        }
+        .font(.callout)
+        .monospacedDigit()
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
     }
 }
 

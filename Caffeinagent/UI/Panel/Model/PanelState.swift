@@ -309,6 +309,9 @@ struct PanelState: Equatable {
     /// "Wakes at 09:14 for backup", while a wake alarm of "Wake for
     /// jobs" is set. Nil when none is.
     var wakeLine: String?
+    /// "On your iPhone hotspot since 14:02", while the Mac is on the
+    /// hotspot because Wi-Fi was lost. Nil when it is not.
+    var hotspotLine: String?
     /// Always in view: the agents with a session that waits or works, and
     /// the first idle ones.
     var groups: [PanelGroup]
@@ -453,4 +456,6 @@ struct PanelInput: Equatable {
     var sleepNote: SleepNote?
     /// The wake alarm of "Wake for jobs" that is set.
     var wakeAlarm: JobAlarm?
+    /// `HotspotView.onHotspotSince`.
+    var hotspotSince: Date?
 }

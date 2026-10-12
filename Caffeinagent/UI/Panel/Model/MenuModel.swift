@@ -33,6 +33,7 @@ enum MenuModel {
             sleepNote: sleepNote(input),
             battery: battery(input),
             wakeLine: wakeLine(input, now: now),
+            hotspotLine: input.hotspotSince.map { PanelText.onHotspotSince($0, calendar: input.calendar, locale: input.locale) },
             groups: groups,
             moreIdle: moreIdle,
             emptyText: isEmpty ? PanelText.empty(invites: invites) : nil,

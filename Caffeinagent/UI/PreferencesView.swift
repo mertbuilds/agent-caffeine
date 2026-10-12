@@ -18,7 +18,13 @@ struct PreferencesView: View {
             GeneralPreferences(
                 mode: $aggregator.mode, settings: $aggregator.settings, showMenuBarIcon: $aggregator.showMenuBarIcon,
                 loginItem: aggregator.loginItem, loginItemError: aggregator.loginItemError,
-                setOpenAtLogin: aggregator.setOpenAtLogin, openLoginItems: aggregator.sleepFlag.openLoginItemsSettings
+                setOpenAtLogin: aggregator.setOpenAtLogin, openLoginItems: aggregator.sleepFlag.openLoginItemsSettings,
+                hotspot: HotspotPreferences(
+                    hotspot: aggregator.hotspot, autoJoin: aggregator.hotspotAutoJoin,
+                    offersAutomatic: HotspotSystemSettings.offersAutomatic,
+                    setOn: aggregator.setHotspotOn, setHopBack: aggregator.setHotspotHopBack, save: aggregator.saveHotspot,
+                    openPrivacy: aggregator.openLocationSettings, openWiFi: aggregator.openWiFiSettings
+                )
             )
                 .tabItem { Label("General", systemImage: "gearshape") }
                 .tag(PreferencesTab.general)
@@ -78,11 +84,13 @@ struct PreferencesView: View {
                 hooksOn: HookRowModel.rows(statuses: aggregator.hookStatuses).filter(\.isOn).map(\.entry),
                 helperRegistered: aggregator.sleepFlag.helperStatus != .notRegistered,
                 agentSetupOn: aggregator.agentSetup.isSetUp,
+                hotspotSaved: aggregator.hotspot.settings.on,
                 checkForUpdates: updater.checkForUpdates,
                 showSetup: { OnboardingWindow.show(aggregator: aggregator) },
                 turnOffHooks: { $0.forEach { aggregator.setHooks($0, on: false) } },
                 removeHelper: aggregator.removeHelper,
                 removeAgentSetup: aggregator.removeAgentSetup,
+                forgetHotspot: aggregator.forgetHotspot,
                 showInFinder: { NSWorkspace.shared.activateFileViewerSelecting([Bundle.main.bundleURL]) },
                 quit: { NSApp.terminate(nil) }
             )
@@ -98,6 +106,7 @@ struct PreferencesView: View {
             aggregator.refreshNotificationPermission()
             aggregator.refreshLoginItem()
             aggregator.refreshJobs()
+            aggregator.refreshHotspot()
         }
     }
 }
@@ -112,11 +121,15 @@ struct AboutPreferences: View {
     var helperRegistered = false
     /// The skill or the link to the command line tool is on this Mac.
     var agentSetupOn = false
+    /// "Join your iPhone hotspot" is on: a name is in the settings or a
+    /// password in the Keychain.
+    var hotspotSaved = false
     var checkForUpdates: () -> Void = {}
     var showSetup: () -> Void = {}
     var turnOffHooks: ([HookCatalogEntry]) -> Void = { _ in }
     var removeHelper: () -> Void = {}
     var removeAgentSetup: () -> Void = {}
+    var forgetHotspot: () -> Void = {}
     var showInFinder: () -> Void = {}
     var quit: () -> Void = {}
 
@@ -181,6 +194,11 @@ struct AboutPreferences: View {
                     done: !agentSetupOn
                 ) { Button("Remove", action: removeAgentSetup) }
                 step(
+                    PanelText.hotspotRemoveStep(saved: hotspotSaved),
+                    help: PanelText.hotspotRemoveHelp,
+                    done: !hotspotSaved
+                ) { Button("Forget", action: forgetHotspot) }
+                step(
                     "Quit Agent Caffeine and move it to the Trash",
                     help: "The app is in your Applications folder.",
                     done: false
@@ -231,6 +249,8 @@ struct GeneralPreferences: View {
     var loginItemError: String?
     var setOpenAtLogin: (Bool) -> Void = { _ in }
     var openLoginItems: () -> Void = {}
+    /// "Join your iPhone hotspot (Beta)", below the offline rule.
+    var hotspot = HotspotPreferences()
 
     /// From 30 seconds to 30 minutes.
     private static let durations: [TimeInterval] = [30, 60, 120, 180, 300, 600, 900, 1200, 1800]
@@ -280,6 +300,7 @@ struct GeneralPreferences: View {
                         .foregroundStyle(.secondary)
                 }
             }
+            hotspot
             Section {
                 Toggle(PanelText.openAtLogin, isOn: Binding(get: { loginItem.isOn }, set: setOpenAtLogin))
                     .disabled(loginItem == .unavailable)
