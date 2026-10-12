@@ -384,3 +384,68 @@ Tests: `VerdictTests` (the section "Background commands after the turn"), `LabRe
 - A background command that waits without CPU use for more than 300 seconds and then works: `sleep 600 && make`, or a test that waits for a slow server. The Mac can sleep in the wait. This is the price of the rule.
 - A dev server that uses 1 percent of a core or more at rest (a file watcher that polls). It holds without a limit, as it did before for an idle session.
 - The time between the end of the turn and the write of `shell`.
+
+---
+
+## 10. A deleted version made working sessions invisible: the record and the fix (2026-10-12)
+
+### 10.1 What happened [LOCAL]
+
+Measured on the owner's Mac on 2026-10-12, with `proc_pidpath`, `proc_name`, `sysctl KERN_PROCARGS2` and the keys `pid`, `kind`, `status`, `procStart`, `startedAt` and `version` of the session files. No argument after argv[0] was printed.
+
+- Two Claude Code sessions worked (`status: "busy"`) and Agent Caffeine had no row for them, in the menu and in a 12 second lab recording. The Mac could sleep while they worked. The owner saw it as "the app does not see subagents any more": one of the two ran his subagents.
+- Claude Code installs each version as one binary that is named after the version: `~/.local/share/claude/versions/2.1.296`. `~/.local/bin/claude` is a link to the newest one. An update later deletes the files of old versions. On this Mac the files of 2.1.287, 2.1.294, 2.1.295 and 2.1.296 were there, and the delete was on 2026-10-10.
+- Four processes of deleted versions ran: an interactive session of 2.1.286 from 2026-10-01 (busy), an interactive session of 2.1.289 from 2026-10-04 (idle), and a pty host of the daemon with its spare, both 2.1.289 from 2026-10-05. The spare had a job: its session file said `kind: "bg"`, `status: "busy"`, with a `jobId`.
+- For each of the four, `proc_pidpath` gave length 0. For every process of a version whose file was there, it gave the versioned path.
+- `proc_name` (`p_comm`) is the version number for all of them ("2.1.286"). It says nothing, for a deleted file and for a file that is there.
+- `KERN_PROCARGS2` still gave the path each process was started with, then argv. For a session that path is the link, `~/.local/bin/claude`, and argv[0] is `claude`. For the pty host and the spare it is the versioned path, `.../claude/versions/2.1.289`, and argv[0] is the title (`claude bg-pty-host`, `claude bg-spare`), with the flag as argv[1].
+- `ps -o comm` printed `claude` for all of them.
+
+### 10.2 The cause
+
+`SystemProcessCensus` left out every process for which `proc_pidpath` gave nothing. The comment said "a process that exited", and for a deleted binary that is wrong. So the catalog never saw these processes. The matchers themselves were right: argv[0] `claude` matches by name, and the title of a spare matches by the path that contains `/claude/versions/`.
+
+The same fault was in `SystemProcessCensus.row(of:)`. The hook command walks up from its own pid with it, so a hook event of such a session found no agent above it.
+
+This is no change of ours. Every Claude Code session that lived longer than the file of its version went out of sight on the day of the delete.
+
+### 10.3 The fix
+
+- The census takes the path from `KERN_PROCARGS2` when `proc_pidpath` gives nothing (`ProcessCensus.executable`). The row says so with `executableGone`. The path can be a link and the file can be gone, so nothing reads the file at that path: the catalog, `AgentHost`, the job probe and the hook command only compare the text.
+- The evidence of an agent carries `executableGone` (`gone` in a recording), so the lab sees how many sessions run on a deleted binary.
+- A second way, which needs no name and no path (`EvidenceCollector.adoptClaudeSessions`): a live process that no matcher knows, with a session file `~/.claude/sessions/<pid>.json` that fits its start time, is a Claude Code session. The evidence says `adoptedBySessionFile` (`adopt` in a recording). The file fits when `procStart` is the start of the process to 2 seconds, or when `startedAt` is not before it: a file that a crashed session left is older than every process that gets its pid later. The role is that of a spare, so a warm spare (the `spare` key and `status: "idle"`) stays out, as before. A process that a matcher knows keeps its match, also a helper.
+- `procStart` is text in UTC, "Mon Oct  5 11:21:50 2026", the start of the process to the second. `startedAt` is in milliseconds and was 2 to 4 seconds after the start of the process, also for the spare that took its job later.
+- The background session: a spare is matched by `--bg-spare` as `helperMaybeSession`, and the reader of the session file decides. With a job the file has `kind: "bg"` and a `jobId`, the status of the file is its state, and `~/.claude/jobs/<id>/state.json` adds the background job. With the path from the arguments a spare of a deleted version goes the same way.
+- The catalog did not change, so its version stays 9.
+
+Tests: `ProcessCensusTests` (the parser, `testExecutableComesFromTheArgumentsWhenTheFileIsGone`, and `testLiveSnapshotKeepsAProcessWhoseBinaryWasDeleted`, which deletes the binary of a process it started), `AgentCatalogTests.testAnAgentWhoseBinaryIsGoneStillMatches`, `EvidenceCollectorTests.testWorkingSessionsOfADeletedVersionAreSeenAndHold` and `testASessionFileMakesAnUnknownProcessASession`, `LabReplayTests.testSessionsOfADeletedVersionHoldWhileTheyWork` with `CaffeinagentTests/Recordings/synthetic-claude-deleted-version.jsonl`, and the test `DET-CC-21` of actest, which compares every live session file with the rows of the installed app.
+
+### 10.4 The other agents
+
+Every matcher reads the path of the census or argv. None reads the short name. So each agent had the same fault when an update deleted or replaced its binary while it ran, and the path from the arguments covers each of them. A binary that is moved and not deleted (an app in the Trash) keeps a path from `proc_pidpath`.
+
+| Agent | Matched by | Binary deleted or replaced while it runs |
+| --- | --- | --- |
+| Claude Code session | argv[0] `claude` | Matches: argv[0], and the start path is the link `claude` |
+| Claude Code spare and pty host | path contains `/claude/versions/`, title in argv[0] | Matches: the start path is the versioned path |
+| Claude app | path ends in `Claude.app/Contents/MacOS/Claude` | Matches when it was started with its full path, as Launch Services does |
+| Claude Code of the Claude app | path ends in `claude.app/Contents/MacOS/claude`, in a versioned folder that the app also deletes | Matches: the app starts it with its full path. Else its session file adopts it, as a Claude Code |
+| Codex CLI | name `codex` from argv[0], a script or the path | Matches |
+| Codex managed daemon | name `codex` and `app-server --managed-daemon` | Matches |
+| Codex desktop engine | path ends in `codex-cli/CodexCLI.app/Contents/MacOS/codex` and `app-server` | Matches when started with its full path |
+| Cursor and its helpers | path in `Cursor.app/Contents/...` | Matches when started with their full paths, as Electron does |
+| Antigravity engine | path ends in `Antigravity.app/Contents/Resources/bin/language_server` | Matches when started with its full path |
+| opencode, Droid, and the CLIs matched by name | name from argv[0] or the path | Matches |
+| Pi, Gemini CLI, OpenClaw session | name of the script that `node` or `bun` runs | Matches: the script name is in argv. The interpreter is read from argv[0] or the start path |
+| OpenClaw gateway | title `openclaw-gateway` in argv[0] | Matches |
+| Grok Build | name `grok`, or path contains `/.grok/downloads/grok-` | Matches: started through the link `~/.grok/bin/grok` or with the download path |
+| Hermes Agent | source of `python -c` in argv | Matches when argv[0] or the start path names Python |
+
+Not measured for any agent but Claude Code: that its updater deletes the binary of a running process, and what start path its processes have then. [UNCONFIRMED] The rows above are from the code and from the start paths in the earlier notes.
+
+### 10.5 Not covered
+
+- A process with no path from `proc_pidpath` and no readable arguments is still left out. For a process of the user, the arguments were readable in every case seen.
+- A census that read the path before the file was deleted keeps the resolved path and does not say `executableGone` until the app starts again. The match is the same.
+- Only Claude Code has the second way. The other agents write no file that names their pid, but for the hooks.
+- A session file of a version before `startedAt` and `procStart` adopts nothing.
