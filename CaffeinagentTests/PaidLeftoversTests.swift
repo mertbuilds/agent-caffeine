@@ -46,6 +46,20 @@ final class PaidLeftoversTests: XCTestCase {
         XCTAssertEqual(defaults.object(forKey: "enabled") as? Bool, false)
     }
 
+    /// Debug and Release share the settings and not the Keychain item.
+    /// A Debug build that found no item of its own must not make the
+    /// Release build skip the real one.
+    func testADebugBuildRemembersUnderAKeyOfItsOwn() {
+        XCTAssertEqual(PaidLeftovers.removedKey.hasSuffix(".debug"), PaidLeftovers.keychainService.hasSuffix(".debug"))
+        #if DEBUG
+        XCTAssertEqual(PaidLeftovers.removedKey, "PaidLeftovers.removed.debug")
+        XCTAssertEqual(remove(itemGone: true), 1)
+        XCTAssertFalse(defaults.bool(forKey: "PaidLeftovers.removed"), "The Release build still cleans up")
+        #else
+        XCTAssertEqual(PaidLeftovers.removedKey, "PaidLeftovers.removed")
+        #endif
+    }
+
     func testTheKeychainItemIsThatOfThePaidVersions() {
         XCTAssertTrue(PaidLeftovers.keychainService.hasPrefix("com.caffeinagent.app.license"))
         XCTAssertEqual(PaidLeftovers.keychainAccount, "license")

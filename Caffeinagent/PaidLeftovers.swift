@@ -7,12 +7,16 @@ import Foundation
 ///
 /// This clean-up can be removed in a later release.
 enum PaidLeftovers {
-    static let removedKey = "PaidLeftovers.removed"
     static let settingsKeys = ["License.trialStart", "License.latestSeen", "License.lastValidated", "TrialNotice.told"]
-    // A Debug build of a paid version kept an item of its own.
+    // A Debug build of a paid version kept an item of its own. The two
+    // builds share the settings, so each remembers its clean-up under a
+    // key of its own: a Debug build that starts first does not make the
+    // Release build skip the real item.
     #if DEBUG
+    static let removedKey = "PaidLeftovers.removed.debug"
     static let keychainService = "com.caffeinagent.app.license.debug"
     #else
+    static let removedKey = "PaidLeftovers.removed"
     static let keychainService = "com.caffeinagent.app.license"
     #endif
     static let keychainAccount = "license"
