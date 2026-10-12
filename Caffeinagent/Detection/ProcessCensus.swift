@@ -14,7 +14,9 @@ struct ProcessInfoRow: Equatable {
     /// Seconds since the epoch, with microseconds.
     let startTime: TimeInterval
     /// The resolved binary from `proc_pidpath`. For Claude Code this ends in
-    /// its version number, not in `claude`.
+    /// its version number, not in `claude`. With `executableGone` it is the
+    /// path the process was started with, which can be a link
+    /// (`~/.local/bin/claude`). Nothing may read the file at this path.
     let executablePath: String
     /// argv as the process was started, or as it rewrote it (process title).
     let arguments: [String]
@@ -36,6 +38,10 @@ struct ProcessInfoRow: Equatable {
     /// Stopped by a signal, as with `kill -STOP` or Ctrl-Z, until it is
     /// continued. See `ProcessCensus.isStopped`.
     var isStopped = false
+    /// The file of the binary was deleted or replaced while the process
+    /// runs, as an update does: `proc_pidpath` gave nothing. See
+    /// `ProcessCensus.executable`.
+    var executableGone = false
 
     static let noTTY: Int32 = -1
 
@@ -96,6 +102,18 @@ enum ProcessCensus {
             arguments.append(argument)
         }
         return ProcessArguments(executablePath: path, arguments: arguments)
+    }
+
+    /// The path of the binary of a process. `proc_pidpath` gives nothing
+    /// for a binary whose file is gone: Claude Code deletes the file of an
+    /// old version while sessions of that version still run
+    /// (docs/research/01-oss-detection.md, section 10). The path the
+    /// process was started with stays in its arguments buffer, so it is
+    /// taken then. Nil when neither gives a path.
+    static func executable(resolved: String?, started: ProcessArguments?) -> (path: String, gone: Bool)? {
+        if let resolved, !resolved.isEmpty { return (resolved, false) }
+        if let path = started?.executablePath, !path.isEmpty { return (path, true) }
+        return nil
     }
 
     /// CPU times from libproc are mach absolute time ticks. One tick is
@@ -182,7 +200,8 @@ enum ProcessCensus {
 /// per-process calls for other users (EPERM), and agents run as the user.
 ///
 /// Reading argv is the expensive part (about 4 microseconds per process), so
-/// the path and argv of a process are read once and kept until it exits. An
+/// the path and argv of a process are read once and kept until it exits. A
+/// binary that is deleted after that read keeps its resolved path here. An
 /// exec keeps pid and start time and changes the short name, so the short
 /// name is part of the cache key. A process that execs a binary with the
 /// same base name keeps its first argv here.
@@ -191,6 +210,7 @@ final class SystemProcessCensus: ProcessCensusing {
         let startTime: TimeInterval
         let name: ShortName
         let executablePath: String
+        let executableGone: Bool
         let arguments: [String]
     }
 
@@ -232,8 +252,9 @@ final class SystemProcessCensus: ProcessCensusing {
                     pathBuffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
                     argumentBuffer = [UInt8](repeating: 0, count: Self.argumentBufferSize)
                 }
-                guard let path = Self.executablePath(of: pid, buffer: &pathBuffer) else { continue }
-                image = Image(startTime: startTime, name: name, executablePath: path, arguments: Self.arguments(of: pid, buffer: &argumentBuffer))
+                let started = Self.arguments(of: pid, buffer: &argumentBuffer)
+                guard let executable = ProcessCensus.executable(resolved: Self.executablePath(of: pid, buffer: &pathBuffer), started: started) else { continue }
+                image = Image(startTime: startTime, name: name, executablePath: executable.path, executableGone: executable.gone, arguments: started?.arguments ?? [])
             }
             alive[pid] = image
             rows.append(ProcessInfoRow(
@@ -251,7 +272,8 @@ final class SystemProcessCensus: ProcessCensusing {
                 instructions: usage.instructions,
                 logicalWriteBytes: usage.logicalWriteBytes,
                 wakeups: usage.wakeups,
-                isStopped: ProcessCensus.isStopped(status: entry.kp_proc.p_stat)
+                isStopped: ProcessCensus.isStopped(status: entry.kp_proc.p_stat),
+                executableGone: image.executableGone
             ))
         }
         images = alive
@@ -268,15 +290,16 @@ final class SystemProcessCensus: ProcessCensusing {
         guard sysctl(&mib, 4, &entry, &size, nil, 0) == 0, size > 0, entry.kp_proc.p_pid == pid,
               ProcessCensus.isRunning(status: entry.kp_proc.p_stat) else { return nil }
         var pathBuffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
-        guard let path = executablePath(of: pid, buffer: &pathBuffer) else { return nil }
         var argumentBuffer = [UInt8](repeating: 0, count: argumentBufferSize)
+        let started = arguments(of: pid, buffer: &argumentBuffer)
+        guard let executable = ProcessCensus.executable(resolved: executablePath(of: pid, buffer: &pathBuffer), started: started) else { return nil }
         let start = entry.kp_proc.p_un.__p_starttime
         return ProcessInfoRow(
             pid: pid,
             ppid: entry.kp_eproc.e_ppid,
             startTime: TimeInterval(start.tv_sec) + TimeInterval(start.tv_usec) / 1_000_000,
-            executablePath: path,
-            arguments: arguments(of: pid, buffer: &argumentBuffer),
+            executablePath: executable.path,
+            arguments: started?.arguments ?? [],
             uid: entry.kp_eproc.e_ucred.cr_uid,
             tty: entry.kp_eproc.e_tdev,
             pgid: entry.kp_eproc.e_pgid,
@@ -286,7 +309,8 @@ final class SystemProcessCensus: ProcessCensusing {
             instructions: nil,
             logicalWriteBytes: nil,
             wakeups: nil,
-            isStopped: ProcessCensus.isStopped(status: entry.kp_proc.p_stat)
+            isStopped: ProcessCensus.isStopped(status: entry.kp_proc.p_stat),
+            executableGone: executable.gone
         )
     }
 
@@ -368,14 +392,14 @@ final class SystemProcessCensus: ProcessCensusing {
         return String(cString: buffer)
     }
 
-    /// Empty when the arguments cannot be read.
-    private static func arguments(of pid: Int32, buffer: inout [UInt8]) -> [String] {
+    /// Nil when the arguments cannot be read.
+    private static func arguments(of pid: Int32, buffer: inout [UInt8]) -> ProcessCensus.ProcessArguments? {
         var mib: [Int32] = [CTL_KERN, KERN_PROCARGS2, pid]
         var size = buffer.count
         let result = buffer.withUnsafeMutableBytes { sysctl(&mib, 3, $0.baseAddress, &size, nil, 0) }
-        guard result == 0, size > 0 else { return [] }
+        guard result == 0, size > 0 else { return nil }
         return buffer.withUnsafeBytes {
-            ProcessCensus.parseArguments(procargs2: UnsafeRawBufferPointer(rebasing: $0[..<min(size, $0.count)]))?.arguments ?? []
+            ProcessCensus.parseArguments(procargs2: UnsafeRawBufferPointer(rebasing: $0[..<min(size, $0.count)]))
         }
     }
 }

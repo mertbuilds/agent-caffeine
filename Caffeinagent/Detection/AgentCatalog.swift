@@ -247,6 +247,14 @@ struct AgentCatalog {
         // daemon's pty host and spares differ: their argv[0] is the whole
         // title ("claude bg-spare"), and the flag follows as argv[1]. The
         // binary also runs its built-in search tools under their own names.
+        //
+        // Seen 2026-10-12, 2.1.286 to 2.1.296: an update deletes the file
+        // of an old version while its sessions run. The census then gives
+        // the path the process was started with
+        // (`ProcessInfoRow.executableGone`): `~/.local/bin/claude` for a
+        // session, which the name matches, and the versioned path for a
+        // spare, which the second matcher matches. The short name of the
+        // process is the version number and is never read.
         AgentDefinition(
             id: "claude", displayName: "Claude Code", level: .state, kind: .cli,
             matchers: [AgentMatcher(.name("claude")), AgentMatcher(.executable(contains: "/claude/versions/", title: "claude"))],

@@ -106,6 +106,86 @@ final class AgentCatalogTests: XCTestCase {
         }
     }
 
+    /// An update deletes or replaces the binary of an agent that runs.
+    /// The kernel gives no path for it then, and the census gives the
+    /// path the process was started with (`ProcessInfoRow.executableGone`).
+    /// The Claude Code shapes are from a Mac on 2026-10-12, where
+    /// sessions of 2.1.286 and 2.1.289 ran after their files were gone.
+    /// Nil id means no agent process.
+    func testAnAgentWhoseBinaryIsGoneStillMatches() {
+        let gone = "/Users/me/.local/share/claude/versions/2.1.286"
+        let link = "/Users/me/.local/bin/claude"
+        let cursor = "/Applications/Cursor.app/Contents"
+        let claudeCode = "/Users/me/Library/Application Support/Claude/claude-code/2.1.293/8433d0d9cd0d/claude.app/Contents/MacOS/claude"
+        let hermes = "/Users/me/.hermes/tools/python-3.14.7+20260901-darwin-arm64/bin/python3"
+        let cases: [(name: String, path: String, args: [String], id: String?, role: AgentRole?)] = [
+            // Claude Code. A session is started through the link, and the
+            // daemon starts its hosts and spares with the versioned path.
+            ("claude session", link, ["claude", "--dangerously-skip-permissions"], "claude", .session),
+            ("claude session by full path", link, [link, "-p", "say hi"], "claude", .session),
+            ("claude session started with the versioned path", gone, ["claude", "--resume", "a56cc820"], "claude", .session),
+            ("claude spare, claimed or warm", gone, ["claude bg-spare", "--bg-spare", "/tmp/cc-daemon-501/03c1f701/spare/17dea89c.claim.sock"], "claude", .helperMaybeSession),
+            ("claude pty host", gone, ["claude bg-pty-host", "--bg-pty-host", "/tmp/x.pty.sock", "200", "50", "--", gone, "--bg-spare", "/tmp/x.claim.sock"], "claude", .helper),
+            ("claude daemon supervisor", link, [link, "daemon", "run", "--origin", "transient"], "claude", .helper),
+            ("claude binary as its own search tool", gone, ["ugrep", "-G", "TODO"], nil, nil),
+            ("claude of the Claude app", claudeCode, [claudeCode, "--output-format", "stream-json"], "claude-desktop", .session),
+            ("Claude app", "/Applications/Claude.app/Contents/MacOS/Claude", ["/Applications/Claude.app/Contents/MacOS/Claude"], "claude-desktop", .engine),
+
+            // A version number as a name is no Claude Code.
+            ("a process named as a version", "/Users/me/tools/2.1.286", ["2.1.286"], nil, nil),
+            ("a process named as a version, with arguments", "/private/tmp/versions/2.1.286", ["2.1.286", "--dangerously-skip-permissions"], nil, nil),
+            ("a spare flag on another program", "/Users/me/tools/2.1.286", ["2.1.286", "--bg-spare", "/tmp/x.claim.sock"], nil, nil),
+
+            // A wrapper named `claude` is read as before.
+            ("a shell that runs a claude script", "/bin/sh", ["sh", "/usr/local/bin/claude", "-p", "hi"], nil, nil),
+            ("node that runs a claude script", "/opt/homebrew/bin/node", ["node", "/usr/local/bin/claude", "-p", "hi"], "claude", .session),
+            ("a claude binary at another path", "/usr/local/bin/claude", ["claude"], "claude", .session),
+
+            // The other agents, with the path they were started with.
+            ("codex", "/opt/homebrew/bin/codex", ["codex", "exec", "say hi"], "codex", .session),
+            ("codex managed daemon", codexDaemonBinary, [codexDaemonBinary, "app-server", "--listen", "unix://", "--managed-daemon"], "codex", .engine),
+            ("codex desktop engine", codexDesktopBinary, [codexDesktopBinary, "app-server", "--analytics-default-enabled"], "codex-desktop", .engine),
+            ("cursor", "\(cursor)/MacOS/Cursor", ["\(cursor)/MacOS/Cursor"], "cursor-desktop", .engine),
+            ("cursor extension host", "\(cursor)/Frameworks/Cursor Helper (Plugin).app/Contents/MacOS/Cursor Helper (Plugin)", ["Cursor Helper (Plugin): extension-host"], "cursor-desktop", .helper),
+            ("antigravity engine", "\(antigravity)/Resources/bin/language_server", ["\(antigravity)/Resources/bin/language_server", "--standalone"], "antigravity-desktop", .engine),
+            ("opencode", "/Users/me/.opencode/bin/opencode", ["opencode", "run", "say hi"], "opencode", .session),
+            ("droid", "/Users/me/.local/bin/droid", ["droid", "exec", "say hi"], "droid", .session),
+            ("grok by its link", "/Users/me/.grok/bin/grok", ["grok", "-p", "say hi"], "grok", .session),
+            ("grok by its download", "/Users/me/.grok/downloads/grok-macos-aarch64", ["agent", "-p", "say hi"], "grok", .session),
+            ("pi run by a node that brew replaced", "/opt/homebrew/bin/node", ["node", "/opt/homebrew/bin/pi"], "pi", .session),
+            ("openclaw run by a node that brew replaced", "/opt/homebrew/bin/node", ["node", "/opt/homebrew/bin/openclaw", "tui"], "openclaw", .session),
+            ("openclaw gateway", "/opt/homebrew/bin/node", ["openclaw-gateway"], "openclaw", .engine),
+            ("hermes", hermes, [hermes, "-I", "-c", "import sys\nfrom hermes_cli.main import main\nmain()", "chat"], "hermes-agent", .session),
+        ]
+        for (index, testCase) in cases.enumerated() {
+            let match = catalog.match(.fixture(Int32(index + 10), path: testCase.path, args: testCase.args, gone: true), userNames: [])
+            XCTAssertEqual(match?.definition.id, testCase.id, testCase.name)
+            XCTAssertEqual(match?.role, testCase.role, testCase.name)
+        }
+    }
+
+    /// The night of 2026-10-12 as the census gives it now: the session
+    /// that started the daemon, the daemon family and a spare with a job,
+    /// all of versions whose files are gone.
+    func testClaudeFamilyOfADeletedVersionGivesTheSameInstances() {
+        let gone = "/Users/me/.local/share/claude/versions/2.1.289"
+        let link = "/Users/me/.local/bin/claude"
+        let snapshot: [Row] = [
+            .fixture(93890, path: "/bin/zsh", args: ["-zsh"]),
+            .fixture(93968, ppid: 93890, path: link, args: ["claude", "--dangerously-skip-permissions"], tty: 0x1000_0009, gone: true),
+            .fixture(20909, ppid: 93968, path: link, args: [link, "daemon", "run", "--origin", "transient"], gone: true),
+            .fixture(20930, ppid: 20909, path: gone, args: ["claude bg-pty-host", "--bg-pty-host", "/tmp/x.pty.sock", "200", "50", "--", gone, "--bg-spare", "/tmp/x.claim.sock"], gone: true),
+            .fixture(20946, ppid: 20930, path: gone, args: ["claude bg-spare", "--bg-spare", "/tmp/x.claim.sock"], tty: 0x1000_000d, gone: true),
+            .fixture(33001, ppid: 20946, path: "/bin/zsh", args: ["zsh", "-c", "xcodebuild test"]),
+            .fixture(69479, ppid: 2514, path: link, args: ["claude", "--dangerously-skip-permissions"], tty: 0x1000_0001, gone: true),
+        ]
+        let instances = catalog.instances(in: snapshot)
+        XCTAssertEqual(ids(instances), ["claude:93968", "claude:20946", "claude:69479"])
+        XCTAssertEqual(instances.map(\.role), [.session, .helperMaybeSession, .session])
+        XCTAssertEqual(instances[0].rows.map(\.pid), [93968, 20909, 20930])
+        XCTAssertEqual(instances[1].rows.map(\.pid), [20946, 33001])
+    }
+
     /// How runtimes and package runners start a CLI. Nil id means no agent.
     func testLaunchForms() {
         let node = "/opt/homebrew/Cellar/node/24.1.0/bin/node"

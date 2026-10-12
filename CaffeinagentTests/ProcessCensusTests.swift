@@ -7,12 +7,13 @@ extension ProcessInfoRow {
         path: String = "/usr/bin/true", args: [String] = [],
         tty: Int32 = ProcessInfoRow.noTTY, pgid: Int32? = nil, tpgid: Int32 = 0,
         cpu: TimeInterval = 0, energy: UInt64? = nil, instructions: UInt64? = nil,
-        writes: UInt64? = nil, wakeups: UInt64? = nil, stopped: Bool = false
+        writes: UInt64? = nil, wakeups: UInt64? = nil, stopped: Bool = false, gone: Bool = false
     ) -> ProcessInfoRow {
         ProcessInfoRow(
             pid: pid, ppid: ppid, startTime: start, executablePath: path, arguments: args,
             uid: 501, tty: tty, pgid: pgid ?? pid, tpgid: tpgid, cpuTime: cpu,
-            energyNanojoules: energy, instructions: instructions, logicalWriteBytes: writes, wakeups: wakeups, isStopped: stopped
+            energyNanojoules: energy, instructions: instructions, logicalWriteBytes: writes, wakeups: wakeups, isStopped: stopped,
+            executableGone: gone
         )
     }
 }
@@ -64,6 +65,23 @@ final class ProcessCensusTests: XCTestCase {
             ("no arguments",
              procargs(argc: 0, path: "/bin/ls", strings: ["A=1"]),
              "/bin/ls", []),
+            // 2026-10-12: the file of version 2.1.289 is deleted. The
+            // buffer still has the path the spare was started with.
+            ("spare of a deleted version",
+             procargs(argc: 3, path: "/Users/me/.local/share/claude/versions/2.1.289", strings: ["claude bg-spare", "--bg-spare", "{}", "HOME=/Users/me"]),
+             "/Users/me/.local/share/claude/versions/2.1.289", ["claude bg-spare", "--bg-spare", "{}"]),
+            ("no path",
+             procargs(argc: 1, path: "", padding: 0, strings: ["claude"]),
+             "", ["claude"]),
+            ("a path that is cut off and nothing more",
+             Array(procargs(argc: 2, path: "/Users/me/.local/bin/claude", padding: 0, strings: []).dropLast(4)),
+             "/Users/me/.local/bin/cla", []),
+            ("only NUL bytes after argc",
+             procargs(argc: 2, path: "", padding: 9, strings: []),
+             "", []),
+            ("a path that is no UTF-8",
+             [1, 0, 0, 0, 0x2F, 0xFF, 0xFE, 0, 0x78, 0],
+             "/\u{FFFD}\u{FFFD}", ["x"]),
         ]
         for testCase in cases {
             let parsed = parse(testCase.bytes)
@@ -76,6 +94,27 @@ final class ProcessCensusTests: XCTestCase {
         XCTAssertNil(parse([]))
         XCTAssertNil(parse([1, 0, 0, 0]))
         XCTAssertNil(parse(procargs(argc: -1, path: "/bin/ls", strings: ["ls"])))
+    }
+
+    // MARK: executable
+
+    func testExecutableComesFromTheArgumentsWhenTheFileIsGone() {
+        typealias Arguments = ProcessCensus.ProcessArguments
+        let started = Arguments(executablePath: "/Users/me/.local/bin/claude", arguments: ["claude"])
+        let resolved = "/Users/me/.local/share/claude/versions/2.1.296"
+        let cases: [(name: String, resolved: String?, started: Arguments?, path: String?, gone: Bool)] = [
+            ("the resolved path wins", resolved, started, resolved, false),
+            ("no arguments", resolved, nil, resolved, false),
+            ("file gone", nil, started, "/Users/me/.local/bin/claude", true),
+            ("file gone, empty answer", "", started, "/Users/me/.local/bin/claude", true),
+            ("file gone and no path in the buffer", nil, Arguments(executablePath: "", arguments: ["claude"]), nil, false),
+            ("neither", nil, nil, nil, false),
+        ]
+        for testCase in cases {
+            let found = ProcessCensus.executable(resolved: testCase.resolved, started: testCase.started)
+            XCTAssertEqual(found?.path, testCase.path, testCase.name)
+            XCTAssertEqual(found?.gone ?? false, testCase.gone, testCase.name)
+        }
     }
 
     // MARK: tick conversion
@@ -272,6 +311,67 @@ final class ProcessCensusTests: XCTestCase {
         XCTAssertFalse((census.snapshot() ?? []).contains { $0.pid == pid })
         XCTAssertNil(SystemProcessCensus.row(of: pid))
         XCTAssertEqual(status(), SZOMB, "Still not reaped after the snapshot")
+    }
+
+    /// A process whose binary was deleted stays in the census, as a
+    /// Claude Code session whose version an update removed. The kernel
+    /// gives no path for it then, and it was left out.
+    ///
+    /// The binary is compiled here: macOS kills a copy of `/bin/sleep`
+    /// that runs from another folder.
+    func testLiveSnapshotKeepsAProcessWhoseBinaryWasDeleted() throws {
+        let folder = FileManager.default.temporaryDirectory.appendingPathComponent("census-\(UUID().uuidString)/versions")
+        try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: folder.deletingLastPathComponent()) }
+        let binary = folder.appendingPathComponent("2.1.286")
+        let source = folder.appendingPathComponent("sleeper.c")
+        try Data("#include <unistd.h>\nint main(void) { sleep(60); return 0; }\n".utf8).write(to: source)
+        let compiler = Process()
+        compiler.executableURL = URL(fileURLWithPath: "/usr/bin/cc")
+        compiler.arguments = ["-o", binary.path, source.path]
+        compiler.standardOutput = FileHandle.nullDevice
+        compiler.standardError = FileHandle.nullDevice
+        do {
+            try compiler.run()
+        } catch {
+            throw XCTSkip("No C compiler at /usr/bin/cc")
+        }
+        compiler.waitUntilExit()
+        guard compiler.terminationStatus == 0 else { throw XCTSkip("The C compiler made no binary") }
+        var pid: pid_t = 0
+        let arguments: [UnsafeMutablePointer<CChar>?] = [strdup("sleeper"), strdup("60"), nil]
+        defer { arguments.forEach { free($0) } }
+        XCTAssertEqual(posix_spawn(&pid, binary.path, nil, nil, arguments, nil), 0)
+        defer {
+            kill(pid, SIGKILL)
+            var status: Int32 = 0
+            waitpid(pid, &status, 0)
+        }
+        func wait(for condition: () -> Bool) -> Bool {
+            for _ in 0..<500 where !condition() { usleep(10_000) }
+            return condition()
+        }
+        // The spawn returns before the exec is done.
+        let before = SystemProcessCensus()
+        XCTAssertTrue(wait { before.snapshot()?.first { $0.pid == pid }?.arguments == ["sleeper", "60"] })
+        XCTAssertEqual(before.snapshot()?.first { $0.pid == pid }?.executableGone, false)
+
+        try FileManager.default.removeItem(at: binary)
+        var buffer = [CChar](repeating: 0, count: 4 * Int(MAXPATHLEN))
+        XCTAssertLessThanOrEqual(proc_pidpath(pid, &buffer, UInt32(buffer.count)), 0, "The kernel still gives a path for a deleted binary")
+
+        let row = try XCTUnwrap(SystemProcessCensus().snapshot()?.first { $0.pid == pid })
+        XCTAssertTrue(row.executableGone)
+        XCTAssertTrue(row.executablePath.hasSuffix("/versions/2.1.286"), row.executablePath)
+        XCTAssertEqual(row.arguments, ["sleeper", "60"])
+        let alone = try XCTUnwrap(SystemProcessCensus.row(of: pid))
+        XCTAssertTrue(alone.executableGone)
+        XCTAssertEqual(alone.executablePath, row.executablePath)
+        XCTAssertEqual(alone.startTime, row.startTime)
+        // A census that read the path before the file went keeps it.
+        let kept = try XCTUnwrap(before.snapshot()?.first { $0.pid == pid })
+        XCTAssertFalse(kept.executableGone)
+        XCTAssertTrue(kept.executablePath.hasSuffix("/versions/2.1.286"), kept.executablePath)
     }
 
     /// A stopped process stays in the census and says that it is stopped.
