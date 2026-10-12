@@ -1,0 +1,61 @@
+id = "HOP-02"
+title = "Does a scan find the hotspot of an iPhone that sat idle for 3 minutes"
+layer = 1
+area = "net"
+minutes = 12
+risk = "Your Mac is offline for up to 3 minutes: you disconnect and reconnect the Wi-Fi yourself. If the hotspot is found, the agent and everything else on the Mac use the data of your phone until you reconnect."
+why = "The open question of Join your iPhone hotspot. An iPhone stops showing its hotspot about 90 seconds after the last device left, and only macOS itself is known to wake it, over Bluetooth. Nobody wrote down whether a scan of an app finds a phone that sits locked in a pocket. This test only measures: every result is a result. Run it twice. First with Ask to join hotspots set to Ask to Join in Wi-Fi settings: then only the scan of Agent Caffeine can find the phone. Then with Automatic: then macOS can join by itself, and Agent Caffeine counts that as joined too. The first step asks which one is set, so the result says it."
+decides = "what the feature promises: if the idle phone is not found with Ask to Join, the feature works alone only while the phone shows its hotspot, and Ask to join hotspots: Automatic is the only road for a phone in a pocket"
+checks = [
+  "within 10s after step 6: app.hotspot.state=waiting",
+  "never from step 6 to step 7: app.hotspot.state=failed:wrongPassword",
+  "never from step 6 to step 7: app.hotspot.state=failed:noPermission",
+  "info key automatic is yes",
+  "info within 150s after step 6: app.hotspot.state=joined and app.network.online=true",
+  "info within 150s after step 6: app.hotspot.state=notFound",
+  "info always from step 6 to step 7: app.agent[*].state=working",
+  "at end: app.network.online=true",
+]
+
+[[steps]]
+say = "Look at System Settings > Wi-Fi > Ask to join hotspots."
+ask = "Is Ask to join hotspots set to Automatic?"
+name = "automatic"
+
+[[steps]]
+say = "In Agent Caffeine, open Settings > General. Join your iPhone hotspot must be on, with the name and the password of your iPhone saved. The runner sees when a hotspot is set up."
+until = "app.hotspot.on=true and app.hotspot.configured=true"
+timeout = 600
+
+[[steps]]
+say = "On your iPhone: Allow Others to Join stays on. Leave the Personal Hotspot screen, lock the phone and put it next to your Mac. Press Enter here, and do not touch the phone until the test is over."
+key = "enter"
+
+[[steps]]
+say = "Nothing to do for 3 minutes. The phone stops showing its hotspot in this time."
+until = "time>=180s"
+timeout = 200
+
+[[steps]]
+say = "In any agent, send this prompt: run `sleep 600` in the shell, then say done. The runner waits until Agent Caffeine holds for the agent."
+until = "app.hold=true and app.headline=working"
+timeout = 120
+
+[[steps]]
+say = "Hold the Option key and click the Wi-Fi icon in the menu bar. Below the name of your network, click the line that starts with Disconnect from. Wi-Fi stays switched on. Pull a network cable too. Do not touch the phone. The runner sees when your Mac is offline."
+until = "app.network.online=false"
+timeout = 180
+
+[[steps]]
+say = "Nothing to do for up to 150 seconds. The runner records whether the hotspot is found. The step ends by itself when it is not."
+until = "app.hotspot.state=joined and app.network.online=true"
+timeout = 150
+optional = true
+
+[[steps]]
+say = "Click the Wi-Fi icon and click your own network. Press Enter here when your Mac is on your own Wi-Fi."
+key = "enter"
+
+[[cleanup]]
+expect = "app.network.online=true"
+tell = "Click your own network in the Wi-Fi menu."

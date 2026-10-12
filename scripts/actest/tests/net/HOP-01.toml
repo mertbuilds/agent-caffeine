@@ -1,0 +1,58 @@
+id = "HOP-01"
+title = "Wi-Fi lost while an agent works: the Mac joins the iPhone hotspot"
+layer = 1
+area = "net"
+minutes = 10
+risk = "Your Mac leaves its Wi-Fi for about 1 minute and joins the hotspot of your iPhone: the agent and everything else on the Mac use the data of your phone for that time. You disconnect and reconnect the Wi-Fi yourself. Do it when no upload or call runs."
+why = "The feature Join your iPhone hotspot (Beta): the owner leaves a cafe with the lid closed, the Wi-Fi is gone, and the agents should stay online. This is the easy case, with the phone on its hotspot screen, so it shows its hotspot the whole time. The runner changes no network setting. Disconnect with the Option key keeps Wi-Fi switched on and takes the path away, which is what a Wi-Fi that goes out of reach does. The agent must run a command that uses no processor, like sleep, so its state does not change in the test. The last step also measures the way back: your Wi-Fi is on the air the whole time, so Agent Caffeine tries to join it again with no password."
+decides = "whether the join through CoreWLAN works at all on this macOS, how long it takes, and whether the way back works with no password"
+checks = [
+  "at step 3: app.network.online=true and app.hotspot.state!=joined",
+  "never from step 3 to step 4 - 2s: app.hotspot.state=scanning",
+  "within 10s after step 4: app.hotspot.state=waiting",
+  "within 60s after step 4: app.hotspot.state=joined and app.network.online=true",
+  "always from step 4 to step 5: app.hold=true",
+  "always from step 4 to step 5: app.agent[*].state=working",
+  "never from start to end: app.network.agentsReleased=true",
+  "never from start to end: app.notice[offline].age<600",
+  "info within 200s after step 5: app.hotspot.state=hoppedBack",
+  "at end: app.network.online=true",
+]
+
+[[steps]]
+say = "In Agent Caffeine, open Settings > General and switch on Join your iPhone hotspot. Type the name and the password of the hotspot of your iPhone, click Save, and allow Location if macOS asks. The runner sees when a hotspot is set up."
+until = "app.hotspot.on=true and app.hotspot.configured=true"
+timeout = 600
+
+[[steps]]
+say = "On your iPhone, open Settings > Personal Hotspot and leave that screen open, with the phone unlocked next to your Mac. Press Enter here when the screen is open."
+key = "enter"
+
+[[steps]]
+say = "In any agent, send this prompt: run `sleep 600` in the shell, then say done. The runner waits until Agent Caffeine holds for the agent."
+until = "app.hold=true and app.headline=working"
+timeout = 120
+
+[[steps]]
+say = "Hold the Option key and click the Wi-Fi icon in the menu bar. Below the name of your network, click the line that starts with Disconnect from. Wi-Fi stays switched on. Pull a network cable too. The runner sees when your Mac is offline."
+until = "app.network.online=false"
+timeout = 180
+
+[[steps]]
+say = "Nothing to do for up to 1 minute. Agent Caffeine waits 15 seconds, looks for the hotspot and joins it."
+until = "app.hotspot.state=joined and app.network.online=true"
+timeout = 90
+
+[[steps]]
+say = "Nothing to do for up to 3 minutes. Your Wi-Fi is still on the air, so Agent Caffeine tries to go back to it. The step ends by itself when it does not."
+until = "app.hotspot.state=hoppedBack"
+timeout = 200
+optional = true
+
+[[steps]]
+say = "Click the Wi-Fi icon. If your Mac is not on your own Wi-Fi, click your network now. Press Enter here when your Mac is on your own Wi-Fi."
+key = "enter"
+
+[[cleanup]]
+expect = "app.network.online=true"
+tell = "Click your own network in the Wi-Fi menu."

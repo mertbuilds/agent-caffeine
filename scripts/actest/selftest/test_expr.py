@@ -16,6 +16,7 @@ APP = {
              "history": [{"kind": "alarmSet", "at": 95}, {"kind": "alarmCancelled", "at": 40}]},
     "notices": [{"kind": "waiting", "at": 98}], "chimeAt": 97,
     "network": {"online": False, "offlineSeconds": 61, "limitSeconds": 60, "agentsReleased": True},
+    "hotspot": {"on": True, "configured": True, "state": "joined", "since": 96},
     "closedLid": {"since": 10, "heldSeconds": 181, "limitSeconds": 180, "limitDrop": 30, "stop": "closedLidTime", "agentsReleased": True},
 }
 SAMPLE = {
@@ -83,6 +84,22 @@ class ExprTests(unittest.TestCase):
         self.assertFalse(self.ok("app.network.online=false", old))
         self.assertFalse(self.ok("app.network.agentsReleased=true", old))
         self.assertEqual(expr.reading("app.network.agentsReleased=true", SAMPLE), "app.network.agentsReleased=true")
+
+    def test_the_hotspot_reads_as_its_switch_and_its_state(self):
+        self.assertTrue(self.ok("app.hotspot.on=true and app.hotspot.configured=true"))
+        self.assertTrue(self.ok("app.hotspot.state=joined and app.hotspot.since>=90"))
+        self.assertTrue(self.ok("app.hotspot.state!=notFound"))
+        failed = dict(SAMPLE, app=dict(APP, hotspot={"on": True, "configured": True, "state": "failed:wrongPassword", "since": 96}))
+        self.assertTrue(self.ok("app.hotspot.state=failed:wrongPassword", failed))
+        self.assertFalse(self.ok("app.hotspot.state=failed:noPermission", failed))
+        off = dict(SAMPLE, app=dict(APP, hotspot={"on": False, "configured": False, "state": "idle"}))
+        self.assertTrue(self.ok("app.hotspot.on=false and app.hotspot.state=idle and app.hotspot.since=none", off))
+        # A build without the feature says nothing, and that is no pass.
+        old = dict(SAMPLE, app={key: value for key, value in APP.items() if key != "hotspot"})
+        self.assertFalse(self.ok("app.hotspot.on=true", old))
+        self.assertFalse(self.ok("app.hotspot.state=joined", old))
+        self.assertFalse(self.ok("app.hotspot.state=idle", old))
+        self.assertEqual(expr.reading("app.hotspot.state=joined", SAMPLE), "app.hotspot.state=joined")
 
     def test_an_agent_reads_as_its_busiest_instance(self):
         self.assertTrue(self.ok("app.agent[grok].state=working"))

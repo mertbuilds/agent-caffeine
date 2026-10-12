@@ -40,6 +40,8 @@ The smallest time limit of the closed lid limit is 1 hour and the smallest time 
 
 The app obeys them only while `StateForTests` is on, and only when they are shorter than the limit of the settings. The runner reads them and never writes them: the cleanup of a run and `actest abort` print the delete command while one is still set, and the preflight has the item "no leftover test limit" for every test but the one that sets that limit. The runner changes no network setting either: in `HOLD-40` the owner turns Wi-Fi off and on, and the runner sees it in `app.network.online`.
 
+The state has "Join your iPhone hotspot" too: `app.hotspot.on`, `app.hotspot.configured` (a name and a password are saved), `app.hotspot.state` (`idle`, `waiting`, `scanning`, `joined`, `notFound`, `hoppedBack`, or `failed:` and the reason: `wrongPassword`, `noPermission`, `wifiOff`, `noWiFi`, `noPassword`, `timeout`, `other`) and `app.hotspot.since`, the time the last try ended. No network name is in the state. `HOP-01` and `HOP-02` are in `tests/net`: the owner sets up the hotspot in Settings, disconnects the Wi-Fi with the Option key and reconnects it, and the runner sees the rest. `HOP-02` only measures whether the hotspot of an idle iPhone is found.
+
 `actest check` says when the installed build has no state export, and when the switch is off. `agent-caffeine status --json --detail` prints the same state. The file holds kinds, numbers and times: no name of a session, no folder, no reason of a hold, no name of a job.
 
 ## A test is a file
