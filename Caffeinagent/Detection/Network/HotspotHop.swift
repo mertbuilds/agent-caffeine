@@ -351,6 +351,9 @@ struct HotspotHop: Equatable {
                 return
             }
             lastNetwork = name.flatMap { HotspotName.matches($0, hotspot) ? nil : $0 }
+        case (.look, .failed):
+            // macOS gave no answer. The next look asks again.
+            lookedAt = now
         case (.join, .joined):
             joined(at: time.at, now: now, backTo: lastNetwork)
             awaitingPath = true

@@ -71,6 +71,7 @@ final class HotspotTextTests: XCTestCase {
         XCTAssertEqual(status(.failed(.wifiOff, at: time)), "Wi-Fi was off at 14:02")
         XCTAssertEqual(status(.failed(.noWiFi, at: time)), "This Mac has no Wi-Fi")
         XCTAssertEqual(status(.failed(.noPassword, at: time)), "The password was not in your Keychain at 14:02. Save it again.")
+        XCTAssertEqual(status(.failed(.keychainLocked, at: time)), "Your Keychain was locked at 14:02, so your Mac did not join the hotspot")
         XCTAssertEqual(status(.failed(.timeout, at: time)), "macOS gave no answer at 14:02")
         XCTAssertEqual(status(.failed(.other, at: time)), "Could not join the hotspot at 14:02")
         XCTAssertEqual(status(.failed(.notSecure, at: time)), "A network with this name is open, so your Mac did not join it")

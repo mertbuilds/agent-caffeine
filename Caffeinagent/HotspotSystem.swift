@@ -1,12 +1,13 @@
 import CoreLocation
 import CoreWLAN
 import Foundation
+import LocalAuthentication
 import Security
 
 /// The Wi-Fi of this Mac through CoreWLAN, the public framework. Every
 /// call blocks and is made off the main thread, and each has a time
-/// limit: a call that macOS never answers ends as a failure, and no
-/// other call starts while it hangs.
+/// limit (`TimedCalls`): a call that macOS never answers ends as a
+/// failure, and no other call starts while it hangs.
 ///
 /// It runs in the app and not in the helper: from macOS 14 on, macOS
 /// shows the names of Wi-Fi networks only to an app the user allowed in
@@ -16,10 +17,12 @@ import Security
 final class SystemWiFi: WiFiAccess {
     static let scanTimeout: TimeInterval = 20
     static let joinTimeout: TimeInterval = 40
-    private static let queue = DispatchQueue(label: "com.caffeinagent.app.wifi", qos: .utility, attributes: .concurrent)
+    /// For a question macOS answers at once when all is well: is Wi-Fi
+    /// on, which network is the Mac on, which networks does it know.
+    static let readTimeout: TimeInterval = 5
 
+    private let calls = TimedCalls(label: "com.caffeinagent.app.wifi")
     private let lock = NSLock()
-    private var busy = false
     /// The network of the last scan that found one. A join needs it:
     /// CoreWLAN joins what a scan gave, not a name.
     private let found = FoundNetwork<(network: CWNetwork, exact: Bool)>()
@@ -33,14 +36,24 @@ final class SystemWiFi: WiFiAccess {
         return lastError
     }
 
-    private var interface: CWInterface? { CWWiFiClient.shared().interface() }
+    /// Asked for inside each timed call: this can hang like any other
+    /// call into CoreWLAN.
+    private static var interface: CWInterface? { CWWiFiClient.shared().interface() }
 
-    func power() -> Bool? {
-        interface?.powerOn()
+    /// One question to the interface, with the time limit of a read.
+    private func read<Value>(_ question: @escaping (CWInterface) -> Value) -> Result<Value, HopFailure> {
+        let answer: Value?? = calls.run(Self.readTimeout) { Self.interface.map(question) }
+        guard let answer else { return .failure(.timeout) }
+        guard let value = answer else { return .failure(.noWiFi) }
+        return .success(value)
     }
 
-    func currentNetwork() -> String? {
-        interface?.ssid()
+    func power() -> Result<Bool, HopFailure> {
+        read { $0.powerOn() }
+    }
+
+    func currentNetwork() -> Result<String?, HopFailure> {
+        read { $0.ssid() }
     }
 
     func scan(for name: String) -> WiFiScan {
@@ -50,8 +63,12 @@ final class SystemWiFi: WiFiAccess {
     }
 
     func scanKnown(_ name: String) -> WiFiScan {
-        guard let profile = profile(named: name) else { return .notFound }
-        let security = profile.security
+        let security: CWSecurity
+        switch knownProfile(name) {
+        case .failure(let failure): return .failed(failure)
+        case .success(nil): return .notFound
+        case .success(let known?): security = known
+        }
         return scan(names: [name], exact: true, keep: { $0.supportsSecurity(security) }, pick: { WiFiPick.known(name, among: $0) })
     }
 
@@ -63,8 +80,8 @@ final class SystemWiFi: WiFiAccess {
         names: [String], exact: Bool, keep: @escaping (CWNetwork) -> Bool, pick: @escaping ([WiFiSeen]) -> (index: Int?, scan: WiFiScan)
     ) -> WiFiScan {
         found.forget()
-        guard let interface else { return .failed(.noWiFi) }
-        let result: (scan: WiFiScan, network: CWNetwork?)? = timed(Self.scanTimeout) { [self] in
+        let result: (scan: WiFiScan, network: CWNetwork?)? = calls.run(Self.scanTimeout) { [self] in
+            guard let interface = Self.interface else { return (.failed(.noWiFi), nil) }
             var hidden = false
             var open = false
             for name in names {
@@ -101,10 +118,10 @@ final class SystemWiFi: WiFiAccess {
     }
 
     func associate(to name: String, password: String?) -> WiFiJoin {
-        guard let interface else { return .failed(.noWiFi) }
         guard let found = found.take(), let ssid = found.network.ssid, found.exact ? ssid == name : HotspotName.matches(ssid, name) else { return .failed(.other) }
         let network = found.network
-        let result: WiFiJoin? = timed(Self.joinTimeout) { [self] in
+        let result: WiFiJoin? = calls.run(Self.joinTimeout) { [self] in
+            guard let interface = Self.interface else { return .failed(.noWiFi) }
             do {
                 try interface.associate(to: network, password: password)
                 return .joined
@@ -115,19 +132,24 @@ final class SystemWiFi: WiFiAccess {
         return result ?? .failed(.timeout)
     }
 
-    func knownSecurity(of name: String) -> WiFiSecurity? {
-        guard let profile = profile(named: name) else { return nil }
-        switch profile.security {
-        case .none: return .open
-        case .wpa2Personal, .wpaPersonalMixed, .wpa3Personal, .wpa3Transition: return .personal
-        default: return .other
+    func knownSecurity(of name: String) -> Result<WiFiSecurity?, HopFailure> {
+        knownProfile(name).map { security in
+            switch security {
+            case nil: return nil
+            case CWSecurity.none?: return .open
+            case .wpa2Personal?, .wpaPersonalMixed?, .wpa3Personal?, .wpa3Transition?: return .personal
+            default: return .other
+            }
         }
     }
 
-    /// The network macOS knows by this name, to the letter.
-    private func profile(named name: String) -> CWNetworkProfile? {
-        let profiles = interface?.configuration()?.networkProfiles.array as? [CWNetworkProfile] ?? []
-        return profiles.first { $0.ssid == name }
+    /// What macOS knows the network with this name as, to the letter.
+    /// Nil when macOS does not know it.
+    private func knownProfile(_ name: String) -> Result<CWSecurity?, HopFailure> {
+        read { interface in
+            let profiles = interface.configuration()?.networkProfiles.array as? [CWNetworkProfile] ?? []
+            return profiles.first { $0.ssid == name }?.security
+        }
     }
 
     /// What macOS says a network takes. An open network is open even
@@ -147,38 +169,20 @@ final class SystemWiFi: WiFiAccess {
         guard error.domain == CWErrorDomain else { return .other }
         return HopFailure.of(coreWLAN: error.code, joining: joining)
     }
-
-    /// Nil when the time ran out, and when an earlier call still hangs.
-    private func timed<Value>(_ seconds: TimeInterval, _ work: @escaping () -> Value) -> Value? {
-        lock.lock()
-        guard !busy else {
-            lock.unlock()
-            return nil
-        }
-        busy = true
-        lock.unlock()
-        let done = DispatchSemaphore(value: 0)
-        var value: Value?
-        Self.queue.async { [self] in
-            let result = work()
-            lock.lock()
-            value = result
-            busy = false
-            lock.unlock()
-            done.signal()
-        }
-        guard done.wait(timeout: .now() + seconds) == .success else { return nil }
-        lock.lock()
-        defer { lock.unlock() }
-        return value
-    }
 }
 
 /// The password of the hotspot as one generic password item in the login
 /// Keychain of the user. The release build is signed with one Developer
 /// ID for every version, so macOS lets each version read the item with
 /// no question.
+///
+/// A read never shows a window. It is made for a join, often with the
+/// lid closed: a locked Keychain fails at once, and the read has a time
+/// limit like every call of the join.
 struct KeychainHotspotPassword: HotspotPasswordStoring {
+    static let readTimeout: TimeInterval = 5
+    private static let calls = TimedCalls(label: "com.caffeinagent.app.hotspot.keychain")
+
     // A Debug build is signed ad hoc, and macOS asks before it reads the
     // item of another build. It keeps an item of its own.
     #if DEBUG
@@ -207,13 +211,29 @@ struct KeychainHotspotPassword: HotspotPasswordStoring {
         return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
     }
 
-    func load() -> String? {
-        var query = itemQuery
+    func load() -> Result<String, HopFailure> {
+        let query = itemQuery
+        return Self.calls.run(Self.readTimeout) { Self.read(query) } ?? .failure(.timeout)
+    }
+
+    private static func read(_ item: [String: Any]) -> Result<String, HopFailure> {
+        var query = item
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
+        // macOS asks the user for nothing: it fails in place of that.
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        query[kSecUseAuthenticationContext as String] = context
         var result: CFTypeRef?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess, let data = result as? Data else { return nil }
-        return String(data: data, encoding: .utf8)
+        switch SecItemCopyMatching(query as CFDictionary, &result) {
+        case errSecSuccess:
+            guard let data = result as? Data, let password = String(data: data, encoding: .utf8) else { return .failure(.noPassword) }
+            return .success(password)
+        case errSecInteractionNotAllowed, errSecAuthFailed:
+            return .failure(.keychainLocked)
+        default:
+            return .failure(.noPassword)
+        }
     }
 
     @discardableResult

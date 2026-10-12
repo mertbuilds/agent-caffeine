@@ -18,6 +18,8 @@ final class FakeWiFi: WiFiAccess {
     /// The password each network takes. A network that is not here is
     /// joined only with no password, and only when it is known.
     var passwords: [String: String] = [:]
+    /// macOS does not answer a question about the Wi-Fi.
+    var readFailure: HopFailure?
     var scanFailure: HopFailure?
     var joinFailure: HopFailure?
     private(set) var scans: [String] = []
@@ -28,9 +30,14 @@ final class FakeWiFi: WiFiAccess {
     /// The network of the last scan that found one.
     private let found = FoundNetwork<WiFiSeen>()
 
-    func power() -> Bool? { powered }
+    func power() -> Result<Bool, HopFailure> {
+        if let readFailure { return .failure(readFailure) }
+        return powered.map { .success($0) } ?? .failure(.noWiFi)
+    }
 
-    func currentNetwork() -> String? { current }
+    func currentNetwork() -> Result<String?, HopFailure> {
+        readFailure.map { .failure($0) } ?? .success(current)
+    }
 
     private var seen: [WiFiSeen] {
         air.sorted().map { WiFiSeen(name: $0, sighting: WiFiSighting(rssi: -52, channel: 6), security: .personal) } + others
@@ -50,7 +57,7 @@ final class FakeWiFi: WiFiAccess {
         scans.append(name)
         found.forget()
         if let scanFailure { return .failed(scanFailure) }
-        guard let security = knownSecurity(of: name) else { return .notFound }
+        guard let security = knownAs[name] ?? (known.contains(name) ? .personal : nil) else { return .notFound }
         let seen = seen.filter { $0.security == security }
         let pick = WiFiPick.known(name, among: seen)
         if let index = pick.index { found.keep(seen[index]) }
@@ -66,7 +73,7 @@ final class FakeWiFi: WiFiAccess {
         if found.security != .open {
             if let right = passwords[found.name] {
                 guard password == right else { return .failed(.wrongPassword) }
-            } else if password != nil || knownSecurity(of: found.name) == nil {
+            } else if password != nil || (knownAs[found.name] == nil && !known.contains(found.name)) {
                 return .failed(.wrongPassword)
             }
         }
@@ -75,8 +82,9 @@ final class FakeWiFi: WiFiAccess {
         return .joined
     }
 
-    func knownSecurity(of name: String) -> WiFiSecurity? {
-        knownAs[name] ?? (known.contains(name) ? .personal : nil)
+    func knownSecurity(of name: String) -> Result<WiFiSecurity?, HopFailure> {
+        if let readFailure { return .failure(readFailure) }
+        return .success(knownAs[name] ?? (known.contains(name) ? .personal : nil))
     }
 }
 
@@ -85,6 +93,8 @@ final class FakePasswordStore: HotspotPasswordStoring {
     var password: String?
     var refusesSave = false
     var refusesRemove = false
+    /// The Keychain is locked, or gives no answer.
+    var loadFailure: HopFailure?
     private(set) var loads = 0
 
     func save(_ password: String) -> Bool {
@@ -93,9 +103,10 @@ final class FakePasswordStore: HotspotPasswordStoring {
         return true
     }
 
-    func load() -> String? {
+    func load() -> Result<String, HopFailure> {
         loads += 1
-        return password
+        if let loadFailure { return .failure(loadFailure) }
+        return password.map { .success($0) } ?? .failure(.noPassword)
     }
 
     func remove() -> Bool {
@@ -119,6 +130,8 @@ struct HopMac {
     let wifi = FakeWiFi()
     var input = HotspotHop.Input(on: true, name: HopMac.hotspot, saves: 1, agentHolds: true, online: true)
     var password: String? = HopMac.password
+    /// The Keychain is locked, or gives no answer.
+    var passwordFailure: HopFailure?
     /// False keeps an action pending until `finish` is called.
     var runsJobsAtOnce = true
     private(set) var awake: TimeInterval = 100
@@ -174,7 +187,8 @@ struct HopMac {
 
     private mutating func run(_ action: HotspotHop.Action) {
         let online = input.online
-        let outcome = HotspotJob.run(action, wifi: wifi, password: { [password] in password }, mayJoin: { !online })
+        let saved: Result<String, HopFailure> = passwordFailure.map { .failure($0) } ?? password.map { .success($0) } ?? .failure(.noPassword)
+        let outcome = HotspotJob.run(action, wifi: wifi, password: { saved }, mayJoin: { !online })
         if outcome == .joined || outcome == .wentBack { input.online = true }
         hop.finished(action, outcome, at: time)
     }

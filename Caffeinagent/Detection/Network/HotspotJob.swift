@@ -11,11 +11,14 @@ enum HotspotJob {
     ///     not wanted any more: a network that works is never left for
     ///     the hotspot.
     static func run(
-        _ action: HotspotHop.Action, wifi: WiFiAccess, password: () -> String?, mayJoin: () -> Bool
+        _ action: HotspotHop.Action, wifi: WiFiAccess, password: () -> Result<String, HopFailure>, mayJoin: () -> Bool
     ) -> HotspotHop.Outcome {
         switch action {
         case .look:
-            return .network(wifi.currentNetwork())
+            switch wifi.currentNetwork() {
+            case .success(let name): return .network(name)
+            case .failure(let failure): return .failed(failure)
+            }
         case .join(let name):
             return join(name, wifi: wifi, password: password, mayJoin: mayJoin)
         case .back(let hotspot, let old, let seen):
@@ -23,15 +26,30 @@ enum HotspotJob {
         }
     }
 
-    private static func join(_ name: String, wifi: WiFiAccess, password: () -> String?, mayJoin: () -> Bool) -> HotspotHop.Outcome {
+    private static func join(
+        _ name: String, wifi: WiFiAccess, password: () -> Result<String, HopFailure>, mayJoin: () -> Bool
+    ) -> HotspotHop.Outcome {
         guard mayJoin() else { return .pathBack }
-        guard let power = wifi.power() else { return .failed(.noWiFi) }
+        switch wifi.power() {
+        case .failure(let failure): return .failed(failure)
         // Agent Caffeine never switches Wi-Fi on.
-        guard power else { return .failed(.wifiOff) }
+        case .success(false): return .failed(.wifiOff)
+        case .success(true): break
+        }
         // On the hotspot with no path: a second join would only cut the
-        // Mac off while the phone gives it an address.
-        if let current = wifi.currentNetwork(), HotspotName.matches(current, name) { return .onHotspot }
-        guard let password = password(), !password.isEmpty else { return .failed(.noPassword) }
+        // Mac off while the phone gives it an address. When macOS does
+        // not say which network the Mac is on, nothing is joined either.
+        switch wifi.currentNetwork() {
+        case .failure(let failure): return .failed(failure)
+        case .success(let current?) where HotspotName.matches(current, name): return .onHotspot
+        case .success: break
+        }
+        let saved: String
+        switch password() {
+        case .failure(let failure): return .failed(failure)
+        case .success(let read) where read.isEmpty: return .failed(.noPassword)
+        case .success(let read): saved = read
+        }
         switch wifi.scan(for: name) {
         case .notFound: return .notFound
         case .failed(let failure): return .failed(failure)
@@ -39,7 +57,7 @@ enum HotspotJob {
         }
         // The scan took seconds.
         guard mayJoin() else { return .pathBack }
-        switch wifi.associate(to: name, password: password) {
+        switch wifi.associate(to: name, password: saved) {
         case .joined: return .joined
         case .failed(let failure): return .failed(failure)
         }
@@ -52,9 +70,18 @@ enum HotspotJob {
     /// up an open network with that name. A weak signal is no way back,
     /// and the first look with a good signal joins nothing yet.
     private static func back(from hotspot: String, to old: String?, seen: Bool, wifi: WiFiAccess) -> HotspotHop.Outcome {
-        guard let current = wifi.currentNetwork(), HotspotName.matches(current, hotspot) else { return .leftHotspot }
+        switch wifi.currentNetwork() {
+        // Nothing is known, so nothing changes.
+        case .failure(let failure): return .failed(failure)
+        case .success(let current?) where HotspotName.matches(current, hotspot): break
+        case .success: return .leftHotspot
+        }
         guard let old else { return .onHotspot }
-        guard wifi.knownSecurity(of: old) == .personal else { return .backFailed }
+        switch wifi.knownSecurity(of: old) {
+        case .failure(let failure): return .failed(failure)
+        case .success(.personal): break
+        case .success: return .backFailed
+        }
         guard case .found(let sighting) = wifi.scanKnown(old), sighting.rssi >= HotspotHop.backSignal else { return .onHotspot }
         guard seen else { return .sawOld }
         switch wifi.associate(to: old, password: nil) {

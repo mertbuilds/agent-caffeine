@@ -1,7 +1,7 @@
 import Foundation
 
 /// Why the Mac did not join the hotspot.
-enum HopFailure: String, Equatable, CaseIterable {
+enum HopFailure: String, Equatable, CaseIterable, Error {
     /// The hotspot refused the password.
     case wrongPassword
     /// macOS hides the names of Wi-Fi networks from Agent Caffeine:
@@ -13,7 +13,11 @@ enum HopFailure: String, Equatable, CaseIterable {
     case noWiFi
     /// The password is not in the Keychain, or cannot be read.
     case noPassword
-    /// macOS gave no answer in time.
+    /// The Keychain is locked. macOS would ask the user to unlock it,
+    /// and with the lid closed nobody answers, so it is not asked.
+    case keychainLocked
+    /// macOS gave no answer in time: to a scan, to a join, or to a
+    /// question about the Wi-Fi or the Keychain.
     case timeout
     /// Only an open network has the name of the hotspot. It is never
     /// joined: anyone can give a network this name.
@@ -134,17 +138,19 @@ enum WiFiJoin: Equatable {
 }
 
 /// The Wi-Fi of the Mac, so a test can pass any air. Every call can
-/// block for seconds and is made off the main thread.
+/// block for seconds and is made off the main thread. Each has a time
+/// limit: a call that macOS never answers fails with `timeout`.
 ///
 /// The name of the hotspot is matched as `HotspotName.matches` has it,
 /// and the name of a network macOS knows to the letter. Nothing here
 /// switches Wi-Fi on or off.
 protocol WiFiAccess {
-    /// Nil on a Mac with no Wi-Fi.
-    func power() -> Bool?
+    /// Fails with `noWiFi` on a Mac with no Wi-Fi.
+    func power() -> Result<Bool, HopFailure>
     /// The name of the network the Mac is on. Nil when it is on none,
-    /// and when macOS hides the name.
-    func currentNetwork() -> String?
+    /// and when macOS hides the name. A failure says nothing of the
+    /// network.
+    func currentNetwork() -> Result<String?, HopFailure>
     /// A scan for the hotspot with this name. Only a network that takes
     /// a password is found: see `WiFiPick`.
     func scan(for name: String) -> WiFiScan
@@ -158,7 +164,7 @@ protocol WiFiAccess {
     func associate(to name: String, password: String?) -> WiFiJoin
     /// The kind of the network with this name, to the letter, in the
     /// list of networks macOS knows. Nil when it is not there.
-    func knownSecurity(of name: String) -> WiFiSecurity?
+    func knownSecurity(of name: String) -> Result<WiFiSecurity?, HopFailure>
 }
 
 /// The password of the hotspot. The real store is one item in the login
@@ -167,8 +173,10 @@ protocol WiFiAccess {
 protocol HotspotPasswordStoring {
     /// False when the password was not saved.
     func save(_ password: String) -> Bool
-    /// Nil when there is none, or it cannot be read.
-    func load() -> String?
+    /// Fails with `noPassword` when there is none, with `keychainLocked`
+    /// when macOS would have to ask the user, and with `timeout`. It
+    /// never shows a window.
+    func load() -> Result<String, HopFailure>
     /// An item that was never there counts as removed.
     @discardableResult
     func remove() -> Bool

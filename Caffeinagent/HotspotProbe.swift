@@ -58,9 +58,10 @@ enum HotspotProbe {
             case .failed(let failure):
                 found = "failed:\(failure.rawValue)\(wifi.lastErrorCode.map { " (\($0))" } ?? "")"
             }
-            let onHotspot = wifi.currentNetwork().map { HotspotName.matches($0, options.name) } ?? false
+            let current = (try? wifi.currentNetwork().get()) ?? nil
+            let onHotspot = current.map { HotspotName.matches($0, options.name) } ?? false
             print([
-                clock.string(from: began), found, rssi, channel, word(location.permission), word(wifi.power()),
+                clock.string(from: began), found, rssi, channel, word(location.permission), word(try? wifi.power().get()),
                 word(path.path()), onHotspot ? "yes" : "no",
             ].joined(separator: "\t"))
             if options.join, !joinTried, case .found = scan {

@@ -86,6 +86,7 @@ extension PanelText {
             case .wifiOff: return HotspotStatusLine(text: "Wi-Fi was off \(at(date))")
             case .noWiFi: return HotspotStatusLine(text: "This Mac has no Wi-Fi")
             case .noPassword: return HotspotStatusLine(text: "The password was not in your Keychain \(at(date)). Save it again.")
+            case .keychainLocked: return HotspotStatusLine(text: "Your Keychain was locked \(at(date)), so your Mac did not join the hotspot")
             case .timeout: return HotspotStatusLine(text: "macOS gave no answer \(at(date))")
             case .notSecure: return HotspotStatusLine(text: "A network with this name is open, so your Mac did not join it")
             case .other: return HotspotStatusLine(text: "Could not join the hotspot \(at(date))")

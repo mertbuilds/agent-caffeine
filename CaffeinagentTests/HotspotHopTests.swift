@@ -252,6 +252,84 @@ final class HotspotHopTests: XCTestCase {
         XCTAssertEqual(WiFiPick.hotspot(name, among: []).scan, .notFound)
     }
 
+    func testALockedKeychainIsNotAskedAndIsTriedAgainLater() {
+        var mac = HopMac()
+        mac.passwordFailure = .keychainLocked
+        mac.loseWiFi()
+        mac.run(seconds: 120)
+        guard case .failed(.keychainLocked, _) = mac.state else { return XCTFail("\(mac.state.code)") }
+        XCTAssertEqual(mac.wifi.scans, [])
+        XCTAssertEqual(mac.wifi.joins, [])
+        XCTAssertGreaterThan(mac.tryTimes.count, 2, "On the schedule")
+        // The user unlocks it.
+        mac.passwordFailure = nil
+        mac.run(seconds: 62)
+        XCTAssertTrue(joined(mac.state))
+    }
+
+    func testACallThatMacOSNeverAnswersIsAFailedTry() {
+        // Offline: the try fails, nothing is joined, and the next try comes.
+        var mac = HopMac()
+        mac.loseWiFi()
+        mac.wifi.readFailure = .timeout
+        mac.run(seconds: 120)
+        guard case .failed(.timeout, _) = mac.state else { return XCTFail("\(mac.state.code)") }
+        XCTAssertEqual(mac.wifi.joins, [], "Nothing says that the Mac is not on the hotspot")
+        XCTAssertNil(mac.hop.pending)
+        XCTAssertGreaterThan(mac.tryTimes.count, 2)
+        mac.wifi.readFailure = nil
+        mac.run(seconds: 62)
+        XCTAssertTrue(joined(mac.state))
+        // The Keychain gives no answer.
+        mac = HopMac()
+        mac.loseWiFi()
+        mac.passwordFailure = .timeout
+        mac.run(seconds: 30)
+        guard case .failed(.timeout, _) = mac.state else { return XCTFail("\(mac.state.code)") }
+        XCTAssertEqual(mac.wifi.scans, [])
+        // On the hotspot: no answer is not "the Mac left the hotspot".
+        mac = hopped(from: HopMac.cafe)
+        mac.wifi.air.insert(HopMac.cafe)
+        mac.wifi.readFailure = .timeout
+        mac.run(seconds: 600)
+        XCTAssertTrue(joined(mac.state))
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot])
+        XCTAssertNil(mac.hop.pending)
+        mac.wifi.readFailure = nil
+        mac.run(seconds: 244)
+        XCTAssertEqual(mac.wifi.current, HopMac.cafe, "The way back is still there")
+        // Online with an agent: the name is asked for again.
+        mac = HopMac()
+        mac.wifi.readFailure = .timeout
+        mac.run(seconds: 30)
+        XCTAssertEqual(mac.state, .idle)
+        XCTAssertGreaterThan(mac.actions.count, 3)
+    }
+
+    func testACallWithNoTimeLimitGetsOne() {
+        let calls = TimedCalls(label: "com.caffeinagent.tests.timed")
+        XCTAssertEqual(calls.run(5) { 7 }, 7)
+        let hang = DispatchSemaphore(value: 0)
+        let ended = expectation(description: "the call that hung ended")
+        let began = Date()
+        let late: Int? = calls.run(0.05) {
+            hang.wait()
+            ended.fulfill()
+            return 1
+        }
+        XCTAssertNil(late, "The caller goes on")
+        XCTAssertLessThan(Date().timeIntervalSince(began), 2)
+        XCTAssertNil(calls.run(5) { 2 }, "No second call while the first one hangs")
+        hang.signal()
+        wait(for: [ended], timeout: 5)
+        var after: Int?
+        for _ in 0..<100 where after == nil {
+            after = calls.run(5) { 3 }
+            if after == nil { Thread.sleep(forTimeInterval: 0.01) }
+        }
+        XCTAssertEqual(after, 3, "And it works again when that one ended")
+    }
+
     func testOffNotSetUpNoAgentAndAStopDoNothing() {
         let changes: [(String, (inout HotspotHop.Input) -> Void)] = [
             ("the feature is off", { $0.on = false }),
