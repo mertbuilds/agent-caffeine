@@ -6,8 +6,6 @@ enum SafetyStop: Equatable {
     /// less than the Mac uses.
     case weakCharger(percent: Int)
     case tooHot
-    /// The last stop for a closed lid on battery. See `ClosedLidLimit`.
-    case closedLid(ClosedLidStop)
 }
 
 extension SafetyStop {
@@ -18,22 +16,7 @@ extension SafetyStop {
         case .weakCharger(let percent):
             return "Agent Caffeine let your Mac sleep because your charger is too weak and the battery is at \(PanelText.percent(percent))"
         case .tooHot: return "Agent Caffeine let your Mac sleep because it got too hot"
-        case .closedLid(let stop): return "Agent Caffeine let your Mac sleep because \(PanelText.closedLidReason(stop, keptAwake: "it kept it awake"))"
         }
-    }
-
-    /// The same text, and for the closed lid limit the agents that still
-    /// worked.
-    func notificationText(working: HoldSubject?) -> String {
-        guard isLastStop, let working else { return notificationText }
-        return "\(notificationText). \(PanelText.stillWorking(working))"
-    }
-
-    /// The closed lid limit is the last stop: the switch and a pause are
-    /// named before it. Heat and the battery come first.
-    var isLastStop: Bool {
-        if case .closedLid = self { return true }
-        return false
     }
 
     /// The stop to tell the user about, nil for none. A stop is told once,

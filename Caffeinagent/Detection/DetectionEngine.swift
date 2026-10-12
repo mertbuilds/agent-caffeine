@@ -72,6 +72,13 @@ final class DetectionEngine: ObservableObject {
         }
     }
     var safety: SafetyStop? { didSet { if safety != oldValue { decideAgain() } } }
+    /// The closed lid limit is reached: no agent keeps the Mac awake. The
+    /// owner sets it. See `ClosedLidLimit`.
+    var closedLidStop: ClosedLidStop? { didSet { if closedLidStop != oldValue { decideAgain() } } }
+    /// The closed lid limit comes first: it lets go of every agent.
+    private var agentStop: AgentStop? {
+        closedLidStop.map(AgentStop.closedLid) ?? (offlineRule.agentsReleased ? .offline : nil)
+    }
     /// The job holds of "Wake for jobs" that are open. Their owner sets
     /// them. A new one brings a sample at once: after an alarm woke the
     /// Mac, the frame at hand is from before the sleep.
@@ -265,7 +272,7 @@ final class DetectionEngine: ObservableObject {
             holds: frame?.holds ?? [], jobHolds: jobHolds, safety: safety, settings: settings, context: context,
             mayHold: mayHold,
             jobsMayHold: wakeGate.allowsJobHold(holding: heldPastGate, windows: jobHolds.map(AlarmWindow.init), now: now),
-            agentStop: offlineRule.agentsReleased ? .offline : nil, now: now
+            agentStop: agentStop, now: now
         )
         jobHoldOnly = next.hold && !mayHold
         policyMemory = memory

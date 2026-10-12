@@ -10,10 +10,20 @@ enum ClosedLidStop: Equatable {
     case drop(points: Int)
 }
 
-/// A last stop for a closed lid on battery. It asks no agent and no rule
-/// of the detection: whatever keeps the Mac awake, a hold with the lid
-/// closed on battery ends after a time, or after the battery lost a number
-/// of points. So a job that hangs does not empty the battery in a bag.
+/// A last stop for agents under a closed lid on battery. It asks no rule
+/// of the detection: after Agent Caffeine kept the Mac awake for a time
+/// with the lid closed on battery, or after the battery lost a number of
+/// points, no agent session keeps it awake, whatever the session says or
+/// does (`AgentStop.closedLid`). So a session that hangs does not empty
+/// the battery in a bag.
+///
+/// What the user or a program asked for holds on past the limit: a hold
+/// from the command line or through MCP, a job hold of "Wake for jobs"
+/// and "stay reachable". Their net is the battery floor, the heat stop
+/// and their own time caps.
+///
+/// The time and the drop count whoever keeps the Mac awake: the battery
+/// does not care who asked. Only the stop is for agents alone.
 ///
 /// One closed-lid period begins at the first sample that sees a hold with
 /// the lid closed on battery. It ends when the lid opens or power comes,

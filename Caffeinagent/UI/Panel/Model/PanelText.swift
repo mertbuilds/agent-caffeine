@@ -81,15 +81,14 @@ enum PanelText {
             return (canSleepTitle, noAgentOpen)
         case .agentsStopped(.offline):
             return (canSleepTitle, offlineAgents)
+        case .agentsStopped(.closedLid(let stop)):
+            return (canSleepTitle, closedLidAgents(stop))
         case .safetyStop(.batteryLow(let percent)):
             return (stoppedTitle, "The battery is at \(Self.percent(percent))")
         case .safetyStop(.weakCharger(let percent)):
             return (stoppedTitle, "Your charger is too weak and the battery is at \(Self.percent(percent))")
         case .safetyStop(.tooHot):
             return (stoppedTitle, "Your Mac got too hot")
-        case .safetyStop(.closedLid(let stop)):
-            let reason = closedLidReason(stop)
-            return (stoppedTitle, reason.prefix(1).uppercased() + reason.dropFirst())
         case .switchedOff:
             return (offTitle, "Your Mac sleeps as usual")
         case .paused(let until):
@@ -249,6 +248,24 @@ enum PanelText {
         }
     }
 
+    /// "Kept awake for 3 hours with the lid closed on battery, so agents
+    /// do not keep it awake". Below the headline when nothing else keeps
+    /// the Mac awake, and as the line below it when something else does.
+    static func closedLidAgents(_ stop: ClosedLidStop) -> String {
+        let reason = closedLidReason(stop)
+        return "\(reason.prefix(1).uppercased() + reason.dropFirst()), so agents do not keep it awake"
+    }
+
+    /// The line below an agent that works under the closed lid limit.
+    static let workingPastLidLimit = "Working, but the closed lid limit is reached"
+
+    /// The text of the notification when the closed lid limit ends a
+    /// hold, with the agents that still worked.
+    static func closedLidNotice(_ stop: ClosedLidStop, working: HoldSubject?) -> String {
+        let text = "Agent Caffeine let your Mac sleep because \(closedLidReason(stop, keptAwake: "it kept it awake"))"
+        return working.map { "\(text). \(stillWorking($0))" } ?? text
+    }
+
     /// "Claude Code was still working".
     static func stillWorking(_ subject: HoldSubject) -> String {
         phrase(subject, one: "was still working", many: "were still working")
@@ -285,7 +302,8 @@ enum PanelText {
     static let helperExplained = "The helper is a background item of Agent Caffeine. It changes one sleep setting of macOS while Agent Caffeine keeps your Mac awake, and changes it back after."
     static let helperRemoveHere = "You can remove it here at any time."
     static let helperRemoveInSettings = "You can remove it in Settings > Battery and lid at any time."
-    static let closedLidLimitExplained = "A last stop, so a job that hangs does not empty the battery in a bag"
+    static let closedLidLimitPicker = "With the lid closed on battery, keep it awake for agents for at most"
+    static let closedLidLimitExplained = "A last stop for agents, so a session that hangs does not empty the battery in a bag. Command line holds and scheduled jobs are not stopped"
     static let noLimit = "No limit"
     static let closedBagWarning = "Do not put your Mac in a closed bag while an agent works."
     static let lidChimeSwitch = "Play a sound when you close the lid and your Mac stays awake"
@@ -333,7 +351,7 @@ enum PanelText {
     }
 
     static let startsAgainWhenCool = "Agent Caffeine starts again when your Mac is cool"
-    static let startsAgainWhenLidOpens = "Agent Caffeine starts again when you open the lid or connect power"
+    static let agentsAgainWhenLidOpens = "Agents keep your Mac awake again when you open the lid or connect power"
     static let allowHelperAgain = "Allow Agent Caffeine again in Login Items, and your Mac sleeps as usual"
     static let helperNotResponding = "Agent Caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery."
     static let helperRepairing = "Setting up the helper again…"

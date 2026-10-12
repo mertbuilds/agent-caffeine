@@ -53,6 +53,8 @@ struct PanelPreview: View {
 #Preview("Helper switched off") { PanelPreview(state: PanelFixtures.helperSwitchedOff, mode: .always) }
 #Preview("Helper gives no answer") { PanelPreview(state: PanelFixtures.helperNotResponding) }
 #Preview("Slept under an agent") { PanelPreview(state: PanelFixtures.sleptAnyway) }
+#Preview("Closed lid limit, agents only") { PanelPreview(state: PanelFixtures.closedLidStopped) }
+#Preview("Closed lid limit, with a hold from the command line") { PanelPreview(state: PanelFixtures.closedLidWithHold) }
 #Preview("Offline, agents only") { PanelPreview(state: PanelFixtures.offline) }
 #Preview("Offline, with a hold from the command line") { PanelPreview(state: PanelFixtures.offlineWithHold) }
 

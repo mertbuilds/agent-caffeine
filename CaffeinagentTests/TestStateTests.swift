@@ -87,7 +87,7 @@ final class TestStateTests: XCTestCase {
         XCTAssertEqual(state.lid, TestState.Lid(closed: true, angle: 3))
         XCTAssertEqual(state.safety, "batteryLow")
         XCTAssertEqual(state.closedLid, TestState.ClosedLid(
-            since: at(-700).timeIntervalSince1970, heldSeconds: 610, percentAtStart: 70, limitSeconds: 600, limitDrop: 30, stop: "closedLidTime"
+            since: at(-700).timeIntervalSince1970, heldSeconds: 610, percentAtStart: 70, limitSeconds: 600, limitDrop: 30, stop: "closedLidTime", agentsReleased: true
         ))
         XCTAssertEqual(state.network, TestState.Network(online: false, offlineSeconds: 610, limitSeconds: 600, agentsReleased: true))
         XCTAssertEqual(state.gate, "open")
@@ -113,12 +113,12 @@ final class TestStateTests: XCTestCase {
         XCTAssertEqual(TestState(input).decision.headline, "safetyStop")
         XCTAssertEqual(TestState(input).decision.reason, "weakCharger")
         XCTAssertTrue(TestState(input).decision.stop)
-        input.decision.headline = .safetyStop(.closedLid(.drop(points: 30)))
-        input.safety = .closedLid(.drop(points: 30))
+        input.decision.headline = .agentsStopped(.closedLid(.drop(points: 30)))
+        XCTAssertEqual(TestState(input).decision.headline, "agentsStopped")
         XCTAssertEqual(TestState(input).decision.reason, "closedLidDrop")
-        XCTAssertEqual(TestState(input).safety, "closedLidDrop")
-        input.safety = .closedLid(.time(seconds: 3600))
-        XCTAssertEqual(TestState(input).safety, "closedLidTime")
+        XCTAssertFalse(TestState(input).decision.stop)
+        input.decision.headline = .agentsStopped(.closedLid(.time(seconds: 3600)))
+        XCTAssertEqual(TestState(input).decision.reason, "closedLidTime")
         input.closedLid = ClosedLidLimit()
         XCTAssertNil(TestState(input).closedLid, "No closed-lid period")
         input.decision.headline = .agentsStopped(.offline)
@@ -162,7 +162,7 @@ final class TestStateTests: XCTestCase {
         "mode": Set(AwakeMode.allCases.map(\.rawValue)),
         "headline": ["working"], "helper": ["enabled"], "setup": ["ready"],
         "source": ["battery", "ac", "launchd", "crontab", "hermes"],
-        "safety": ["batteryLow", "weakCharger", "tooHot", "closedLidTime", "closedLidDrop"],
+        "safety": ["batteryLow", "weakCharger", "tooHot"],
         "stop": ["closedLidTime", "closedLidDrop"],
         "gate": ["open", "sleepAnnounced", "slept", "woke"],
         "id": ["claude", TestState.userAgentID, "0a1b2c3d"],

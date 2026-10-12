@@ -30,8 +30,8 @@ enum SleepReason: Equatable {
     case tooHot
     case paused
     case waitedTooLong(HoldSubject, hold: TimeInterval)
-    /// The closed lid limit ended a hold, with the agents that still
-    /// worked then.
+    /// The closed lid limit let go of the agents, with the ones that
+    /// still worked then.
     case closedLidLimit(ClosedLidStop, working: HoldSubject?)
     /// The Mac was offline for the limit, so the agents kept it awake no
     /// longer, with the agents that still worked then.
@@ -40,19 +40,21 @@ enum SleepReason: Equatable {
     /// Nil when no agent worked or waited, when the user turned agent
     /// caffeine off, and when the reason is not known: with a hold and an
     /// open lid, or on power, the user put the Mac to sleep by hand.
-    /// The closed lid limit is told with no agent too: it ends every kind
-    /// of hold.
+    /// A rule that let go of the agents is told whatever they did: an
+    /// agent that is only open is let go too.
     static func reason(_ snapshot: SleepSnapshot) -> SleepReason? {
-        if case .safetyStop(.closedLid(let stop)) = snapshot.headline { return .closedLidLimit(stop, working: snapshot.working) }
+        switch snapshot.headline {
+        case .agentsStopped(.closedLid(let stop)): return .closedLidLimit(stop, working: snapshot.working)
+        case .agentsStopped(.offline): return .offline(limit: snapshot.offlineLimit, working: snapshot.working)
+        default: break
+        }
         guard snapshot.agentActive else { return nil }
         switch snapshot.headline {
         case .safetyStop(.batteryLow(let percent)), .safetyStop(.weakCharger(let percent)): return .battery(percent: percent)
         case .safetyStop(.tooHot): return .tooHot
-        case .safetyStop(.closedLid(let stop)): return .closedLidLimit(stop, working: snapshot.working)
         case .paused: return .paused
         case .waitingReleased(let subject): return .waitedTooLong(subject, hold: snapshot.waitingHold)
-        case .agentsStopped(.offline): return .offline(limit: snapshot.offlineLimit, working: snapshot.working)
-        case .switchedOff, .idle, .noAgents: return nil
+        case .switchedOff, .idle, .noAgents, .agentsStopped: return nil
         case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess, .reachable, .manualHold, .scheduledJob:
             guard snapshot.lidClosed, snapshot.onBattery else { return nil }
             if !snapshot.helperSetUp { return .lidClosedNoHelper }

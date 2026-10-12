@@ -73,18 +73,18 @@ struct AttentionLine: View {
 
     private var symbol: String {
         switch attention.kind {
-        case .safetyStop, .helperSwitchedOff, .helperNotResponding, .helperLost: return "exclamationmark.triangle.fill"
+        case .safetyStop, .helperSwitchedOff, .helperNotResponding, .helperLost, .closedLidLimit: return "exclamationmark.triangle.fill"
         case .lidClosedNotSetUp, .reachableNeedsLidClosed: return "laptopcomputer"
         case .sleptAnyway: return "moon.zzz"
-        case .agentsStopped: return "wifi.slash"
+        case .agentsOffline: return "wifi.slash"
         }
     }
 
     private var tint: Color {
         switch attention.kind {
-        case .safetyStop, .helperNotResponding, .helperLost, .reachableNeedsLidClosed: return .orange
+        case .safetyStop, .helperNotResponding, .helperLost, .reachableNeedsLidClosed, .closedLidLimit: return .orange
         case .helperSwitchedOff: return .red
-        case .lidClosedNotSetUp, .sleptAnyway, .agentsStopped: return .secondary
+        case .lidClosedNotSetUp, .sleptAnyway, .agentsOffline: return .secondary
         }
     }
 }

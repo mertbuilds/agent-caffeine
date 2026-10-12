@@ -764,11 +764,19 @@ final class StateAggregator: ObservableObject {
     // MARK: Engine
 
     private func apply(_ decision: HoldDecision) {
-        // The offline rule ended a hold, and nothing else keeps the Mac
-        // awake: the user is told why, once.
-        if decision.headline == .agentsStopped(.offline), self.decision.hold, let limit = engine.offlineRule.limit {
-            testNotices.note(.offline, at: Date())
-            notify(PanelText.offlineNotice(limit: limit, working: decision.working(settings)))
+        // A rule for agents ended a hold, and nothing else keeps the Mac
+        // awake: the user is told why. Not while another hold goes on:
+        // the Mac is not let go then.
+        if self.decision.hold, case .agentsStopped(let stop) = decision.headline {
+            let working = decision.working(settings)
+            switch stop {
+            case .offline:
+                testNotices.note(.offline, at: Date())
+                notify(PanelText.offlineNotice(limit: engine.offlineRule.limit ?? 0, working: working))
+            case .closedLid(let stop):
+                testNotices.note(.closedLidLimit, at: Date())
+                notify(PanelText.closedLidNotice(stop, working: working))
+            }
         }
         self.decision = decision
         refreshRows()
@@ -793,12 +801,13 @@ final class StateAggregator: ObservableObject {
         closedLidLimit.timeLimit = limits.time
         closedLidLimit.dropLimit = limits.drop
         engine.offlineTestSeconds = OfflineRule.testSeconds(in: defaults)
+        // Whoever holds: the battery does not care. The stop is for the
+        // agents alone, and `apply` tells the user when it ends a hold.
         let lidStop = closedLidLimit.update(context, holding: power.held, at: sample.frame.time, afterGap: sample.afterGap)
-        // Heat and the battery floor come first.
-        let stop = safetyMonitor.update(context.safetyInputs, afterGap: sample.afterGap) ?? lidStop.map(SafetyStop.closedLid)
+        let stop = safetyMonitor.update(context.safetyInputs, afterGap: sample.afterGap)
         if let begun = SafetyStop.toAnnounce(previous: engine.safety, current: stop, wasHolding: power.held) {
             testNotices.note(.safetyStop, at: sample.frame.at)
-            notify(begun.notificationText(working: decision.working(settings)))
+            notify(begun.notificationText)
         }
         let warned = noLimitWarning.update(
             context.safetyInputs, drainingOnPower: safetyMonitor.drainingOnPower, floorEnabled: settings.batteryFloorEnabled, holding: power.held
@@ -808,6 +817,7 @@ final class StateAggregator: ObservableObject {
             notify(NoLimitBatteryWarning.notificationText(percent: percent))
         }
         engine.safety = stop
+        engine.closedLidStop = lidStop
         // The power source, the battery and a stop move the wake alarm.
         updateJobWake()
         sleepFlag.sampleCompleted()

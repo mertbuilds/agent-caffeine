@@ -152,6 +152,33 @@ final class DetectionEngineTests: XCTestCase {
         XCTAssertEqual(engine.decision.headline, .working(.one("Claude Code")))
     }
 
+    /// `ClosedLidLimit`: the owner sets the stop, and the agents let go
+    /// at once. A hold from the command line holds on.
+    func testTheClosedLidLimitLetsGoOfTheAgentAndNotOfAManualHold() {
+        state = .working
+        engine.start()
+        scheduler.advance(by: 4)
+        XCTAssertTrue(engine.decision.hold)
+        let stop = ClosedLidStop.time(seconds: 10_800)
+        engine.closedLidStop = stop
+        XCTAssertFalse(engine.decision.hold)
+        XCTAssertEqual(engine.decision.headline, .agentsStopped(.closedLid(stop)))
+        engine.closedLidStop = nil
+        XCTAssertTrue(engine.decision.hold, "The lid opens: no wait")
+
+        let hold = ManualHold.timed(id: "aaaa0001", length: 3600, reason: "render", now: now)
+        collector.next = { [unowned self] in
+            var sample = self.sample()
+            sample.frame.holds = [hold]
+            return sample
+        }
+        scheduler.advance(by: 2)
+        engine.closedLidStop = stop
+        XCTAssertTrue(engine.decision.hold)
+        XCTAssertEqual(engine.decision.headline, .manualHold(.one("render")))
+        XCTAssertEqual(engine.decision.perAgent.map(\.stopped), [.closedLid(stop)])
+    }
+
     /// The setting counts at once, and so does the hidden default of
     /// the tests.
     func testTheLimitOfTheOfflineRuleFollowsTheSettings() {

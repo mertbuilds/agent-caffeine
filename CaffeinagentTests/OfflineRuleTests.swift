@@ -351,7 +351,6 @@ final class OfflineRuleTests: XCTestCase {
         let cases: [(HoldHeadline, (inout Mac) -> Void)] = [
             (.safetyStop(.batteryLow(percent: 20)), { $0.safety = .batteryLow(percent: 20) }),
             (.safetyStop(.tooHot), { $0.safety = .tooHot }),
-            (.safetyStop(.closedLid(.time(seconds: 10_800))), { $0.safety = .closedLid(.time(seconds: 10_800)) }),
             (.switchedOff, { $0.enabled = false }),
             (.paused(until: until), { $0.pausedUntil = until }),
         ]
@@ -365,6 +364,17 @@ final class OfflineRuleTests: XCTestCase {
             XCTAssertEqual(mac.decision?.headline, headline)
             XCTAssertEqual(mac.decision?.perAgent.map(\.stopped), [nil], "The stop is the reason, not the network")
         }
+    }
+
+    /// The closed lid limit lets go of every agent, so it is named
+    /// before the offline rule, which leaves a busy command.
+    func testTheClosedLidLimitComesBeforeTheOfflineRule() {
+        let lid = AgentStop.closedLid(.time(seconds: 10_800))
+        let decision = HoldPolicy.decide(
+            readings: [Self.reading(.working, .runningCommand(1))], memory: PolicyMemory(), mode: .agentWorking, enabled: true,
+            safety: nil, settings: DetectionSettings(), context: FrameContext(offline: true), agentStop: lid, now: Self.start
+        ).0
+        XCTAssertEqual(decision.headline, .agentsStopped(lid))
     }
 
     // MARK: The incident
@@ -448,7 +458,7 @@ final class OfflineRuleTests: XCTestCase {
         let state = MenuModel.state(PanelInput(decision: mac.decision!), now: mac.now)
         XCTAssertEqual(state.title, "Your Mac stays awake")
         XCTAssertEqual(state.subtitle, "deploy asked for it")
-        XCTAssertEqual(state.attention, PanelAttention(kind: .agentsStopped, text: "Your Mac is offline, so agents do not keep it awake"))
+        XCTAssertEqual(state.attention, PanelAttention(kind: .agentsOffline, text: "Your Mac is offline, so agents do not keep it awake"))
         XCTAssertEqual(state.groups.map(\.header.name), ["Claude Code", "deploy"])
         XCTAssertEqual(state.groups[0].header.detail, "Working, but your Mac is offline")
         XCTAssertTrue(state.groups[1].header.detail.hasPrefix("Keeps your Mac awake until "))

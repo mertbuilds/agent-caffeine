@@ -20,6 +20,9 @@ enum AgentStop: Equatable {
     /// `OfflineRule`: the Mac has no way to the network. An agent with a
     /// busy child command holds on.
     case offline
+    /// `ClosedLidLimit`: the last net for agents under a closed lid on
+    /// battery. It lets go of every agent, whatever its reason.
+    case closedLid(ClosedLidStop)
 }
 
 struct AgentHold: Equatable {
@@ -118,10 +121,10 @@ enum HoldHeadline: Equatable {
         case .waitingReleased(let subject): return "Mac can sleep: \(Self.phrase(subject, one: "is waiting for you", many: "are waiting for you"))"
         case .noAgents: return "Mac can sleep: no agent is open"
         case .agentsStopped(.offline): return "Mac can sleep: the Mac is offline, so agents do not keep it awake"
+        case .agentsStopped(.closedLid(let stop)): return "Mac can sleep: \(PanelText.closedLidReason(stop)), so agents do not keep it awake"
         case .safetyStop(.batteryLow(let percent)): return "Sleeping allowed: battery at \(PanelText.percent(percent))"
         case .safetyStop(.weakCharger(let percent)): return "Sleeping allowed: weak charger, battery at \(PanelText.percent(percent))"
         case .safetyStop(.tooHot): return "Sleeping allowed: the Mac is too hot"
-        case .safetyStop(.closedLid(let stop)): return "Sleeping allowed: \(PanelText.closedLidReason(stop))"
         case .switchedOff: return "Mac can sleep: Agent Caffeine is off"
         case .paused: return "Mac can sleep: Agent Caffeine is paused"
         }
@@ -253,6 +256,7 @@ enum HoldPolicy {
     private static func stops(_ stop: AgentStop, _ reading: AgentReading) -> Bool {
         switch stop {
         case .offline: return !reading.runsBusyCommand
+        case .closedLid: return true
         }
     }
 
@@ -277,12 +281,11 @@ enum HoldPolicy {
     /// after the switch, because a pause of an app that is off means
     /// nothing. Every stop gives a decision without the sleep flag, so a
     /// pause never leaves SleepDisabled on.
-    /// The closed lid limit is named last: every other stop wins over it.
     private static func stopHeadline(enabled: Bool, pausedUntil: Date?, safety: SafetyStop?, now: Date) -> HoldHeadline? {
-        if let safety, !safety.isLastStop { return .safetyStop(safety) }
+        if let safety { return .safetyStop(safety) }
         guard enabled else { return .switchedOff }
         if let pausedUntil, now < pausedUntil { return .paused(until: pausedUntil) }
-        return safety.map(HoldHeadline.safetyStop)
+        return nil
     }
 
     /// An instance that is not among the readings is gone, and so is its hold.

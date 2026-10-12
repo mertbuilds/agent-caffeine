@@ -92,10 +92,9 @@ struct LabScore: Equatable {
 /// the result against the owner's marks. Pure.
 enum LabReplay {
     /// The settings and the mode are the recorded ones unless given. The
-    /// replay runs switched on. Of the safety stops it has the closed lid
-    /// limit alone: the frames say all it needs. The offline rule runs
-    /// from the path state of each frame. The hidden defaults of the
-    /// tests do not count here.
+    /// replay runs switched on, with no safety stop. The closed lid limit
+    /// and the offline rule run from what each frame says. The hidden
+    /// defaults of the tests do not count here.
     static func steps(of recording: LabRecording, settings: DetectionSettings? = nil, mode: AwakeMode? = nil) -> [LabStep] {
         let settings = settings ?? recording.header?.settings ?? DetectionSettings()
         let mode = mode ?? recording.header.flatMap { AwakeMode(rawValue: $0.mode) } ?? .agentWorking
@@ -120,8 +119,8 @@ enum LabReplay {
             let (readings, nextAgents) = VerdictRules.readings(for: sample.frame, memory: agentMemory, settings: settings)
             let (decision, nextPolicy) = HoldPolicy.decide(
                 readings: readings, memory: policyMemory, mode: mode, enabled: true, holds: sample.frame.holds, jobHolds: sample.frame.jobHolds,
-                safety: lidStop.map(SafetyStop.closedLid), settings: settings, context: sample.frame.context,
-                agentStop: offline.agentsReleased ? .offline : nil, now: sample.frame.at
+                safety: nil, settings: settings, context: sample.frame.context,
+                agentStop: lidStop.map(AgentStop.closedLid) ?? (offline.agentsReleased ? .offline : nil), now: sample.frame.at
             )
             agentMemory = nextAgents
             policyMemory = nextPolicy

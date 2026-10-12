@@ -629,7 +629,7 @@ struct LidClosedPreferences: View {
                 .foregroundStyle(.secondary)
             }
             Section("Closed lid limit") {
-                Picker("With the lid closed on battery, keep it awake for at most", selection: $settings.closedLidLimitHours) {
+                Picker(PanelText.closedLidLimitPicker, selection: $settings.closedLidLimitHours) {
                     ForEach(ClosedLidLimit.hourChoices, id: \.self) { Text(HumaneDuration.counted($0, "hour")).tag($0) }
                     Text(PanelText.noLimit).tag(ClosedLidLimit.noLimit)
                 }

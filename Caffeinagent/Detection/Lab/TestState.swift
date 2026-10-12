@@ -31,7 +31,8 @@ struct TestState: Codable, Equatable {
         /// The case of `HoldHeadline`: "working", "noAgents", "paused".
         var headline: String
         /// The kind of the safety stop, where the headline is one, and
-        /// "offline" where the offline rule let go of the agents.
+        /// the rule that let go of the agents, where it is that: "offline",
+        /// "closedLidTime" or "closedLidDrop".
         var reason: String?
         var stop: Bool
         /// The app holds its power assertions.
@@ -72,9 +73,11 @@ struct TestState: Codable, Equatable {
         /// The limits in use. Nil is no limit.
         var limitSeconds: TimeInterval?
         var limitDrop: Int?
-        /// "closedLidTime" or "closedLidDrop", nil while the limit has
-        /// not stopped the hold.
+        /// "closedLidTime" or "closedLidDrop", nil while the limit is
+        /// not reached.
         var stop: String?
+        /// The limit is reached: agents do not keep the Mac awake.
+        var agentsReleased: Bool
     }
 
     /// The way to the network and the offline rule. See `OfflineRule`.
@@ -191,4 +194,6 @@ enum TestNoticeKind: String, CaseIterable {
     case hidden
     /// The offline rule ended a hold.
     case offline
+    /// The closed lid limit ended a hold.
+    case closedLidLimit
 }

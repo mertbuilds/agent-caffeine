@@ -293,14 +293,33 @@ enum PanelFixtures {
         return state(input)
     }()
 
-    /// The closed lid limit ended the hold, and the lid is still closed
-    /// on battery: seen on a second display.
+    /// The closed lid limit let go of the agent, and the lid is still
+    /// closed on battery: seen on a second display.
     static let closedLidStopped: PanelState = {
-        var input = Self.input(.safetyStop(.closedLid(.time(seconds: 3 * 3600))), [
-            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 190, label: "blog"),
+        let stop = AgentStop.closedLid(.time(seconds: 3 * 3600))
+        var input = Self.input(.agentsStopped(stop), [
+            Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 190, label: "blog", stopped: stop),
         ])
         input.onBattery = true
         input.batteryPercent = 71
+        return state(input)
+    }()
+
+    /// The same, and a hold from the command line keeps the Mac awake.
+    static let closedLidWithHold: PanelState = {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        var input = Self.input(.manualHold(.one("render")), [
+            Agent(
+                id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 190, label: "blog",
+                stopped: .closedLid(.time(seconds: 3 * 3600))
+            ),
+        ])
+        input.decision.manualHolds = [ManualHold.timed(id: "0a1b2c3d", length: 8 * 3600, reason: "render", now: now.addingTimeInterval(-190 * 60))]
+        input.onBattery = true
+        input.batteryPercent = 71
+        input.calendar = calendar
+        input.locale = Locale(identifier: "en_GB")
         return state(input)
     }()
 
@@ -349,7 +368,7 @@ enum PanelFixtures {
         ("reachable", reachable), ("reachable-no-helper", reachableNoHelper), ("lid-closed", lidClosedNotSetUp),
         ("helper-off", helperSwitchedOff), ("helper-silent", helperNotResponding),
         ("slept-anyway", sleptAnyway), ("manual-holds", manualHolds), ("job-hold", jobHold), ("wake-set", wakeSet),
-        ("closed-lid-stopped", closedLidStopped), ("slept-closed-lid", sleptClosedLid),
+        ("closed-lid-stopped", closedLidStopped), ("closed-lid-with-hold", closedLidWithHold), ("slept-closed-lid", sleptClosedLid),
         ("offline", offline), ("offline-with-hold", offlineWithHold),
     ]
 

@@ -1,7 +1,8 @@
 import XCTest
 
-/// The last stop for a closed lid on battery: `ClosedLidLimit`, with the
-/// policy, the texts, the settings and the replay.
+/// The last stop for agents under a closed lid on battery:
+/// `ClosedLidLimit`, with the policy, the texts, the settings and the
+/// replay.
 final class ClosedLidLimitTests: XCTestCase {
     private static let start = Date(timeIntervalSince1970: 1_791_200_000)
     private static let hour: TimeInterval = 3600
@@ -63,8 +64,8 @@ final class ClosedLidLimitTests: XCTestCase {
             let lidStop = limit.update(context, holding: held, at: time, afterGap: gap != nil)
             let (next, nextMemory) = HoldPolicy.decide(
                 readings: readings, memory: memory, mode: .agentWorking, enabled: enabled, reachableUntil: reachableUntil, holds: holds,
-                jobHolds: jobHolds, safety: otherStop ?? lidStop.map(SafetyStop.closedLid), settings: settings,
-                context: context, now: now
+                jobHolds: jobHolds, safety: otherStop, settings: settings,
+                context: context, agentStop: lidStop.map(AgentStop.closedLid), now: now
             )
             memory = nextMemory
             decision = next
@@ -85,7 +86,7 @@ final class ClosedLidLimitTests: XCTestCase {
     }
 
     private func assertStopped(_ mac: Mac, _ stop: ClosedLidStop, file: StaticString = #filePath, line: UInt = #line) {
-        XCTAssertEqual(mac.decision?.headline, .safetyStop(.closedLid(stop)), file: file, line: line)
+        XCTAssertEqual(mac.decision?.headline, .agentsStopped(.closedLid(stop)), file: file, line: line)
         XCTAssertEqual(mac.decision?.hold, false, file: file, line: line)
         XCTAssertEqual(mac.decision?.lidClosedFlag, false, "The sleep flag goes off with the hold", file: file, line: line)
     }
@@ -398,19 +399,49 @@ final class ClosedLidLimitTests: XCTestCase {
     // MARK: The other stops and the other holds
 
     func testEveryOtherStopWins() {
-        let lid = SafetyStop.closedLid(.time(seconds: 3 * Self.hour))
-        func decide(enabled: Bool = true, pausedUntil: Date? = nil) -> HoldHeadline {
+        let lid = AgentStop.closedLid(.time(seconds: 3 * Self.hour))
+        func decide(enabled: Bool = true, pausedUntil: Date? = nil, safety: SafetyStop? = nil) -> HoldHeadline {
             HoldPolicy.decide(
                 readings: [Self.reading(.working)], memory: PolicyMemory(), mode: .agentWorking, enabled: enabled, pausedUntil: pausedUntil,
-                safety: lid, settings: DetectionSettings(), context: FrameContext(), now: Self.start
+                safety: safety, settings: DetectionSettings(), context: FrameContext(), agentStop: lid, now: Self.start
             ).0.headline
         }
-        XCTAssertEqual(decide(), .safetyStop(lid))
+        XCTAssertEqual(decide(), .agentsStopped(lid))
         XCTAssertEqual(decide(enabled: false), .switchedOff)
         let until = Self.start.addingTimeInterval(600)
         XCTAssertEqual(decide(pausedUntil: until), .paused(until: until))
-        XCTAssertTrue(lid.isLastStop)
-        for stop in [SafetyStop.batteryLow(percent: 20), .weakCharger(percent: 20), .tooHot] { XCTAssertFalse(stop.isLastStop) }
+        for stop in [SafetyStop.batteryLow(percent: 20), .weakCharger(percent: 20), .tooHot] {
+            XCTAssertEqual(decide(safety: stop), .safetyStop(stop))
+        }
+        XCTAssertFalse(HoldHeadline.agentsStopped(lid).isStop, "What was asked for holds on, so it is no stop")
+        XCTAssertFalse(HoldHeadline.agentsStopped(lid).keepsAwake)
+    }
+
+    /// The last net for agents holds for every agent reason: a busy
+    /// command too, and an agent that waits or is only open.
+    func testEveryAgentReasonIsLetGo() throws {
+        let readings: [(AgentReading, AwakeMode)] = [
+            (Self.reading(.working), .agentWorking),
+            (AgentReading(
+                agentID: "claude", displayName: "Claude Code", level: .state, identity: ProcessIdentity(pid: 1, startTime: 1),
+                verdict: AgentVerdict(state: .working, confidence: .inferredStrong, reason: .runningCommand(2)), busyCommands: 2
+            ), .agentWorking),
+            (AgentReading(
+                agentID: "claude", displayName: "Claude Code", level: .state, identity: ProcessIdentity(pid: 1, startTime: 1),
+                verdict: AgentVerdict(state: .waitingForUser, confidence: .reported, reason: .asksPermission)
+            ), .agentWorking),
+            (Self.reading(.idle), .agentOpen),
+        ]
+        for (reading, mode) in readings {
+            let lid = AgentStop.closedLid(.drop(points: 30))
+            let decision = HoldPolicy.decide(
+                readings: [reading], memory: PolicyMemory(), mode: mode, enabled: true,
+                safety: nil, settings: DetectionSettings(), context: FrameContext(), agentStop: lid, now: Self.start
+            ).0
+            XCTAssertFalse(decision.hold, "\(reading.verdict.reason)")
+            XCTAssertEqual(decision.headline, .agentsStopped(lid))
+            XCTAssertEqual(decision.perAgent.map(\.stopped), [lid])
+        }
     }
 
     func testHeatAndTheBatteryFloorComeFirst() throws {
@@ -421,7 +452,7 @@ final class ClosedLidLimitTests: XCTestCase {
             XCTAssertEqual(mac.sample().headline, .safetyStop(stop))
         }
         mac.otherStop = nil
-        XCTAssertEqual(mac.sample().headline, .safetyStop(.closedLid(.time(seconds: 3 * Self.hour))), "It is still on behind the other stop")
+        XCTAssertEqual(mac.sample().headline, .agentsStopped(.closedLid(.time(seconds: 3 * Self.hour))), "It is still on behind the other stop")
     }
 
     func testTimeUnderAnotherStopIsNoHeldTime() throws {
@@ -437,7 +468,9 @@ final class ClosedLidLimitTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(mac.limit.period?.held), try XCTUnwrap(held), accuracy: 20)
     }
 
-    func testAManualHoldAJobHoldAndStayReachableAreStoppedToo() throws {
+    /// What the user or a program asked for holds on past the limit. The
+    /// agent is let go, and the time counts whoever holds.
+    func testAManualHoldAJobHoldAndStayReachableHoldOnPastTheLimit() throws {
         let manual = ManualHold.timed(id: "aaaa0001", length: 4 * Self.hour, now: Self.start)
         let job = ScheduledJob(id: "crontab:backup.sh", source: .crontab, name: "backup.sh", schedule: .cron(JobTime.cron("0 3 * * *")), enabled: true)
         let jobHold = try XCTUnwrap(JobHold.open(job: job, fireAt: Self.start.addingTimeInterval(60), settings: JobSettings()))
@@ -448,15 +481,67 @@ final class ClosedLidLimitTests: XCTestCase {
         ]
         for (name, headline, set) in cases {
             var mac = Mac()
-            mac.readings = []
             // The hidden default of the tests: 2 minutes.
             (mac.limit.timeLimit, mac.limit.dropLimit) = DetectionSettings().closedLidLimits(testSeconds: 120)
             set(&mac)
-            XCTAssertEqual(mac.sample().headline, headline, name)
-            XCTAssertEqual(try XCTUnwrap(mac.runUntilReleased()), 120, accuracy: 30, name)
-            assertStopped(mac, .time(seconds: 120))
-            XCTAssertEqual(mac.decision?.manualHolds, mac.holds, "Listed, and it keeps nothing awake: \(name)")
+            XCTAssertEqual(mac.sample().headline, .working(.one("Claude Code")), name)
+            // Inside the start grace of the job hold.
+            mac.run(200)
+            XCTAssertTrue(mac.held, name)
+            XCTAssertEqual(mac.limit.period?.stop, .time(seconds: 120), "The time counts whoever holds: \(name)")
+            XCTAssertEqual(mac.decision?.headline, headline, "The agent is no longer the reason: \(name)")
+            XCTAssertEqual(mac.decision?.perAgent.map(\.stopped), [.closedLid(.time(seconds: 120))], name)
+            XCTAssertEqual(mac.decision?.lidClosedFlag, true, name)
         }
+    }
+
+    /// With no agent the limit is reached all the same, and stops nothing.
+    func testWithNoAgentTheLimitStopsNothing() {
+        var mac = Mac()
+        mac.readings = []
+        mac.holds = [ManualHold.timed(id: "aaaa0001", length: 8 * Self.hour, reason: "render", now: Self.start)]
+        mac.run(4 * Self.hour)
+        XCTAssertTrue(mac.held)
+        XCTAssertEqual(mac.decision?.headline, .manualHold(.one("render")))
+        XCTAssertEqual(mac.limit.period?.stop, .time(seconds: 3 * Self.hour))
+    }
+
+    /// A hold of 8 hours from the command line, the lid closed, on
+    /// battery: it holds past the 3 hours to its own end.
+    func testAManualHoldOfEightHoursHoldsToItsOwnEnd() throws {
+        var mac = Mac()
+        mac.holds = [ManualHold.timed(id: "aaaa0001", length: 8 * Self.hour, reason: "render", now: Self.start)]
+        mac.run(3 * Self.hour + 600)
+        XCTAssertTrue(mac.held)
+        XCTAssertEqual(mac.decision?.headline, .manualHold(.one("render")))
+        XCTAssertEqual(mac.decision?.perAgent.map(\.stopped), [.closedLid(.time(seconds: 3 * Self.hour))])
+        let released = try XCTUnwrap(mac.runUntilReleased())
+        XCTAssertEqual(released, 8 * Self.hour, accuracy: 30)
+        assertStopped(mac, .time(seconds: 3 * Self.hour))
+    }
+
+    /// Its net is the battery floor: that stop ends it before its time.
+    func testTheBatteryFloorEndsAManualHoldPastTheLimit() throws {
+        var mac = Mac()
+        mac.limit.dropLimit = nil
+        mac.holds = [ManualHold.timed(id: "aaaa0001", length: 8 * Self.hour, reason: "render", now: Self.start)]
+        mac.run(5 * Self.hour)
+        XCTAssertTrue(mac.held)
+        mac.otherStop = .batteryLow(percent: 20)
+        XCTAssertFalse(mac.sample().hold)
+        XCTAssertEqual(mac.decision?.headline, .safetyStop(.batteryLow(percent: 20)))
+    }
+
+    /// The drop limit does the same: the battery lost 30 points under a
+    /// hold from the command line, and only the agent is let go.
+    func testTheDropLimitLetsGoOfTheAgentAndNotOfAManualHold() {
+        var mac = Mac()
+        mac.drainPerHour = 20
+        mac.holds = [ManualHold.timed(id: "aaaa0001", length: 8 * Self.hour, reason: "render", now: Self.start)]
+        mac.run(2 * Self.hour)
+        XCTAssertTrue(mac.held)
+        XCTAssertEqual(mac.decision?.headline, .manualHold(.one("render")))
+        XCTAssertEqual(mac.decision?.perAgent.map(\.stopped), [.closedLid(.drop(points: 30))])
     }
 
     // MARK: The night of 2026-10-10
@@ -510,7 +595,7 @@ final class ClosedLidLimitTests: XCTestCase {
         let steps = LabReplay.steps(of: recording(DetectionSettings()))
         let released = steps.first { !$0.decision.hold }
         XCTAssertEqual(try XCTUnwrap(released).at.timeIntervalSince(Self.start), 3 * Self.hour, accuracy: 15)
-        XCTAssertEqual(released?.decision.headline, .safetyStop(.closedLid(.time(seconds: 3 * Self.hour))))
+        XCTAssertEqual(released?.decision.headline, .agentsStopped(.closedLid(.time(seconds: 3 * Self.hour))))
         XCTAssertEqual(steps.last?.decision.hold, false)
         XCTAssertEqual(LabReplay.score(recording(DetectionSettings())).heldSeconds, 3 * Self.hour, accuracy: 15)
 
@@ -522,39 +607,84 @@ final class ClosedLidLimitTests: XCTestCase {
     // MARK: Texts
 
     func testTheWordsOfTheStop() {
-        let time = SafetyStop.closedLid(.time(seconds: 3 * Self.hour))
-        let drop = SafetyStop.closedLid(.drop(points: 30))
-        XCTAssertEqual(time.notificationText, "Agent Caffeine let your Mac sleep because it kept it awake for 3 hours with the lid closed on battery")
-        XCTAssertEqual(drop.notificationText, "Agent Caffeine let your Mac sleep because the battery lost 30% with the lid closed")
+        let timeStop = ClosedLidStop.time(seconds: 3 * Self.hour)
+        let dropStop = ClosedLidStop.drop(points: 30)
+        let time = AgentStop.closedLid(timeStop)
+        let drop = AgentStop.closedLid(dropStop)
         XCTAssertEqual(
-            time.notificationText(working: .one("Claude Code")),
+            PanelText.closedLidNotice(timeStop, working: nil),
+            "Agent Caffeine let your Mac sleep because it kept it awake for 3 hours with the lid closed on battery"
+        )
+        XCTAssertEqual(PanelText.closedLidNotice(dropStop, working: nil), "Agent Caffeine let your Mac sleep because the battery lost 30% with the lid closed")
+        XCTAssertEqual(
+            PanelText.closedLidNotice(timeStop, working: .one("Claude Code")),
             "Agent Caffeine let your Mac sleep because it kept it awake for 3 hours with the lid closed on battery. Claude Code was still working"
         )
         XCTAssertEqual(
-            drop.notificationText(working: .many(2)),
+            PanelText.closedLidNotice(dropStop, working: .many(2)),
             "Agent Caffeine let your Mac sleep because the battery lost 30% with the lid closed. 2 agents were still working"
         )
-        XCTAssertEqual(time.notificationText(working: nil), time.notificationText)
-        XCTAssertEqual(SafetyStop.tooHot.notificationText(working: .one("Codex")), SafetyStop.tooHot.notificationText, "Only the closed lid limit names an agent")
-
-        XCTAssertEqual(SafetyStop.closedLid(.time(seconds: Self.hour)).notificationText, "Agent Caffeine let your Mac sleep because it kept it awake for 1 hour with the lid closed on battery")
+        XCTAssertEqual(
+            PanelText.closedLidNotice(.time(seconds: Self.hour), working: nil),
+            "Agent Caffeine let your Mac sleep because it kept it awake for 1 hour with the lid closed on battery"
+        )
         XCTAssertEqual(PanelText.closedLidReason(.time(seconds: 120)), "kept awake for 2 minutes with the lid closed on battery")
         XCTAssertEqual(PanelText.closedLidReason(.time(seconds: 45)), "kept awake for 45 seconds with the lid closed on battery")
 
-        XCTAssertEqual(HoldHeadline.safetyStop(time).text, "Sleeping allowed: kept awake for 3 hours with the lid closed on battery")
-        XCTAssertEqual(HoldHeadline.safetyStop(drop).text, "Sleeping allowed: the battery lost 30% with the lid closed")
+        XCTAssertEqual(
+            HoldHeadline.agentsStopped(time).text,
+            "Mac can sleep: kept awake for 3 hours with the lid closed on battery, so agents do not keep it awake"
+        )
+        XCTAssertEqual(HoldHeadline.agentsStopped(drop).text, "Mac can sleep: the battery lost 30% with the lid closed, so agents do not keep it awake")
         let now = Date()
-        XCTAssertEqual(PanelText.headline(.safetyStop(time), now: now).subtitle, "Kept awake for 3 hours with the lid closed on battery")
-        XCTAssertEqual(PanelText.headline(.safetyStop(drop), now: now).subtitle, "The battery lost 30% with the lid closed")
-        XCTAssertEqual(PanelText.headline(.safetyStop(time), now: now).title, PanelText.stoppedTitle)
-        XCTAssertEqual(PanelText.startsAgainWhenLidOpens, "Agent Caffeine starts again when you open the lid or connect power")
-        XCTAssertEqual(MenuModel.pose(for: .safetyStop(time)), .safetyStop(.battery))
-        XCTAssertFalse(HoldHeadline.safetyStop(time).keepsAwake)
-        XCTAssertTrue(HoldHeadline.safetyStop(time).isStop)
+        XCTAssertEqual(
+            PanelText.headline(.agentsStopped(time), now: now).subtitle,
+            "Kept awake for 3 hours with the lid closed on battery, so agents do not keep it awake"
+        )
+        XCTAssertEqual(PanelText.headline(.agentsStopped(drop), now: now).subtitle, "The battery lost 30% with the lid closed, so agents do not keep it awake")
+        XCTAssertEqual(PanelText.headline(.agentsStopped(time), now: now).title, PanelText.canSleepTitle, "Agent Caffeine did not stop: other holds go on")
+        XCTAssertEqual(PanelText.agentsAgainWhenLidOpens, "Agents keep your Mac awake again when you open the lid or connect power")
+        XCTAssertEqual(MenuModel.pose(for: .agentsStopped(time)), .asleep)
+    }
+
+    // MARK: Menu
+
+    /// Only the agent is there: the headline says that the Mac can
+    /// sleep and why, and a line says when the agents count again.
+    func testTheMenuWithAgentsOnly() throws {
+        var mac = Mac()
+        _ = try XCTUnwrap(mac.runUntilReleased())
+        let state = MenuModel.state(PanelInput(decision: mac.decision!), now: mac.now)
+        XCTAssertEqual(state.title, "Your Mac can sleep")
+        XCTAssertEqual(state.subtitle, "Kept awake for 3 hours with the lid closed on battery, so agents do not keep it awake")
+        XCTAssertEqual(state.attention, PanelAttention(kind: .closedLidLimit, text: "Agents keep your Mac awake again when you open the lid or connect power"))
+        XCTAssertEqual(state.groups.map(\.header.detail), ["Working, but the closed lid limit is reached"])
+    }
+
+    /// A hold from the command line keeps the Mac awake past the limit:
+    /// the headline names it, and a line says why the agent does not.
+    func testTheMenuWithAgentsAndAHoldFromTheCommandLine() {
+        var mac = Mac()
+        mac.holds = [ManualHold.timed(id: "aaaa0001", length: 8 * Self.hour, reason: "render", now: Self.start)]
+        mac.run(4 * Self.hour)
+        let state = MenuModel.state(PanelInput(decision: mac.decision!), now: mac.now)
+        XCTAssertEqual(state.title, "Your Mac stays awake")
+        XCTAssertEqual(state.subtitle, "render asked for it")
+        XCTAssertEqual(
+            state.attention,
+            PanelAttention(kind: .closedLidLimit, text: "Kept awake for 3 hours with the lid closed on battery, so agents do not keep it awake")
+        )
+        XCTAssertEqual(state.groups.map(\.header.name), ["Claude Code", "render"])
+        XCTAssertEqual(state.groups[0].header.detail, "Working, but the closed lid limit is reached")
+        XCTAssertTrue(state.groups[1].header.detail.hasPrefix("Keeps your Mac awake until "))
     }
 
     func testTheSettingsWords() {
-        XCTAssertEqual(PanelText.closedLidLimitExplained, "A last stop, so a job that hangs does not empty the battery in a bag")
+        XCTAssertEqual(PanelText.closedLidLimitPicker, "With the lid closed on battery, keep it awake for agents for at most")
+        XCTAssertEqual(
+            PanelText.closedLidLimitExplained,
+            "A last stop for agents, so a session that hangs does not empty the battery in a bag. Command line holds and scheduled jobs are not stopped"
+        )
         XCTAssertEqual(PanelText.noLimit, "No limit")
         XCTAssertEqual(ClosedLidLimit.hourChoices, [1, 2, 3, 6, 12])
         XCTAssertEqual(ClosedLidLimit.dropChoices, [15, 30, 50])
@@ -569,8 +699,8 @@ final class ClosedLidLimitTests: XCTestCase {
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
         let at = Date(timeIntervalSince1970: 2 * 3600 + 14 * 60)
         let stop = ClosedLidStop.time(seconds: 3 * Self.hour)
-        var snapshot = SleepSnapshot(at: at, headline: .safetyStop(.closedLid(stop)), agentActive: false, lidClosed: true, onBattery: true)
-        XCTAssertEqual(SleepReason.reason(snapshot), .closedLidLimit(stop, working: nil), "Told with no agent too: it ends every kind of hold")
+        var snapshot = SleepSnapshot(at: at, headline: .agentsStopped(.closedLid(stop)), agentActive: false, lidClosed: true, onBattery: true)
+        XCTAssertEqual(SleepReason.reason(snapshot), .closedLidLimit(stop, working: nil), "Told for an agent that was only open too")
         snapshot.agentActive = true
         snapshot.working = .one("Claude Code")
         XCTAssertEqual(SleepNote(snapshot), SleepNote(at: at, reason: .closedLidLimit(stop, working: .one("Claude Code"))))

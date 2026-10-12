@@ -77,7 +77,7 @@ enum MenuModel {
         case .reachable: return .reachable
         case .waitingHeld: return .attentive
         case .idle, .waitingReleased, .noAgents, .agentsStopped: return .asleep
-        case .safetyStop(.batteryLow), .safetyStop(.weakCharger), .safetyStop(.closedLid): return .safetyStop(.battery)
+        case .safetyStop(.batteryLow), .safetyStop(.weakCharger): return .safetyStop(.battery)
         case .safetyStop(.tooHot): return .safetyStop(.heat)
         case .switchedOff: return .off
         case .paused: return .paused
@@ -142,8 +142,6 @@ enum MenuModel {
                 }
             case .tooHot:
                 return PanelAttention(kind: .safetyStop, text: PanelText.startsAgainWhenCool)
-            case .closedLid:
-                return PanelAttention(kind: .safetyStop, text: PanelText.startsAgainWhenLidOpens)
             }
         }
         if input.flagLeftOn {
@@ -203,12 +201,18 @@ enum MenuModel {
         return PanelBattery(percent: shown, floor: floor, level: level)
     }
 
-    /// A rule let go of the agents while something else keeps the Mac
-    /// awake. Nil when nothing else does: the headline says it then.
+    /// A rule let go of the agents. While something else keeps the Mac
+    /// awake, the line says so: the headline has the other reason. While
+    /// nothing does, the headline says it, and the closed lid limit has
+    /// a line for when the agents count again.
     private static func agentsStopped(_ input: PanelInput) -> PanelAttention? {
-        if case .agentsStopped = input.decision.headline { return nil }
+        if case .agentsStopped(let stop) = input.decision.headline {
+            if case .closedLid = stop { return PanelAttention(kind: .closedLidLimit, text: PanelText.agentsAgainWhenLidOpens) }
+            return nil
+        }
         switch input.decision.perAgent.lazy.compactMap(\.stopped).first {
-        case .offline: return PanelAttention(kind: .agentsStopped, text: PanelText.offlineAgents)
+        case .offline: return PanelAttention(kind: .agentsOffline, text: PanelText.offlineAgents)
+        case .closedLid(let stop): return PanelAttention(kind: .closedLidLimit, text: PanelText.closedLidAgents(stop))
         case nil: return nil
         }
     }
@@ -406,6 +410,7 @@ enum MenuModel {
         if reading.verdict.state == .working {
             switch input.decision.perAgent.first(where: { $0.reading.identity == reading.identity })?.stopped {
             case .offline: return PanelText.workingOffline
+            case .closedLid: return PanelText.workingPastLidLimit
             case nil: break
             }
         }

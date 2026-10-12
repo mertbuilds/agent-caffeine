@@ -71,7 +71,8 @@ extension TestState {
             closedLid: input.closedLid.period.map { period in
                 ClosedLid(
                     since: period.since.timeIntervalSince1970, heldSeconds: period.held.rounded(), percentAtStart: period.percentAtStart,
-                    limitSeconds: input.closedLid.timeLimit, limitDrop: input.closedLid.dropLimit, stop: period.stop?.code
+                    limitSeconds: input.closedLid.timeLimit, limitDrop: input.closedLid.dropLimit, stop: period.stop?.code,
+                    agentsReleased: period.stop != nil
                 )
             },
             network: context.map {
@@ -130,7 +131,6 @@ extension SafetyStop {
         case .batteryLow: return "batteryLow"
         case .weakCharger: return "weakCharger"
         case .tooHot: return "tooHot"
-        case .closedLid(let stop): return stop.code
         }
     }
 }
@@ -210,6 +210,7 @@ extension HoldHeadline {
         switch self {
         case .safetyStop(let stop): return stop.code
         case .agentsStopped(.offline): return "offline"
+        case .agentsStopped(.closedLid(let stop)): return stop.code
         default: return nil
         }
     }
