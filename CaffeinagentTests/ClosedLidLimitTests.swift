@@ -561,6 +561,31 @@ final class ClosedLidLimitTests: XCTestCase {
         XCTAssertEqual(mac.limit.period?.heldOn, true)
     }
 
+    /// The mode "always" is no agent: the limit does not stop it. The
+    /// battery floor and the heat stop do, and with the floor off only
+    /// heat is left.
+    func testTheModeAlwaysHoldsPastTheLimitToASafetyStop() {
+        let lid = AgentStop.closedLid(.time(seconds: 3 * Self.hour))
+        func decide(safety: SafetyStop? = nil) -> HoldDecision {
+            HoldPolicy.decide(
+                readings: [Self.reading(.working)], memory: PolicyMemory(), mode: .always, enabled: true, safety: safety,
+                settings: DetectionSettings(), context: FrameContext(onBattery: true, batteryPercent: 40, lidClosed: true), agentStop: lid, now: Self.start
+            ).0
+        }
+        XCTAssertTrue(decide().hold)
+        XCTAssertEqual(decide().headline, .alwaysOn)
+        XCTAssertTrue(decide().lidClosedFlag)
+        XCTAssertEqual(decide().perAgent.map(\.stopped), [lid])
+        for stop in [SafetyStop.batteryLow(percent: 20), .tooHot] {
+            XCTAssertFalse(decide(safety: stop).hold, "\(stop)")
+            XCTAssertFalse(decide(safety: stop).lidClosedFlag, "\(stop)")
+        }
+        var monitor = SafetyMonitor()
+        monitor.batteryFloorEnabled = false
+        XCTAssertNil(monitor.update(SafetyInputs(batteryPercent: 3, onBattery: true, thermalState: .nominal)), "With the floor off the battery ends nothing")
+        XCTAssertEqual(monitor.update(SafetyInputs(batteryPercent: 3, onBattery: true, thermalState: .serious)), .tooHot)
+    }
+
     // MARK: The notification
 
     /// Samples for this long.
@@ -796,7 +821,7 @@ final class ClosedLidLimitTests: XCTestCase {
         XCTAssertEqual(PanelText.closedLidLimitPicker, "With the lid closed on battery, keep it awake for agents for at most")
         XCTAssertEqual(
             PanelText.closedLidLimitExplained,
-            "A last stop for agents, so a session that hangs does not empty the battery in a bag. Command line holds and scheduled jobs are not stopped"
+            "A last stop for agents, so a session that hangs does not empty the battery in a bag. Command line holds, scheduled jobs and the mode Always are not stopped"
         )
         XCTAssertEqual(PanelText.noLimit, "No limit")
         XCTAssertEqual(ClosedLidLimit.hourChoices, [1, 2, 3, 6, 12])

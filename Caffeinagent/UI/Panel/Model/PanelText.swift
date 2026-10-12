@@ -323,7 +323,7 @@ enum PanelText {
     static let helperRemoveHere = "You can remove it here at any time."
     static let helperRemoveInSettings = "You can remove it in Settings > Battery and lid at any time."
     static let closedLidLimitPicker = "With the lid closed on battery, keep it awake for agents for at most"
-    static let closedLidLimitExplained = "A last stop for agents, so a session that hangs does not empty the battery in a bag. Command line holds and scheduled jobs are not stopped"
+    static let closedLidLimitExplained = "A last stop for agents, so a session that hangs does not empty the battery in a bag. Command line holds, scheduled jobs and the mode Always are not stopped"
     static let noLimit = "No limit"
     static let closedBagWarning = "Do not put your Mac in a closed bag while an agent works."
     static let lidChimeSwitch = "Play a sound when you close the lid and your Mac stays awake"

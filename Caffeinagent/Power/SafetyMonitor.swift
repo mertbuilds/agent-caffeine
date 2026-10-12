@@ -168,6 +168,9 @@ enum SafetyText {
 
     static let floorOnHelp = "Agent Caffeine lets your Mac sleep when the battery is at this level, even while an agent is working. This applies with the lid open too."
     static let floorOffWarning = "Your agents keep working until the battery is empty. Your Mac then turns off at once, and work that is not saved is lost."
+    /// Below the warning: the closed lid limit is for agents alone, so
+    /// with the floor off only heat ends what was asked for.
+    static let floorOffLidClosed = "With this off, a command line hold or the mode Always can empty the battery with the lid closed."
     static let floorOffQuestion = "Let the battery run empty?"
     static let floorOffConsequence = "With this off, Agent Caffeine keeps your Mac awake until the battery is empty. Your Mac then turns off at once, and work that is not saved can be lost."
 }

@@ -18,9 +18,10 @@ enum ClosedLidStop: Equatable {
 /// the battery in a bag.
 ///
 /// What the user or a program asked for holds on past the limit: a hold
-/// from the command line or through MCP, a job hold of "Wake for jobs"
-/// and "stay reachable". Their net is the battery floor, the heat stop
-/// and their own time caps.
+/// from the command line or through MCP, a job hold of "Wake for jobs",
+/// "stay reachable" and the mode "always". Their net is the battery
+/// floor, the heat stop and their own time caps. With the battery floor
+/// off only heat ends them, and the mode "always" has no time cap.
 ///
 /// The time and the drop count whoever keeps the Mac awake: the battery
 /// does not care who asked. Only the stop is for agents alone.

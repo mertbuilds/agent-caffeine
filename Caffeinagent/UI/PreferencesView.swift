@@ -622,6 +622,7 @@ struct LidClosedPreferences: View {
                         Text("Agent Caffeine also lets your Mac sleep when it gets too hot.")
                     } else {
                         Label(SafetyText.floorOffWarning, systemImage: "exclamationmark.triangle")
+                        Text(SafetyText.floorOffLidClosed)
                         Text("Agent Caffeine still lets your Mac sleep when it gets too hot.")
                     }
                 }
