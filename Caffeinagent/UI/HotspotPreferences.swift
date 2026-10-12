@@ -35,7 +35,7 @@ struct HotspotPreferences: View {
                     }
                 }
                 limit
-                Text(PanelText.hotspotLeaves)
+                Text("\(PanelText.hotspotStays) \(PanelText.hotspotLeaves)")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 VStack(alignment: .leading, spacing: 4) {

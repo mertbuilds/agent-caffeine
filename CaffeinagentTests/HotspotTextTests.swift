@@ -42,6 +42,7 @@ final class HotspotTextTests: XCTestCase {
     }
 
     func testWhatTheMacDoesOnTheHotspotIsSaid() {
+        XCTAssertEqual(PanelText.hotspotStays, "Your Mac stays on the hotspot until its Wi-Fi comes back or you change the network.")
         XCTAssertEqual(PanelText.hotspotLeaves, "If you leave the hotspot, your Mac does not join it again by itself.")
     }
 
@@ -149,7 +150,7 @@ final class HotspotTextTests: XCTestCase {
         var lines = [
             PanelText.hotspotTitle, PanelText.hotspotSwitch, PanelText.hotspotExplained, PanelText.hotspotName, PanelText.hotspotNamePrompt,
             PanelText.hotspotPassword, PanelText.hotspotPasswordSaved, PanelText.hotspotSave, PanelText.hotspotOpenPrivacy,
-            PanelText.hotspotOpenWiFi, PanelText.hotspotLeaves, PanelText.hotspotHopBack, PanelText.hotspotHopBackExplained, PanelText.hotspotForgets,
+            PanelText.hotspotOpenWiFi, PanelText.hotspotStays, PanelText.hotspotLeaves, PanelText.hotspotHopBack, PanelText.hotspotHopBackExplained, PanelText.hotspotForgets,
             PanelText.hotspotLimit(offersAutomatic: true), PanelText.hotspotLimit(offersAutomatic: false),
             PanelText.hotspotAutoJoin(.automatic), PanelText.hotspotAutoJoin(.notAutomatic),
             PanelText.hotspotRemoveStep(saved: true), PanelText.hotspotRemoveStep(saved: false), PanelText.hotspotRemoveHelp,

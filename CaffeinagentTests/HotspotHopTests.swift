@@ -589,6 +589,18 @@ final class HotspotHopTests: XCTestCase {
 
     // MARK: Leaving the hotspot
 
+    func testTheMacStaysOnTheHotspotAfterTheAgentsFinished() {
+        var mac = hopped(from: HopMac.cafe)
+        mac.input.agentHolds = false
+        mac.run(seconds: 3600)
+        XCTAssertTrue(joined(mac.state))
+        XCTAssertEqual(mac.wifi.current, HopMac.hotspot, "Nothing takes the Mac off the hotspot")
+        // Its Wi-Fi comes back.
+        mac.wifi.air.insert(HopMac.cafe)
+        mac.run(seconds: 244)
+        XCTAssertEqual(mac.wifi.current, HopMac.cafe)
+    }
+
     func testAPathThatIsLostOnTheHotspotStartsNoSecondJoin() {
         var mac = hopped(from: HopMac.cafe)
         mac.run(seconds: 30)
