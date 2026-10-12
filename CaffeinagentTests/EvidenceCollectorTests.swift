@@ -279,6 +279,9 @@ final class EvidenceCollectorTests: XCTestCase {
         file.apply(.set(.working), session: "a", event: "UserPromptSubmit", at: at(0))
         let path = hooks.appendingPathComponent("claude-100.json")
         try JSONEncoder().encode(file).write(to: path)
+        // The clock of the test started when the run started, and the file
+        // has the real time of now, which can be seconds later.
+        try FileManager.default.setAttributes([.modificationDate: at(0)], ofItemAtPath: path.path)
         census.rows = []
         _ = sample(at: 1)
         XCTAssertTrue(FileManager.default.fileExists(atPath: path.path))
