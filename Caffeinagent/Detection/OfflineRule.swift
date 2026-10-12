@@ -1,9 +1,14 @@
 import Foundation
 
 /// When the Mac had no way to the network for a time without a break,
-/// agent sessions stop counting as a reason to keep it awake: an agent
+/// agent sessions stop counting as a reason to keep it awake: most agents
 /// cannot work without the internet. `HoldPolicy` then lets go of every
 /// agent that only says it works or waits (`AgentStop.offline`).
+///
+/// An agent that uses a model on this Mac (Ollama, LM Studio) can work
+/// offline, and is let go all the same: the model server is not a child
+/// command of the agent. The way out is the choice "Never", and the
+/// texts of the settings, the README and the release note say so.
 ///
 /// What the user or a program asked for keeps holding: a hold from the
 /// command line or through MCP, a job hold of "Wake for jobs", "stay

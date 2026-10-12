@@ -126,7 +126,7 @@ enum PanelText {
     }
 
     static let offlineLimitPicker = "When your Mac is offline, stop staying awake for agents after"
-    static let offlineLimitExplained = "An agent cannot work without the internet. Command line holds and scheduled jobs are not stopped. Wi-Fi that is connected but has no internet does not count as offline."
+    static let offlineLimitExplained = "Most agents cannot work without the internet. If your agents use a model on this Mac, choose Never. Command line holds and scheduled jobs are not stopped. Wi-Fi that is connected but has no internet does not count as offline."
     static let never = "Never"
 
     // MARK: Sleep outlook
