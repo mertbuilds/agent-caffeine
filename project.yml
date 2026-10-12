@@ -231,6 +231,8 @@ targets:
       - Caffeinagent/LoginItem.swift
       # Where the app runs from. The alerts are never shown by a test.
       - Caffeinagent/AppRelocator.swift
+      # What the paid versions left. Without the call to the Keychain.
+      - Caffeinagent/PaidLeftovers.swift
       # Optional, so the project still generates on a branch without the folder.
       - path: Caffeinagent/Detection
         optional: true
