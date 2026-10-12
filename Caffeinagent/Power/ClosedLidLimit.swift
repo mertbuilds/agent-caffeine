@@ -44,12 +44,12 @@ struct ClosedLidLimit: Equatable {
     /// It counts only while the switch of the tests is on
     /// (`HoldStore.stateSwitchKey`), and it can only make the limit
     /// shorter: a value that is left over, or a large one, does not take
-    /// the last stop away.
+    /// the last stop away. See `TestLimit`.
     static let testSecondsKey = "ClosedLidLimitSecondsForTests"
 
     /// The hidden default, 0 while the switch of the tests is off.
     static func testSeconds(in defaults: UserDefaults) -> TimeInterval {
-        defaults.bool(forKey: HoldStore.stateSwitchKey) ? defaults.double(forKey: testSecondsKey) : 0
+        TestLimit.seconds(forKey: testSecondsKey, in: defaults)
     }
 
     struct Period: Equatable {
@@ -119,7 +119,7 @@ extension DetectionSettings {
     func closedLidLimits(testSeconds: TimeInterval = 0) -> (time: TimeInterval?, drop: Int?) {
         let hours = closedLidLimitHours == ClosedLidLimit.noLimit ? nil : TimeInterval(closedLidLimitHours) * 3600
         return (
-            testSeconds > 0 ? min(testSeconds, hours ?? testSeconds) : hours,
+            TestLimit.shortened(hours, to: testSeconds),
             closedLidLimitDrop == ClosedLidLimit.noLimit ? nil : closedLidLimitDrop
         )
     }
