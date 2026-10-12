@@ -284,7 +284,8 @@ struct HotspotHop: Equatable {
         if onHotspot, !awaitingPath { return nil }
         lostWhileArmed = true
         guard let lostFor = lost.offlineFor, lostFor >= Self.lostTime else {
-            state = .waiting
+            // Joined, with no path yet, and the Mac slept: still joined.
+            if case .joined = state {} else { state = .waiting }
             tries = 0
             nextTryAt = nil
             return nil
@@ -374,8 +375,10 @@ struct HotspotHop: Equatable {
             if state == .scanning { state = .idle }
         case (.back, .sawOld):
             backSeen = true
+            onHotspot = true
         case (.back(_, let to, _), .onHotspot):
             if to != nil { backSeen = false }
+            onHotspot = true
         case (.back, .leftHotspot):
             state = .idle
             onHotspot = false

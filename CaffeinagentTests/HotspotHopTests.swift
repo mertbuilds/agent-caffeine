@@ -432,10 +432,22 @@ final class HotspotHopTests: XCTestCase {
         XCTAssertEqual(mac.wifi.joins.count, 1, "The Mac is on the hotspot")
         XCTAssertEqual(mac.wifi.scans.count, 1)
         XCTAssertTrue(joined(mac.state))
+        // A sleep changes nothing of that.
+        mac.sleep(3600)
+        mac.run(seconds: 60)
+        XCTAssertTrue(joined(mac.state))
+        XCTAssertEqual(mac.wifi.joins.count, 1)
         // The path comes: the Mac is on the hotspot as after any join.
         mac.input.online = true
         mac.run(seconds: 10)
         XCTAssertTrue(joined(mac.state))
+        // A save on the hotspot does not make the next loss there a hop.
+        mac.input.saves += 1
+        mac.run(seconds: 10)
+        mac.wifi.current = nil
+        mac.input.online = false
+        mac.run(seconds: 120)
+        XCTAssertEqual(mac.wifi.joins.count, 1)
     }
 
     func testAJoinThatDoesNotHoldIsTriedAgainOnTheSchedule() {
