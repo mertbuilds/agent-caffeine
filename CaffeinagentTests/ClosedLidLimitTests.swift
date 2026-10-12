@@ -572,16 +572,21 @@ final class ClosedLidLimitTests: XCTestCase {
         }
     }
 
-    /// Its net is the battery floor: that stop ends it before its time.
-    func testTheBatteryFloorEndsAManualHoldPastTheLimit() throws {
-        var mac = Mac()
-        mac.limit.dropLimit = nil
-        mac.holds = [ManualHold.timed(id: "aaaa0001", length: 8 * Self.hour, reason: "render", now: Self.start)]
-        mac.run(5 * Self.hour)
-        XCTAssertTrue(mac.held)
-        mac.otherStop = .batteryLow(percent: 20)
-        XCTAssertFalse(mac.sample().hold)
-        XCTAssertEqual(mac.decision?.headline, .safetyStop(.batteryLow(percent: 20)))
+    /// Its net is the battery floor and the heat stop: each ends it
+    /// before its time, and takes the sleep flag off with the lid closed.
+    func testTheBatteryFloorAndHeatEndAManualHoldPastTheLimit() throws {
+        for stop in [SafetyStop.batteryLow(percent: 20), .tooHot] {
+            var mac = Mac()
+            mac.limit.dropLimit = nil
+            mac.holds = [ManualHold.timed(id: "aaaa0001", length: 8 * Self.hour, reason: "render", now: Self.start)]
+            mac.run(5 * Self.hour)
+            XCTAssertTrue(mac.held, "\(stop)")
+            XCTAssertEqual(mac.decision?.lidClosedFlag, true, "\(stop)")
+            mac.otherStop = stop
+            XCTAssertFalse(mac.sample().hold, "\(stop)")
+            XCTAssertEqual(mac.decision?.headline, .safetyStop(stop))
+            XCTAssertEqual(mac.decision?.lidClosedFlag, false, "The sleep flag goes off with the hold: \(stop)")
+        }
     }
 
     /// The drop limit does the same: the battery lost 30 points under a
