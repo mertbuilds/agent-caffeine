@@ -11,3 +11,5 @@ The pictures this covers are in `assets/`, `Caffeinagent/AppIcon.icon`, the `Rob
 The agent names and logos are trademarks of their owners and are used only to identify those products. Agent Caffeine is not affiliated with or endorsed by any of them.
 
 Questions go to hi@caffeinagent.com.
+
+The robot and the app icon were made by Mert Duzgun with an image model (ChatGPT) and finished by hand. They are his own work for this product and are not part of the open source license.

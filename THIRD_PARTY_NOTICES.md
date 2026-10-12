@@ -35,10 +35,14 @@ The menu shows a mark beside each agent. The drawings are path data on a 24 by
 24 canvas in `AgentLogoData.swift`.
 
 - Most of them are drawings from lobe-icons, under its MIT license.
-- Four were added by hand and are not from that set, as far as the records of
-  this project show: Pi (`pi`), OpenClaw (`openclaw`), Hermes Agent
-  (`hermesagent`) and Command Code (`commandcode`). Each is the mark that its
-  own project shows. The file each drawing was taken from is not recorded.
+- Pi (`pi`) is the mark from the project's own site, https://pi.dev/logo-auto.svg,
+  taken on 2026-10-08.
+- opencode (`opencode`) follows the mark of https://opencode.ai/favicon.svg,
+  taken on 2026-10-08.
+- OpenClaw (`openclaw`) and Hermes Agent (`hermesagent`) are from lobe-icons
+  (`openclaw-color.svg` and `hermesagent.svg`).
+- Command Code (`commandcode`) is the mark that its own project shows. The file
+  the drawing was taken from is not recorded.
 
 The agent names and logos are trademarks of their owners and are used only to
 identify those products. Agent Caffeine is not affiliated with or endorsed by
