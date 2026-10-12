@@ -515,9 +515,50 @@ final class ClosedLidLimitTests: XCTestCase {
         XCTAssertTrue(mac.held)
         XCTAssertEqual(mac.decision?.headline, .manualHold(.one("render")))
         XCTAssertEqual(mac.decision?.perAgent.map(\.stopped), [.closedLid(.time(seconds: 3 * Self.hour))])
+        XCTAssertEqual(mac.limit.period?.heldOn, true)
         let released = try XCTUnwrap(mac.runUntilReleased())
         XCTAssertEqual(released, 8 * Self.hour, accuracy: 30)
         assertStopped(mac, .time(seconds: 3 * Self.hour))
+        // The Mac was kept awake for 8 hours, so the text names the
+        // limit and not a time kept awake.
+        XCTAssertEqual(mac.limit.period?.heldOn, true)
+        XCTAssertEqual(mac.limit.period?.held ?? 0, 8 * Self.hour, accuracy: 30)
+        XCTAssertEqual(
+            PanelText.closedLidNotice(.time(seconds: 3 * Self.hour), heldOn: mac.limit.period?.heldOn ?? false, working: mac.decision?.working(mac.settings)),
+            "Agent Caffeine let your Mac sleep. Agents stopped keeping it awake earlier, when the closed lid limit of 3 hours was reached. Claude Code was still working"
+        )
+    }
+
+    /// With agents alone no hold goes on after the stop, so the time of
+    /// the limit is the time the Mac was kept awake.
+    func testWithAgentsAloneNoHoldGoesOnAfterTheStop() throws {
+        var mac = Mac()
+        _ = try XCTUnwrap(mac.runUntilReleased())
+        mac.run(Self.hour)
+        XCTAssertEqual(mac.limit.period?.heldOn, false)
+        XCTAssertEqual(mac.limit.period?.held ?? 0, 3 * Self.hour, accuracy: 30)
+        // A hold that starts later in the same period goes on past it.
+        mac.holds = [ManualHold.timed(id: "aaaa0001", length: Self.hour, reason: "render", now: mac.now)]
+        mac.run(600)
+        XCTAssertEqual(mac.limit.period?.heldOn, true)
+        // A new period starts fresh.
+        mac.context.lidClosed = false
+        mac.sample()
+        mac.context.lidClosed = true
+        mac.run(60)
+        XCTAssertEqual(mac.limit.period?.heldOn, false)
+    }
+
+    /// The drop limit the same way.
+    func testAHoldPastTheDropLimitIsSeen() {
+        var mac = Mac()
+        mac.drainPerHour = 20
+        mac.holds = [ManualHold.timed(id: "aaaa0001", length: 8 * Self.hour, reason: "render", now: Self.start)]
+        mac.run(1.5 * Self.hour - 60)
+        XCTAssertEqual(mac.limit.period?.heldOn, false)
+        mac.run(600)
+        XCTAssertEqual(mac.limit.period?.stop, .drop(points: 30))
+        XCTAssertEqual(mac.limit.period?.heldOn, true)
     }
 
     // MARK: The notification
@@ -685,6 +726,21 @@ final class ClosedLidLimitTests: XCTestCase {
             PanelText.closedLidNotice(.time(seconds: Self.hour), working: nil),
             "Agent Caffeine let your Mac sleep because it kept it awake for 1 hour with the lid closed on battery"
         )
+        // Another hold went on after the agents were let go: the limit
+        // is named, and no time kept awake.
+        XCTAssertEqual(
+            PanelText.closedLidNotice(timeStop, heldOn: true, working: nil),
+            "Agent Caffeine let your Mac sleep. Agents stopped keeping it awake earlier, when the closed lid limit of 3 hours was reached"
+        )
+        XCTAssertEqual(
+            PanelText.closedLidNotice(timeStop, heldOn: true, working: .one("Claude Code")),
+            "Agent Caffeine let your Mac sleep. Agents stopped keeping it awake earlier, when the closed lid limit of 3 hours was reached. Claude Code was still working"
+        )
+        XCTAssertEqual(
+            PanelText.closedLidNotice(dropStop, heldOn: true, working: .many(2)),
+            "Agent Caffeine let your Mac sleep. Agents stopped keeping it awake earlier, when the closed lid limit of 30% of the battery was reached. 2 agents were still working"
+        )
+        XCTAssertEqual(PanelText.closedLidLimitName(.time(seconds: 120)), "the closed lid limit of 2 minutes")
         XCTAssertEqual(PanelText.closedLidReason(.time(seconds: 120)), "kept awake for 2 minutes with the lid closed on battery")
         XCTAssertEqual(PanelText.closedLidReason(.time(seconds: 45)), "kept awake for 45 seconds with the lid closed on battery")
 
@@ -761,12 +817,23 @@ final class ClosedLidLimitTests: XCTestCase {
         snapshot.agentActive = true
         snapshot.working = .one("Claude Code")
         XCTAssertEqual(SleepNote(snapshot), SleepNote(at: at, reason: .closedLidLimit(stop, working: .one("Claude Code"))))
+        snapshot.heldOnPastLidLimit = true
+        XCTAssertEqual(SleepNote(snapshot), SleepNote(at: at, reason: .closedLidLimit(stop, heldOn: true, working: .one("Claude Code"))))
 
         let cases: [(SleepReason, String)] = [
             (.closedLidLimit(stop, working: nil), "Agent Caffeine had kept it awake for 3 hours with the lid closed on battery"),
             (.closedLidLimit(stop, working: .one("Claude Code")), "Agent Caffeine had kept it awake for 3 hours with the lid closed on battery, and Claude Code was still working"),
             (.closedLidLimit(.drop(points: 30), working: nil), "the battery lost 30% with the lid closed"),
             (.closedLidLimit(.drop(points: 30), working: .many(2)), "the battery lost 30% with the lid closed, and 2 agents were still working"),
+            (.closedLidLimit(stop, heldOn: true, working: nil), "the closed lid limit of 3 hours was reached earlier, so agents did not keep it awake"),
+            (
+                .closedLidLimit(stop, heldOn: true, working: .one("Claude Code")),
+                "the closed lid limit of 3 hours was reached earlier, so agents did not keep it awake, and Claude Code was still working"
+            ),
+            (
+                .closedLidLimit(.drop(points: 30), heldOn: true, working: nil),
+                "the closed lid limit of 30% of the battery was reached earlier, so agents did not keep it awake"
+            ),
         ]
         for (reason, text) in cases {
             let line = PanelText.slept(SleepNote(at: at, reason: reason), calendar: calendar, locale: Locale(identifier: "en_GB"))

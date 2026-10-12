@@ -18,6 +18,9 @@ struct SleepSnapshot: Equatable {
     /// The agents that worked, by their display names, and no rule
     /// ignores them. Nil for none.
     var working: HoldSubject?
+    /// A hold went on after the closed lid limit let go of the agents.
+    /// See `ClosedLidLimit.Period.heldOn`.
+    var heldOnPastLidLimit = false
     /// The limit of the offline rule in use. See `OfflineRule`.
     var offlineLimit: TimeInterval = TimeInterval(OfflineRule.defaultMinutes) * 60
 }
@@ -31,8 +34,9 @@ enum SleepReason: Equatable {
     case paused
     case waitedTooLong(HoldSubject, hold: TimeInterval)
     /// The closed lid limit let go of the agents, with the ones that
-    /// still worked then.
-    case closedLidLimit(ClosedLidStop, working: HoldSubject?)
+    /// still worked then. `heldOn`: another hold kept the Mac awake
+    /// after that, and its end let the Mac sleep.
+    case closedLidLimit(ClosedLidStop, heldOn: Bool = false, working: HoldSubject?)
     /// The Mac was offline for the limit, so the agents kept it awake no
     /// longer, with the agents that still worked then.
     case offline(limit: TimeInterval, working: HoldSubject?)
@@ -44,7 +48,7 @@ enum SleepReason: Equatable {
     /// agent that is only open is let go too.
     static func reason(_ snapshot: SleepSnapshot) -> SleepReason? {
         switch snapshot.headline {
-        case .agentsStopped(.closedLid(let stop)): return .closedLidLimit(stop, working: snapshot.working)
+        case .agentsStopped(.closedLid(let stop)): return .closedLidLimit(stop, heldOn: snapshot.heldOnPastLidLimit, working: snapshot.working)
         case .agentsStopped(.offline): return .offline(limit: snapshot.offlineLimit, working: snapshot.working)
         default: break
         }

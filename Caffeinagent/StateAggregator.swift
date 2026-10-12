@@ -507,6 +507,7 @@ final class StateAggregator: ObservableObject {
             lidClosedWanted: settings.stayAwakeLidClosedOnBattery,
             waitingHold: settings.waitingHold,
             working: decision.working(settings),
+            heldOnPastLidLimit: closedLidLimit.period?.heldOn ?? false,
             offlineLimit: engine.offlineRule.limit ?? 0
         )
         display?.willSleep()
@@ -774,7 +775,7 @@ final class StateAggregator: ObservableObject {
                 notify(PanelText.offlineNotice(limit: engine.offlineRule.limit ?? 0, working: working))
             case .closedLid(let stop):
                 testNotices.note(.closedLidLimit, at: Date())
-                notify(PanelText.closedLidNotice(stop, working: working))
+                notify(PanelText.closedLidNotice(stop, heldOn: closedLidLimit.period?.heldOn ?? false, working: working))
             }
         }
         self.decision = decision

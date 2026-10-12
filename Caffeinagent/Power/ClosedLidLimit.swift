@@ -70,6 +70,10 @@ struct ClosedLidLimit: Equatable {
         /// while the Mac does not say its battery level.
         var percentAtStart: Int?
         var stop: ClosedLidStop?
+        /// A hold went on after the stop: what was asked for kept the
+        /// Mac awake past the limit. The limit is then no longer the
+        /// time the Mac was kept awake, or what the battery lost.
+        var heldOn = false
     }
 
     /// Nil is no limit.
@@ -109,6 +113,7 @@ struct ClosedLidLimit: Equatable {
                 current.held += after - before
             }
         }
+        if current.stop != nil, holding { current.heldOn = true }
         // Only a hold is stopped. A period that holds nothing waits.
         if current.stop == nil, holding {
             if let timeLimit, current.held >= timeLimit {

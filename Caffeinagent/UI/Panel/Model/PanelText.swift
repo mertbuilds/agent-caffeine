@@ -259,10 +259,28 @@ enum PanelText {
     /// The line below an agent that works under the closed lid limit.
     static let workingPastLidLimit = "Working, but the closed lid limit is reached"
 
+    /// "the closed lid limit of 3 hours", for the middle of a sentence.
+    /// It names the limit as it is set, and not how long the Mac was
+    /// kept awake.
+    static func closedLidLimitName(_ stop: ClosedLidStop) -> String {
+        switch stop {
+        case .time(let seconds):
+            let length = HumaneDuration.length(seconds: seconds) ?? HumaneDuration.counted(Int(seconds), "second")
+            return "the closed lid limit of \(length)"
+        case .drop(let points):
+            return "the closed lid limit of \(percent(points)) of the battery"
+        }
+    }
+
     /// The text of the notification when the closed lid limit ends a
     /// hold, with the agents that still worked.
-    static func closedLidNotice(_ stop: ClosedLidStop, working: HoldSubject?) -> String {
-        let text = "Agent Caffeine let your Mac sleep because \(closedLidReason(stop, keptAwake: "it kept it awake"))"
+    /// - Parameter heldOn: another hold kept the Mac awake after the
+    /// agents were let go, and ended now. The Mac was then kept awake for
+    /// longer than the limit, so the text names the limit.
+    static func closedLidNotice(_ stop: ClosedLidStop, heldOn: Bool = false, working: HoldSubject?) -> String {
+        let text = heldOn
+            ? "Agent Caffeine let your Mac sleep. Agents stopped keeping it awake earlier, when \(closedLidLimitName(stop)) was reached"
+            : "Agent Caffeine let your Mac sleep because \(closedLidReason(stop, keptAwake: "it kept it awake"))"
         return working.map { "\(text). \(stillWorking($0))" } ?? text
     }
 
@@ -277,8 +295,10 @@ enum PanelText {
         case .lidClosedSettingOff: return "the lid was closed on battery and staying awake with the lid closed is turned off"
         case .battery(let percent): return "the battery was at \(Self.percent(percent))"
         case .tooHot: return "your Mac got too hot"
-        case .closedLidLimit(let stop, let working):
-            let reason = closedLidReason(stop, keptAwake: "Agent Caffeine had kept it awake")
+        case .closedLidLimit(let stop, let heldOn, let working):
+            let reason = heldOn
+                ? "\(closedLidLimitName(stop)) was reached earlier, so agents did not keep it awake"
+                : closedLidReason(stop, keptAwake: "Agent Caffeine had kept it awake")
             return working.map { "\(reason), and \(stillWorking($0))" } ?? reason
         case .paused: return "Agent Caffeine was paused"
         case .offline(let limit, let working):
