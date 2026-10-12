@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Release build → sign → notarize → staple → zip → dmg → appcast → R2 → Polar.
+# Release build → sign → notarize → staple → zip → dmg → appcast → R2.
 #
 # This script is the only way to publish a release. The dmg, the appcast
 # Sparkle reads and the latest.json the download page reads go to the R2
@@ -20,8 +20,8 @@
 # the login keychain, and the keychain refuses SSH and scripted sessions.
 #
 #   --dry-run  do everything local (build, sign, smoke test, dmg, appcast,
-#              latest.json) but notarize nothing, upload nothing and publish
-#              nothing to Polar, and print each upload command instead.
+#              latest.json) but notarize nothing and upload nothing, and print
+#              each upload command instead.
 #   --allow-dirty  only with --dry-run: build from a working tree with changes
 #              that are not committed. A release is always built from a clean
 #              tree, so what ships is what a commit holds.
@@ -604,23 +604,6 @@ r2_put "mac/$DMG_NAME" "$SITE_DMG" "application/x-apple-diskimage"
 r2_put "mac/latest.json" "$SITE_DIR/latest.json" "application/json"
 r2_put "mac/appcast.xml" "$SITE_DIR/appcast.xml" "application/xml"
 
-# Publish the notarized dmg to the Polar "File Downloads" benefit (add new +
-# archive old). Credentials come from the standard per-service env file
-# (~/.config/polar/credentials.env: POLAR_ACCESS_TOKEN + POLAR_BENEFIT_ID),
-# unless already exported. Opt-in: skips cleanly if the file/vars are absent.
-POLAR_ENV="$HOME/.config/polar/credentials.env"
-if [ "$DRY_RUN" = 1 ]; then
-  echo "==> skip Polar publish (--dry-run)"
-else
-  if [ -f "$POLAR_ENV" ]; then set -a; . "$POLAR_ENV"; set +a; fi
-  if [ -n "${POLAR_ACCESS_TOKEN:-}" ] && [ -n "${POLAR_BENEFIT_ID:-}" ]; then
-    echo "==> publish dmg to Polar (add new + disable old)"
-    node scripts/polar-publish.mjs "$RELEASE_DMG"
-  else
-    echo "==> skip Polar publish (no creds at $POLAR_ENV and env vars unset)"
-  fi
-fi
-
 echo ""
 echo "✓ release artifacts:"
 echo "  zip: $RELEASE_ZIP"
@@ -642,6 +625,10 @@ fi
 echo "  gatekeeper: $(spctl -a -t exec -vvv "$APP" 2>&1 | tail -1)"
 if [ "$DRY_RUN" = 1 ]; then
   echo ""
-  echo "  nothing was uploaded or published (--dry-run), so the site and Polar"
-  echo "  still serve the release before this one."
+  echo "  nothing was uploaded (--dry-run), so the site still serves the"
+  echo "  release before this one."
+else
+  echo ""
+  echo "  next: create the GitHub release v$VERSION from this commit, with"
+  echo "  $SITE_DMG"
 fi

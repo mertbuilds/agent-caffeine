@@ -11,7 +11,7 @@
 #
 # The app runs as `caffeinagent --smoke-test <seconds>` (see
 # Caffeinagent/SmokeTest.swift). In that mode it takes no power assertion,
-# never reaches the helper, the Keychain, Polar or Sparkle, sends no
+# never reaches the helper, the Keychain or Sparkle, sends no
 # notification and keeps its settings under a bundle identifier of its own, so
 # it is safe next to a copy that is installed and running. A second robot
 # shows in the menu bar while it runs, and Preferences opens once behind the
