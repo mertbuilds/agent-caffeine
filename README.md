@@ -1,17 +1,36 @@
 # Agent Caffeine
 
-> The brand is `Agent Caffeine`, with both words capitalised. Every
-> user-visible string uses it: the app, the dmg and the site. The app
-> bundle is `Agent Caffeine.app` from 1.0.2. It was `agent caffeine.app`
-> in 1.0.0 and 1.0.1, and an update keeps the name of the bundle it
-> replaces, so both names are installed and both are supported for good:
-> see `AppInstall`. `caffeinagent` is the name of the repo, the binary, the bundle id
-> and the domain (caffeinagent.com), and the Xcode target and source
-> folder are `Caffeinagent`. Users never see those names as the brand.
+Agent Caffeine is a macOS menu bar app that keeps your Mac awake while AI coding agents work, and lets it sleep when they are done. Start a long task in Claude Code, Codex, Cursor or another agent, close the lid, and come back to finished work.
 
-macOS menu bar app that keeps your Mac awake while AI coding agents work. By default it releases sleep prevention when agents are idle or waiting for your input, so the Mac can nap when it's safe to.
+It is free and open source. There is no license key, no account and no price. If it helps you, you can [support the project](https://caffeinagent.com/support?utm_source=github&utm_medium=readme) with an amount you choose.
+
+## Install
+
+- Download the disk image from [caffeinagent.com](https://caffeinagent.com/?utm_source=github&utm_medium=readme), open it and drag Agent Caffeine to Applications.
+- Or with Homebrew: `brew install --cask mertbuilds/tap/agent-caffeine`
+
+It needs macOS 13 or later, on Apple silicon or Intel. The app updates itself from caffeinagent.com.
 
 ## What it does
+
+- It finds the agents that run on your Mac: Claude Code, Codex, Cursor, opencode, Gemini CLI, Grok Build, Hermes Agent, OpenClaw and about 40 more.
+- It keeps the Mac awake while an agent works, for a short time after it finishes, and for a while when it waits for you. Then the Mac sleeps as usual.
+- With its helper set up, the Mac also stays awake with the lid closed on battery.
+- It lets the Mac sleep when the battery is low, when the Mac gets too hot, and after 3 hours awake with the lid closed on battery or a loss of 30 points of charge there.
+- A script or an agent can ask for the Mac to stay awake with the command line tool `agent-caffeine`, or through its MCP server.
+- "Wake for jobs" (off by default) wakes the Mac for a scheduled job and keeps it awake while the job runs.
+
+## Limits
+
+- The state of an agent is exact only where the agent says it: Claude Code, Codex, and the agents with hooks (see Hooks). For the others Agent Caffeine reads signs of work, such as a running command or processor use. It can be wrong both ways: the Mac can sleep under an agent that works quietly, and stay awake for one that only looks busy. Settings has a rule per agent for that.
+- Some agents of the catalog were found from their documents and not yet measured in a real turn. `docs/research/` says what was measured for each.
+- A closed lid on battery keeps the Mac awake only with the helper, which runs as root and needs your approval once in System Settings > General > Login Items. It is offered only when the app is in the Applications folder.
+- A Mac that stays awake in a bag gets warm and uses its battery. The battery limit (20% by default), the heat stop and the closed lid limit are there for that, and they end a hold whatever asked for it. Work that needs the Mac awake stops then.
+- The display may still sleep. Agent Caffeine keeps the Mac awake, not the screen.
+- "Wake for jobs" sets no wake time on battery unless you allow it, and cannot see a Mac that is unplugged while it sleeps.
+- There is no warranty. See the license.
+
+## What it does, in detail
 
 - Finds the agents that run on the Mac from the process table and a built-in catalog (Claude Code, Codex, opencode, Antigravity and about 45 more). Settings has one rule per agent (automatic, always counts as working, ignore) and a list for process names of tools that are not in the catalog.
 - Reads what each agent says about itself where it can: Claude Code's session state files and Codex's session logs give working, waiting for you, or idle. Other agents are judged by signs of work: a running command, a background task, a power assertion of their own, writes to their session files and, as weak evidence, processor use.
@@ -28,13 +47,13 @@ macOS menu bar app that keeps your Mac awake while AI coding agents work. By def
 - Battery line: while the Mac runs on battery and Agent Caffeine could keep it awake, the menu shows one small line below the headline: a battery mark filled to the charge, the charge, and what follows from it ("58% · sleeps below 20%"). The mark's level and the number are amber within 10 points of the floor, and the mark and the number are red with "starts again at 25%" while the floor stopped Agent Caffeine; the menu then has no second line that says the same. With the battery floor off the line says "no battery limit", and it is amber at 10% and below and red at 5% and below. It is hidden on wall power, on a Mac without a battery, and while Agent Caffeine is off or paused.
 - Durations read as a person says them: "22 minutes", "1 hour 22 minutes" up to 10 hours, then "13 hours", then "3 days" (`Caffeinagent/Detection/HumaneDuration.swift`).
 - Surfaces state in the menu bar with a small version of the robot of the app icon, in the same pose as the robot in the menu: a solid head with smiling eyes when keeping the Mac awake, round eyes while an agent is waiting for you, a grey outline with closed eyes when the Mac can sleep or Agent Caffeine is paused or off, and red crosses for eyes after a safety stop. The menu names what keeps the Mac awake and lists each agent with its state and the reason.
-- "Show Agent Caffeine in the menu bar" (Settings > General, on by default) hides the icon. The app keeps your Mac awake the same way without it. To open Settings again, open Agent Caffeine from Applications or Spotlight. While the icon is hidden, a notification says when the helper was turned off, the helper cannot be reached or the license no longer holds.
+- "Show Agent Caffeine in the menu bar" (Settings > General, on by default) hides the icon. The app keeps your Mac awake the same way without it. To open Settings again, open Agent Caffeine from Applications or Spotlight. While the icon is hidden, a notification says when the helper was turned off or cannot be reached.
 - Pause: "Pause for 30 minutes", "Pause for 1 hour" or "Pause until tomorrow" (06:00, or 8 hours when the morning is less than 4 hours away), from the timer button next to the switch. While paused Agent Caffeine holds nothing and clears the lid closed setting, as if it were off, and starts again by itself. The end is a time on the clock ("Paused until 15:30") and is saved, so it lasts over a restart of the app, and the time the Mac sleeps counts: a Mac that slept past the end wakes with the pause over. Switching Agent Caffeine off ends a pause, and "Resume" ends it at once. The rule is `Caffeinagent/Detection/Pause.swift`.
 - Stay reachable: "Stay reachable for 1 hour", "for 2 hours" or "for 4 hours", from the same timer button. It is the mirror of a pause: until the time on the clock ("Reachable until 18:30") the Mac stays awake also when no agent works, and with the lid closed on battery when the helper is set up, so a message from your phone (Claude Code Remote Control, Codex remote) reaches the agent in seconds. An agent that works keeps its own line in the menu. It costs about 1% of battery per hour on the Mac it was measured on (`docs/research/07-display-and-remote-wake.md`), and the menu says so on battery. "Stop" ends it, a pause ends it, switching Agent Caffeine off ends it, and a safety stop ends it for good: it does not start again when the power returns. With the battery floor off only heat is a safety stop, so the battery does not end it. Starting it ends a pause. The end is saved like the end of a pause. The rule is `Caffeinagent/Detection/Reachable.swift`.
 - Agent notifications (Settings > Notifications), each with its own switch: "An agent is waiting for you" (on by default) and "An agent finished" (off by default), both with the system sound. A session finished when its turn ends or its process is gone, also when a command it started runs on, and not when it works again within 2 seconds. It waits when it asks a question or needs a permission and still does so after 3 seconds. Each change gives one notification with an identifier of its own, and the older one about the same session leaves Notification Center. "Only notify when the agent's window is not in front" (on by default) skips the notification while you use the app the agent runs in. Three or more agents that change within 2 seconds give one notification. Nothing is told for what was already there at launch, or while Agent Caffeine is off or paused. A click on a notification about one agent brings the app that agent runs in to the front, looked up at the click. A click on one about several agents does what macOS does by itself. macOS asks for permission the first time one is due or when you switch one on. Settings > Notifications lists the last 5 notifications and what became of them, and every decision is in the log with the pid, the state and the time, and no name: `log show --last 1h --info --predicate 'subsystem == "com.caffeinagent.app" AND category == "Notices"'`. `caffeinagent --lab-notices <recording>` replays a lab recording and lists what would be told. The notifications about a safety stop, and the ones at 10% and at 5% with the battery floor off, have no switch. The name of a session can come from what you typed: it is shown in the notification on your Mac and is never logged or recorded. The rules are `Caffeinagent/Detection/AgentNotices.swift`.
 - "Open Agent Caffeine at login" (Settings > General) registers the app with `SMAppService.mainApp`, only from `/Applications`. The last page of the setup window asks with a checked box, and nothing is registered when the setup is skipped. The state mapping is `Caffeinagent/LoginItem.swift`.
-- A stop has its own headline, "Agent Caffeine has stopped", with the reason below it (the battery, heat, the trial, the license), so a row that says "Working" below it is no contradiction.
-- After a sleep under an agent the menu says why, once, until it is dismissed or the Mac sleeps again: "Your Mac slept at 02:14: the battery was at 20%". The app takes what it knows when macOS says the Mac goes to sleep, with the lid read at that moment, and names only reasons that are certain: a stop (the closed lid limit also with no agent at work), a pause, a license that does not hold, a wait that ran out, and a lid closed on battery without the helper. A Mac that the user put to sleep by hand gets no line. The rule is `Caffeinagent/Detection/SleepReason.swift`.
+- A stop has its own headline, "Agent Caffeine has stopped", with the reason below it (the battery, heat, the closed lid limit), so a row that says "Working" below it is no contradiction.
+- After a sleep under an agent the menu says why, once, until it is dismissed or the Mac sleeps again: "Your Mac slept at 02:14: the battery was at 20%". The app takes what it knows when macOS says the Mac goes to sleep, with the lid read at that moment, and names only reasons that are certain: a stop (the closed lid limit also with no agent at work), a pause, a wait that ran out, and a lid closed on battery without the helper. A Mac that the user put to sleep by hand gets no line. The rule is `Caffeinagent/Detection/SleepReason.swift`.
 - A click on an agent in the menu brings the app it runs in to the front and closes the menu: the agent's own app, or the terminal or editor its command line runs in. That is the app, not the window or the tab. An app whose windows are all in the Dock shows one again, as after a click on its icon in the Dock. A line of several sessions opens its group, and each session below it goes to its own app. An agent with no app to go to takes no click: over SSH, under screen or zellij, or under a tmux or herdr with no client, or with clients in more than one app. The rules are `Caffeinagent/Detection/AgentHost.swift`.
 - A right click on an agent in the menu goes to its app ("Go to Cursor"), sets its rule ("This agent is working", "Ignore this agent") or opens its settings.
 - Keyboard shortcuts that work in every app (Settings > Shortcuts): "Turn Agent Caffeine on or off", which is the switch and ends a pause, and "Pause for 1 hour". The defaults are ⌃⌥⌘C and ⌃⌥⌘P; you can record others, clear them, or restore the default. They are registered with Carbon's `RegisterEventHotKey`, which needs no Accessibility permission. A shortcut needs Command, Control or Option, and one that macOS uses is refused (`Caffeinagent/Shortcut/`).
@@ -62,7 +81,7 @@ A script, a long job or an agent that Agent Caffeine does not know can ask for t
 - `agent-caffeine skill` prints the skill of the app (`skills/agent-caffeine/SKILL.md` of this repo), so any agent can read it. The tool installs nothing.
 - `agent-caffeine mcp` is an MCP server on stdin and stdout with three tools: `hold_awake` (`minutes` from 1 to 720, `reason`), `release` (`id`, or the holds of the session) and `status`. A hold ends when its session ends: when the agent closes the server's input or its output, or ends the tool with a signal, the holds that session made are released.
 - A hold is one small file in `~/Library/Application Support/com.caffeinagent.app/holds/`, which the app reads with every sample and watches. No daemon and no socket. A timed hold is dead at its time. A command hold is dead when the tool that holds it is gone, checked by pid and start time, so a pid that is used again keeps nothing awake. A dead hold is removed. While the tool is stopped (`kill -STOP`, Ctrl-Z) its hold keeps nothing awake, and it counts again when the tool is continued.
-- A hold is a reason to stay awake like an agent at work, and goes through the same decision. The battery limit, heat, a pause, the switch and a trial that ended still let the Mac sleep. In the menu each hold has a line with "Stop".
+- A hold is a reason to stay awake like an agent at work, and goes through the same decision. The battery limit, heat, a pause and the switch still let the Mac sleep. In the menu each hold has a line with "Stop".
 - `hold --for` is refused while the app does not run. `hold -- <command>` runs the command all the same and says so on stderr.
 - `AGENT_CAFFEINE_HOME` names another folder in place of the app's own. It is for tests and development.
 
@@ -128,47 +147,68 @@ Builds before the helper used a sudoers entry for `pmset -b disablesleep`. The a
 - What it finds: launchd agents in `~/Library/LaunchAgents` with `StartCalendarInterval`, the lines of your crontab (`crontab -l`), and the cron jobs of Hermes Agent (`~/.hermes/cron/jobs.json`). Nothing is read while the switch is off. Each job has a switch of its own, off at first: Agent Caffeine adopts nothing by itself, and it edits no crontab, no plist and no file of an agent. A job that runs at more than 48 times of a day is listed and cannot be switched on, also when it runs on some days only. The same goes for a crontab line that cannot be told apart from another one (the same times and the same command name), or whose command has no plain name: its switch could move to another line when the crontab changes. When a job that was on loses its switch this way, the history and a line in Settings say so.
 - What it keeps of a job: its times and a short name (the launchd label, the name of the command without its folder and its arguments, "Hermes job" with the id of a Hermes job). No command line, no argument, no environment and no prompt is kept, shown or logged. The name of a Hermes job is not read either: Hermes Agent makes it from the start of the prompt when you give none.
 - One alarm at a time, for the nearest job that is on. A Mac that is awake gets no new alarm for a job in the next 30 minutes; the plan is made again when macOS says the Mac goes to sleep. An alarm that is set stays until its job ran. No alarm is set more than 8 days ahead: the helper refuses it, and Settings says that the next run to wake for is that far away. That can be the run after the next one: a monthly job that runs in 20 minutes on an awake Mac gets no alarm for that run, and its run of next month is too far. The app asks the helper for the alarm again every 3 minutes, and the helper takes away an alarm that nobody asked for in 10 minutes of awake time. It also takes the alarm away 30 seconds of awake time after the last connection of the app ended (the app died, or quit with no cancel), unless the app connects again in that time, as after an update. The alarm is taken away when the feature or Agent Caffeine is switched off, during a pause, without a license, in a safety stop, when the app quits and before the helper is removed. At most 12 alarms in 24 hours.
-- The hold: at the time of the alarm a job hold opens, and it goes through the same decision as an agent at work, so the battery limit, heat, a pause, the switch and a trial that ended still let the Mac sleep. It ends when the job was seen to run and is gone (a launchd job by `launchctl list <label>`, a crontab job by a process below `cron` with the name of the command), 4 minutes after the time of a job that was never seen, or 30 minutes after the alarm. The hold of a Hermes job is a bridge of 5 minutes: from the moment the agent works, the detection holds the Mac. With the lid closed that does not happen in this version: the alarm brings no full wake, so Agent Caffeine starts no hold for an agent, and a Hermes job has the 5 minutes of the bridge and no more. On battery no hold opens and none goes on while no alarm would be set there, so a Mac that was unplugged while it slept is not kept awake by an alarm that was set on power. In the menu the hold has a line with "Stop", and a set alarm has one quiet line ("Wakes at 09:14 for backup").
+- The hold: at the time of the alarm a job hold opens, and it goes through the same decision as an agent at work, so the battery limit, heat, a pause and the switch still let the Mac sleep. It ends when the job was seen to run and is gone (a launchd job by `launchctl list <label>`, a crontab job by a process below `cron` with the name of the command), 4 minutes after the time of a job that was never seen, or 30 minutes after the alarm. The hold of a Hermes job is a bridge of 5 minutes: from the moment the agent works, the detection holds the Mac. With the lid closed that does not happen in this version: the alarm brings no full wake, so Agent Caffeine starts no hold for an agent, and a Hermes job has the 5 minutes of the bridge and no more. On battery no hold opens and none goes on while no alarm would be set there, so a Mac that was unplugged while it slept is not kept awake by an alarm that was set on power. In the menu the hold has a line with "Stop", and a set alarm has one quiet line ("Wakes at 09:14 for backup").
 - Limits: "Only on power" is on by default, so on battery no alarm is set and no job keeps the Mac awake. An alarm that was set on power is taken away when Agent Caffeine sees the battery; it cannot see a Mac that is unplugged while it sleeps, so that alarm can still wake the Mac once, and the Mac sleeps again. With it off, an alarm is set on battery only while the battery limit is on and the charge is more than 5 points above it. **With the lid closed on battery this is not tested yet**: the wake may last a few seconds only, and a Mac can wake in a bag. After the job Agent Caffeine sends no sleep request: with the lid open the Mac sleeps when its own sleep timer says so. launchd runs a missed calendar job at the next wake anyway, so there the wake buys punctuality; cron skips a job that falls into a sleep.
 - "Show history" lists the last 50 events with their time: alarm set, refused or taken away, the wake, the job seen and ended, and how a hold ended.
 - The rules are in `Caffeinagent/Detection/Jobs/`: `JobPlanner.swift` (which alarm), `JobWake.swift` (the loop), `JobHold.swift` (the hold) and `JobRunProbe.swift` (how a job is found among the processes). The alarm window of the wake gate is in `Caffeinagent/Detection/WakeGate.swift`.
 
-## Build
+## Privacy
 
-Requires Xcode 16+, macOS 13+ deployment target.
+Agent Caffeine makes one kind of network request: it asks caffeinagent.com for updates, once a day and when you press "Check for updates…". It sends nothing about you or your agents, and it has no analytics. What it reads of an agent (its state, the name of its session for the menu) stays on the Mac.
+
+## Build from source
+
+You need Xcode 16 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen). The deployment target is macOS 13.
 
 ```bash
-brew install xcodegen          # one-time
-xcodegen generate              # regenerate Xcode project from project.yml
+brew install xcodegen          # one time
+xcodegen generate              # makes the Xcode project from project.yml
 xcodebuild -project Caffeinagent.xcodeproj -scheme Caffeinagent -configuration Debug -derivedDataPath build
 open build/Build/Products/Debug/caffeinagent.app
 ```
 
 Xcode names the build product `caffeinagent.app`. `scripts/release.sh` copies it to `Agent Caffeine.app` for the disk image, and that is the name of a new install.
 
-Run the unit tests with `xcodebuild test -project Caffeinagent.xcodeproj -scheme Caffeinagent -destination 'platform=macOS'`.
+A Debug build is signed ad hoc and needs no Apple account. Two things do not work in it, by design: the helper refuses it, so a closed lid on battery and "Wake for jobs" do not work, and the updater never starts. A fork that wants them needs its own Developer ID, bundle ids and update key: [CONTRIBUTING.md](CONTRIBUTING.md) lists every value to change.
 
-## Releases and updates
+## Tests
+
+- The unit tests: `xcodebuild test -project Caffeinagent.xcodeproj -scheme Caffeinagent -destination 'platform=macOS'`. They compile the logic files directly and never start the app, so they touch no power setting, no helper and no Keychain.
+- The smoke test: `scripts/smoke-test.sh`. The unit tests pass on a build that hangs at launch, so no release is made without it. It builds the app and starts it for 14 seconds as `caffeinagent --smoke-test 14`: the real scenes, the real aggregator and the real engine, with no power assertion, helper, Keychain, Sparkle or notification behind them, and with settings of its own, so it is safe next to the copy you use. It hides and shows the icon and opens Settings once in its first seconds, takes no click, and fails when the main thread stalls, the app uses 15% of a core or more in the median steady second (the seconds after the first 2, without the ones of those two steps) or 40% or more over the steady seconds, the scenes are worked out more than 50 times per second, the menu bar has no icon or the engine takes no sample. For its last 6 seconds it shows the views of the menu in a window that is on no screen, with a robot that floats and agents at work, and fails when the app uses 12% of a core or more in the median of those seconds: the motion of the menu runs in Core Animation and costs the app next to nothing, and a motion that the app works out for each frame takes 20% or more. It prints what it measured as one line of JSON, then PASS or FAIL. `scripts/smoke-test.sh --app <path>` tests a bundle that is built already, and `scripts/release.sh` runs it on the signed app and stops when it fails, also with `--dry-run`.
+- The test runner for the real app: `scripts/actest`. It guides a person through tests on a real Mac (close the lid, pull the charger, send a prompt to an agent), sees what it can by itself, records, judges and cleans up. It uses no sudo and never changes a power setting. See [scripts/actest/README.md](scripts/actest/README.md). Its own tests run with `cd scripts/actest && python3 -m unittest discover -s selftest -t .`.
+
+## Releases and how they are signed
 
 The app updates itself with [Sparkle](https://sparkle-project.org). It reads the feed at `https://caffeinagent.com/mac/appcast.xml` once a day, and from "Check for updates…" in Settings. Debug builds never check.
 
-- `scripts/release.sh` is the only way to publish a release. It builds, signs, notarizes, writes the dmg, signs it for Sparkle, adds it to the appcast, uploads the dmg, `appcast.xml` and `latest.json` to `mac/` in the R2 bucket the site serves (named in `~/.config/agent-caffeine/release.env`, public to read at `https://files.caffeinagent.com`), and publishes the dmg to Polar. `--dry-run` does everything local and uploads, notarizes and publishes nothing. A release stops at the start when the working tree has changes that are not committed (`--dry-run --allow-dirty` builds them all the same, and `scripts/build-on-request.sh` uses that), runs the unit tests before it builds, and asks Gatekeeper (`spctl`) about the notarized app and the dmg before the first upload. The header of the script lists the one-time setup.
+- `scripts/release.sh` is the only way to publish a release. It builds, signs, notarizes, writes the dmg, signs it for Sparkle, adds it to the appcast, uploads the dmg, `appcast.xml` and `latest.json` to `mac/` in the R2 bucket the site serves (named in `~/.config/agent-caffeine/release.env`, public to read at `https://files.caffeinagent.com`). `--dry-run` does everything local and uploads and notarizes nothing. A release stops at the start when the working tree has changes that are not committed (`--dry-run --allow-dirty` builds them all the same, and `scripts/build-on-request.sh` uses that), runs the unit tests before it builds, and asks Gatekeeper (`spctl`) about the notarized app and the dmg before the first upload. The header of the script lists the one-time setup.
 - Updates are signed with the EdDSA key in the login keychain under the account `agent-caffeine`. Its public half is `SUPublicEDKey` in `project.yml`. Every Sparkle tool call passes `--account agent-caffeine`.
 - Run the script from a local Terminal: the keychain refuses SSH and scripted sessions.
-- Third-party licenses are in `THIRD_PARTY_NOTICES.md` and `Resources/Licenses/`, both bundled into the app.
+- The app and its helper are signed with the Developer ID of the owner (team `3HGP3W3TLD`) and notarized by Apple. The helper takes calls only from an app that this team signed.
+- Each release is built from one commit of this repository, and that commit has the tag of the version (`v1.1.0`). The GitHub release of the tag holds the same dmg as the site.
+- The license of the app, `THIRD_PARTY_NOTICES.md` and the texts in `Resources/Licenses/` are bundled into the app.
 
-## Before a release
+## Names
 
-Run `scripts/smoke-test.sh`. The unit tests never start the app, so they pass on a build that hangs at launch. The smoke test builds the app and starts it for 14 seconds as `caffeinagent --smoke-test 14`: the real scenes, the real aggregator and the real engine, with no power assertion, helper, Keychain, Polar, Sparkle or notification behind them, and with settings of its own, so it is safe next to the copy you use. It hides and shows the icon and opens Settings once in its first seconds, takes no click, and fails when the main thread stalls, the app uses 15% of a core or more in the median steady second (the seconds after the first 2, without the ones of those two steps) or 40% or more over the steady seconds, the scenes are worked out more than 50 times per second, the menu bar has no icon or the engine takes no sample. For its last 6 seconds it shows the views of the menu in a window that is on no screen, with a robot that floats and agents at work, and fails when the app uses 12% of a core or more in the median of those seconds: the motion of the menu runs in Core Animation and costs the app next to nothing, and a motion that the app works out for each frame takes 20% or more. It prints what it measured as one line of JSON, then PASS or FAIL. `scripts/smoke-test.sh --app <path>` tests a bundle that is built already, and `scripts/release.sh` runs it on the signed app and stops when it fails, also with `--dry-run`.
+The brand is Agent Caffeine, with both words capitalised, in every text people read. The app bundle is `Agent Caffeine.app` from 1.0.2. It was `agent caffeine.app` in 1.0.0 and 1.0.1, and an update keeps the name of the bundle it replaces, so both names are installed and both are supported: see `AppInstall`. `caffeinagent` is the name of the binary, the bundle id and the domain, and the Xcode target and source folder are `Caffeinagent`.
 
-## License keys
+## License
 
-The app runs fully for 7 days from its first launch. The last page of the setup window says so, a notification says once when the last day begins and once when the trial has ended, with the icon shown or hidden, and these two have no switch. After that it keeps the Mac awake only with a license key, sold on Polar. A key runs on one Mac ($19) or on three Macs ($29): the plan sets the number of Polar activations, and Settings > License names it after the activation. The app activates, validates and deactivates keys through Polar's public customer portal endpoints, sandbox in Debug and production in Release (`Caffeinagent/License/LicenseConfig.swift`). The key, its activation id and the trial clock live in the login Keychain (service `com.caffeinagent.app.license`, `.debug` appended in Debug builds). The trial start, the latest time seen and the date of the last successful check are mirrored in `UserDefaults` in case the Keychain cannot be read; the key and the activation id are not. A licensed Mac stays licensed offline for 30 days after its last successful check.
+Copyright (C) 2026 Mert Duzgun
 
-## Roadmap
+This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, version 3.
 
-- [x] Phase 1: AC-only sleep prevention + Claude Code jsonl detector + CLI process detector + menu bar UI + preferences
-- [x] Phase 2: battery override through a sudoers entry for `pmset -b disablesleep`
-- [x] Phase 3: detection engine with an agent catalog, root helper for the lid-closed flag, battery and heat safety stops
-- [x] Phase 4: setup window, agent hooks, phone access detection
-- [x] Phase 5: open at login
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
+
+The full text is in [LICENSE](LICENSE). The SPDX identifier is `AGPL-3.0-only`. The app links to this source code from Settings > About.
+
+- The small files that Agent Caffeine writes into the folders of your agents (the hook lines, the opencode plugin, the Pi extension and the skill) may also be used under the MIT license, so they put no term of the AGPL on your agent configuration.
+- What the app carries from other people, and under which licenses, is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
+
+### Name and icon
+
+The source code is under the AGPL. The name Agent Caffeine, the app icon and the robot are not. A changed version that you give to other people must have another name and another icon. See [TRADEMARKS.md](TRADEMARKS.md).
+
+The agent names and logos are trademarks of their owners and are used only to identify those products.
+
+Contributions: [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
