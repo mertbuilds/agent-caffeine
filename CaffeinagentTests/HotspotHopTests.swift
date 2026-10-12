@@ -163,6 +163,47 @@ final class HotspotHopTests: XCTestCase {
         XCTAssertEqual(mac.wifi.joins, [])
     }
 
+    func testAnOpenNetworkWithTheNameOfTheHotspotIsNeverJoined() {
+        func twin(rssi: Int) -> WiFiSeen {
+            WiFiSeen(name: HopMac.hotspot, sighting: WiFiSighting(rssi: rssi, channel: 1), security: .open)
+        }
+        // An open network with the name of the phone and a stronger signal.
+        var mac = HopMac()
+        mac.wifi.others = [twin(rssi: -30)]
+        mac.loseWiFi()
+        mac.run(seconds: 20)
+        XCTAssertTrue(joined(mac.state))
+        XCTAssertEqual(mac.wifi.joined.map(\.security), [.personal], "The phone, not the open network")
+        XCTAssertEqual(mac.wifi.joined.first?.sighting.rssi, -52)
+        // The open network alone.
+        mac = HopMac()
+        mac.wifi.air = []
+        mac.wifi.others = [twin(rssi: -30)]
+        mac.loseWiFi()
+        mac.run(seconds: 120)
+        guard case .failed(.notSecure, _) = mac.state else { return XCTFail("\(mac.state.code)") }
+        XCTAssertEqual(mac.wifi.joins, [], "No join")
+        XCTAssertGreaterThan(mac.wifi.scans.count, 1, "The phone can come on the air later")
+        mac.wifi.air = [HopMac.hotspot]
+        mac.run(seconds: 62)
+        XCTAssertEqual(mac.wifi.joined.map(\.security), [.personal])
+    }
+
+    func testOnlyANetworkWithAPasswordCountsAsTheHotspot() {
+        func seen(_ name: String, _ rssi: Int, _ security: WiFiSecurity) -> WiFiSeen {
+            WiFiSeen(name: name, sighting: WiFiSighting(rssi: rssi, channel: 6), security: security)
+        }
+        let name = "Mert's iPhone"
+        let air = [seen("Cafe", -20, .personal), seen(HopMac.hotspot, -30, .open), seen(HopMac.hotspot, -70, .personal), seen(name, -60, .personal)]
+        let pick = WiFiPick.hotspot(name, among: air)
+        XCTAssertEqual(pick.index, 3, "The strongest that takes a password, with either apostrophe")
+        XCTAssertEqual(pick.scan, .found(WiFiSighting(rssi: -60, channel: 6)))
+        XCTAssertEqual(WiFiPick.hotspot(name, among: Array(air.prefix(2))).scan, .failed(.notSecure))
+        XCTAssertNil(WiFiPick.hotspot(name, among: Array(air.prefix(2))).index)
+        XCTAssertEqual(WiFiPick.hotspot(name, among: [air[0], seen(name, -30, .other)]).scan, .notFound, "WEP and a network with a user name")
+        XCTAssertEqual(WiFiPick.hotspot(name, among: []).scan, .notFound)
+    }
+
     func testOffNotSetUpNoAgentAndAStopDoNothing() {
         let changes: [(String, (inout HotspotHop.Input) -> Void)] = [
             ("the feature is off", { $0.on = false }),

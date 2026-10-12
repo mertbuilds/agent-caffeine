@@ -15,6 +15,9 @@ enum HopFailure: String, Equatable, CaseIterable {
     case noPassword
     /// macOS gave no answer in time.
     case timeout
+    /// Only an open network has the name of the hotspot. It is never
+    /// joined: anyone can give a network this name.
+    case notSecure
     case other
 }
 
@@ -23,6 +26,41 @@ struct WiFiSighting: Equatable {
     /// The signal in dBm.
     var rssi: Int
     var channel: Int
+}
+
+/// How a network keeps others out, as far as a join asks.
+enum WiFiSecurity: Equatable {
+    /// No password: anyone can set up a network like it.
+    case open
+    /// One password for the network: WPA2 or WPA3 Personal. The hotspot
+    /// of an iPhone is of this kind.
+    case personal
+    /// Anything else: WEP, the first WPA alone, or a network that asks
+    /// for a user name.
+    case other
+}
+
+/// One network of a scan.
+struct WiFiSeen: Equatable {
+    var name: String
+    var sighting: WiFiSighting
+    var security: WiFiSecurity
+}
+
+/// Which network of a scan the Mac may join. A name alone says nothing:
+/// anyone can give an open network the name of the hotspot, with a
+/// strong signal, so the kind of the network is asked too.
+enum WiFiPick {
+    /// The strongest network with the name of the hotspot that takes a
+    /// password. `index` is its place in `seen`.
+    static func hotspot(_ name: String, among seen: [WiFiSeen]) -> (index: Int?, scan: WiFiScan) {
+        let named = seen.indices.filter { HotspotName.matches(seen[$0].name, name) }
+        let safe = named.filter { seen[$0].security == .personal }
+        if let best = safe.max(by: { seen[$0].sighting.rssi < seen[$1].sighting.rssi }) {
+            return (best, .found(seen[best].sighting))
+        }
+        return (nil, named.contains { seen[$0].security == .open } ? .failed(.notSecure) : .notFound)
+    }
 }
 
 enum WiFiScan: Equatable {
@@ -48,7 +86,8 @@ protocol WiFiAccess {
     /// The name of the network the Mac is on. Nil when it is on none,
     /// and when macOS hides the name.
     func currentNetwork() -> String?
-    /// A scan for this one name.
+    /// A scan for the hotspot with this name. Only a network that takes
+    /// a password is found: see `WiFiPick`.
     func scan(for name: String) -> WiFiScan
     /// Joins a network that a scan found.
     /// - Parameter password: nil for a network macOS knows already: the

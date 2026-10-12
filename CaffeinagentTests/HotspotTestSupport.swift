@@ -5,8 +5,12 @@ import XCTest
 final class FakeWiFi: WiFiAccess {
     var powered: Bool? = true
     var current: String?
-    /// The names a scan can see, as the air spells them.
+    /// The names a scan can see, as the air spells them. Each takes a
+    /// password, with a good signal.
     var air: Set<String> = []
+    /// More networks on the air: a second one with a name of `air`, an
+    /// open one, a weak one.
+    var others: [WiFiSeen] = []
     var known: Set<String> = []
     /// The password each network takes. A network that is not here is
     /// joined only with no password, and only when it is known.
@@ -16,32 +20,44 @@ final class FakeWiFi: WiFiAccess {
     private(set) var scans: [String] = []
     private(set) var joins: [String] = []
     private(set) var joinPasswords: [String?] = []
+    /// The network each join that worked went to.
+    private(set) var joined: [WiFiSeen] = []
+    /// The network of the last scan that found one.
+    private var found: WiFiSeen?
 
     func power() -> Bool? { powered }
 
     func currentNetwork() -> String? { current }
 
-    private func onAir(_ name: String) -> String? {
-        air.first { HotspotName.matches($0, name) }
+    private var seen: [WiFiSeen] {
+        air.sorted().map { WiFiSeen(name: $0, sighting: WiFiSighting(rssi: -52, channel: 6), security: .personal) } + others
     }
 
     func scan(for name: String) -> WiFiScan {
         scans.append(name)
+        found = nil
         if let scanFailure { return .failed(scanFailure) }
-        return onAir(name) == nil ? .notFound : .found(WiFiSighting(rssi: -52, channel: 6))
+        let seen = seen
+        let pick = WiFiPick.hotspot(name, among: seen)
+        found = pick.index.map { seen[$0] }
+        return pick.scan
     }
 
     func associate(to name: String, password: String?) -> WiFiJoin {
         joins.append(name)
         joinPasswords.append(password)
         if let joinFailure { return .failed(joinFailure) }
-        guard let found = onAir(name) else { return .failed(.other) }
-        if let right = passwords[found] {
-            guard password == right else { return .failed(.wrongPassword) }
-        } else if password != nil || !isKnown(found) {
-            return .failed(.wrongPassword)
+        guard let found, HotspotName.matches(found.name, name) else { return .failed(.other) }
+        // An open network takes anyone, with any password.
+        if found.security != .open {
+            if let right = passwords[found.name] {
+                guard password == right else { return .failed(.wrongPassword) }
+            } else if password != nil || !isKnown(found.name) {
+                return .failed(.wrongPassword)
+            }
         }
-        current = found
+        current = found.name
+        joined.append(found)
         return .joined
     }
 

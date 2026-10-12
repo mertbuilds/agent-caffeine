@@ -68,6 +68,7 @@ final class HotspotTextTests: XCTestCase {
         XCTAssertEqual(status(.failed(.noPassword, at: time)), "The password was not in your Keychain at 14:02. Save it again.")
         XCTAssertEqual(status(.failed(.timeout, at: time)), "macOS gave no answer at 14:02")
         XCTAssertEqual(status(.failed(.other, at: time)), "Could not join the hotspot at 14:02")
+        XCTAssertEqual(status(.failed(.notSecure, at: time)), "A network with this name is open, so your Mac did not join it")
         XCTAssertEqual(status(.joined(at: at("2026-10-09 23:10"))), "Joined at Oct 9, 23:10", "Another day has its date")
         let american = PanelText.hotspotStatus(view(.joined(at: time)), now: now, calendar: calendar, locale: Locale(identifier: "en_US"))
         XCTAssertEqual(american?.text.replacingOccurrences(of: "\u{202F}", with: " "), "Joined at 2:02 PM")

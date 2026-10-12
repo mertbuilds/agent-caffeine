@@ -49,13 +49,24 @@ final class SystemWiFi: WiFiAccess {
             // macOS looks for the exact bytes, so each spelling of the
             // apostrophe gets a scan of its own.
             var hidden = false
+            var open = false
             for spelling in HotspotName.spellings(of: name) {
                 do {
-                    let networks = try interface.scanForNetworks(withSSID: Data(spelling.utf8))
-                    let matches = networks.filter { $0.ssid.map { HotspotName.matches($0, name) } ?? false }
-                    if let best = matches.max(by: { $0.rssiValue < $1.rssiValue }) {
-                        remember(best)
-                        return .found(WiFiSighting(rssi: best.rssiValue, channel: best.wlanChannel?.channelNumber ?? 0))
+                    let networks = Array(try interface.scanForNetworks(withSSID: Data(spelling.utf8)))
+                    let named = networks.filter { $0.ssid != nil }
+                    let seen = named.map { network in
+                        WiFiSeen(
+                            name: network.ssid ?? "",
+                            sighting: WiFiSighting(rssi: network.rssiValue, channel: network.wlanChannel?.channelNumber ?? 0),
+                            security: Self.security(of: network)
+                        )
+                    }
+                    let pick = WiFiPick.hotspot(name, among: seen)
+                    if let index = pick.index { remember(named[index]) }
+                    switch pick.scan {
+                    case .found: return pick.scan
+                    case .failed: open = true
+                    case .notFound: break
                     }
                     // A network with no name: macOS hides it. It is never
                     // joined, because nothing says that it is the hotspot.
@@ -64,6 +75,7 @@ final class SystemWiFi: WiFiAccess {
                     return .failed(failure(of: error, joining: false))
                 }
             }
+            if open { return .failed(.notSecure) }
             return hidden ? .failed(.noPermission) : .notFound
         }
         return result ?? .failed(.timeout)
@@ -89,6 +101,14 @@ final class SystemWiFi: WiFiAccess {
     func isKnown(_ name: String) -> Bool {
         let profiles = interface?.configuration()?.networkProfiles.array as? [CWNetworkProfile] ?? []
         return profiles.contains { $0.ssid.map { HotspotName.matches($0, name) } ?? false }
+    }
+
+    /// What macOS says a network takes. An open network is open even
+    /// when it says more.
+    private static func security(of network: CWNetwork) -> WiFiSecurity {
+        if network.supportsSecurity(.none) { return .open }
+        let personal: [CWSecurity] = [.wpa2Personal, .wpaPersonalMixed, .wpa3Personal, .wpa3Transition]
+        return personal.contains { network.supportsSecurity($0) } ? .personal : .other
     }
 
     private func remember(_ network: CWNetwork) {
