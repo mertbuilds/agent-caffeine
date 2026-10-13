@@ -285,7 +285,9 @@ struct HotspotHop: Equatable {
         lostWhileArmed = true
         guard let lostFor = lost.offlineFor, lostFor >= Self.lostTime else {
             // Joined, with no path yet, and the Mac slept: still joined.
-            if case .joined = state {} else { state = .waiting }
+            // When no try of this loss can come any more, the state
+            // keeps what the last one came to.
+            if case .joined = state {} else if triesLeft(now: now) { state = .waiting }
             tries = 0
             nextTryAt = nil
             return nil
@@ -304,6 +306,14 @@ struct HotspotHop: Equatable {
         // Joined, with no path yet: the state stays until a try says more.
         if case .joined = state {} else { state = .scanning }
         return start(.join(name: name))
+    }
+
+    /// False when this loss gets no try any more: the hotspot refused
+    /// the password `passwordTries` times, or `tryLimit` is over.
+    private func triesLeft(now: TimeInterval) -> Bool {
+        if passwordFailures >= Self.passwordTries { return false }
+        guard let triesBegan, triesBegan <= now else { return true }
+        return now - triesBegan <= Self.tryLimit
     }
 
     /// On the hotspot, and online. The name of the network is read every

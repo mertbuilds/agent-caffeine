@@ -379,14 +379,42 @@ final class HotspotHopTests: XCTestCase {
         // A sleep gives no new tries: the loss is the same.
         let tries = mac.tryTimes.count
         mac.sleep(3600)
-        mac.run(seconds: 600)
+        mac.run(seconds: 10)
+        guard case .notFound = mac.state else { return XCTFail("No try comes, so nothing waits: \(mac.state.code)") }
+        mac.run(seconds: 590)
         XCTAssertEqual(mac.tryTimes.count, tries)
+        guard case .notFound = mac.state else { return XCTFail("The last result stays: \(mac.state.code)") }
         // The next loss has its own half hour.
         mac.input.online = true
         mac.run(seconds: 10)
         mac.input.online = false
         mac.run(seconds: 20)
         XCTAssertEqual(mac.tryTimes.count, tries + 1)
+    }
+
+    func testARefusedPasswordIsStillSaidAfterASleep() {
+        var mac = HopMac()
+        mac.password = "wrong"
+        mac.loseWiFi()
+        mac.run(seconds: 120)
+        XCTAssertEqual(mac.wifi.joins.count, HotspotHop.passwordTries)
+        // No try comes after the sleep, so the state does not say that
+        // the Mac looks for the hotspot in a moment.
+        mac.sleep(3600)
+        mac.run(seconds: 10)
+        guard case .failed(.wrongPassword, _) = mac.state else { return XCTFail("\(mac.state.code)") }
+        mac.run(seconds: 120)
+        guard case .failed(.wrongPassword, _) = mac.state else { return XCTFail("\(mac.state.code)") }
+        XCTAssertEqual(mac.wifi.joins.count, HotspotHop.passwordTries)
+        // One refusal leaves a try, and the state waits for it.
+        mac = HopMac()
+        mac.password = "wrong"
+        mac.loseWiFi()
+        mac.run(seconds: 20)
+        XCTAssertEqual(mac.wifi.joins.count, 1)
+        mac.sleep(3600)
+        mac.run(seconds: 10)
+        XCTAssertEqual(mac.state, .waiting)
     }
 
     func testAPathThatComesBackByItselfEndsTheTries() {
