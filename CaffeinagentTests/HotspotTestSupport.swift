@@ -82,6 +82,10 @@ final class FakeWiFi: WiFiAccess {
         return .joined
     }
 
+    func forgetFound() {
+        found.forget()
+    }
+
     func knownSecurity(of name: String) -> Result<WiFiSecurity?, HopFailure> {
         if let readFailure { return .failure(readFailure) }
         return .success(knownAs[name] ?? (known.contains(name) ? .personal : nil))

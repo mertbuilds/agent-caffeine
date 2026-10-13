@@ -162,6 +162,9 @@ protocol WiFiAccess {
     /// - Parameter password: nil for a network macOS knows already: the
     ///   password of such a network is in the keychain of the system.
     func associate(to name: String, password: String?) -> WiFiJoin
+    /// Forgets the network that the last scan found, when no join
+    /// follows that scan.
+    func forgetFound()
     /// The kind of the network with this name, to the letter, in the
     /// list of networks macOS knows. Nil when it is not there.
     func knownSecurity(of name: String) -> Result<WiFiSecurity?, HopFailure>

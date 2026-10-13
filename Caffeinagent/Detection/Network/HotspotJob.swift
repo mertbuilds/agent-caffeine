@@ -55,8 +55,11 @@ enum HotspotJob {
         case .failed(let failure): return .failed(failure)
         case .found: break
         }
-        // The scan took seconds.
-        guard mayJoin() else { return .pathBack }
+        // The scan took seconds. No join takes what it found.
+        guard mayJoin() else {
+            wifi.forgetFound()
+            return .pathBack
+        }
         switch wifi.associate(to: name, password: saved) {
         case .joined: return .joined
         case .failed(let failure): return .failed(failure)
@@ -82,8 +85,15 @@ enum HotspotJob {
         case .success(.personal): break
         case .success: return .backFailed
         }
-        guard case .found(let sighting) = wifi.scanKnown(old), sighting.rssi >= HotspotHop.backSignal else { return .onHotspot }
-        guard seen else { return .sawOld }
+        // No join takes a network that is weak, or seen for the first time.
+        guard case .found(let sighting) = wifi.scanKnown(old), sighting.rssi >= HotspotHop.backSignal else {
+            wifi.forgetFound()
+            return .onHotspot
+        }
+        guard seen else {
+            wifi.forgetFound()
+            return .sawOld
+        }
         switch wifi.associate(to: old, password: nil) {
         case .joined: return .wentBack
         case .failed: return .backFailed

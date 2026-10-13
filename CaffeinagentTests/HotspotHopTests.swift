@@ -954,6 +954,37 @@ final class HotspotHopTests: XCTestCase {
         XCTAssertEqual(wifi.associate(to: HopMac.hotspot, password: HopMac.password), .failed(.other), "A scan that found nothing forgets the one before")
     }
 
+    func testAScanThatNoJoinFollowsKeepsNoNetwork() {
+        let saved: () -> Result<String, HopFailure> = { .success(HopMac.password) }
+        // A path came back during the scan for the hotspot.
+        var wifi = FakeWiFi()
+        wifi.air = [HopMac.hotspot]
+        wifi.passwords = [HopMac.hotspot: HopMac.password]
+        var asked = 0
+        let pathBack = HotspotJob.run(.join(name: HopMac.hotspot), wifi: wifi, password: saved) {
+            asked += 1
+            return asked == 1
+        }
+        XCTAssertEqual(pathBack, .pathBack)
+        XCTAssertEqual(wifi.scans, [HopMac.hotspot])
+        XCTAssertEqual(wifi.associate(to: HopMac.hotspot, password: HopMac.password), .failed(.other))
+        XCTAssertEqual(wifi.joined, [])
+        // The first look that sees the old network, and a look that
+        // sees it with a weak signal.
+        for rssi in [-52, HotspotHop.backSignal - 1] {
+            wifi = FakeWiFi()
+            wifi.others = [WiFiSeen(name: HopMac.cafe, sighting: WiFiSighting(rssi: rssi, channel: 6), security: .personal)]
+            wifi.known = [HopMac.cafe]
+            wifi.current = HopMac.hotspot
+            let back = HotspotJob.run(.back(hotspot: HopMac.hotspot, to: HopMac.cafe, seen: false), wifi: wifi, password: saved, mayJoin: { true })
+            XCTAssertEqual(back, rssi == -52 ? .sawOld : .onHotspot)
+            XCTAssertEqual(wifi.scans, [HopMac.cafe])
+            XCTAssertEqual(wifi.associate(to: HopMac.cafe, password: nil), .failed(.other), "\(rssi)")
+            XCTAssertEqual(wifi.joined, [], "\(rssi)")
+            XCTAssertEqual(wifi.current, HopMac.hotspot)
+        }
+    }
+
     /// The files of the feature that are compiled into the tests write
     /// no log and print nothing: a name cannot get out that way.
     func testTheCoreWritesNoLog() throws {

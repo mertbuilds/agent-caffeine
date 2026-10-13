@@ -132,6 +132,10 @@ final class SystemWiFi: WiFiAccess {
         return result ?? .failed(.timeout)
     }
 
+    func forgetFound() {
+        found.forget()
+    }
+
     func knownSecurity(of name: String) -> Result<WiFiSecurity?, HopFailure> {
         knownProfile(name).map { security in
             switch security {
