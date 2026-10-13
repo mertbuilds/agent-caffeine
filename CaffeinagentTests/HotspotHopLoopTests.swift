@@ -244,6 +244,26 @@ final class HotspotHopLoopTests: XCTestCase {
         XCTAssertEqual(parts.wifi.current, HopMac.cafe)
     }
 
+    func testALockedKeychainIsNotReadAndATryAfterTheUnlockJoins() {
+        let loop = loop()
+        loop.setOn(true)
+        loop.save(name: HopMac.hotspot, password: HopMac.password)
+        parts.passwords.locked = true
+        run(loop, seconds: 10)
+        loseWiFi()
+        run(loop, seconds: 60)
+        XCTAssertEqual(loop.view.state.code, "failed:keychainLocked")
+        XCTAssertEqual(parts.passwords.loads, 0, "A read could make macOS show its window")
+        XCTAssertEqual(parts.wifi.scans, [])
+        XCTAssertEqual(parts.wifi.joins, [])
+        // The user unlocks it.
+        parts.passwords.locked = false
+        run(loop, seconds: 62)
+        XCTAssertEqual(loop.view.state.code, "joined")
+        XCTAssertEqual(parts.passwords.loads, 1)
+        XCTAssertEqual(parts.wifi.joinPasswords, [HopMac.password])
+    }
+
     func testTheWayBackCanBeSwitchedOff() {
         let loop = loop()
         loop.setOn(true)

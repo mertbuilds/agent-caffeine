@@ -131,7 +131,7 @@ final class HotspotHopLoop {
     private nonisolated static func work(
         _ action: HotspotHop.Action, wifi: WiFiAccess, passwords: HotspotPasswordStoring, gate: HopGate, isOnline: @escaping () -> Bool
     ) -> () -> HotspotHop.Outcome {
-        { HotspotJob.run(action, wifi: wifi, password: passwords.load, mayJoin: { gate.isOpen && !isOnline() }) }
+        { HotspotJob.run(action, wifi: wifi, password: passwords.loadUnlocked, mayJoin: { gate.isOpen && !isOnline() }) }
     }
 
     private func publish(_ next: HotspotView) {

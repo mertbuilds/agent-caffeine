@@ -176,9 +176,13 @@ final class SystemWiFi: WiFiAccess {
 /// ID for every version, so macOS lets each version read the item with
 /// no question.
 ///
-/// A read never shows a window. It is made for a join, often with the
-/// lid closed: a locked Keychain fails at once, and the read has a time
-/// limit like every call of the join.
+/// A read is made for a join, often with the lid closed, when nobody
+/// answers a window. A locked Keychain is not read: `isLocked` is asked
+/// first, because macOS can show its window for an item of a Keychain
+/// in a file, whatever the query says. The read has a time limit like
+/// every call of the join. When macOS shows a window all the same, the
+/// try fails with `timeout`, and so does each later one until the user
+/// answered.
 struct KeychainHotspotPassword: HotspotPasswordStoring {
     static let readTimeout: TimeInterval = 5
     private static let calls = TimedCalls(label: "com.caffeinagent.app.hotspot.keychain")
@@ -211,6 +215,12 @@ struct KeychainHotspotPassword: HotspotPasswordStoring {
         return SecItemAdd(add as CFDictionary, nil) == errSecSuccess
     }
 
+    /// A question that macOS did not answer in time counts as not
+    /// locked: the read that follows fails with `timeout` then.
+    func isLocked() -> Bool {
+        Self.calls.run(Self.readTimeout) { (LoginKeychain.self as KeychainLockReading.Type).isLocked() } ?? false
+    }
+
     func load() -> Result<String, HopFailure> {
         let query = itemQuery
         return Self.calls.run(Self.readTimeout) { Self.read(query) } ?? .failure(.timeout)
@@ -220,7 +230,9 @@ struct KeychainHotspotPassword: HotspotPasswordStoring {
         var query = item
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
-        // macOS asks the user for nothing: it fails in place of that.
+        // For an item that macOS guards with Touch ID: the read fails in
+        // place of a question. It does not stop the window of a locked
+        // Keychain in a file. `isLocked` is there for that one.
         let context = LAContext()
         context.interactionNotAllowed = true
         query[kSecUseAuthenticationContext as String] = context
@@ -240,6 +252,26 @@ struct KeychainHotspotPassword: HotspotPasswordStoring {
     func remove() -> Bool {
         let status = SecItemDelete(itemQuery as CFDictionary)
         return status == errSecSuccess || status == errSecItemNotFound
+    }
+}
+
+/// Reached through this protocol alone, so the compiler gives no
+/// warning for `SecKeychainGetStatus`. macOS has no newer call that says
+/// whether a Keychain in a file is locked.
+private protocol KeychainLockReading {
+    static func isLocked() -> Bool
+}
+
+/// The Keychain a query with no Keychain named goes to: the login
+/// Keychain of the user.
+private enum LoginKeychain: KeychainLockReading {
+    /// False when macOS does not say: the read, with its time limit,
+    /// says more then.
+    @available(macOS, deprecated: 10.10)
+    static func isLocked() -> Bool {
+        var status = SecKeychainStatus()
+        guard SecKeychainGetStatus(nil, &status) == errSecSuccess else { return false }
+        return status & kSecUnlockStateStatus == 0
     }
 }
 

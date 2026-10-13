@@ -93,9 +93,12 @@ final class FakePasswordStore: HotspotPasswordStoring {
     var password: String?
     var refusesSave = false
     var refusesRemove = false
-    /// The Keychain is locked, or gives no answer.
+    var locked = false
+    /// The Keychain refuses the read, or gives no answer.
     var loadFailure: HopFailure?
     private(set) var loads = 0
+
+    func isLocked() -> Bool { locked }
 
     func save(_ password: String) -> Bool {
         guard !refusesSave else { return false }

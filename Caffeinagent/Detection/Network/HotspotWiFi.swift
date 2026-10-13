@@ -173,11 +173,24 @@ protocol WiFiAccess {
 protocol HotspotPasswordStoring {
     /// False when the password was not saved.
     func save(_ password: String) -> Bool
+    /// The Keychain is locked: for a read, macOS would show a window
+    /// that asks the user to unlock it.
+    func isLocked() -> Bool
     /// Fails with `noPassword` when there is none, with `keychainLocked`
-    /// when macOS would have to ask the user, and with `timeout`. It
-    /// never shows a window.
+    /// when macOS refuses the read, and with `timeout`. Only
+    /// `loadUnlocked` keeps macOS from a window: this call alone does
+    /// not, when the Keychain is locked.
     func load() -> Result<String, HopFailure>
     /// An item that was never there counts as removed.
     @discardableResult
     func remove() -> Bool
+}
+
+extension HotspotPasswordStoring {
+    /// The read for a join. A locked Keychain is not read at all, and
+    /// the try fails with `keychainLocked`: with the lid closed nobody
+    /// answers a window of macOS.
+    func loadUnlocked() -> Result<String, HopFailure> {
+        isLocked() ? .failure(.keychainLocked) : load()
+    }
 }
