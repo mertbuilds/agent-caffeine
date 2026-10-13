@@ -20,7 +20,7 @@ extension PanelText {
     static let hotspotTitle = "Join your iPhone hotspot (Beta)"
     static let hotspotSwitch = "Join your iPhone hotspot when Wi-Fi is lost"
     static let hotspotExplained = "When Wi-Fi is lost while an agent works, your Mac joins this hotspot. This uses the data and the battery of your phone."
-    static let hotspotStays = "Your Mac stays on the hotspot until its Wi-Fi comes back or you change the network."
+    static let hotspotStays = "Your Mac stays on the hotspot until you change the network, or until it goes back to its Wi-Fi."
     static let hotspotLeaves = "If you leave the hotspot, your Mac does not join it again by itself."
     static let hotspotName = "Hotspot name"
     static let hotspotNamePrompt = "The name of your iPhone"
@@ -30,7 +30,7 @@ extension PanelText {
     static let hotspotOpenPrivacy = "Open Privacy settings"
     static let hotspotOpenWiFi = "Open Wi-Fi settings"
     static let hotspotHopBack = "Go back to your Wi-Fi when your Mac sees it again"
-    static let hotspotHopBackExplained = "On the hotspot, your Mac looks for the Wi-Fi it lost every \(minutes(HotspotHop.backInterval)), and every \(minutes(HotspotHop.backIntervalInBag)) on battery with the lid closed. It goes back when the signal is good on 2 looks in a row, and never to an open network or to one that asks for a user name."
+    static let hotspotHopBackExplained = "On the hotspot, your Mac looks for the Wi-Fi it lost every \(minutes(HotspotHop.backInterval)), and every \(minutes(HotspotHop.backIntervalInBag)) on battery with the lid closed. It goes back when the signal is good on 2 looks in a row, and never to an open network or to one that asks for a user name. Only when Agent Caffeine joined the hotspot itself."
     static let hotspotForgets = "The password is kept in your Keychain. When you switch this off, Agent Caffeine forgets the name and the password."
 
     private static func minutes(_ seconds: TimeInterval) -> String {

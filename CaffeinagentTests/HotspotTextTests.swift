@@ -37,12 +37,12 @@ final class HotspotTextTests: XCTestCase {
         )
         XCTAssertEqual(
             PanelText.hotspotHopBackExplained,
-            "On the hotspot, your Mac looks for the Wi-Fi it lost every 2 minutes, and every 10 minutes on battery with the lid closed. It goes back when the signal is good on 2 looks in a row, and never to an open network or to one that asks for a user name."
+            "On the hotspot, your Mac looks for the Wi-Fi it lost every 2 minutes, and every 10 minutes on battery with the lid closed. It goes back when the signal is good on 2 looks in a row, and never to an open network or to one that asks for a user name. Only when Agent Caffeine joined the hotspot itself."
         )
     }
 
     func testWhatTheMacDoesOnTheHotspotIsSaid() {
-        XCTAssertEqual(PanelText.hotspotStays, "Your Mac stays on the hotspot until its Wi-Fi comes back or you change the network.")
+        XCTAssertEqual(PanelText.hotspotStays, "Your Mac stays on the hotspot until you change the network, or until it goes back to its Wi-Fi.")
         XCTAssertEqual(PanelText.hotspotLeaves, "If you leave the hotspot, your Mac does not join it again by itself.")
     }
 
