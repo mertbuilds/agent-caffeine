@@ -32,7 +32,7 @@ class CatalogTests(unittest.TestCase):
 
     def test_the_hotspot_tests_change_no_network_setting(self):
         tests = catalog.load_all()
-        for name in ("HOP-01", "HOP-02"):
+        for name in ("HOP-01", "HOP-02", "HOP-03"):
             found = tests[name]
             self.assertEqual(found["area"], "net")
             self.assertTrue(found.get("decides"), name)
@@ -40,9 +40,14 @@ class CatalogTests(unittest.TestCase):
             self.assertTrue(all("run" not in step and "spawn" not in step and "command" not in step for step in found["steps"]), name)
             self.assertEqual([entry["expect"] for entry in found["cleanup"]], ["app.network.online=true"])
             said = " ".join(step["say"] for step in found["steps"])
-            self.assertIn("Disconnect from", said)
+            # A Wi-Fi the owner disconnects from gets no way back, so the
+            # test of the way back has a real loss: the owner walks away.
+            self.assertEqual("Disconnect from" in said, name != "HOP-03", name)
             self.assertNotIn("networksetup", said)
         self.assertIn("within 60s after step 4: app.hotspot.state=joined and app.network.online=true", tests["HOP-01"]["checks"])
+        self.assertFalse(any("hoppedBack" in str(value) for value in tests["HOP-01"]["checks"] + tests["HOP-01"]["steps"]))
+        self.assertTrue(all(rule.startswith("info ") for rule in tests["HOP-03"]["checks"] if "hoppedBack" in rule))
+        self.assertTrue(tests["HOP-03"]["steps"][-2].get("optional"))
         # The test of the idle phone only measures whether it is found.
         self.assertTrue(all(rule.startswith("info ") for rule in tests["HOP-02"]["checks"] if "joined" in rule or "notFound" in rule))
         self.assertTrue(tests["HOP-02"]["steps"][-2].get("optional"))

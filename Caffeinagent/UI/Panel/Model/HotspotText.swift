@@ -30,7 +30,7 @@ extension PanelText {
     static let hotspotOpenPrivacy = "Open Privacy settings"
     static let hotspotOpenWiFi = "Open Wi-Fi settings"
     static let hotspotHopBack = "Go back to your Wi-Fi when your Mac sees it again"
-    static let hotspotHopBackExplained = "On the hotspot, your Mac looks for the Wi-Fi it lost every \(minutes(HotspotHop.backInterval)), and every \(minutes(HotspotHop.backIntervalInBag)) on battery with the lid closed. It goes back when the signal is good on 2 looks in a row, and never to an open network or to one that asks for a user name. Only when Agent Caffeine joined the hotspot itself."
+    static let hotspotHopBackExplained = "On the hotspot, your Mac looks for the Wi-Fi it lost every \(minutes(HotspotHop.backInterval)), and every \(minutes(HotspotHop.backIntervalInBag)) on battery with the lid closed. It goes back when the signal is good on 2 looks in a row, and never to an open network or to one that asks for a user name. Only when Agent Caffeine joined the hotspot itself, and only to a Wi-Fi that was really gone."
     static let hotspotForgets = "The password is kept in your Keychain. When you switch this off, Agent Caffeine forgets the name and the password."
 
     private static func minutes(_ seconds: TimeInterval) -> String {

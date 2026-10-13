@@ -71,7 +71,9 @@ enum HotspotJob {
     /// sees it now by the same name to the letter. An open network and a
     /// network that asks for a user name get no way back: anyone can set
     /// up an open network with that name. A weak signal is no way back,
-    /// and the first look with a good signal joins nothing yet.
+    /// and the first look with a good signal joins nothing yet. A scan
+    /// that failed is a failure, so it does not count as a look that
+    /// did not see the network.
     private static func back(from hotspot: String, to old: String?, seen: Bool, wifi: WiFiAccess) -> HotspotHop.Outcome {
         switch wifi.currentNetwork() {
         // Nothing is known, so nothing changes.
@@ -86,7 +88,11 @@ enum HotspotJob {
         case .success: return .backFailed
         }
         // No join takes a network that is weak, or seen for the first time.
-        guard case .found(let sighting) = wifi.scanKnown(old), sighting.rssi >= HotspotHop.backSignal else {
+        switch wifi.scanKnown(old) {
+        // A scan that did not run says nothing of the air.
+        case .failed(let failure): return .failed(failure)
+        case .found(let sighting) where sighting.rssi >= HotspotHop.backSignal: break
+        case .found, .notFound:
             wifi.forgetFound()
             return .onHotspot
         }

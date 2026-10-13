@@ -2,10 +2,10 @@ id = "HOP-01"
 title = "Wi-Fi lost while an agent works: the Mac joins the iPhone hotspot"
 layer = 1
 area = "net"
-minutes = 12
-risk = "Your Mac leaves its Wi-Fi for up to 6 minutes and joins the hotspot of your iPhone: the agent and everything else on the Mac use the data of your phone for that time. You disconnect and reconnect the Wi-Fi yourself. Do it when no upload or call runs."
-why = "The feature Join your iPhone hotspot (Beta): the owner leaves a cafe with the lid closed, the Wi-Fi is gone, and the agents should stay online. This is the easy case, with the phone on its hotspot screen, so it shows its hotspot the whole time. The runner changes no network setting. Disconnect with the Option key keeps Wi-Fi switched on and takes the path away, which is what a Wi-Fi that goes out of reach does. The agent must run a command that uses no processor, like sleep, so its state does not change in the test. The last step also measures the way back: your Wi-Fi is on the air the whole time, so Agent Caffeine tries to join it again with no password. It does that only for a Wi-Fi with a WPA2 or WPA3 password that macOS knows, and only when two looks in a row, 2 minutes apart, see it with a signal of -70 dBm or better. So the way back takes about 4 minutes, and none comes on an open Wi-Fi, on one that asks for a user name, or far from the router: that is no failure."
-decides = "whether the join through CoreWLAN works at all on this macOS, how long it takes, and whether the way back works with no password"
+minutes = 8
+risk = "Your Mac leaves its Wi-Fi and joins the hotspot of your iPhone, and it stays there until you click your own network again: the agent and everything else on the Mac use the data of your phone for that time. You disconnect and reconnect the Wi-Fi yourself. Do it when no upload or call runs."
+why = "The feature Join your iPhone hotspot (Beta): the owner leaves a cafe with the lid closed, the Wi-Fi is gone, and the agents should stay online. This is the easy case, with the phone on its hotspot screen, so it shows its hotspot the whole time. The runner changes no network setting. Disconnect with the Option key keeps Wi-Fi switched on and takes the path away, which is what a Wi-Fi that goes out of reach does. The agent must run a command that uses no processor, like sleep, so its state does not change in the test. The way back is not in this test. You disconnect by hand and your Wi-Fi stays on the air, and Agent Caffeine goes back only to a Wi-Fi that was really gone: it would undo what you did. So the Mac stays on the hotspot until you click your own network. HOP-03 measures the way back."
+decides = "whether the join through CoreWLAN works at all on this macOS, and how long it takes"
 checks = [
   "at step 3: app.network.online=true and app.hotspot.state!=joined",
   "never from step 3 to step 4 - 2s: app.hotspot.state=scanning",
@@ -15,7 +15,6 @@ checks = [
   "always from step 4 to step 5: app.agent[*].state=working",
   "never from start to end: app.network.agentsReleased=true",
   "never from start to end: app.notice[offline].age<600",
-  "info within 320s after step 5: app.hotspot.state=hoppedBack",
   "at end: app.network.online=true",
 ]
 
@@ -44,13 +43,7 @@ until = "app.hotspot.state=joined and app.network.online=true"
 timeout = 90
 
 [[steps]]
-say = "Nothing to do for up to 5 minutes. Your Wi-Fi is still on the air, so Agent Caffeine goes back to it when it sees it with a good signal twice. The step ends by itself when it does not."
-until = "app.hotspot.state=hoppedBack"
-timeout = 320
-optional = true
-
-[[steps]]
-say = "Click the Wi-Fi icon. If your Mac is not on your own Wi-Fi, click your network now. Press Enter here when your Mac is on your own Wi-Fi."
+say = "Click the Wi-Fi icon and click your own network: Agent Caffeine does not go back to a Wi-Fi you disconnected from. Press Enter here when your Mac is on your own Wi-Fi."
 key = "enter"
 
 [[cleanup]]

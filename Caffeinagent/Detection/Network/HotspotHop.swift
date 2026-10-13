@@ -42,8 +42,13 @@ import Foundation
 /// for that network every `backInterval`, and every `backIntervalInBag`
 /// on battery with the lid closed: a scan takes the radio off its
 /// channel for a moment and costs charge, and in a bag the old network
-/// rarely comes back. When the network is seen with a signal of
-/// `backSignal` or better on two looks in a row, the Mac joins it with
+/// rarely comes back. The network must be gone first: the first look
+/// after the join does not see it with a signal of `backSignal` or
+/// better. When that look sees it, the loss was no real loss: the user
+/// clicked Disconnect, or the base station dropped the Mac. Going back
+/// would undo what the user did, so this join has no way back. When the
+/// network was gone and is then seen with a good signal on two looks in
+/// a row, the Mac joins it with
 /// no password, because macOS keeps that one. Only a network that macOS
 /// knows as one with a WPA2 or WPA3 password counts, by its name to the
 /// letter: an open network and one that asks for a user name get no way
@@ -189,6 +194,9 @@ struct HotspotHop: Equatable {
     private var awaitingPath = false
     /// Where the way back goes.
     private var backTo: String?
+    /// A look after the join did not see `backTo` with a good signal:
+    /// the network was really gone. Before that nothing is joined.
+    private var backGone = false
     /// The last look saw `backTo` with a good signal.
     private var backSeen = false
     private var lastBackAt: TimeInterval?
@@ -384,11 +392,24 @@ struct HotspotHop: Equatable {
         case (.join, .pathBack):
             if state == .scanning { state = .idle }
         case (.back, .sawOld):
-            backSeen = true
             onHotspot = true
+            if backGone {
+                backSeen = true
+            } else {
+                // Seen on the first look after the join: the network
+                // never went away. The user left it, or it dropped the
+                // Mac, and the Mac does not go back to it by itself.
+                noWayBack()
+            }
         case (.back(_, let to, _), .onHotspot):
-            if to != nil { backSeen = false }
+            if to != nil {
+                backSeen = false
+                backGone = true
+            }
             onHotspot = true
+        case (.back(_, let to, _), .failed):
+            // Nothing is known of the air: this was no look.
+            if to != nil { backSeen = false }
         case (.back, .leftHotspot):
             state = .idle
             onHotspot = false
@@ -410,6 +431,7 @@ struct HotspotHop: Equatable {
     private mutating func joined(at date: Date, now: TimeInterval, backTo: String?) {
         state = .joined(at: date)
         self.backTo = backTo
+        backGone = false
         backSeen = false
         lastBackAt = now
         lastCheckAt = now
@@ -420,6 +442,7 @@ struct HotspotHop: Equatable {
 
     private mutating func noWayBack() {
         backTo = nil
+        backGone = false
         backSeen = false
         lastNetwork = nil
     }

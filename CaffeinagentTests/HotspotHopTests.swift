@@ -289,6 +289,7 @@ final class HotspotHopTests: XCTestCase {
         XCTAssertEqual(mac.wifi.scans, [])
         // On the hotspot: no answer is not "the Mac left the hotspot".
         mac = hopped(from: HopMac.cafe)
+        mac.run(seconds: 122)
         mac.wifi.air.insert(HopMac.cafe)
         mac.wifi.readFailure = .timeout
         mac.run(seconds: 600)
@@ -528,6 +529,70 @@ final class HotspotHopTests: XCTestCase {
         XCTAssertEqual(mac.wifi.current, HopMac.cafe)
     }
 
+    func testAWiFiTheUserDisconnectedFromIsNotJoinedAgain() {
+        // The user clicks Disconnect while an agent works. The cafe
+        // Wi-Fi stays on the air, with a good signal.
+        var mac = HopMac()
+        mac.run(seconds: 10)
+        mac.wifi.current = nil
+        mac.input.online = false
+        mac.run(seconds: 20)
+        XCTAssertTrue(joined(mac.state))
+        mac.run(seconds: 3600)
+        XCTAssertTrue(joined(mac.state))
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot], "Going back would undo what the user did")
+        XCTAssertEqual(mac.wifi.current, HopMac.hotspot)
+        XCTAssertEqual(mac.wifi.scans.filter { $0 == HopMac.cafe }.count, 1, "The first look ends the way back, and its scans")
+        // Not later either, when the network goes and comes.
+        mac.wifi.air.remove(HopMac.cafe)
+        mac.run(seconds: 600)
+        mac.wifi.air.insert(HopMac.cafe)
+        mac.run(seconds: 600)
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot])
+        // A scan that failed is no look: the first one that runs counts.
+        mac = HopMac()
+        mac.run(seconds: 10)
+        mac.wifi.current = nil
+        mac.input.online = false
+        mac.run(seconds: 20)
+        mac.wifi.scanFailure = .timeout
+        mac.run(seconds: 600)
+        mac.wifi.scanFailure = nil
+        mac.run(seconds: 3600)
+        XCTAssertTrue(joined(mac.state))
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot])
+    }
+
+    func testAWiFiThatWasGoneAndCameBackIsJoinedAgain() {
+        // The Mac went out of reach of the cafe Wi-Fi: the first look
+        // on the hotspot does not see it.
+        var mac = HopMac()
+        mac.run(seconds: 10)
+        mac.loseWiFi()
+        mac.run(seconds: 20)
+        XCTAssertTrue(joined(mac.state))
+        mac.run(seconds: 122)
+        XCTAssertEqual(mac.wifi.scans.filter { $0 == HopMac.cafe }.count, 1)
+        mac.wifi.air.insert(HopMac.cafe)
+        mac.run(seconds: 120)
+        XCTAssertEqual(mac.wifi.joins, [HopMac.hotspot], "Seen once")
+        mac.run(seconds: 120)
+        guard case .hoppedBack = mac.state else { return XCTFail("\(mac.state.code)") }
+        XCTAssertEqual(mac.wifi.current, HopMac.cafe)
+        // A first look that sees it with a weak signal: the Mac was at
+        // the edge, and the network was as good as gone.
+        mac = HopMac()
+        mac.run(seconds: 10)
+        mac.loseWiFi()
+        mac.wifi.others = [WiFiSeen(name: HopMac.cafe, sighting: WiFiSighting(rssi: HotspotHop.backSignal - 1, channel: 6), security: .personal)]
+        mac.run(seconds: 20)
+        mac.run(seconds: 122)
+        mac.wifi.others = []
+        mac.wifi.air.insert(HopMac.cafe)
+        mac.run(seconds: 240)
+        XCTAssertEqual(mac.wifi.current, HopMac.cafe)
+    }
+
     func testTheWayBackIsLookedForEveryTwoMinutesAndLessOftenInABag() {
         func scansForCafe(_ change: (inout HotspotHop.Input) -> Void) -> Int {
             var mac = HopMac()
@@ -613,6 +678,8 @@ final class HotspotHopTests: XCTestCase {
         mac.run(seconds: 10)
         mac.loseWiFi()
         mac.run(seconds: 20)
+        // The first look does not see it.
+        mac.run(seconds: 122)
         mac.wifi.air.insert(HopMac.cafe)
         mac.wifi.joinFailure = .other
         mac.run(seconds: 1200)
