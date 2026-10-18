@@ -83,7 +83,7 @@ final class DisplayTraceTests: XCTestCase {
         for fade in 0..<7 {
             recorder.add(row(Double(fade), written: 0.4, read: 0.4))
             recorder.add(row(Double(fade) + 0.01))
-            XCTAssertEqual(names.count, min(fade, 5), "Written when the fade ends")
+            XCTAssertEqual(names.count, min(fade + 1, 5), "Made at the first step")
             recorder.finish()
         }
         XCTAssertEqual(names.count, 5)
@@ -96,5 +96,32 @@ final class DisplayTraceTests: XCTestCase {
         recorder.add(row(10))
         recorder.finish()
         XCTAssertEqual(names.count, 5)
+    }
+
+    /// A hard restart in the middle of a fade keeps what came before the
+    /// last second.
+    func testTheFileGetsTheNewStepsOncePerSecondWhileTheFadeRuns() throws {
+        defaults.set(true, forKey: DisplayTrace.defaultsKey)
+        let recorder = DisplayTraceRecorder(defaults: defaults, directory: directory)
+        func lines() throws -> Int {
+            try String(contentsOf: directory.appendingPathComponent(names[0]), encoding: .utf8).split(separator: "\n").count
+        }
+        recorder.add(row(0))
+        XCTAssertEqual(try lines(), 2, "The header and the first step at once")
+        recorder.add(row(0.5))
+        XCTAssertEqual(try lines(), 2)
+        recorder.add(row(1))
+        XCTAssertEqual(try lines(), 4)
+        recorder.add(row(1.5))
+        recorder.add(row(2.2))
+        XCTAssertEqual(try lines(), 6)
+        recorder.add(row(2.5))
+        XCTAssertEqual(try lines(), 6)
+        recorder.finish()
+        XCTAssertEqual(try lines(), 7)
+        var trace = DisplayTrace()
+        for seconds in [0, 0.5, 1, 1.5, 2.2, 2.5] { trace.add(row(seconds)) }
+        XCTAssertEqual(try String(contentsOf: directory.appendingPathComponent(names[0]), encoding: .utf8), trace.text, "The same text as in one write")
+        XCTAssertEqual(DisplayTrace.flushEvery, 1)
     }
 }

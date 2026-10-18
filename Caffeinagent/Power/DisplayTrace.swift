@@ -26,6 +26,9 @@ struct DisplayTrace: Equatable {
     static let suffix = ".tsv"
     static let maxLines = 2000
     static let keptFiles = 5
+    /// The file gets the new lines at least this often while a fade runs,
+    /// so a hard restart keeps what came before it.
+    static let flushEvery: TimeInterval = 1
     /// A brightness this far from the one that was set: macOS set its own.
     static let fight: Float = 0.01
 
@@ -75,12 +78,18 @@ struct DisplayTrace: Equatable {
     }
 }
 
-/// Keeps the trace of one fade in memory and writes it to a file when the
-/// fade ends. Off unless the switch in the defaults is on.
+/// Keeps the trace of one fade in memory and writes it to a file: the
+/// first step at once, then the new steps once per second, and the rest
+/// when the fade ends. Off unless the switch in the defaults is on.
 final class DisplayTraceRecorder {
     private let defaults: UserDefaults
     private let directory: URL
     private var trace: DisplayTrace?
+    /// The file of the fade that runs.
+    private var file: URL?
+    /// The lines of the trace that are in the file.
+    private var flushed = 0
+    private var flushedAt: Date?
 
     /// `~/Library/Application Support/<bundle id>`.
     static func traceDirectory(bundleID: String = Bundle.main.bundleIdentifier ?? "com.caffeinagent.app") -> URL {
@@ -103,20 +112,42 @@ final class DisplayTraceRecorder {
     func add(_ row: DisplayTraceRow) {
         guard isRecording else { return }
         trace?.add(row)
+        // A clock that was set back writes too.
+        if let flushedAt, (0..<DisplayTrace.flushEvery).contains(row.time.timeIntervalSince(flushedAt)) { return }
+        flushedAt = row.time
+        flush()
     }
 
-    /// The fade ended: the file is written, and old files are removed.
+    /// The fade ended: the rest is written.
     func finish() {
-        guard let trace else { return }
-        self.trace = nil
-        guard let start = trace.start, !trace.isEmpty else { return }
+        flush()
+        trace = nil
+        file = nil
+        flushed = 0
+        flushedAt = nil
+    }
+
+    /// The new lines go to the end of the file. The first write makes the
+    /// file and removes old files.
+    private func flush() {
+        guard let trace, let start = trace.start, flushed < trace.lines.count else { return }
         let files = FileManager.default
         do {
-            try files.createDirectory(at: directory, withIntermediateDirectories: true)
-            try trace.text.write(to: directory.appendingPathComponent(DisplayTrace.fileName(start: start)), atomically: true, encoding: .utf8)
-            for name in DisplayTrace.stale(among: try files.contentsOfDirectory(atPath: directory.path)) {
-                try files.removeItem(at: directory.appendingPathComponent(name))
+            if file == nil {
+                try files.createDirectory(at: directory, withIntermediateDirectories: true)
+                let url = directory.appendingPathComponent(DisplayTrace.fileName(start: start))
+                try (DisplayTrace.header + "\n").write(to: url, atomically: true, encoding: .utf8)
+                file = url
+                for name in DisplayTrace.stale(among: try files.contentsOfDirectory(atPath: directory.path)) {
+                    try files.removeItem(at: directory.appendingPathComponent(name))
+                }
             }
+            guard let file else { return }
+            let handle = try FileHandle(forWritingTo: file)
+            defer { try? handle.close() }
+            try handle.seekToEnd()
+            try handle.write(contentsOf: Data((trace.lines[flushed...].joined(separator: "\n") + "\n").utf8))
+            flushed = trace.lines.count
         } catch {
             // A trace is for a test by hand. Without it the fade is the same.
         }

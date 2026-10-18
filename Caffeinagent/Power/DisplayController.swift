@@ -102,12 +102,18 @@ final class BuiltinDimmer {
         self.calls = calls
     }
 
+    /// Every result is in the log, which is kept on disk: a report after a
+    /// hard restart still has it. It holds brightness values only.
     private func read(_ method: BuiltinBrightness) -> Float? {
-        calls.run("\(method.name) read") { method.level() } ?? nil
+        let level = calls.run("\(method.name) read") { method.level() } ?? nil
+        log.notice("\(method.name, privacy: .public) read: \(level.map { String(format: "%.3f", $0) } ?? "none", privacy: .public)")
+        return level
     }
 
     private func write(_ method: BuiltinBrightness, _ level: Float) -> Bool {
-        calls.run("\(method.name) set") { method.set(level) } ?? false
+        let done = calls.run("\(method.name) set") { method.set(level) } ?? false
+        log.notice("\(method.name, privacy: .public) set \(String(format: "%.3f", level), privacy: .public): \(done ? "done" : "failed", privacy: .public)")
+        return done
     }
 
     /// The way a write was seen to work with, in this run.
@@ -159,7 +165,7 @@ final class BuiltinDimmer {
         let wasDimmed = isDimmed
         if !wasDimmed {
             guard let previous = level() else {
-                log.info("the built-in display was not dimmed: its brightness cannot be read")
+                log.notice("the built-in display was not dimmed: its brightness cannot be read")
                 return false
             }
             guard previous > DisplayRules.darkLevel else { return true }
@@ -169,7 +175,7 @@ final class BuiltinDimmer {
             // A way that says yes and changes nothing did not work.
             if let now = read(method), now > DisplayRules.darkLevel { continue }
             defaults.set(method.name, forKey: Self.methodKey)
-            log.info("the built-in display was dimmed with \(method.name, privacy: .public)")
+            log.notice("the built-in display was dimmed with \(method.name, privacy: .public)")
             return true
         }
         log.error("no way to dim the built-in display worked")
@@ -191,7 +197,7 @@ final class BuiltinDimmer {
         for method in ordered where write(method, wanted) {
             if let now = read(method), abs(now - wanted) > 0.05, now <= DisplayRules.darkLevel { continue }
             defaults.removeObject(forKey: Self.previousKey)
-            log.info("the brightness of the built-in display was put back with \(method.name, privacy: .public)")
+            log.notice("the brightness of the built-in display was put back with \(method.name, privacy: .public)")
             return true
         }
         log.error("the brightness of the built-in display could not be put back")
@@ -268,7 +274,7 @@ final class DisplayController {
     /// first. The rules dim again when that is still right.
     func start(onChange: @escaping () -> Void) {
         if dimmer.isDimmed {
-            log.info("putting back the brightness an earlier run left dark")
+            log.notice("putting back the brightness an earlier run left dark")
             memory.dimmed = !dimmer.restore()
         }
         self.onChange = onChange
@@ -312,7 +318,7 @@ final class DisplayController {
         for action in actions {
             // While the brightness follows the angle, the fade puts it back.
             if case .restoreBuiltin = action, fade.phase != .idle { continue }
-            log.info("\(String(describing: action).prefix(while: { $0 != "(" }), privacy: .public): \(action.reason, privacy: .public)")
+            log.notice("\(String(describing: action).prefix(while: { $0 != "(" }), privacy: .public): \(action.reason, privacy: .public)")
             switch action {
             case .sleepDisplays:
                 sleep()
@@ -345,7 +351,7 @@ final class DisplayController {
         slept = false
         // A brightness that stays saved is put back at the next update.
         if dimmer.isDimmed, !reconfiguring {
-            log.info("the Mac goes to sleep: the brightness is put back")
+            log.notice("the Mac goes to sleep: the brightness is put back")
             memory.dimmed = !dimmer.restore()
         }
     }
@@ -370,6 +376,7 @@ final class DisplayController {
     private func changed(_ change: DisplayChange) {
         switch change {
         case .lid(let closed):
+            log.notice("the lid switch says \(closed ? "closed" : "open", privacy: .public)")
             // An open lid is a Mac that someone uses, whatever was said about sleep.
             if !closed { asleep = false }
             // The display is dealt with here and now. The sample that
@@ -378,6 +385,7 @@ final class DisplayController {
             onChange?()
         case .displaysBegin, .displaysDone:
             // Nothing else here: the callback must not change the displays.
+            if !reconfiguring { log.notice("macOS changes the displays: no display call until they settle") }
             reconfiguring = true
             settle.after(change == .displaysBegin ? Self.settleLimit : Self.settleTime) { [weak self] in
                 MainActor.assumeIsolated { self?.settled() }
@@ -386,6 +394,7 @@ final class DisplayController {
     }
 
     private func settled() {
+        log.notice("the displays settled")
         reconfiguring = false
         let now = clock()
         // No display sleep is asked while the displays settle.
@@ -446,7 +455,7 @@ final class DisplayController {
         let before = fade
         let result = LidDimming.decide(inputs, memory: fade, now: now)
         fade = result.memory
-        for note in result.notes { log.info("\(note, privacy: .public)") }
+        for note in result.notes { log.notice("\(note, privacy: .public)") }
         var written: Float?
         for action in result.actions {
             switch action {
@@ -499,7 +508,9 @@ final class DisplayController {
     }
 
     private func sleep() {
-        if dimmer.calls.run("display sleep", { [sleeper] in sleeper.sleepDisplays() }) == true {
+        let done = dimmer.calls.run("display sleep", { [sleeper] in sleeper.sleepDisplays() }) == true
+        log.notice("display sleep: \(done ? "asked" : "failed", privacy: .public)")
+        if done {
             slept = true
         } else {
             log.error("the request for display sleep failed")
