@@ -190,7 +190,7 @@ The new rules [P, our code]:
 4. The lid switch ends the fade: the sensor is closed, and nothing is read or written while the lid stays shut. When the lid opens, the brightness comes back in one step once the switch says open and the built-in display is online and awake. A restore by the rules also waits for that.
 5. The fade reads and writes 30 times a second, not 120.
 6. The brightness calls, `IORequestIdle` and the `pmset` fallback run on a serial queue of their own. A call that takes longer than 200 ms turns the display feature off for the run of the app, and logs an error. The main thread waits for that call for 200 ms at most, once.
-7. The decisions, the lid switch, a change of the displays and every call result are logged at `notice` level, which is kept on disk. The trace file is written at least once per second while a fade runs.
+7. The decisions, the lid switch, a change of the displays, every write and every failure are logged at `notice` level, which is kept on disk. A read that worked is at `debug` level, which is not kept. The trace file is written at least once per second while a fade runs.
 
 The same replay before and after (`DisplayControllerTests`, a lid that closes from 110 degrees in 0.6 seconds while an agent works, then 10 minutes of samples every 2 seconds):
 

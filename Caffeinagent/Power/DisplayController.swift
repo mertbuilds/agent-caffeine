@@ -102,11 +102,17 @@ final class BuiltinDimmer {
         self.calls = calls
     }
 
-    /// Every result is in the log, which is kept on disk: a report after a
-    /// hard restart still has it. It holds brightness values only.
+    /// Every write and every failure is in the log, which is kept on disk:
+    /// a report after a hard restart still has it. A read that worked is at
+    /// debug level, which is not kept: a fade reads 30 times a second. It
+    /// holds brightness values only.
     private func read(_ method: BuiltinBrightness) -> Float? {
         let level = calls.run("\(method.name) read") { method.level() } ?? nil
-        log.notice("\(method.name, privacy: .public) read: \(level.map { String(format: "%.3f", $0) } ?? "none", privacy: .public)")
+        if let level {
+            log.debug("\(method.name, privacy: .public) read: \(String(format: "%.3f", level), privacy: .public)")
+        } else {
+            log.notice("\(method.name, privacy: .public) read: none")
+        }
         return level
     }
 
