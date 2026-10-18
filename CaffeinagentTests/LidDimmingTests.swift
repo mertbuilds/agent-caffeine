@@ -12,7 +12,6 @@ final class LidDimmingTests: XCTestCase {
         var panel: Float = 0.6
         var saved: Float?
         var slept = false
-        var sleeps = 0
         var wakes = 0
         var writes = 0
         var notes: [String] = []
@@ -38,9 +37,6 @@ final class LidDimmingTests: XCTestCase {
                 case .restore:
                     if let saved { panel = saved }
                     saved = nil
-                case .sleepDisplays:
-                    slept = true
-                    sleeps += 1
                 case .wakeDisplays:
                     slept = false
                     wakes += 1
@@ -96,20 +92,18 @@ final class LidDimmingTests: XCTestCase {
         XCTAssertEqual(line.writes, 0)
     }
 
-    func testClosingFadesToZeroAndSleepsTheDisplays() {
+    func testClosingFadesToZeroAndAsksForNoDisplaySleep() {
         var line = Timeline()
         line.move(from: 110, to: 30, over: 1)
         XCTAssertEqual(line.panel, 0.6 * 0.708, accuracy: 0.01)
         XCTAssertEqual(line.saved, 0.6, "Saved before the first step down")
         line.move(from: 30, to: 15, over: 0.3)
         XCTAssertEqual(line.panel, 0.6 * 0.198, accuracy: 0.01)
-        XCTAssertEqual(line.sleeps, 0)
         line.move(from: 15, to: 0, over: 0.3)
         XCTAssertEqual(line.panel, 0)
-        XCTAssertEqual(line.sleeps, 1)
         XCTAssertEqual(line.memory.phase, .closed)
         line.rest(at: 0, for: 5)
-        XCTAssertEqual(line.sleeps, 1, "Asked once. `DisplayRules` asks again when the display wakes under the lid")
+        XCTAssertFalse(line.slept, "macOS turns the panel off by itself")
         XCTAssertEqual(line.notes, [
             "the lid closes below 45 degrees: the built-in display fades",
             "the lid is shut: the built-in display is off",
@@ -149,7 +143,8 @@ final class LidDimmingTests: XCTestCase {
     func testOpeningWakesTheDisplaysAndLightsThemInTheSameStep() {
         var line = Timeline()
         line.move(from: 110, to: 0, over: 0.5)
-        XCTAssertTrue(line.slept)
+        // `DisplayRules` asked for display sleep under the lid.
+        line.slept = true
         line.rest(at: 0, for: 2)
         XCTAssertEqual(line.wakes, 0)
         let step = line.feed(6)
@@ -165,6 +160,7 @@ final class LidDimmingTests: XCTestCase {
     func testTheDisplaysAreNotWokenWhileTheLidSwitchSaysClosed() {
         var line = Timeline()
         line.move(from: 110, to: 0, over: 0.5)
+        line.slept = true
         line.inputs.clamshellClosed = true
         line.rest(at: 5, for: 2)
         XCTAssertEqual(line.wakes, 0, "A sensor that reads 5 degrees for a shut lid")
@@ -177,16 +173,15 @@ final class LidDimmingTests: XCTestCase {
         var line = Timeline()
         line.feed(110)
         let step = line.feed(0, after: 0.5)
-        XCTAssertEqual(step.actions, [.save(0.6), .set(0), .sleepDisplays])
+        XCTAssertEqual(step.actions, [.save(0.6), .set(0)])
         XCTAssertEqual(step.target, 0)
     }
 
-    func testNextToAnExternalDisplayTheDisplaysDoNotSleep() {
+    func testNextToAnExternalDisplayTheBuiltInOneStaysDarkUntilTheLidOpens() {
         var line = Timeline()
         line.inputs.externalDisplay = true
         line.move(from: 110, to: 0, over: 1)
         XCTAssertEqual(line.panel, 0)
-        XCTAssertEqual(line.sleeps, 0)
         // The hold ends at the desk: dark until the lid opens.
         line.inputs.holding = false
         line.rest(at: 0, for: 3)
@@ -263,7 +258,6 @@ final class LidDimmingTests: XCTestCase {
         let step = line.feed(8)
         XCTAssertEqual(line.panel, 0, "The switch is first: the sensor still reads 8 degrees")
         XCTAssertEqual(step.target, 0)
-        XCTAssertEqual(line.sleeps, 1)
         XCTAssertEqual(line.memory.phase, .closed)
         // It opens: from black, with no jump.
         line.inputs.clamshellClosed = false
@@ -443,7 +437,6 @@ final class LidDimmingTests: XCTestCase {
         line.move(from: 110, to: 0, over: 1)
         line.rest(at: 0, for: 2)
         XCTAssertEqual(line.panel, 0.6)
-        XCTAssertEqual(line.sleeps, 0)
         XCTAssertNil(line.saved)
     }
 

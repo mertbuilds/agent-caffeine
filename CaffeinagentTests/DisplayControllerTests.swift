@@ -118,7 +118,9 @@ final class DisplayControllerTests: XCTestCase {
     private let clock = Clock()
 
     private func controller(_ methods: [Method], watcher: Watcher? = nil) -> DisplayController {
-        DisplayController(reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: methods, defaults: defaults), watcher: watcher)
+        DisplayController(
+            reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: methods, defaults: defaults), watcher: watcher, clock: { [clock] in clock.now }
+        )
     }
 
     /// With the lid angle sensor, and Agent Caffeine holding.
@@ -223,16 +225,20 @@ final class DisplayControllerTests: XCTestCase {
         XCTAssertEqual(sleeper.requests, 0)
     }
 
-    func testLidClosedWithoutAnExternalDisplaySleepsTheDisplaysOncePerFiveSeconds() {
+    func testLidClosedWithoutAnExternalDisplayAsksForDisplaySleepOnlyLateAndTwiceAtMost() {
         let controller = controller([Method("first", panel: panel)])
-        for seconds in [0.0, 2, 4] { controller.update(lidClosed: true, holding: true, enabled: true, now: at(seconds)) }
+        for seconds in [0.0, 2, 4, 10, 14] { controller.update(lidClosed: true, holding: true, enabled: true, now: at(seconds)) }
+        XCTAssertEqual(sleeper.requests, 0, "macOS turns the panel off by itself")
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(15))
         XCTAssertEqual(sleeper.requests, 1)
         XCTAssertEqual(panel.level, 0.6, "Not dimmed while display sleep may still hold")
-        controller.update(lidClosed: true, holding: true, enabled: true, now: at(6))
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(21))
         XCTAssertEqual(sleeper.requests, 2)
         XCTAssertEqual(panel.level, 0, "It did not hold: dimmed as well")
+        for seconds in stride(from: 23.0, through: 600, by: 2) { controller.update(lidClosed: true, holding: true, enabled: true, now: at(seconds)) }
+        XCTAssertEqual(sleeper.requests, 2)
         // The lid opens: the brightness is back, and nothing sleeps.
-        controller.update(lidClosed: false, holding: true, enabled: true, now: at(60))
+        controller.update(lidClosed: false, holding: true, enabled: true, now: at(660))
         XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
         XCTAssertEqual(sleeper.requests, 2)
         XCTAssertNil(saved)
@@ -282,14 +288,15 @@ final class DisplayControllerTests: XCTestCase {
     func testAHoldThatAStopEndsGivesTheBrightnessBackAtOnce() {
         let controller = controller([Method("first", panel: panel)])
         controller.update(lidClosed: true, holding: true, enabled: true, now: at(0))
-        controller.update(lidClosed: true, holding: true, enabled: true, now: at(6))
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(15))
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(21))
         XCTAssertEqual(panel.level, 0, "Display sleep did not hold, so the display was dimmed")
-        controller.update(holding: false, now: at(7))
+        controller.update(holding: false, now: at(22))
         XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
         XCTAssertNil(saved)
         // The same hold again changes nothing.
         let reads = reader.reads
-        controller.update(holding: false, now: at(8))
+        controller.update(holding: false, now: at(23))
         XCTAssertEqual(reader.reads, reads)
     }
 
@@ -479,6 +486,7 @@ final class DisplayControllerTests: XCTestCase {
         XCTAssertEqual(lid.reads, 0)
         // The old way still works.
         controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now)
+        controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now + 15)
         XCTAssertEqual(sleeper.requests, 1)
     }
 
@@ -493,15 +501,14 @@ final class DisplayControllerTests: XCTestCase {
         XCTAssertEqual(panel.level, 0.3, accuracy: 0.01, "No sample of the engine in between")
         move(from: 24, to: 0, over: 0.3)
         XCTAssertEqual(panel.level, 0)
-        XCTAssertEqual(sleeper.requests, 1)
+        XCTAssertEqual(sleeper.requests, 0, "macOS turns the panel off by itself")
         // The lid opens.
         tick(5, after: 3)
-        XCTAssertEqual(sleeper.wakes, 1)
         XCTAssertGreaterThan(panel.level, 0)
         move(from: 5, to: 50, over: 0.5)
         XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
         XCTAssertNil(saved)
-        XCTAssertEqual(sleeper.wakes, 1)
+        XCTAssertEqual(sleeper.wakes, 0, "Nothing was put to sleep")
     }
 
     func testAnAngleTheSensorSendsByItselfIsActedOnAtOnce() {
@@ -509,7 +516,7 @@ final class DisplayControllerTests: XCTestCase {
         clock.now += 0.1
         lid.onPush?(0)
         XCTAssertEqual(panel.level, 0)
-        XCTAssertEqual(sleeper.requests, 1)
+        XCTAssertEqual(sleeper.requests, 0)
     }
 
     func testASampleOfTheEngineDoesNotPutTheBrightnessBackInTheMiddleOfAFade() {
@@ -625,10 +632,27 @@ final class DisplayControllerTests: XCTestCase {
         controller.start { samples += 1 }
         controller.update(lidClosed: false, holding: true, enabled: true, now: at(0))
         watcher.onChange?(true)
-        XCTAssertEqual(sleeper.requests, 1, "No sample of the engine was needed")
+        XCTAssertEqual(sleeper.requests, 0, "No display sleep at the lid switch")
         XCTAssertEqual(samples, 1, "One is asked for, for the rest of the app")
+        clock.now += 15
+        controller.update(lidClosed: true, holding: true, enabled: true, now: clock.now)
+        XCTAssertEqual(sleeper.requests, 1, "The panel still reads on: the late request")
         watcher.onChange?(false)
         XCTAssertEqual(sleeper.wakes, 1)
+    }
+
+    func testAChangeOfTheDisplaysPutsOffDisplaySleepFor15Seconds() {
+        let watcher = Watcher()
+        let controller = controller([Method("first", panel: panel)], watcher: watcher)
+        controller.start(onChange: {})
+        watcher.onChange?(true)
+        clock.now += 14
+        watcher.onChange?(nil)
+        XCTAssertEqual(sleeper.requests, 0, "Never from the callback of a change of the displays")
+        controller.update(lidClosed: true, holding: true, enabled: true, now: clock.now + 14)
+        XCTAssertEqual(sleeper.requests, 0)
+        controller.update(lidClosed: true, holding: true, enabled: true, now: clock.now + 15)
+        XCTAssertEqual(sleeper.requests, 1)
     }
 
     func testTheLidThatOpensGetsItsBrightnessBackWhenTheSwitchSaysSo() {

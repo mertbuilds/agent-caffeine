@@ -17,7 +17,7 @@ struct LidDimInputs: Equatable {
     var externalDisplay = false
     /// What the power root domain says about the lid.
     var clamshellClosed = false
-    /// Agent Caffeine put the displays to sleep and did not wake them yet.
+    /// `DisplayRules` put the displays to sleep and they were not woken yet.
     var slept = false
 }
 
@@ -76,7 +76,6 @@ enum LidDimAction: Equatable {
     case set(Float)
     /// The user's brightness comes back and the saved value is removed.
     case restore(reason: String)
-    case sleepDisplays
     case wakeDisplays
 }
 
@@ -109,9 +108,9 @@ struct LidDimStep: Equatable {
 ///
 /// At 45 degrees and above the brightness is the user's. From 45 degrees
 /// down to the closed angle it is the user's brightness times `curve`. At
-/// the closed angle, or when the lid switch says closed, it is zero, and
-/// without an external display the displays also go to sleep. The way up
-/// is the same curve.
+/// the closed angle, or when the lid switch says closed, it is zero. The
+/// fade asks for no display sleep: macOS turns the panel off by itself
+/// about 5 seconds after the lid closes. The way up is the same curve.
 ///
 /// The sensor gives whole degrees, and one degree is up to 3.6 percent of
 /// the brightness: a stair the eye sees as flicker. So the curve is fed
@@ -232,7 +231,6 @@ enum LidDimming {
             }
             if memory.phase != .closed {
                 if memory.written != 0 { step.actions.append(.set(0)) }
-                if !inputs.externalDisplay { step.actions.append(.sleepDisplays) }
                 step.notes.append("the lid is shut: the built-in display is off")
                 memory.written = 0
                 memory.wroteAt = now

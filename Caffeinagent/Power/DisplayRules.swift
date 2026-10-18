@@ -22,6 +22,10 @@ struct DisplayMemory: Equatable {
     var lastSleepAt: Date?
     /// Requests for display sleep since the display last slept.
     var sleepRequests = 0
+    /// Requests for display sleep since the lid closed.
+    var closedSleepRequests = 0
+    /// When the list of displays last changed. It stays when the lid opens.
+    var displaysChangedAt: Date?
     var lastDimAt: Date?
     /// Tries to dim that did not work, one after the other.
     var dimFailures = 0
@@ -49,11 +53,15 @@ enum DisplayAction: Equatable {
 /// caffeine keeps the Mac awake. Pure: the caller keeps the memory and
 /// passes the time.
 ///
-/// Without an external display, the displays are put to sleep, and again
-/// when something wakes them under the lid. When sleep does not hold, the
-/// brightness goes to zero as well. With an external display, display sleep
-/// would take the display the user works on, so only the brightness of the
-/// built-in one goes to zero.
+/// Without an external display, macOS turns the panel off by itself about
+/// 5 seconds after the lid closes. A request for display sleep while the
+/// lid closes or the displays change can hang WindowServer, so the rules
+/// ask only when the built-in display still reads on 15 seconds after the
+/// lid closed and after the displays last changed, and twice at most per
+/// closed lid. When sleep does not hold, the brightness goes to zero as
+/// well. With an external display, display sleep would take the display
+/// the user works on, so only the brightness of the built-in one goes to
+/// zero.
 enum DisplayRules {
     /// The same request is not made more often than this.
     static let retryAfter: TimeInterval = 5
@@ -66,6 +74,11 @@ enum DisplayRules {
     /// who uses the Mac from afar. Display sleep would lock them out, so
     /// for this long after such an event the display is only dimmed.
     static let remoteUseGrace: TimeInterval = 60
+    /// No display sleep is asked for this long after the lid closed or the
+    /// displays changed.
+    static let sleepGrace: TimeInterval = 15
+    /// At most this many requests for display sleep per closed lid.
+    static let sleepRequestsPerClose = 2
 
     static func decide(_ inputs: DisplayInputs, enabled: Bool, memory: DisplayMemory, now: Date) -> ([DisplayAction], DisplayMemory) {
         var memory = memory
@@ -73,6 +86,7 @@ enum DisplayRules {
             memory.lidClosedAt = nil
             memory.lastSleepAt = nil
             memory.sleepRequests = 0
+            memory.closedSleepRequests = 0
             memory.lastDimAt = nil
             memory.dimFailures = 0
         } else if memory.lidClosedAt == nil {
@@ -107,11 +121,18 @@ enum DisplayRules {
             if mayDim { dim("the lid is closed and someone uses the Mac from afar") }
             return (actions, memory)
         }
+        let settled = passed(sleepGrace, since: lidClosedAt, now: now) && memory.displaysChangedAt.map { passed(sleepGrace, since: $0, now: now) } ?? true
+        guard settled else { return (actions, memory) }
+        guard memory.closedSleepRequests < sleepRequestsPerClose else {
+            if mayDim { dim("display sleep did not hold under the closed lid") }
+            return (actions, memory)
+        }
         let askedBefore = memory.sleepRequests > 0
         if due(memory.lastSleepAt, now: now) {
-            actions.append(.sleepDisplays(reason: askedBefore ? "the built-in display is still on under the closed lid" : "the lid is closed and the built-in display is on"))
+            actions.append(.sleepDisplays(reason: askedBefore ? "the built-in display is still on under the closed lid" : "the built-in display is still on 15 seconds after the lid closed"))
             memory.lastSleepAt = now
             memory.sleepRequests += 1
+            memory.closedSleepRequests += 1
             if askedBefore, mayDim { dim("display sleep did not hold under the closed lid") }
         }
         return (actions, memory)
@@ -132,8 +153,12 @@ enum DisplayRules {
 
     private static func due(_ last: Date?, now: Date) -> Bool {
         guard let last else { return true }
+        return passed(retryAfter, since: last, now: now)
+    }
+
+    private static func passed(_ time: TimeInterval, since: Date, now: Date) -> Bool {
         // A clock that was set back must not stop the requests.
-        let passed = now.timeIntervalSince(last)
-        return passed >= retryAfter || passed < 0
+        let passed = now.timeIntervalSince(since)
+        return passed >= time || passed < 0
     }
 }

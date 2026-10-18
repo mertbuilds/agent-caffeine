@@ -309,7 +309,10 @@ final class DisplayController {
     private func changed(lidClosed: Bool?) {
         // An open lid is a Mac that someone uses, whatever was said about sleep.
         if lidClosed == false { asleep = false }
-        update(lidClosed: lidClosed ?? wanted.lidClosed, holding: wanted.holding, enabled: wanted.enabled, fade: wanted.fade, now: clock())
+        let now = clock()
+        // No display sleep is asked while the displays settle.
+        if lidClosed == nil { memory.displaysChangedAt = now }
+        update(lidClosed: lidClosed ?? wanted.lidClosed, holding: wanted.holding, enabled: wanted.enabled, fade: wanted.fade, now: now)
     }
 
     /// The sensor is asked only while a fade can start or is under way.
@@ -370,8 +373,6 @@ final class DisplayController {
             case .restore:
                 // One that fails is tried again on the next sample.
                 _ = dimmer.restore()
-            case .sleepDisplays:
-                sleep()
             case .wakeDisplays:
                 sleeper.wakeDisplays()
                 slept = false

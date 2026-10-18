@@ -32,6 +32,13 @@ final class DisplayRulesTests: XCTestCase {
         return (all, memory)
     }
 
+    /// The lid closed at 0 seconds.
+    private var shut: DisplayMemory {
+        var memory = DisplayMemory()
+        memory.lidClosedAt = at(0)
+        return memory
+    }
+
     // MARK: Nothing to do
 
     func testNothingHappensWithTheLidOpen() {
@@ -58,23 +65,47 @@ final class DisplayRulesTests: XCTestCase {
 
     // MARK: No external display
 
-    func testTheDisplaysSleepAtOnceWhenTheLidCloses() {
+    /// macOS turns the panel off by itself about 5 seconds after the lid
+    /// closes. A request in that time is what can hang WindowServer.
+    func testNoDisplaySleepIsAskedFor15SecondsAfterTheLidCloses() {
         // The user typed a second before the lid closed. That is no use from afar.
-        let (actions, memory) = run([(0, closed(idle: 1))])
-        XCTAssertEqual(actions, [["sleep"]])
+        let steps = [0, 5, 10, 14.9, 15].map { (TimeInterval($0), closed(idle: 1 + $0)) }
+        let (actions, memory) = run(steps)
+        XCTAssertEqual(actions, [[], [], [], [], ["sleep"]])
         XCTAssertEqual(memory.lidClosedAt, at(0))
+        XCTAssertEqual(DisplayRules.sleepGrace, 15)
+    }
+
+    func testNoDisplaySleepIsAskedFor15SecondsAfterTheDisplaysChanged() {
+        var memory = DisplayMemory()
+        memory.displaysChangedAt = at(100)
+        XCTAssertEqual(run([(0, closed()), (110, closed()), (114.9, closed()), (115, closed())], memory: memory).0, [[], [], [], ["sleep"]])
     }
 
     func testTheRequestIsNotRepeatedWithinFiveSeconds() {
-        let steps = [0, 2, 4, 4.9].map { (TimeInterval($0), closed()) }
-        XCTAssertEqual(run(steps).0, [["sleep"], [], [], []])
+        let steps = [15, 17, 19, 19.9].map { (TimeInterval($0), closed()) }
+        XCTAssertEqual(run(steps, memory: shut).0, [["sleep"], [], [], []])
     }
 
     /// Belt and braces: display sleep that does not hold also dims.
     func testADisplayThatStaysOnIsAskedAgainAndDimmed() {
-        let (actions, memory) = run([(0, closed()), (2, closed()), (5, closed()), (7, closed())])
+        let (actions, memory) = run([(15, closed()), (17, closed()), (20, closed()), (22, closed())], memory: shut)
         XCTAssertEqual(actions, [["sleep"], [], ["sleep", "dim"], []])
         XCTAssertEqual(memory.sleepRequests, 2)
+    }
+
+    func testDisplaySleepIsAskedTwiceAtMostPerClosedLid() {
+        let steps = stride(from: 0, through: 600, by: 2).map { (TimeInterval($0), closed()) }
+        let (actions, memory) = run(steps)
+        XCTAssertEqual(actions.joined().filter { $0 == "sleep" }.count, 2)
+        XCTAssertEqual(memory.closedSleepRequests, DisplayRules.sleepRequestsPerClose)
+        XCTAssertTrue(actions.dropFirst(12).joined().contains("dim"), "After that only the brightness")
+        // The lid was open in between: the next closed lid may ask again.
+        var open = closed()
+        open.lidClosed = false
+        let opened = DisplayRules.decide(open, enabled: true, memory: memory, now: at(700)).1
+        XCTAssertEqual(opened.closedSleepRequests, 0)
+        XCTAssertEqual(run([(800, closed()), (815, closed())], memory: opened).0, [[], ["sleep"]])
     }
 
     func testADisplayThatWakesUnderTheLidSleepsAgain() {
@@ -84,31 +115,31 @@ final class DisplayRulesTests: XCTestCase {
             (602, closed(idle: 602)), (604, closed(asleep: true)),
         ]
         let (actions, memory) = run(story)
-        XCTAssertEqual(actions, [["sleep"], [], [], ["sleep"], []])
+        XCTAssertEqual(actions, [[], [], [], ["sleep"], []])
         XCTAssertEqual(memory.sleepRequests, 0, "It held, so the next wake starts with sleep alone")
     }
 
     func testOnceDarkTheDisplayIsNotDimmedAgain() {
-        var memory = DisplayMemory()
+        var memory = shut
         memory.dimmed = true
         let dark = closed(brightness: 0)
-        let (actions, _) = run([(0, dark), (5, dark), (10, dark)], memory: memory)
-        XCTAssertEqual(actions, [["sleep"], ["sleep"], ["sleep"]], "Still asked to sleep, and not dimmed twice")
+        let (actions, _) = run([(15, dark), (20, dark), (25, dark)], memory: memory)
+        XCTAssertEqual(actions, [["sleep"], ["sleep"], []], "Asked to sleep twice, and not dimmed again")
     }
 
     func testABrightnessThatCameUpAgainIsDimmedAgain() {
-        var memory = DisplayMemory()
+        var memory = shut
         memory.dimmed = true
-        let (actions, _) = run([(0, closed(brightness: 0)), (5, closed(brightness: 0.4))], memory: memory)
+        let (actions, _) = run([(15, closed(brightness: 0)), (20, closed(brightness: 0.4))], memory: memory)
         XCTAssertEqual(actions, [["sleep"], ["sleep", "dim"]])
     }
 
     func testWithoutABrightnessToReadTheDisplayIsDimmedOnce() {
         let unknown = closed(brightness: nil)
-        var (actions, memory) = run([(0, unknown), (5, unknown)])
+        var (actions, memory) = run([(15, unknown), (20, unknown)], memory: shut)
         XCTAssertEqual(actions, [["sleep"], ["sleep", "dim"]])
         memory.dimmed = true
-        XCTAssertEqual(run([(10, unknown), (15, unknown)], memory: memory).0, [["sleep"], ["sleep"]])
+        XCTAssertEqual(run([(25, unknown), (30, unknown)], memory: memory).0, [[], []])
     }
 
     /// Screen sharing with the lid closed: display sleep would lock the
@@ -125,7 +156,7 @@ final class DisplayRulesTests: XCTestCase {
     }
 
     func testAClockThatWentBackDoesNotStopTheRequests() {
-        XCTAssertEqual(run([(100, closed()), (10, closed())]).0, [["sleep"], ["sleep", "dim"]])
+        XCTAssertEqual(run([(100, closed()), (20, closed())], memory: shut).0, [["sleep"], ["sleep", "dim"]])
     }
 
     // MARK: With an external display
@@ -202,8 +233,9 @@ final class DisplayRulesTests: XCTestCase {
     }
 
     func testEveryActionSaysWhy() {
-        let (actions, _) = DisplayRules.decide(closed(), enabled: true, memory: DisplayMemory(), now: at(0))
-        XCTAssertEqual(actions, [.sleepDisplays(reason: "the lid is closed and the built-in display is on")])
+        let memory = DisplayRules.decide(closed(), enabled: true, memory: DisplayMemory(), now: at(0)).1
+        let (actions, _) = DisplayRules.decide(closed(), enabled: true, memory: memory, now: at(15))
+        XCTAssertEqual(actions, [.sleepDisplays(reason: "the built-in display is still on 15 seconds after the lid closed")])
         for action in actions + [.dimBuiltin(reason: "x"), .restoreBuiltin(reason: "y")] {
             XCTAssertFalse(action.reason.isEmpty)
         }
