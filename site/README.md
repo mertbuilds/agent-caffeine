@@ -28,7 +28,7 @@ All of them are optional. None has a value in this repository.
 | `NEXT_PUBLIC_SUPPORT_URL` | The GitHub Sponsors page that the button on `/support` opens. Without it the page says that support is not set up yet. |
 | `NEXT_PUBLIC_OPENPANEL_CLIENT_ID` | The OpenPanel project that counts page views and downloads. |
 | `OPENPANEL_CLIENT_SECRET` | Lets the server count a download. Server only: never give it a `NEXT_PUBLIC_` name. |
-| `FONT_BUCKET`, `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | Where `scripts/fetch-fonts.sh` gets the licensed fonts from (see Fonts). |
+| `FONT_BUCKET`, `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Where `scripts/fetch-fonts.sh` gets the licensed fonts from (see Fonts). |
 
 ## Downloads
 
@@ -57,7 +57,7 @@ Every download button links to `/download?from=<placement>`. The route (`app/dow
 The site is set in Suisse Intl, a licensed typeface. Its files are not in this repository, and git ignores `app/fonts/`.
 
 - Without the files the site builds and runs. The text is then set in Arial with the measures of Suisse Intl, or in the system's face.
-- `bun run fonts` (`scripts/fetch-fonts.sh`) fetches `SuisseIntl-Regular.woff2` and `SuisseIntl-Medium.woff2` from a private Cloudflare R2 bucket into `app/fonts/`. It needs `FONT_BUCKET`, `CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_API_TOKEN`. `bun run build` runs it first. It never stops a build.
+- `bun run fonts` (`scripts/fetch-fonts.sh`) fetches `SuisseIntl-Regular.woff2` and `SuisseIntl-Medium.woff2` from a private Cloudflare R2 bucket into `app/fonts/`, over the R2 S3 API. It needs `FONT_BUCKET`, `CLOUDFLARE_ACCOUNT_ID`, and an R2 S3 access key that may read that bucket in `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`. `bun run build` runs it first. It never stops a build.
 - If you have your own license for Suisse Intl, put the two files in `app/fonts/` yourself.
 
 ## Link preview picture
