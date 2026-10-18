@@ -693,6 +693,45 @@ final class DisplayControllerTests: XCTestCase {
         XCTAssertEqual(first.sets.count, before.sets + 1)
     }
 
+    /// A sample is collected away from the main thread and applied later.
+    /// One collected just before the lid switch says the lid is open.
+    func testASampleFromBeforeTheLidSwitchDoesNotPutTheBrightnessBackUnderTheShutLid() {
+        let watcher = Watcher()
+        let controller = fading(watcher: watcher)
+        tick(60, after: 0.5)
+        move(from: 60, to: 0, over: 0.5)
+        watcher.onChange?(.lid(closed: true))
+        let sets = first.sets.count
+        controller.update(lidClosed: false, holding: true, enabled: true, fade: true, now: clock.now - 0.05)
+        XCTAssertEqual(first.sets.count, sets, "The switch decides about the lid")
+        XCTAssertEqual(panel.level, 0)
+        XCTAssertNotNil(saved)
+        XCTAssertNil(lid.onPush, "The sensor stays closed")
+        clock.now += 0.2
+        controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now)
+        XCTAssertEqual(first.sets.count, sets)
+    }
+
+    /// The lid opens next to an external display, and a sample from before
+    /// the switch says it is closed.
+    func testASampleFromBeforeTheLidSwitchDoesNotDimTheOpenLidNextToAnExternalDisplay() {
+        reader.inputs.externalDisplay = true
+        let watcher = Watcher()
+        let method = Method("first", panel: panel)
+        let controller = controller([method], watcher: watcher)
+        controller.start(onChange: {})
+        controller.update(lidClosed: false, holding: true, enabled: true, now: clock.now)
+        clock.now += 1
+        watcher.onChange?(.lid(closed: false))
+        controller.update(lidClosed: true, holding: true, enabled: true, now: clock.now - 0.05)
+        XCTAssertEqual(method.sets, [])
+        XCTAssertEqual(panel.level, 0.6)
+        XCTAssertNil(saved)
+        clock.now += 2
+        controller.update(lidClosed: false, holding: true, enabled: true, now: clock.now)
+        XCTAssertEqual(method.sets, [])
+    }
+
     func testAHoldThatEndsUnderTheShutLidGivesTheBrightnessBackWhenTheLidOpens() {
         let watcher = Watcher()
         let controller = fading(watcher: watcher)

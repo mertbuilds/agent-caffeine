@@ -245,6 +245,9 @@ final class DisplayController {
     private var displays: (inputs: DisplayInputs, at: Date)?
     /// macOS changes the displays, and they did not settle yet.
     private var reconfiguring = false
+    /// What the lid switch said last, and when. A sample that was collected
+    /// before it is late: the switch decides about the lid.
+    private var lidSwitch: (closed: Bool, at: Date)?
     private var onChange: (() -> Void)?
     private let log = Logger(subsystem: "com.caffeinagent.app", category: "Display")
 
@@ -285,6 +288,8 @@ final class DisplayController {
 
     /// `fade` is the setting "Dim the display as the lid closes".
     func update(lidClosed: Bool, holding: Bool, enabled: Bool, fade wantsFade: Bool = false, now: Date) {
+        var lidClosed = lidClosed
+        if let lidSwitch, now < lidSwitch.at { lidClosed = lidSwitch.closed }
         wanted = Wanted(lidClosed: lidClosed, holding: holding, enabled: enabled, fade: wantsFade)
         displays = nil
         // A call that hung: nothing more is asked of the displays.
@@ -377,11 +382,13 @@ final class DisplayController {
         switch change {
         case .lid(let closed):
             log.notice("the lid switch says \(closed ? "closed" : "open", privacy: .public)")
+            let now = clock()
+            lidSwitch = (closed, now)
             // An open lid is a Mac that someone uses, whatever was said about sleep.
             if !closed { asleep = false }
             // The display is dealt with here and now. The sample that
             // follows is for the rest of the app.
-            update(lidClosed: closed, holding: wanted.holding, enabled: wanted.enabled, fade: wanted.fade, now: clock())
+            update(lidClosed: closed, holding: wanted.holding, enabled: wanted.enabled, fade: wanted.fade, now: now)
             onChange?()
         case .displaysBegin, .displaysDone:
             // Nothing else here: the callback must not change the displays.
