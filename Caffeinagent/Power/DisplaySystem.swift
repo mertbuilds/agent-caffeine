@@ -349,7 +349,7 @@ final class SystemLidTicker: LidTicking {
 /// steps of the sensor, and `wouldSet` is the brightness the fade would set
 /// if Agent Caffeine kept the Mac awake. It only reads. It starts no app,
 /// takes no hold, and sets nothing. With the switch of `DisplayTrace` on,
-/// it also writes a trace of every step of each fade, 120 per second, with
+/// it also writes a trace of every step of each fade, 30 per second, with
 /// no value in the `written` column.
 enum DisplayProbe {
     private typealias KeyboardFloat = @convention(c) (AnyObject, Selector, UInt64) -> Float

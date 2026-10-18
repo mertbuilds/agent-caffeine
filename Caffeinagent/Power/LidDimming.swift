@@ -93,7 +93,9 @@ enum LidPoll: Equatable {
     var interval: TimeInterval {
         switch self {
         case .slow: return 0.5
-        case .fast: return 1.0 / 120
+        // Each step reads and writes the brightness. Fewer calls into
+        // WindowServer while the lid moves, and still no step the eye sees.
+        case .fast: return 1.0 / 30
         }
     }
 }
@@ -137,7 +139,7 @@ enum LidDimming {
     /// At or below this the lid counts as shut. The sensor gives whole
     /// degrees.
     static let closedAngle = 3.0
-    /// Below this angle the sensor is asked 120 times a second while the
+    /// Below this angle the sensor is asked 30 times a second while the
     /// lid moves.
     static let fastBelow = 70.0
     /// After this long without a change of the angle the lid is steady.

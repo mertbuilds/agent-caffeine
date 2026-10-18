@@ -486,7 +486,7 @@ final class DisplayController {
         }
     }
 
-    /// Read at most twice a second: a fade asks 120 times a second.
+    /// Read at most twice a second: a fade asks 30 times a second.
     private func displays(now: Date) -> DisplayInputs {
         if let displays, abs(now.timeIntervalSince(displays.at)) < 0.5 { return displays.inputs }
         let inputs = reader.read()

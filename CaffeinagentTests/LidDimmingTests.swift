@@ -227,17 +227,17 @@ final class LidDimmingTests: XCTestCase {
         line.feed(50)
         var largest: Float = 0
         var before = line.panel
-        let frames = 5 * 120
+        let frames = 5 * 30
         for frame in 1...frames {
-            // 120 readings a second of a sensor that gives whole degrees.
-            line.feed((50 - 50 * Double(frame) / Double(frames)).rounded(), after: 1.0 / 120)
+            // 30 readings a second of a sensor that gives whole degrees.
+            line.feed((50 - 50 * Double(frame) / Double(frames)).rounded(), after: LidPoll.fast.interval)
             XCTAssertLessThanOrEqual(line.panel, before, "Never up while the lid goes down")
             largest = max(largest, before - line.panel)
             before = line.panel
         }
         XCTAssertEqual(line.panel, 0)
-        XCTAssertLessThan(largest, 0.006, "One degree at once would be 0.036")
-        XCTAssertGreaterThan(line.writes, 300)
+        XCTAssertLessThan(largest, 0.015, "One degree at once would be 0.036")
+        XCTAssertGreaterThan(line.writes, 100)
     }
 
     func testOneDegreeOfNoiseWritesNothing() {
@@ -590,6 +590,6 @@ final class LidDimmingTests: XCTestCase {
         line.rest(at: 40, for: 1)
         XCTAssertEqual(line.poll, .slow)
         XCTAssertEqual(LidPoll.slow.interval, 0.5)
-        XCTAssertEqual(LidPoll.fast.interval, 1.0 / 120, "The refresh rate of the display")
+        XCTAssertEqual(LidPoll.fast.interval, 1.0 / 30, "Fewer calls into WindowServer than the refresh rate of the display")
     }
 }
