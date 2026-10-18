@@ -3,7 +3,7 @@ import { CONTACT_EMAIL, PRIVACY_UPDATED } from "@/lib/site";
 
 export const metadata = legalMetadata(
   "Privacy",
-  "What Agent Caffeine and this website collect: no telemetry in the app, Polar for voluntary support payments, self-hosted analytics with no cookies.",
+  "What Agent Caffeine and this website collect: no telemetry in the app, GitHub Sponsors for voluntary support, self-hosted analytics with no cookies.",
   "/privacy"
 );
 
@@ -50,14 +50,20 @@ export default function Privacy() {
 
       <h2>Support</h2>
       <p>
-        The app is free. If you choose to support it, the payment goes through{" "}
-        <a href="https://polar.sh">Polar</a>, the merchant of record: Polar collects the payment,
-        handles tax and sends the invoice. At checkout Polar collects your email address, name,
-        billing country and payment details.
+        The app is free. If you choose to support it, you sponsor me on{" "}
+        <a href="https://github.com/sponsors/mertbuilds">GitHub Sponsors</a>. GitHub processes the
+        sponsorship. I see your GitHub username and the amount. I see your email address only if
+        you choose to share it in your sponsor settings on GitHub. I never see your card number.
+        GitHub&apos;s{" "}
+        <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">
+          privacy statement
+        </a>{" "}
+        says what GitHub collects.
       </p>
       <p>
-        From Polar I receive your email address, name, country and the amount. I never see your
-        card number. The same is true for a purchase made before the app became free.
+        Purchases of versions before 1.1.0 went through <a href="https://polar.sh">Polar</a>, the
+        merchant of record. For those, Polar shared your email address, name, country and the
+        amount with me.
       </p>
 
       <h2>This website</h2>

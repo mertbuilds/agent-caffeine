@@ -3,7 +3,7 @@ import { CONTACT_EMAIL, LICENSE_URL, REPO_URL, TERMS_UPDATED } from "@/lib/site"
 
 export const metadata = legalMetadata(
   "Terms",
-  "The terms for Agent Caffeine: free and open source under the AGPL-3.0, voluntary support through Polar, and what the app does and does not promise.",
+  "The terms for Agent Caffeine: free and open source under the AGPL-3.0, voluntary support through GitHub Sponsors, and what the app does and does not promise.",
   "/terms"
 );
 
@@ -28,8 +28,8 @@ export default function Terms() {
       <p>
         You can support the project with a payment of an amount you choose, on the{" "}
         <a href="/support">support page</a>. It is voluntary and gives you nothing extra: the app is
-        the same for everyone. <a href="https://polar.sh">Polar</a> handles it as the merchant of
-        record: Polar takes the payment, adds taxes where they apply and sends the invoice.
+        the same for everyone. <a href="https://github.com/sponsors/mertbuilds">GitHub Sponsors</a>{" "}
+        handles it, one-time or monthly.
       </p>
 
       <h2>Earlier purchases</h2>

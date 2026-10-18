@@ -45,7 +45,7 @@ export default function Support() {
               Support the project
             </a>
             <p className="text-sm text-muted">
-              Polar handles the payment. <a href={REPO_URL}>The source code is on GitHub</a>
+              GitHub Sponsors handles it: one-time or monthly, any amount. <a href={REPO_URL}>The source code is on GitHub</a>
             </p>
           </div>
         )}
