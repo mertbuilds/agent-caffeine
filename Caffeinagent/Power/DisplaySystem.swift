@@ -10,10 +10,9 @@ import ObjectiveC
 import os
 
 /// The built-in display of this Mac. macOS can take it off the list of
-/// displays while the lid is closed, so the last id that was seen is kept.
+/// displays while the lid is closed. Then it has no id, and nothing reads
+/// or sets its brightness.
 enum BuiltinDisplay {
-    private static var lastSeen: CGDirectDisplayID?
-
     static func online() -> [CGDirectDisplayID] {
         var ids = [CGDirectDisplayID](repeating: 0, count: 16)
         var count: UInt32 = 0
@@ -22,16 +21,14 @@ enum BuiltinDisplay {
     }
 
     static func id(among online: [CGDirectDisplayID] = online()) -> CGDirectDisplayID? {
-        if let id = online.first(where: { CGDisplayIsBuiltin($0) != 0 }) { lastSeen = id }
-        return lastSeen
+        online.first { CGDisplayIsBuiltin($0) != 0 }
     }
 }
 
 struct SystemDisplayReader: DisplayReading {
     func read() -> DisplayInputs {
         let online = BuiltinDisplay.online()
-        let builtin = online.first { CGDisplayIsBuiltin($0) != 0 }
-        _ = BuiltinDisplay.id(among: online)
+        let builtin = BuiltinDisplay.id(among: online)
         // `kCGAnyInputEventType`.
         let idle = CGEventType(rawValue: ~0).map { CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: $0) }
         return DisplayInputs(
@@ -114,6 +111,7 @@ struct DisplayServicesBrightness: BuiltinBrightness {
     }
 }
 
+#if arch(x86_64)
 /// The public call of IOKit. It finds a display on an Intel Mac. An Apple
 /// silicon Mac has no `IODisplayConnect` service, so there it does nothing.
 struct IODisplayBrightness: BuiltinBrightness {
@@ -130,8 +128,10 @@ struct IODisplayBrightness: BuiltinBrightness {
         withService { IODisplaySetFloatParameter($0, 0, kIODisplayBrightnessKey as CFString, level) == kIOReturnSuccess ? true : nil } ?? false
     }
 
-    /// The first display that has a brightness: the built-in one.
+    /// The first display that has a brightness: the built-in one, only
+    /// while it is online.
     private func withService<T>(_ work: (io_service_t) -> T?) -> T? {
+        guard BuiltinDisplay.id() != nil else { return nil }
         var iterator: io_iterator_t = 0
         guard IOServiceGetMatchingServices(kIOMainPortDefault, IOServiceMatching("IODisplayConnect"), &iterator) == KERN_SUCCESS else { return nil }
         defer { IOObjectRelease(iterator) }
@@ -144,34 +144,17 @@ struct IODisplayBrightness: BuiltinBrightness {
         return nil
     }
 }
-
-/// `CoreDisplay`, the older private way. The last one to try.
-struct CoreDisplayBrightness: BuiltinBrightness {
-    private typealias Get = @convention(c) (CGDirectDisplayID) -> Double
-    private typealias Set = @convention(c) (CGDirectDisplayID, Double) -> Void
-
-    private static let handle = dlopen("/System/Library/Frameworks/CoreDisplay.framework/CoreDisplay", RTLD_LAZY)
-    private static let get = handle.flatMap { dlsym($0, "CoreDisplay_Display_GetUserBrightness") }.map { unsafeBitCast($0, to: Get.self) }
-    private static let set = handle.flatMap { dlsym($0, "CoreDisplay_Display_SetUserBrightness") }.map { unsafeBitCast($0, to: Set.self) }
-
-    let name = "CoreDisplay"
-
-    func level() -> Float? {
-        guard let get = Self.get, let id = BuiltinDisplay.id() else { return nil }
-        let level = get(id)
-        return level.isFinite ? Float(level) : nil
-    }
-
-    func set(_ level: Float) -> Bool {
-        guard let set = Self.set, let id = BuiltinDisplay.id() else { return false }
-        set(id, Double(level))
-        return true
-    }
-}
+#endif
 
 extension BuiltinDimmer {
-    /// In the order they are tried.
-    static let systemMethods: [BuiltinBrightness] = [DisplayServicesBrightness(), IODisplayBrightness(), CoreDisplayBrightness()]
+    /// In the order they are tried. `IODisplay` only on Intel: on Apple
+    /// silicon it finds no display. `CoreDisplay` is not used: its set call
+    /// gives no result, so it always counted as done.
+    #if arch(x86_64)
+    static let systemMethods: [BuiltinBrightness] = [DisplayServicesBrightness(), IODisplayBrightness()]
+    #else
+    static let systemMethods: [BuiltinBrightness] = [DisplayServicesBrightness()]
+    #endif
 }
 
 // MARK: Watch
@@ -401,7 +384,6 @@ enum DisplayProbe {
             let now = Date()
             let angle = lid.angle()
             let online = BuiltinDisplay.online()
-            _ = BuiltinDisplay.id(among: online)
             let level = methods.lazy.compactMap { $0.level() }.first
             // A dry run of the fade: what it would set is taken as set.
             let step = LidDimming.decide(

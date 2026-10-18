@@ -207,6 +207,15 @@ final class DisplayControllerTests: XCTestCase {
         XCTAssertEqual(works.sets.count, 2)
     }
 
+    /// An older version remembered `CoreDisplay`, which is gone.
+    func testAWayThatWasRememberedAndIsGoneIsLeftOut() {
+        defaults.set("CoreDisplay", forKey: BuiltinDimmer.methodKey)
+        let method = Method("DisplayServices", panel: panel)
+        XCTAssertTrue(BuiltinDimmer(methods: [method], defaults: defaults).dim())
+        XCTAssertEqual(method.sets, [0])
+        XCTAssertEqual(defaults.string(forKey: BuiltinDimmer.methodKey), "DisplayServices")
+    }
+
     func testADimThatNoWayCanDoLeavesNothingBehind() {
         let dimmer = BuiltinDimmer(methods: [Method("refuses", .refuses, panel: panel), Method("pretends", .pretends, panel: panel)], defaults: defaults)
         XCTAssertFalse(dimmer.dim())

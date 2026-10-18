@@ -168,8 +168,8 @@ final class DisplayRulesTests: XCTestCase {
         XCTAssertFalse(actions.joined().contains("sleep"), "Display sleep would take the display the user works on")
     }
 
-    func testTheBuiltInDisplayThatIsOffTheListIsDimmedWhenItsBrightnessReadsLit() {
-        XCTAssertEqual(run([(0, closed(external: true, online: false))]).0, [["dim"]])
+    func testTheBuiltInDisplayThatIsOffTheListIsNeverDimmed() {
+        XCTAssertEqual(run([(0, closed(external: true, online: false))]).0, [[]])
         XCTAssertEqual(run([(0, closed(external: true, online: false, brightness: 0))]).0, [[]])
         XCTAssertEqual(run([(0, closed(external: true, online: false, brightness: nil))]).0, [[]])
     }

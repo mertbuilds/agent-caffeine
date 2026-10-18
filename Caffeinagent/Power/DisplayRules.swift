@@ -101,7 +101,8 @@ enum DisplayRules {
         // Without a brightness to read, a display that is on counts as lit
         // until it was dimmed.
         let lit = !asleep && (inputs.brightness.map { $0 > darkLevel } ?? (awake && !memory.dimmed))
-        let mayDim = lit && memory.dimFailures < dimTries && due(memory.lastDimAt, now: now)
+        // A display that is off the list is never touched.
+        let mayDim = inputs.builtinOnline && lit && memory.dimFailures < dimTries && due(memory.lastDimAt, now: now)
         var actions: [DisplayAction] = []
         func dim(_ reason: String) {
             actions.append(.dimBuiltin(reason: reason))
