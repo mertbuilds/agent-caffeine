@@ -19,7 +19,7 @@ export const LICENSE_URL = "https://www.gnu.org/licenses/agpl-3.0.html";
 
 const supportUrl = process.env.NEXT_PUBLIC_SUPPORT_URL ?? "";
 
-/** The checkout where a reader pays what they want, or null while none is set. */
+/** The GitHub Sponsors page that the support button opens, or null while none is set. */
 export const SUPPORT_URL = supportUrl.startsWith("https://") && URL.canParse(supportUrl) ? supportUrl : null;
 
 export const CONTACT_EMAIL = "hi@caffeinagent.com";
