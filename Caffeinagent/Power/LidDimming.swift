@@ -17,6 +17,8 @@ struct LidDimInputs: Equatable {
     var externalDisplay = false
     /// What the power root domain says about the lid.
     var clamshellClosed = false
+    /// The built-in display is online and reads awake.
+    var builtinReady = true
     /// `DisplayRules` put the displays to sleep and they were not woken yet.
     var slept = false
 }
@@ -54,6 +56,10 @@ struct LidDimMemory: Equatable {
     /// 0 to 1, how far the brightness is back at the user's value.
     var release: Double = 0
     var at: Date?
+    /// The lid switch said closed while the display was dark. The fade is
+    /// over: macOS turns the panel off, and the user's brightness comes
+    /// back in one step once the lid is open and the panel is on.
+    var switchClosed = false
 
     /// For a sensor that starts again: what the lid did before is unknown.
     func forgettingMotion() -> LidDimMemory {
@@ -120,6 +126,12 @@ struct LidDimStep: Equatable {
 /// A lid that rests between 20 and 45 degrees is in use, so after 1.5
 /// seconds the user's brightness comes back. It fades again when the lid
 /// moves down.
+///
+/// When the lid switch says closed, the fade is over and nothing is read
+/// or written while the lid stays shut. No fade comes up from black while
+/// macOS powers the panel on: once the switch says open and the built-in
+/// display is online and awake, the user's brightness comes back in one
+/// step.
 enum LidDimming {
     static let fadeStart = 45.0
     /// At or below this the lid counts as shut. The sensor gives whole
@@ -164,6 +176,8 @@ enum LidDimming {
         memory.at = now
         guard inputs.enabled else { return end(memory, inputs, reason: "the setting is off") }
         guard inputs.sensorAvailable else { return end(memory, inputs, reason: "this Mac has no lid angle sensor") }
+        if memory.phase == .closed, inputs.clamshellClosed { memory.switchClosed = true }
+        if memory.switchClosed { return opened(memory, inputs, now: now) }
         guard let angle = inputs.angle else {
             if memory.phase == .idle { return LidDimStep(memory: memory.forgettingMotion()) }
             let since = memory.silentSince ?? now
@@ -237,6 +251,7 @@ enum LidDimming {
                 memory.keys.wrote(0, now: now)
                 memory.phase = .closed
             }
+            if inputs.clamshellClosed { memory.switchClosed = true }
             step.memory = memory
             step.target = 0
             return step
@@ -325,6 +340,31 @@ enum LidDimming {
             return LidDimStep(memory: next, target: memory.written, notes: ["the fade ends under the closed lid: \(reason)"])
         }
         return LidDimStep(actions: [.restore(reason: reason)], memory: next, notes: ["the fade ends and the brightness is back: \(reason)"])
+    }
+
+    /// After the lid switch said closed: nothing until the lid is open and
+    /// the panel is on, then the user's brightness in one step. The lid
+    /// counts as resting where it is, so it fades again when it moves down.
+    private static func opened(_ memory: LidDimMemory, _ inputs: LidDimInputs, now: Date) -> LidDimStep {
+        guard !inputs.clamshellClosed else { return LidDimStep(memory: memory, target: memory.written) }
+        var actions: [LidDimAction] = inputs.slept ? [.wakeDisplays] : []
+        guard inputs.builtinReady else { return LidDimStep(actions: actions, memory: memory, target: memory.written) }
+        actions.append(.restore(reason: "the lid is open"))
+        var next = idle(memory).forgettingMotion()
+        next.switchClosed = false
+        next.at = now
+        if let angle = inputs.angle {
+            next.lastAngle = angle
+            next.changedAt = now
+            next.estimator.reset(to: angle, now: now)
+            if angle < fadeStart {
+                next.restLow = angle
+                next.restSince = now
+                next.released = true
+                next.release = 1
+            }
+        }
+        return LidDimStep(actions: actions, memory: next, notes: ["the lid is open and the built-in display is on: the brightness is back"])
     }
 
     private static func idle(_ memory: LidDimMemory) -> LidDimMemory {

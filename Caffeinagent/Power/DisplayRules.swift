@@ -143,9 +143,11 @@ enum DisplayRules {
     /// setting goes off. It also comes back when the hold ends without an
     /// external display: the Mac then sleeps, and wakes with its own
     /// brightness. With an external display the Mac stays awake at the
-    /// desk, so the built-in display stays dark until the lid opens.
+    /// desk, so the built-in display stays dark until the lid opens. It is
+    /// written only to a built-in display that is online and awake: while
+    /// macOS powers the panel on, the next sample tries again.
     private static func restore(_ inputs: DisplayInputs, enabled: Bool, memory: DisplayMemory) -> [DisplayAction] {
-        guard memory.dimmed else { return [] }
+        guard memory.dimmed, inputs.builtinOnline, !inputs.builtinAsleep else { return [] }
         if !inputs.lidClosed { return [.restoreBuiltin(reason: "the lid is open")] }
         if !enabled { return [.restoreBuiltin(reason: "the setting is off")] }
         if !inputs.externalDisplay { return [.restoreBuiltin(reason: "Agent Caffeine no longer keeps the Mac awake")] }

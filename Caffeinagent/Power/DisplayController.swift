@@ -225,7 +225,7 @@ final class DisplayController {
     private var slept = false
     /// macOS said the Mac goes to sleep, and it did not wake yet.
     private var asleep = false
-    private var external: (value: Bool, at: Date)?
+    private var displays: (inputs: DisplayInputs, at: Date)?
     /// macOS changes the displays, and they did not settle yet.
     private var reconfiguring = false
     private var onChange: (() -> Void)?
@@ -269,7 +269,7 @@ final class DisplayController {
     /// `fade` is the setting "Dim the display as the lid closes".
     func update(lidClosed: Bool, holding: Bool, enabled: Bool, fade wantsFade: Bool = false, now: Date) {
         wanted = Wanted(lidClosed: lidClosed, holding: holding, enabled: enabled, fade: wantsFade)
-        external = nil
+        displays = nil
         // The rules run when the displays settled.
         if reconfiguring { return }
         // Nothing gets dark between the word that the Mac goes to sleep
@@ -289,7 +289,8 @@ final class DisplayController {
         var inputs = reader.read()
         inputs.lidClosed = lidClosed
         inputs.holding = holding
-        inputs.brightness = dimmer.level()
+        // A panel that is off the list or sleeps is not asked.
+        if inputs.builtinOnline, !inputs.builtinAsleep { inputs.brightness = dimmer.level() }
         let (actions, next) = DisplayRules.decide(inputs, enabled: enabled, memory: memory, now: now)
         memory = next
         for action in actions {
@@ -377,11 +378,13 @@ final class DisplayController {
         onChange?()
     }
 
-    /// The sensor is asked only while a fade can start or is under way.
+    /// The sensor is asked only while a fade can start or is under way, and
+    /// not while the lid stays shut after the lid switch ended the fade.
     private func arm() {
         guard let lid, lid.isAvailable else { return }
         let canStart = wanted.enabled && wanted.fade && wanted.holding
-        if canStart, !armed {
+        let shut = wanted.lidClosed && fade.switchClosed
+        if canStart || fade.phase != .idle, !armed, !shut {
             armed = true
             fade = fade.forgettingMotion()
             lid.start { [weak self] angle in
@@ -390,7 +393,7 @@ final class DisplayController {
         }
         guard armed else { return }
         step(angle: lid.angle())
-        if !canStart, fade.phase == .idle { disarm() }
+        if armed, !canStart, fade.phase == .idle { disarm() }
     }
 
     private func disarm() {
@@ -410,9 +413,15 @@ final class DisplayController {
         )
         // With the lid wide open and no fade, nothing else is read.
         if fade.phase != .idle || angle.map({ $0 < LidDimming.fadeStart }) ?? false {
-            inputs.brightness = dimmer.level()
+            let displays = displays(now: now)
+            inputs.externalDisplay = displays.externalDisplay
+            inputs.builtinReady = displays.builtinOnline && !displays.builtinAsleep
+            // After the lid switch said closed, the panel is asked again
+            // only when it is on.
+            if !fade.switchClosed || inputs.builtinReady && !wanted.lidClosed {
+                inputs.brightness = dimmer.level()
+            }
             inputs.saved = dimmer.saved
-            inputs.externalDisplay = externalDisplay(now: now)
         }
         let before = fade
         let result = LidDimming.decide(inputs, memory: fade, now: now)
@@ -451,6 +460,11 @@ final class DisplayController {
                 trace.finish()
             }
         }
+        // The fade is over under the shut lid: the sensor is closed.
+        if wanted.lidClosed, fade.switchClosed {
+            disarm()
+            return
+        }
         if result.poll != poll {
             poll = result.poll
             ticker?.tick(every: result.poll.interval) { [weak self] in
@@ -473,10 +487,10 @@ final class DisplayController {
     }
 
     /// Read at most twice a second: a fade asks 120 times a second.
-    private func externalDisplay(now: Date) -> Bool {
-        if let external, abs(now.timeIntervalSince(external.at)) < 0.5 { return external.value }
-        let value = reader.read().externalDisplay
-        external = (value, now)
-        return value
+    private func displays(now: Date) -> DisplayInputs {
+        if let displays, abs(now.timeIntervalSince(displays.at)) < 0.5 { return displays.inputs }
+        let inputs = reader.read()
+        displays = (inputs, now)
+        return inputs
     }
 }

@@ -259,12 +259,54 @@ final class LidDimmingTests: XCTestCase {
         XCTAssertEqual(line.panel, 0, "The switch is first: the sensor still reads 8 degrees")
         XCTAssertEqual(step.target, 0)
         XCTAssertEqual(line.memory.phase, .closed)
-        // It opens: from black, with no jump.
+        XCTAssertTrue(line.memory.switchClosed)
+        // It opens: no fade while macOS powers the panel on.
         line.inputs.clamshellClosed = false
         line.feed(8)
-        XCTAssertLessThan(line.panel, 0.01)
-        line.rest(at: 8, for: 0.5)
-        XCTAssertEqual(line.panel, 0.6 * Float(LidDimming.curve(8)), accuracy: 0.002)
+        XCTAssertEqual(line.panel, 0.6, "In one step")
+    }
+
+    func testTheLidSwitchEndsTheFadeAndTheBrightnessComesBackInOneStepOnceThePanelIsOn() {
+        var line = Timeline()
+        line.move(from: 110, to: 0, over: 0.5)
+        line.inputs.clamshellClosed = true
+        line.feed(0)
+        XCTAssertTrue(line.memory.switchClosed)
+        let writes = line.writes
+        for angle: Double? in [0, 2, nil, 5] { XCTAssertEqual(line.feed(angle, after: 0.5).actions, []) }
+        XCTAssertEqual(line.poll, .slow)
+        // The switch says open, and macOS still powers the panel on.
+        line.inputs.clamshellClosed = false
+        line.inputs.builtinReady = false
+        for angle in [8.0, 15, 25] { XCTAssertEqual(line.feed(angle, after: 0.5).actions, []) }
+        XCTAssertEqual(line.panel, 0)
+        XCTAssertEqual(line.writes, writes, "Nothing is written while the lid is shut or the panel is off")
+        line.inputs.builtinReady = true
+        XCTAssertEqual(line.feed(30, after: 0.5).actions, [.restore(reason: "the lid is open")])
+        XCTAssertEqual(line.panel, 0.6)
+        XCTAssertNil(line.saved)
+        XCTAssertEqual(line.memory.phase, .idle)
+        XCTAssertEqual(line.notes.last, "the lid is open and the built-in display is on: the brightness is back")
+        line.move(from: 30, to: 100, over: 0.5)
+        XCTAssertEqual(line.writes, writes)
+        // It closes again: the fade is as before.
+        line.move(from: 100, to: 24, over: 0.5)
+        line.rest(at: 24, for: 0.3)
+        XCTAssertEqual(line.panel, 0.3, accuracy: 0.01)
+    }
+
+    func testALidThatOpensBelow45DegreesStaysBrightUntilItMovesDown() {
+        var line = Timeline()
+        line.move(from: 110, to: 0, over: 0.5)
+        line.inputs.clamshellClosed = true
+        line.feed(0)
+        line.inputs.clamshellClosed = false
+        line.feed(20)
+        line.rest(at: 20, for: 3)
+        XCTAssertEqual(line.panel, 0.6)
+        line.move(from: 20, to: 10, over: 0.3)
+        line.rest(at: 10, for: 0.3)
+        XCTAssertEqual(line.panel, 0.6 * Float(LidDimming.curve(10)), accuracy: 0.01)
     }
 
     func testALidThatIsShutInALittleTimeIsDarkAtTheClosedAngle() {
@@ -500,10 +542,13 @@ final class LidDimmingTests: XCTestCase {
         line.inputs.clamshellClosed = true
         line.feed(nil, after: 0.5)
         let step = line.feed(nil, after: 0.5)
-        XCTAssertEqual(step.actions, [], "`DisplayRules` goes on, and puts the brightness back when the lid opens")
+        XCTAssertEqual(step.actions, [], "The fade is over under the shut lid, and the sensor is not needed")
         XCTAssertEqual(line.panel, 0)
         XCTAssertEqual(line.saved, 0.6)
-        XCTAssertEqual(line.memory.phase, .idle)
+        XCTAssertEqual(line.memory.phase, .closed)
+        line.inputs.clamshellClosed = false
+        line.feed(nil)
+        XCTAssertEqual(line.panel, 0.6, "Back when the lid opens, also without an angle")
     }
 
     func testADisplayThatIsDarkAlreadyIsNotTouched() {

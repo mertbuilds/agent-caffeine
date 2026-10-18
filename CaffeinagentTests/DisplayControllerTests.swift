@@ -147,10 +147,13 @@ final class DisplayControllerTests: XCTestCase {
         )
     }
 
+    /// The way the fade sets the brightness with.
+    private lazy var first = Method("first", panel: panel)
+
     /// With the lid angle sensor, and Agent Caffeine holding.
     private func fading(watcher: Watcher? = nil) -> DisplayController {
         let controller = DisplayController(
-            reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: [Method("first", panel: panel)], defaults: defaults),
+            reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: [first], defaults: defaults),
             watcher: watcher, lid: lid, ticker: ticker, settle: delay, clock: { [clock] in clock.now }
         )
         controller.start(onChange: {})
@@ -555,15 +558,68 @@ final class DisplayControllerTests: XCTestCase {
     func testASampleOfTheEngineDoesNotPutTheBrightnessBackInTheMiddleOfAFade() {
         let controller = fading()
         tick(60, after: 0.5)
-        move(from: 60, to: 0, over: 0.5)
-        // The clamshell switch says closed, then open at a few degrees.
-        controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now)
-        tick(10, after: 2)
+        move(from: 60, to: 10, over: 0.5)
         let dim = panel.level
         controller.update(lidClosed: false, holding: true, enabled: true, fade: true, now: clock.now)
-        XCTAssertEqual(panel.level, dim, accuracy: 0.01, "The angle decides, not the switch")
+        XCTAssertEqual(panel.level, dim, accuracy: 0.01, "The angle decides")
         XCTAssertLessThan(panel.level, 0.1)
         XCTAssertNotNil(saved)
+    }
+
+    /// The lid switch ends the fade. While the lid stays shut nothing is
+    /// read or written, and on open the brightness comes back in one step
+    /// once the panel is on.
+    func testUnderTheShutLidTheSensorIsClosedAndNothingIsReadOrWritten() {
+        let watcher = Watcher()
+        let controller = fading(watcher: watcher)
+        tick(60, after: 0.5)
+        move(from: 60, to: 0, over: 0.5)
+        watcher.onChange?(.lid(closed: true))
+        XCTAssertNil(lid.onPush, "The sensor is closed")
+        XCTAssertNil(ticker.interval)
+        // macOS turns the panel off about 5 seconds later.
+        clock.now += 5
+        reader.inputs.builtinAsleep = true
+        let before = (levels: first.reads, sets: first.sets.count, angles: lid.reads)
+        for _ in 0..<300 {
+            clock.now += 2
+            controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now)
+        }
+        XCTAssertEqual(first.reads, before.levels)
+        XCTAssertEqual(first.sets.count, before.sets)
+        XCTAssertEqual(lid.reads, before.angles)
+        XCTAssertEqual(sleeper.requests, 0)
+        // The lid opens, and the panel is not on yet.
+        lid.degrees = 20
+        watcher.onChange?(.lid(closed: false))
+        XCTAssertNotNil(lid.onPush)
+        tick(40, after: 0.5)
+        XCTAssertEqual(first.sets.count, before.sets)
+        XCTAssertEqual(panel.level, 0)
+        reader.inputs.builtinAsleep = false
+        tick(60, after: 0.5)
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+        XCTAssertEqual(first.sets.count, before.sets + 1, "Once")
+        XCTAssertNil(saved)
+        move(from: 60, to: 110, over: 0.5)
+        XCTAssertEqual(first.sets.count, before.sets + 1)
+    }
+
+    func testAHoldThatEndsUnderTheShutLidGivesTheBrightnessBackWhenTheLidOpens() {
+        let watcher = Watcher()
+        let controller = fading(watcher: watcher)
+        tick(60, after: 0.5)
+        move(from: 60, to: 0, over: 0.5)
+        watcher.onChange?(.lid(closed: true))
+        reader.inputs.externalDisplay = true
+        controller.update(lidClosed: true, holding: false, enabled: true, fade: true, now: clock.now + 10)
+        XCTAssertNil(lid.onPush)
+        XCTAssertEqual(panel.level, 0, "At the desk it stays dark until the lid opens")
+        lid.degrees = 100
+        watcher.onChange?(.lid(closed: false))
+        XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+        XCTAssertNil(saved)
+        XCTAssertNil(lid.onPush, "No hold and no fade: the sensor is closed again")
     }
 
     func testNextToAnExternalDisplayTheFadeDoesNotSleepTheDisplays() {
