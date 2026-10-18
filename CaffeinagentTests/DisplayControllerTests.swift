@@ -43,6 +43,7 @@ final class DisplayControllerTests: XCTestCase {
         let kind: Kind
         let panel: Panel
         var sets: [Float] = []
+        var reads = 0
 
         init(_ name: String, _ kind: Kind = .works, panel: Panel) {
             self.name = name
@@ -50,7 +51,10 @@ final class DisplayControllerTests: XCTestCase {
             self.panel = panel
         }
 
-        func level() -> Float? { kind == .cannotRead ? nil : panel.level }
+        func level() -> Float? {
+            reads += 1
+            return kind == .cannotRead ? nil : panel.level
+        }
 
         func set(_ level: Float) -> Bool {
             sets.append(level)
@@ -65,11 +69,29 @@ final class DisplayControllerTests: XCTestCase {
     }
 
     private final class Watcher: DisplayWatching {
-        var onChange: ((Bool?) -> Void)?
+        var onChange: ((DisplayChange) -> Void)?
         var stopped = false
 
-        func start(onChange: @escaping (Bool?) -> Void) { self.onChange = onChange }
+        func start(onChange: @escaping (DisplayChange) -> Void) { self.onChange = onChange }
         func stop() { stopped = true }
+    }
+
+    private final class Delay: DisplayDelaying {
+        var seconds: TimeInterval?
+        var work: (() -> Void)?
+
+        func after(_ seconds: TimeInterval?, _ work: @escaping () -> Void) {
+            self.seconds = seconds
+            self.work = seconds == nil ? nil : work
+        }
+
+        /// The time is up.
+        func fire() {
+            let work = self.work
+            seconds = nil
+            self.work = nil
+            work?()
+        }
     }
 
     private final class Lid: LidAngleReading {
@@ -115,11 +137,13 @@ final class DisplayControllerTests: XCTestCase {
     /// The timer and the sensor hold the controller weakly.
     private var kept: DisplayController?
     private let ticker = Ticker()
+    private let delay = Delay()
     private let clock = Clock()
 
     private func controller(_ methods: [Method], watcher: Watcher? = nil) -> DisplayController {
         DisplayController(
-            reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: methods, defaults: defaults), watcher: watcher, clock: { [clock] in clock.now }
+            reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: methods, defaults: defaults), watcher: watcher, settle: delay,
+            clock: { [clock] in clock.now }
         )
     }
 
@@ -127,7 +151,7 @@ final class DisplayControllerTests: XCTestCase {
     private func fading(watcher: Watcher? = nil) -> DisplayController {
         let controller = DisplayController(
             reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: [Method("first", panel: panel)], defaults: defaults),
-            watcher: watcher, lid: lid, ticker: ticker, clock: { [clock] in clock.now }
+            watcher: watcher, lid: lid, ticker: ticker, settle: delay, clock: { [clock] in clock.now }
         )
         controller.start(onChange: {})
         controller.update(lidClosed: false, holding: true, enabled: true, fade: true, now: clock.now)
@@ -370,7 +394,7 @@ final class DisplayControllerTests: XCTestCase {
         controller.update(lidClosed: true, holding: true, enabled: true, now: at(10))
         XCTAssertEqual(panel.level, 0.6, accuracy: 0.001, "Not dark again before the wake")
         // The lid opens with no word of a wake, and closes again.
-        watcher.onChange?(false)
+        watcher.onChange?(.lid(closed: false))
         controller.update(lidClosed: true, holding: true, enabled: true, now: at(20))
         XCTAssertEqual(panel.level, 0)
     }
@@ -631,13 +655,13 @@ final class DisplayControllerTests: XCTestCase {
         let controller = controller([Method("first", panel: panel)], watcher: watcher)
         controller.start { samples += 1 }
         controller.update(lidClosed: false, holding: true, enabled: true, now: at(0))
-        watcher.onChange?(true)
+        watcher.onChange?(.lid(closed: true))
         XCTAssertEqual(sleeper.requests, 0, "No display sleep at the lid switch")
         XCTAssertEqual(samples, 1, "One is asked for, for the rest of the app")
         clock.now += 15
         controller.update(lidClosed: true, holding: true, enabled: true, now: clock.now)
         XCTAssertEqual(sleeper.requests, 1, "The panel still reads on: the late request")
-        watcher.onChange?(false)
+        watcher.onChange?(.lid(closed: false))
         XCTAssertEqual(sleeper.wakes, 1)
     }
 
@@ -645,11 +669,75 @@ final class DisplayControllerTests: XCTestCase {
         let watcher = Watcher()
         let controller = controller([Method("first", panel: panel)], watcher: watcher)
         controller.start(onChange: {})
-        watcher.onChange?(true)
+        watcher.onChange?(.lid(closed: true))
         clock.now += 14
-        watcher.onChange?(nil)
-        XCTAssertEqual(sleeper.requests, 0, "Never from the callback of a change of the displays")
+        watcher.onChange?(.displaysBegin)
+        watcher.onChange?(.displaysDone)
+        clock.now += DisplayController.settleTime
+        delay.fire()
+        XCTAssertEqual(sleeper.requests, 0, "Never right after a change of the displays")
         controller.update(lidClosed: true, holding: true, enabled: true, now: clock.now + 14)
+        XCTAssertEqual(sleeper.requests, 0)
+        controller.update(lidClosed: true, holding: true, enabled: true, now: clock.now + 15)
+        XCTAssertEqual(sleeper.requests, 1)
+    }
+
+    /// Two displays are plugged in under the shut lid. While macOS sets
+    /// them up, nothing is read or set: no brightness, no display sleep.
+    func testAChangeOfTheDisplaysMakesNoCallInItsCallbackAndOneUpdateWhenTheySettled() {
+        let watcher = Watcher()
+        let method = Method("first", panel: panel)
+        var samples = 0
+        let controller = controller([method], watcher: watcher)
+        controller.start { samples += 1 }
+        controller.update(lidClosed: true, holding: true, enabled: true, now: clock.now)
+        watcher.onChange?(.lid(closed: true))
+        clock.now += 60
+        controller.update(lidClosed: true, holding: true, enabled: true, now: clock.now)
+        XCTAssertEqual(sleeper.requests, 1, "The built-in display still read on")
+        samples = 0
+        let before = (reader: reader.reads, levels: method.reads, sets: method.sets.count, sleeps: sleeper.requests)
+
+        reader.inputs.externalDisplay = true
+        reader.inputs.builtinOnline = false
+        for change in [DisplayChange.displaysBegin, .displaysBegin, .displaysDone, .displaysDone] {
+            watcher.onChange?(change)
+            XCTAssertEqual(delay.seconds, change == .displaysBegin ? DisplayController.settleLimit : DisplayController.settleTime)
+        }
+        // A sample of the engine and the lid switch in that time wait too.
+        controller.update(lidClosed: true, holding: true, enabled: true, now: clock.now + 1)
+        watcher.onChange?(.lid(closed: true))
+        controller.update(holding: false, now: clock.now + 1)
+        controller.update(holding: true, now: clock.now + 1)
+        XCTAssertEqual(reader.reads, before.reader)
+        XCTAssertEqual(method.reads, before.levels)
+        XCTAssertEqual(method.sets.count, before.sets)
+        XCTAssertEqual(sleeper.requests, before.sleeps)
+        XCTAssertEqual(samples, 1, "Only the sample of the lid")
+
+        clock.now += DisplayController.settleTime
+        delay.fire()
+        XCTAssertEqual(reader.reads, before.reader + 1, "One update")
+        XCTAssertEqual(samples, 2)
+        XCTAssertNil(delay.seconds)
+        XCTAssertEqual(sleeper.requests, before.sleeps, "Next to an external display nothing sleeps")
+    }
+
+    /// The displays are unplugged under the shut lid: no display sleep in
+    /// the callback, and none for 15 seconds after they settled.
+    func testDisplaysThatAreUnpluggedUnderTheShutLidAreNotPutToSleepAtOnce() {
+        reader.inputs.externalDisplay = true
+        let watcher = Watcher()
+        let controller = controller([Method("first", panel: panel)], watcher: watcher)
+        controller.start(onChange: {})
+        controller.update(lidClosed: true, holding: true, enabled: true, now: clock.now)
+        clock.now += 600
+        reader.inputs.externalDisplay = false
+        watcher.onChange?(.displaysBegin)
+        watcher.onChange?(.displaysDone)
+        XCTAssertEqual(sleeper.requests, 0)
+        clock.now += DisplayController.settleTime
+        delay.fire()
         XCTAssertEqual(sleeper.requests, 0)
         controller.update(lidClosed: true, holding: true, enabled: true, now: clock.now + 15)
         XCTAssertEqual(sleeper.requests, 1)
@@ -661,13 +749,15 @@ final class DisplayControllerTests: XCTestCase {
         let controller = controller([Method("first", panel: panel)], watcher: watcher)
         controller.start(onChange: {})
         controller.update(lidClosed: false, holding: true, enabled: true, now: at(0))
-        watcher.onChange?(true)
+        watcher.onChange?(.lid(closed: true))
         XCTAssertEqual(panel.level, 0)
-        watcher.onChange?(false)
+        watcher.onChange?(.lid(closed: false))
         XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
         XCTAssertNil(saved)
         // The list of displays changed: the lid is as it was.
-        watcher.onChange?(nil)
+        watcher.onChange?(.displaysBegin)
+        watcher.onChange?(.displaysDone)
+        delay.fire()
         XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
     }
 }

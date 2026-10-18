@@ -177,7 +177,8 @@ extension BuiltinDimmer {
 // MARK: Watch
 
 /// The lid, from the power root domain, and the list of displays, from
-/// Core Graphics. Both call on the main thread.
+/// Core Graphics. Both call on the main thread. The callback of the
+/// displays only passes the word on: it reads and sets nothing.
 final class SystemDisplayWatcher: DisplayWatching {
     /// `kIOPMMessageClamshellStateChange`, a macro Swift does not import:
     /// `iokit_family_msg(sub_iokit_powermanagement, 0x100)`, which is
@@ -188,14 +189,14 @@ final class SystemDisplayWatcher: DisplayWatching {
 
     private var port: IONotificationPortRef?
     private var notifier: io_object_t = 0
-    private var onChange: ((Bool?) -> Void)?
+    private var onChange: ((DisplayChange) -> Void)?
     private var watchesDisplays = false
 
     deinit {
         stop()
     }
 
-    func start(onChange: @escaping (Bool?) -> Void) {
+    func start(onChange: @escaping (DisplayChange) -> Void) {
         stop()
         self.onChange = onChange
         let context = Unmanaged.passUnretained(self).toOpaque()
@@ -205,7 +206,7 @@ final class SystemDisplayWatcher: DisplayWatching {
             let result = IOServiceAddInterestNotification(port, root, "IOGeneralInterest", { context, _, type, argument in
                 guard type == SystemDisplayWatcher.clamshellStateChange, let context else { return }
                 let closed = UInt(bitPattern: argument) & SystemDisplayWatcher.clamshellClosedBit != 0
-                Unmanaged<SystemDisplayWatcher>.fromOpaque(context).takeUnretainedValue().onChange?(closed)
+                Unmanaged<SystemDisplayWatcher>.fromOpaque(context).takeUnretainedValue().onChange?(.lid(closed: closed))
             }, context, &notifier)
             if result == KERN_SUCCESS {
                 self.port = port
@@ -234,8 +235,9 @@ final class SystemDisplayWatcher: DisplayWatching {
     }
 
     private static let displaysChanged: CGDisplayReconfigurationCallBack = { _, flags, context in
-        guard !flags.contains(.beginConfigurationFlag), let context else { return }
-        Unmanaged<SystemDisplayWatcher>.fromOpaque(context).takeUnretainedValue().onChange?(nil)
+        guard let context else { return }
+        let change: DisplayChange = flags.contains(.beginConfigurationFlag) ? .displaysBegin : .displaysDone
+        Unmanaged<SystemDisplayWatcher>.fromOpaque(context).takeUnretainedValue().onChange?(change)
     }
 }
 

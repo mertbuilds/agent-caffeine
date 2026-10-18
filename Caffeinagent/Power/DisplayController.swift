@@ -24,12 +24,43 @@ protocol BuiltinBrightness {
     func set(_ level: Float) -> Bool
 }
 
+/// What the watcher saw.
+enum DisplayChange: Equatable {
+    case lid(closed: Bool)
+    /// macOS starts to change the list or the setup of the displays.
+    case displaysBegin
+    /// macOS is done with a change of one display.
+    case displaysDone
+}
+
 /// Tells that the lid or the displays changed, before the next sample.
 /// Both call on the main thread.
 protocol DisplayWatching: AnyObject {
-    /// `lidClosed` is nil when the list of displays changed.
-    func start(onChange: @escaping (_ lidClosed: Bool?) -> Void)
+    func start(onChange: @escaping (DisplayChange) -> Void)
     func stop()
+}
+
+/// Runs work once on the main thread after a time.
+protocol DisplayDelaying: AnyObject {
+    /// Replaces the work before it. Nil cancels.
+    func after(_ seconds: TimeInterval?, _ work: @escaping () -> Void)
+}
+
+final class MainQueueDelay: DisplayDelaying {
+    private var item: DispatchWorkItem?
+
+    deinit {
+        item?.cancel()
+    }
+
+    func after(_ seconds: TimeInterval?, _ work: @escaping () -> Void) {
+        item?.cancel()
+        item = nil
+        guard let seconds else { return }
+        let item = DispatchWorkItem(block: work)
+        DispatchQueue.main.asyncAfter(deadline: .now() + seconds, execute: item)
+        self.item = item
+    }
 }
 
 /// The lid angle sensor of this Mac.
@@ -157,10 +188,17 @@ final class BuiltinDimmer {
     }
 }
 
-/// Runs `DisplayRules` on every sample and at once when the lid or the
-/// displays change, and `LidDimming` on every reading of the lid angle.
+/// Runs `DisplayRules` on every sample and at once when the lid changes,
+/// and `LidDimming` on every reading of the lid angle. A change of the
+/// displays is not acted on in its callback: from the first word of it no
+/// brightness and no sleep call is made, and the rules run once, 2 seconds
+/// after macOS said the last display is done.
 @MainActor
 final class DisplayController {
+    static let settleTime: TimeInterval = 2
+    /// A change that macOS never says is done counts as done after this.
+    static let settleLimit: TimeInterval = 10
+
     private struct Wanted {
         var lidClosed = false
         var holding = false
@@ -175,6 +213,7 @@ final class DisplayController {
     private let lid: LidAngleReading?
     private let ticker: LidTicking?
     private let trace: DisplayTraceRecorder?
+    private let settle: DisplayDelaying
     private let clock: () -> Date
     private var memory = DisplayMemory()
     private var fade = LidDimMemory()
@@ -187,12 +226,15 @@ final class DisplayController {
     /// macOS said the Mac goes to sleep, and it did not wake yet.
     private var asleep = false
     private var external: (value: Bool, at: Date)?
+    /// macOS changes the displays, and they did not settle yet.
+    private var reconfiguring = false
+    private var onChange: (() -> Void)?
     private let log = Logger(subsystem: "com.caffeinagent.app", category: "Display")
 
     init(
         reader: DisplayReading, sleeper: DisplaySleeping, dimmer: BuiltinDimmer, watcher: DisplayWatching? = nil,
         lid: LidAngleReading? = nil, ticker: LidTicking? = nil, trace: DisplayTraceRecorder? = nil,
-        clock: @escaping () -> Date = Date.init
+        settle: DisplayDelaying = MainQueueDelay(), clock: @escaping () -> Date = Date.init
     ) {
         self.reader = reader
         self.sleeper = sleeper
@@ -201,6 +243,7 @@ final class DisplayController {
         self.lid = lid
         self.ticker = ticker
         self.trace = trace
+        self.settle = settle
         self.clock = clock
     }
 
@@ -217,13 +260,9 @@ final class DisplayController {
             log.info("putting back the brightness an earlier run left dark")
             memory.dimmed = !dimmer.restore()
         }
-        watcher?.start { [weak self] lidClosed in
-            MainActor.assumeIsolated {
-                // The display is dealt with here and now. The sample that
-                // follows is for the rest of the app.
-                self?.changed(lidClosed: lidClosed)
-                onChange()
-            }
+        self.onChange = onChange
+        watcher?.start { [weak self] change in
+            MainActor.assumeIsolated { self?.changed(change) }
         }
     }
 
@@ -231,6 +270,8 @@ final class DisplayController {
     func update(lidClosed: Bool, holding: Bool, enabled: Bool, fade wantsFade: Bool = false, now: Date) {
         wanted = Wanted(lidClosed: lidClosed, holding: holding, enabled: enabled, fade: wantsFade)
         external = nil
+        // The rules run when the displays settled.
+        if reconfiguring { return }
         // Nothing gets dark between the word that the Mac goes to sleep
         // and its wake. A restore that failed is tried again.
         if asleep {
@@ -285,7 +326,8 @@ final class DisplayController {
         fade = LidDimMemory()
         memory = DisplayMemory()
         slept = false
-        if dimmer.isDimmed {
+        // A brightness that stays saved is put back at the next update.
+        if dimmer.isDimmed, !reconfiguring {
             log.info("the Mac goes to sleep: the brightness is put back")
             memory.dimmed = !dimmer.restore()
         }
@@ -299,20 +341,40 @@ final class DisplayController {
     /// At quit: the user's brightness comes back.
     func stop() {
         watcher?.stop()
+        settle.after(nil) {}
         disarm()
         fade = LidDimMemory()
-        if dimmer.isDimmed { memory.dimmed = !dimmer.restore() }
+        // A brightness that stays saved is put back at the next start.
+        if dimmer.isDimmed, !reconfiguring { memory.dimmed = !dimmer.restore() }
     }
 
     // MARK: The lid angle
 
-    private func changed(lidClosed: Bool?) {
-        // An open lid is a Mac that someone uses, whatever was said about sleep.
-        if lidClosed == false { asleep = false }
+    private func changed(_ change: DisplayChange) {
+        switch change {
+        case .lid(let closed):
+            // An open lid is a Mac that someone uses, whatever was said about sleep.
+            if !closed { asleep = false }
+            // The display is dealt with here and now. The sample that
+            // follows is for the rest of the app.
+            update(lidClosed: closed, holding: wanted.holding, enabled: wanted.enabled, fade: wanted.fade, now: clock())
+            onChange?()
+        case .displaysBegin, .displaysDone:
+            // Nothing else here: the callback must not change the displays.
+            reconfiguring = true
+            settle.after(change == .displaysBegin ? Self.settleLimit : Self.settleTime) { [weak self] in
+                MainActor.assumeIsolated { self?.settled() }
+            }
+        }
+    }
+
+    private func settled() {
+        reconfiguring = false
         let now = clock()
         // No display sleep is asked while the displays settle.
-        if lidClosed == nil { memory.displaysChangedAt = now }
-        update(lidClosed: lidClosed ?? wanted.lidClosed, holding: wanted.holding, enabled: wanted.enabled, fade: wanted.fade, now: now)
+        memory.displaysChangedAt = now
+        update(lidClosed: wanted.lidClosed, holding: wanted.holding, enabled: wanted.enabled, fade: wanted.fade, now: now)
+        onChange?()
     }
 
     /// The sensor is asked only while a fade can start or is under way.
@@ -341,7 +403,7 @@ final class DisplayController {
     }
 
     private func step(angle: Double?) {
-        guard armed else { return }
+        guard armed, !reconfiguring else { return }
         let now = clock()
         var inputs = LidDimInputs(
             angle: angle, enabled: wanted.enabled && wanted.fade, holding: wanted.holding, clamshellClosed: wanted.lidClosed, slept: slept
