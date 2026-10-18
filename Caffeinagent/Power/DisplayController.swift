@@ -92,11 +92,22 @@ final class BuiltinDimmer {
 
     private let methods: [BuiltinBrightness]
     private let defaults: UserDefaults
+    /// Every call to a way goes through these. Display sleep too.
+    let calls: DisplayCalls
     private let log = Logger(subsystem: "com.caffeinagent.app", category: "Display")
 
-    init(methods: [BuiltinBrightness], defaults: UserDefaults) {
+    init(methods: [BuiltinBrightness], defaults: UserDefaults, calls: DisplayCalls = DisplayCalls()) {
         self.methods = methods
         self.defaults = defaults
+        self.calls = calls
+    }
+
+    private func read(_ method: BuiltinBrightness) -> Float? {
+        calls.run("\(method.name) read") { method.level() } ?? nil
+    }
+
+    private func write(_ method: BuiltinBrightness, _ level: Float) -> Bool {
+        calls.run("\(method.name) set") { method.set(level) } ?? false
     }
 
     /// The way a write was seen to work with, in this run.
@@ -116,11 +127,11 @@ final class BuiltinDimmer {
     /// One step of a fade. The saved value is not touched. False when no
     /// way took the value.
     func set(_ level: Float) -> Bool {
-        if let trusted { return trusted.set(level) }
+        if let trusted { return write(trusted, level) }
         for method in ordered {
-            let before = method.level()
-            guard method.set(level) else { continue }
-            guard let before, abs(before - level) > 0.01, let after = method.level() else { return true }
+            let before = read(method)
+            guard write(method, level) else { continue }
+            guard let before, abs(before - level) > 0.01, let after = read(method) else { return true }
             // A way that says yes and changes nothing did not work.
             guard abs(after - level) < abs(before - level) else { continue }
             trusted = method
@@ -132,7 +143,7 @@ final class BuiltinDimmer {
 
     /// From the first way that can read it.
     func level() -> Float? {
-        ordered.lazy.compactMap { $0.level() }.first
+        ordered.lazy.compactMap { self.read($0) }.first
     }
 
     /// The way that worked last comes first.
@@ -154,9 +165,9 @@ final class BuiltinDimmer {
             guard previous > DisplayRules.darkLevel else { return true }
             defaults.set(Double(previous), forKey: Self.previousKey)
         }
-        for method in ordered where method.set(0) {
+        for method in ordered where write(method, 0) {
             // A way that says yes and changes nothing did not work.
-            if let now = method.level(), now > DisplayRules.darkLevel { continue }
+            if let now = read(method), now > DisplayRules.darkLevel { continue }
             defaults.set(method.name, forKey: Self.methodKey)
             log.info("the built-in display was dimmed with \(method.name, privacy: .public)")
             return true
@@ -177,8 +188,8 @@ final class BuiltinDimmer {
             defaults.removeObject(forKey: Self.previousKey)
             return true
         }
-        for method in ordered where method.set(wanted) {
-            if let now = method.level(), abs(now - wanted) > 0.05, now <= DisplayRules.darkLevel { continue }
+        for method in ordered where write(method, wanted) {
+            if let now = read(method), abs(now - wanted) > 0.05, now <= DisplayRules.darkLevel { continue }
             defaults.removeObject(forKey: Self.previousKey)
             log.info("the brightness of the built-in display was put back with \(method.name, privacy: .public)")
             return true
@@ -270,6 +281,11 @@ final class DisplayController {
     func update(lidClosed: Bool, holding: Bool, enabled: Bool, fade wantsFade: Bool = false, now: Date) {
         wanted = Wanted(lidClosed: lidClosed, holding: holding, enabled: enabled, fade: wantsFade)
         displays = nil
+        // A call that hung: nothing more is asked of the displays.
+        if dimmer.calls.isOff {
+            disarm()
+            return
+        }
         // The rules run when the displays settled.
         if reconfiguring { return }
         // Nothing gets dark between the word that the Mac goes to sleep
@@ -407,6 +423,10 @@ final class DisplayController {
 
     private func step(angle: Double?) {
         guard armed, !reconfiguring else { return }
+        if dimmer.calls.isOff {
+            disarm()
+            return
+        }
         let now = clock()
         var inputs = LidDimInputs(
             angle: angle, enabled: wanted.enabled && wanted.fade, holding: wanted.holding, clamshellClosed: wanted.lidClosed, slept: slept
@@ -479,7 +499,7 @@ final class DisplayController {
     }
 
     private func sleep() {
-        if sleeper.sleepDisplays() {
+        if dimmer.calls.run("display sleep", { [sleeper] in sleeper.sleepDisplays() }) == true {
             slept = true
         } else {
             log.error("the request for display sleep failed")

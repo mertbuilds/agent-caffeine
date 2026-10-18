@@ -68,6 +68,27 @@ final class DisplayControllerTests: XCTestCase {
         }
     }
 
+    /// A way whose set call does not come back until it is let go, as a
+    /// WindowServer that hangs.
+    private final class Hanging: BuiltinBrightness {
+        let name = "hanging"
+        let release = DispatchSemaphore(value: 0)
+        private let lock = NSLock()
+        private var count = 0
+        var calls: Int { lock.withLock { count } }
+
+        func level() -> Float? {
+            lock.withLock { count += 1 }
+            return 0.6
+        }
+
+        func set(_ level: Float) -> Bool {
+            lock.withLock { count += 1 }
+            release.wait()
+            return true
+        }
+    }
+
     private final class Watcher: DisplayWatching {
         var onChange: ((DisplayChange) -> Void)?
         var stopped = false
@@ -250,6 +271,73 @@ final class DisplayControllerTests: XCTestCase {
         XCTAssertEqual(panel.level, 0)
         XCTAssertTrue(dimmer.restore())
         XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
+    }
+
+    // MARK: Calls that hang
+
+    func testTheCallsRunOneAfterTheOtherInOrder() {
+        let calls = DisplayCalls()
+        var order: [Int] = []
+        for index in 0..<50 { XCTAssertEqual(calls.run("call") { order.append(index); return index }, index) }
+        XCTAssertEqual(order, Array(0..<50))
+        XCTAssertFalse(calls.isOff)
+        XCTAssertEqual(DisplayCalls.limit, 0.2)
+    }
+
+    func testACallThatHangsTurnsTheDisplayFeatureOffAndTheMainThreadGoesOn() {
+        let hanging = Hanging()
+        defer { hanging.release.signal() }
+        let calls = DisplayCalls(limit: 0.05)
+        reader.inputs.externalDisplay = true
+        let controller = DisplayController(
+            reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: [hanging], defaults: defaults, calls: calls),
+            lid: lid, ticker: ticker, settle: delay, clock: { [clock] in clock.now }
+        )
+        kept = controller
+        let started = Date()
+        controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now)
+        XCTAssertLessThan(Date().timeIntervalSince(started), 1, "Not stuck in the call")
+        XCTAssertTrue(calls.isOff)
+        let made = hanging.calls
+        // Nothing more is asked of the displays: no brightness, no sleep.
+        reader.inputs.externalDisplay = false
+        for seconds in stride(from: 2.0, through: 600, by: 2) {
+            controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now + seconds)
+        }
+        controller.update(lidClosed: false, holding: true, enabled: true, fade: true, now: clock.now + 700)
+        controller.willSleep()
+        controller.stop()
+        XCTAssertEqual(hanging.calls, made)
+        XCTAssertEqual(sleeper.requests, 0)
+        XCTAssertNil(lid.onPush, "The sensor is closed")
+        XCTAssertNil(ticker.interval)
+        XCTAssertNotNil(saved, "The value stays saved for the next start")
+        XCTAssertNil(calls.run("read") { 1 })
+    }
+
+    func testADisplaySleepThatHangsTurnsTheFeatureOff() {
+        final class Stuck: DisplaySleeping {
+            let release = DispatchSemaphore(value: 0)
+            func sleepDisplays() -> Bool {
+                release.wait()
+                return true
+            }
+            func wakeDisplays() {}
+        }
+        let stuck = Stuck()
+        defer { stuck.release.signal() }
+        let calls = DisplayCalls(limit: 0.05)
+        let method = Method("first", panel: panel)
+        let controller = DisplayController(
+            reader: reader, sleeper: stuck, dimmer: BuiltinDimmer(methods: [method], defaults: defaults, calls: calls), settle: delay
+        )
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(0))
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(15))
+        XCTAssertTrue(calls.isOff)
+        let reads = method.reads
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(21))
+        XCTAssertEqual(method.reads, reads)
+        XCTAssertEqual(method.sets, [], "Not dimmed either")
     }
 
     // MARK: The controller
