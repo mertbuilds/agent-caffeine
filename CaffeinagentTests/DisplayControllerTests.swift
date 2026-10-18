@@ -800,6 +800,46 @@ final class DisplayControllerTests: XCTestCase {
         XCTAssertEqual(try FileManager.default.contentsOfDirectory(atPath: directory.path).count, 2)
     }
 
+    // MARK: Replays
+
+    /// The lid closes while an agent works: the fade at 30 readings a
+    /// second, the lid switch, then 10 minutes of samples every 2 seconds.
+    /// `panelSleeps` is what macOS does about 5 seconds after the switch.
+    private func replayLidClose(panelSleeps: Bool) -> (fadeWrites: Int, writes: Int, sleeps: Int, readsUnderTheLid: Int) {
+        let watcher = Watcher()
+        let controller = fading(watcher: watcher)
+        tick(110, after: 0.5)
+        let frames = Int(0.6 / LidPoll.fast.interval)
+        for frame in 1...frames { tick((110 - 110 * Double(frame) / Double(frames)).rounded(), after: LidPoll.fast.interval) }
+        let fadeWrites = first.sets.count
+        clock.now += 0.033
+        watcher.onChange?(.lid(closed: true))
+        let reads = first.reads
+        for _ in 0..<300 {
+            clock.now += 2
+            if panelSleeps, clock.now.timeIntervalSince(start) > 6 { reader.inputs.builtinAsleep = true }
+            controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now)
+        }
+        return (fadeWrites, first.sets.count, sleeper.requests, first.reads - reads)
+    }
+
+    /// Before: 27 writes at 120 a second, 2 requests for display sleep by
+    /// the lid switch, and the brightness read twice a second under the lid.
+    func testReplayLidCloseWithAnAgentAtWork() {
+        let counts = replayLidClose(panelSleeps: true)
+        XCTAssertEqual(counts.fadeWrites, 8)
+        XCTAssertEqual(counts.writes, 8, "None under the lid")
+        XCTAssertEqual(counts.sleeps, 0)
+        XCTAssertEqual(counts.readsUnderTheLid, 4, "Only in the seconds before macOS turns the panel off")
+    }
+
+    /// Before: 102 requests for display sleep in 10 minutes.
+    func testReplayLidCloseOnAPanelThatStaysLit() {
+        let counts = replayLidClose(panelSleeps: false)
+        XCTAssertEqual(counts.writes, 8)
+        XCTAssertEqual(counts.sleeps, 2)
+    }
+
     // MARK: Without the fade: at once, not at the next sample
 
     func testTheLidThatClosesIsActedOnWhenTheSwitchSaysSo() {
