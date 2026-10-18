@@ -72,10 +72,25 @@ final class DisplayControllerTests: XCTestCase {
     /// WindowServer that hangs.
     private final class Hanging: BuiltinBrightness {
         let name = "hanging"
-        let release = DispatchSemaphore(value: 0)
+        private let gate = DispatchGroup()
         private let lock = NSLock()
         private var count = 0
+        private var released = false
+        private var written: [Float] = []
         var calls: Int { lock.withLock { count } }
+        /// Every set call, in the order they started.
+        var sets: [Float] { lock.withLock { written } }
+
+        init() { gate.enter() }
+
+        /// The set calls come back, from now on at once.
+        func letGo() {
+            lock.withLock {
+                guard !released else { return }
+                released = true
+                gate.leave()
+            }
+        }
 
         func level() -> Float? {
             lock.withLock { count += 1 }
@@ -83,10 +98,36 @@ final class DisplayControllerTests: XCTestCase {
         }
 
         func set(_ level: Float) -> Bool {
-            lock.withLock { count += 1 }
-            release.wait()
+            lock.withLock {
+                count += 1
+                written.append(level)
+            }
+            gate.wait()
             return true
         }
+    }
+
+    /// Waits until the calls queued before this are done.
+    private func drain(_ calls: DisplayCalls) {
+        let done = expectation(description: "the queue is done")
+        calls.enqueue { done.fulfill() }
+        wait(for: [done], timeout: 5)
+    }
+
+    /// Next to an external display the lid closes, and the write of zero hangs.
+    private func hungDim() -> (DisplayController, Hanging, DisplayCalls) {
+        let hanging = Hanging()
+        let calls = DisplayCalls(limit: 0.05)
+        reader.inputs.externalDisplay = true
+        let controller = DisplayController(
+            reader: reader, sleeper: sleeper, dimmer: BuiltinDimmer(methods: [hanging], defaults: defaults, calls: calls), settle: delay
+        )
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(0))
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(DisplayController.settleTime))
+        XCTAssertTrue(calls.isOff)
+        XCTAssertEqual(hanging.sets, [0])
+        XCTAssertEqual(saved ?? -1, 0.6, accuracy: 0.001)
+        return (controller, hanging, calls)
     }
 
     private final class Watcher: DisplayWatching {
@@ -286,7 +327,7 @@ final class DisplayControllerTests: XCTestCase {
 
     func testACallThatHangsTurnsTheDisplayFeatureOffAndTheMainThreadGoesOn() {
         let hanging = Hanging()
-        defer { hanging.release.signal() }
+        defer { hanging.letGo() }
         let calls = DisplayCalls(limit: 0.05)
         reader.inputs.externalDisplay = true
         let controller = DisplayController(
@@ -311,8 +352,57 @@ final class DisplayControllerTests: XCTestCase {
         XCTAssertEqual(sleeper.requests, 0)
         XCTAssertNil(lid.onPush, "The sensor is closed")
         XCTAssertNil(ticker.interval)
-        XCTAssertNotNil(saved, "The value stays saved for the next start")
+        XCTAssertNotNil(saved, "Nothing is written while the call hangs")
         XCTAssertNil(calls.run("read") { 1 })
+        hanging.letGo()
+        drain(calls)
+        XCTAssertEqual(hanging.sets.last, 0.6, "Once the call returns, the brightness comes back")
+        XCTAssertNil(saved)
+    }
+
+    /// After a call that hung, a panel at zero must not wait for the next
+    /// start: on Apple silicon that is a black screen.
+    func testAfterACallThatHungTheBrightnessIsQueuedWhenTheLidOpens() {
+        let (controller, hanging, calls) = hungDim()
+        defer { hanging.letGo() }
+        let started = Date()
+        controller.update(lidClosed: false, holding: true, enabled: true, now: at(10))
+        controller.update(lidClosed: false, holding: true, enabled: true, now: at(12))
+        controller.willSleep()
+        controller.stop()
+        XCTAssertLessThan(Date().timeIntervalSince(started), 0.5, "The main thread does not wait")
+        XCTAssertEqual(hanging.sets, [0], "Not before the hung call returns")
+        XCTAssertNotNil(saved)
+        hanging.letGo()
+        drain(calls)
+        XCTAssertEqual(hanging.sets, [0, 0.6], "One write")
+        XCTAssertNil(saved)
+    }
+
+    func testAfterACallThatHungTheBrightnessIsQueuedUnderTheShutLidOnlyAtSleepOrQuit() {
+        let (controller, hanging, calls) = hungDim()
+        defer { hanging.letGo() }
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(10))
+        controller.update(holding: false, now: at(11))
+        hanging.letGo()
+        drain(calls)
+        XCTAssertEqual(hanging.sets, [0], "Under the shut lid the display stays dark")
+        controller.willSleep()
+        drain(calls)
+        XCTAssertEqual(hanging.sets, [0, 0.6])
+        XCTAssertNil(saved)
+        controller.stop()
+        drain(calls)
+        XCTAssertEqual(hanging.sets, [0, 0.6])
+    }
+
+    func testAfterACallThatHungQuitQueuesTheBrightness() {
+        let (controller, hanging, calls) = hungDim()
+        controller.stop()
+        hanging.letGo()
+        drain(calls)
+        XCTAssertEqual(hanging.sets, [0, 0.6])
+        XCTAssertNil(saved)
     }
 
     func testADisplaySleepThatHangsTurnsTheFeatureOff() {

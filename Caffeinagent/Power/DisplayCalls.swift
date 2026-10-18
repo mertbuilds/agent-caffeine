@@ -38,6 +38,13 @@ final class DisplayCalls {
         return result.value
     }
 
+    /// Queues the work behind the calls before it and does not wait for it.
+    /// Also when the feature is off: after a call that hung, the work runs
+    /// once that call returns.
+    func enqueue(_ work: @escaping () -> Void) {
+        queue.async(execute: work)
+    }
+
     /// Written on the queue, read after the semaphore.
     private final class Box<T>: @unchecked Sendable {
         var value: T?

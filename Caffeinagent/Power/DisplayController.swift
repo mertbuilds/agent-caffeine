@@ -203,6 +203,24 @@ final class BuiltinDimmer {
         log.error("the brightness of the built-in display could not be put back")
         return false
     }
+
+    /// One write is queued at most. Set on the main thread.
+    private var restoreQueued = false
+
+    /// After a call that hung: one write of the saved value is queued
+    /// behind it. It runs once the hung call returns, and the main thread
+    /// does not wait for it. A panel left at zero is a black screen on Apple
+    /// silicon, so the value must not wait for the next start.
+    func restoreLater() {
+        guard calls.isOff, !restoreQueued, let wanted = saved, let method = trusted ?? ordered.first else { return }
+        restoreQueued = true
+        log.notice("a display call hung: the brightness is put back once it returns")
+        calls.enqueue { [defaults, log] in
+            let done = method.set(wanted)
+            log.notice("\(method.name, privacy: .public) set \(String(format: "%.3f", wanted), privacy: .public): \(done ? "done" : "failed", privacy: .public)")
+            if done { defaults.removeObject(forKey: Self.previousKey) }
+        }
+    }
 }
 
 /// Runs `DisplayRules` on every sample and at once when the lid changes,
@@ -292,9 +310,11 @@ final class DisplayController {
         if let lidSwitch, now < lidSwitch.at { lidClosed = lidSwitch.closed }
         wanted = Wanted(lidClosed: lidClosed, holding: holding, enabled: enabled, fade: wantsFade)
         displays = nil
-        // A call that hung: nothing more is asked of the displays.
+        // A call that hung: nothing more is asked of the displays. The
+        // brightness under an open lid is queued behind the hung call.
         if dimmer.calls.isOff {
             disarm()
+            if !lidClosed { dimmer.restoreLater() }
             return
         }
         // The rules run when the displays settled.
@@ -355,7 +375,9 @@ final class DisplayController {
         memory = DisplayMemory()
         slept = false
         // A brightness that stays saved is put back at the next update.
-        if dimmer.isDimmed, !reconfiguring {
+        if dimmer.calls.isOff {
+            dimmer.restoreLater()
+        } else if dimmer.isDimmed, !reconfiguring {
             log.notice("the Mac goes to sleep: the brightness is put back")
             memory.dimmed = !dimmer.restore()
         }
@@ -373,7 +395,11 @@ final class DisplayController {
         disarm()
         fade = LidDimMemory()
         // A brightness that stays saved is put back at the next start.
-        if dimmer.isDimmed, !reconfiguring { memory.dimmed = !dimmer.restore() }
+        if dimmer.calls.isOff {
+            dimmer.restoreLater()
+        } else if dimmer.isDimmed, !reconfiguring {
+            memory.dimmed = !dimmer.restore()
+        }
     }
 
     // MARK: The lid angle
