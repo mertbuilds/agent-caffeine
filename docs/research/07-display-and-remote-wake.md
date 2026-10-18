@@ -168,6 +168,43 @@ Test plan (the owner, by hand, about 10 minutes plus one optional overnight run)
 8. Optional, the number that matters: note `ioreg -r -c AppleSmartBattery | grep AppleRawCurrentCapacity`, leave the Mac for 2 hours with the lid closed and the hold active and no agent working, then read the value again. (Difference in mAh) x 11.5 V / 1000 / hours = watts. Repeat one time with Low Power Mode on (System Settings > Battery) to see what that switch is worth.
 9. If step 6 fails (the panel is lit under the lid), tell me. Then the feature is real, and the API is `IORequestIdle` (true display sleep), with `DisplayServicesSetBrightness(0)` as the fallback.
 
+## 1.8 2026-10-18: a black screen after the lid closed, and the new rules
+
+The report: a user closed the lid, and later connected two monitors. The Mac then showed a black screen with a spinning cursor until a hard restart. That is a WindowServer or display hang. It is not proven that Agent Caffeine caused it. The display features shipped after 1.7 (the rules in `DisplayRules.swift` and the fade in `LidDimming.swift`), and a look at our lid-close path found that we forced display sleep and wrote the brightness at the moments with the most risk.
+
+Findings, from the code before this change (version 1.1.0 (26)) [P, our code; I for the effect on WindowServer]:
+
+- At the lid switch we asked for display sleep twice within about 33 ms: the fade (`set(0)` and `IORequestIdle` at 3 degrees) and the rules again at the lid notification. Then every 5 seconds with no cap while `CGDisplayIsAsleep` read 0. A replay of a panel that stays lit made 102 requests in 10 minutes. Section 1.1 shows that macOS turns the panel off by itself about 5 seconds after the lid closes, so the request is not needed.
+- A public case [C]: SidePulse issue 51 (September 2026, M4 Pro and M4 Air, macOS 26.5 and 26.6). An app that forced the panel power during a lid close with sleep prevention ended in a WindowServer watchdog kill: "display 1 has become stuck".
+- The display reconfiguration callback ran the whole update in the callback, for each display in each change. It could dim, put back the brightness and put the displays to sleep there. On an unplug under a shut lid it called `IORequestIdle` in the callback. The header of `CGDisplayRegisterReconfigurationCallback` says that a callback should not change the setup of the displays [P, SDK header].
+- `BuiltinDisplay.id()` kept the last id it saw, so reads and writes went to a built-in display that was offline under the shut lid next to an external display. The `CoreDisplay` fallback always reported success, and does nothing on Apple silicon.
+- While the lid stayed shut, the sensor and `DisplayServicesGetBrightness` were asked twice a second for the whole hold. On open the fade wrote the brightness 120 times a second while macOS powered the panel on.
+- All of it ran on the main thread with no time limit on the private calls. One call that blocks also blocks the samples and the heartbeats to the helper.
+- The decisions were logged at `info` level, which a hard restart loses, and the trace of a fade was written only when the fade ended.
+
+The new rules [P, our code]:
+
+1. No display sleep at the lid switch. The fade asks for none. The rules ask only when the built-in display still reads on 15 seconds after the lid closed and 15 seconds after the displays last changed, at most once per 5 seconds and twice per closed lid. After that only the brightness goes to zero.
+2. A change of the displays is not acted on in its callback. From its first word no brightness and no sleep call is made. The rules run once, 2 seconds after the last "done" (10 seconds after a "begin" with no "done").
+3. A built-in display that is not in `CGGetOnlineDisplayList` has no id, and nothing reads or sets it. `CoreDisplay` is gone. `IODisplay` is used only on Intel.
+4. The lid switch ends the fade: the sensor is closed, and nothing is read or written while the lid stays shut. When the lid opens, the brightness comes back in one step once the switch says open and the built-in display is online and awake. A restore by the rules also waits for that.
+5. The fade reads and writes 30 times a second, not 120.
+6. The brightness calls, `IORequestIdle` and the `pmset` fallback run on a serial queue of their own. A call that takes longer than 200 ms turns the display feature off for the run of the app, and logs an error. The main thread waits for that call for 200 ms at most, once.
+7. The decisions, the lid switch, a change of the displays and every call result are logged at `notice` level, which is kept on disk. The trace file is written at least once per second while a fade runs.
+
+The same replay before and after (`DisplayControllerTests`, a lid that closes from 110 degrees in 0.6 seconds while an agent works, then 10 minutes of samples every 2 seconds):
+
+| | Before | After |
+|---|---|---|
+| Brightness writes for the close | 27 | 8 |
+| Brightness writes under the shut lid | 0 | 0 |
+| Display sleep requests in 10 minutes, panel off after 5 seconds | 2, both by the lid switch | 0 |
+| Display sleep requests in 10 minutes, panel stays lit | 102 | 2 |
+| Brightness reads under the shut lid | 2 per second | none after macOS turns the panel off |
+| Calls in the callback of a display change | the whole update | 0 |
+
+What is still not known: whether our calls caused the reported hang. The next report has the log lines and the trace for that.
+
 ---
 
 # FEATURE 2 - wake the Mac by a message to the agent

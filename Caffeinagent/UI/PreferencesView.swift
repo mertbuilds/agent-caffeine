@@ -691,7 +691,7 @@ struct LidClosedPreferences: View {
                 if hasLidAngleSensor {
                     Toggle("Dim the display as the lid closes", isOn: $settings.dimAsLidCloses)
                         .disabled(!settings.displayOffLidClosed)
-                    Text("The built-in display gets darker from 45 degrees and is off when the lid is closed. It gets bright again the same way when you open the lid. A lid that rests half open stays bright.")
+                    Text("The built-in display gets darker from 45 degrees and is off when the lid is closed. When you open the lid, your brightness comes back. A lid that rests half open stays bright.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
