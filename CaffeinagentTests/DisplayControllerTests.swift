@@ -337,6 +337,7 @@ final class DisplayControllerTests: XCTestCase {
         kept = controller
         let started = Date()
         controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now)
+        controller.update(lidClosed: true, holding: true, enabled: true, fade: true, now: clock.now + DisplayController.settleTime)
         XCTAssertLessThan(Date().timeIntervalSince(started), 1, "Not stuck in the call")
         XCTAssertTrue(calls.isOff)
         let made = hanging.calls
@@ -462,6 +463,8 @@ final class DisplayControllerTests: XCTestCase {
         reader.inputs.externalDisplay = true
         let controller = controller([Method("first", panel: panel)])
         controller.update(lidClosed: true, holding: true, enabled: true, now: at(0))
+        XCTAssertEqual(panel.level, 0.6, "Not while macOS changes the displays for the closed lid")
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(DisplayController.settleTime))
         XCTAssertEqual(sleeper.requests, 0)
         XCTAssertEqual(panel.level, 0)
         XCTAssertEqual(saved ?? -1, 0.6, accuracy: 0.001)
@@ -488,6 +491,7 @@ final class DisplayControllerTests: XCTestCase {
         controller.start(onChange: {})
         XCTAssertNotNil(watcher.onChange)
         controller.update(lidClosed: true, holding: true, enabled: true, now: at(0))
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(2))
         XCTAssertEqual(panel.level, 0)
         controller.stop()
         XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
@@ -577,6 +581,7 @@ final class DisplayControllerTests: XCTestCase {
         let controller = controller([Method("first", panel: panel)], watcher: watcher)
         controller.start(onChange: {})
         controller.update(lidClosed: true, holding: true, enabled: true, now: at(0))
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(2))
         XCTAssertEqual(panel.level, 0)
         controller.willSleep()
         XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
@@ -586,6 +591,7 @@ final class DisplayControllerTests: XCTestCase {
         // The lid opens with no word of a wake, and closes again.
         watcher.onChange?(.lid(closed: false))
         controller.update(lidClosed: true, holding: true, enabled: true, now: at(20))
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(22))
         XCTAssertEqual(panel.level, 0)
     }
 
@@ -636,6 +642,7 @@ final class DisplayControllerTests: XCTestCase {
         let dims = Method("dims", panel: panel)
         let controller = controller([dims])
         controller.update(lidClosed: true, holding: true, enabled: true, now: at(0))
+        controller.update(lidClosed: true, holding: true, enabled: true, now: at(2))
         XCTAssertEqual(panel.level, 0)
         // The display is away for a moment while the lid opens.
         let blocked = DisplayController(
@@ -959,7 +966,7 @@ final class DisplayControllerTests: XCTestCase {
         XCTAssertEqual(counts.fadeWrites, 8)
         XCTAssertEqual(counts.writes, 8, "None under the lid")
         XCTAssertEqual(counts.sleeps, 0)
-        XCTAssertEqual(counts.readsUnderTheLid, 4, "Only in the seconds before macOS turns the panel off")
+        XCTAssertEqual(counts.readsUnderTheLid, 0, "macOS turns the panel off within the 15 seconds")
     }
 
     /// Before: 102 requests for display sleep in 10 minutes.
@@ -1072,7 +1079,12 @@ final class DisplayControllerTests: XCTestCase {
         controller.start(onChange: {})
         controller.update(lidClosed: false, holding: true, enabled: true, now: at(0))
         watcher.onChange?(.lid(closed: true))
-        XCTAssertEqual(panel.level, 0)
+        XCTAssertEqual(panel.level, 0.6, "No dim in the handler of the lid switch")
+        // macOS changes the displays for the closed lid.
+        watcher.onChange?(.displaysBegin)
+        watcher.onChange?(.displaysDone)
+        delay.fire()
+        XCTAssertEqual(panel.level, 0, "Once they settled")
         watcher.onChange?(.lid(closed: false))
         XCTAssertEqual(panel.level, 0.6, accuracy: 0.001)
         XCTAssertNil(saved)

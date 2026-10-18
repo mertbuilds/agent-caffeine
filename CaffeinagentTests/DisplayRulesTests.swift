@@ -162,10 +162,19 @@ final class DisplayRulesTests: XCTestCase {
     // MARK: With an external display
 
     func testOnlyTheBuiltInDisplayIsDimmedNextToAnExternalDisplay() {
-        let story = [0, 2, 5, 10].map { (TimeInterval($0), closed(external: true)) }
+        let story = [0, 1.9, 2, 5, 7, 12].map { (TimeInterval($0), closed(external: true)) }
         let (actions, _) = run(story)
-        XCTAssertEqual(actions, [["dim"], [], ["dim"], ["dim"]])
+        XCTAssertEqual(actions, [[], [], ["dim"], [], ["dim"], ["dim"]], "Not before the displays settled after the lid closed")
         XCTAssertFalse(actions.joined().contains("sleep"), "Display sleep would take the display the user works on")
+        XCTAssertEqual(DisplayRules.settleTime, DisplayController.settleTime)
+    }
+
+    func testNextToAnExternalDisplayTheBuiltInOneIsDimmedOnceTheDisplaysSettledAfterTheLidClosed() {
+        var memory = shut
+        memory.displaysChangedAt = at(-5)
+        XCTAssertEqual(run([(0.5, closed(external: true))], memory: memory).0, [[]], "A change from before the lid closed does not count")
+        memory.displaysChangedAt = at(0.5)
+        XCTAssertEqual(run([(0.5, closed(external: true))], memory: memory).0, [["dim"]])
     }
 
     func testTheBuiltInDisplayThatIsOffTheListIsNeverDimmed() {
@@ -175,9 +184,9 @@ final class DisplayRulesTests: XCTestCase {
     }
 
     func testDimmingStopsAfterThreeTriesThatDidNotWork() {
-        var memory = DisplayMemory()
+        var memory = shut
         var asked: [[String]] = []
-        for seconds in stride(from: 0, through: 30, by: 5) {
+        for seconds in stride(from: 2, through: 32, by: 5) {
             let (actions, next) = DisplayRules.decide(closed(external: true), enabled: true, memory: memory, now: at(TimeInterval(seconds)))
             memory = next
             // What the controller does when the dimmer says no.
@@ -189,7 +198,8 @@ final class DisplayRulesTests: XCTestCase {
         var open = closed(external: true)
         open.lidClosed = false
         memory = DisplayRules.decide(open, enabled: true, memory: memory, now: at(40)).1
-        XCTAssertEqual(kinds(DisplayRules.decide(closed(external: true), enabled: true, memory: memory, now: at(41)).0), ["dim"])
+        memory = DisplayRules.decide(closed(external: true), enabled: true, memory: memory, now: at(41)).1
+        XCTAssertEqual(kinds(DisplayRules.decide(closed(external: true), enabled: true, memory: memory, now: at(43)).0), ["dim"])
     }
 
     // MARK: Putting the brightness back

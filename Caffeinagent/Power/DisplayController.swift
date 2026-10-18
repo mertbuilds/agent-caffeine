@@ -230,7 +230,7 @@ final class BuiltinDimmer {
 /// after macOS said the last display is done.
 @MainActor
 final class DisplayController {
-    static let settleTime: TimeInterval = 2
+    static let settleTime = DisplayRules.settleTime
     /// A change that macOS never says is done counts as done after this.
     static let settleLimit: TimeInterval = 10
 
@@ -336,8 +336,12 @@ final class DisplayController {
         var inputs = reader.read()
         inputs.lidClosed = lidClosed
         inputs.holding = holding
-        // A panel that is off the list or sleeps is not asked.
-        if inputs.builtinOnline, !inputs.builtinAsleep { inputs.brightness = dimmer.level() }
+        // A panel that is off the list or sleeps is not asked. Nor is one
+        // under a lid that just closed with no external display: macOS turns
+        // it off by itself, and the rules ask for nothing before the grace.
+        let closedSince = memory.lidClosedAt.map { now.timeIntervalSince($0) } ?? 0
+        let inGrace = lidClosed && !inputs.externalDisplay && closedSince >= 0 && closedSince < DisplayRules.sleepGrace
+        if inputs.builtinOnline, !inputs.builtinAsleep, !inGrace { inputs.brightness = dimmer.level() }
         let (actions, next) = DisplayRules.decide(inputs, enabled: enabled, memory: memory, now: now)
         memory = next
         for action in actions {

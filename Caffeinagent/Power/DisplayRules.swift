@@ -61,7 +61,7 @@ enum DisplayAction: Equatable {
 /// closed lid. When sleep does not hold, the brightness goes to zero as
 /// well. With an external display, display sleep would take the display
 /// the user works on, so only the brightness of the built-in one goes to
-/// zero.
+/// zero, once the displays settled after the lid closed.
 enum DisplayRules {
     /// The same request is not made more often than this.
     static let retryAfter: TimeInterval = 5
@@ -79,6 +79,11 @@ enum DisplayRules {
     static let sleepGrace: TimeInterval = 15
     /// At most this many requests for display sleep per closed lid.
     static let sleepRequestsPerClose = 2
+    /// How long the displays get to settle after macOS said the last one is
+    /// done. Next to an external display the built-in one is dimmed only
+    /// this long after the lid closed, or once the displays settled after
+    /// it: not while macOS changes the displays for the closed lid.
+    static let settleTime: TimeInterval = 2
 
     static func decide(_ inputs: DisplayInputs, enabled: Bool, memory: DisplayMemory, now: Date) -> ([DisplayAction], DisplayMemory) {
         var memory = memory
@@ -110,7 +115,8 @@ enum DisplayRules {
         }
 
         if inputs.externalDisplay {
-            if mayDim { dim("the lid is closed and the built-in display is lit next to an external display") }
+            let settled = passed(settleTime, since: lidClosedAt, now: now) || memory.displaysChangedAt.map { $0 >= lidClosedAt } ?? false
+            if mayDim, settled { dim("the lid is closed and the built-in display is lit next to an external display") }
             return (actions, memory)
         }
         guard awake else {
