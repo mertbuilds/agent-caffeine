@@ -829,6 +829,38 @@ final class DisplayControllerTests: XCTestCase {
         XCTAssertEqual(method.sets, [])
     }
 
+    /// The lid closes, and a sample from before the switch says it is open.
+    /// Its time is earlier than the close: none of the grace has passed.
+    func testASampleFromBeforeTheLidSwitchDoesNotAskForDisplaySleepAtTheClose() {
+        let watcher = Watcher()
+        let method = Method("first", panel: panel)
+        let controller = controller([method], watcher: watcher)
+        controller.start(onChange: {})
+        controller.update(lidClosed: false, holding: true, enabled: true, now: clock.now)
+        clock.now += 1
+        watcher.onChange?(.lid(closed: true))
+        controller.update(lidClosed: false, holding: true, enabled: true, now: clock.now - 0.05)
+        XCTAssertEqual(sleeper.requests, 0, "macOS turns the panel off by itself")
+        XCTAssertEqual(method.reads, 0, "The panel under the lid that just closed is not read")
+    }
+
+    /// The same next to an external display: the built-in one is not dimmed
+    /// before the displays settled.
+    func testASampleFromBeforeTheLidSwitchDoesNotDimBeforeTheSettleNextToAnExternalDisplay() {
+        reader.inputs.externalDisplay = true
+        let watcher = Watcher()
+        let method = Method("first", panel: panel)
+        let controller = controller([method], watcher: watcher)
+        controller.start(onChange: {})
+        controller.update(lidClosed: false, holding: true, enabled: true, now: clock.now)
+        clock.now += 1
+        watcher.onChange?(.lid(closed: true))
+        controller.update(lidClosed: false, holding: true, enabled: true, now: clock.now - 0.05)
+        XCTAssertEqual(method.sets, [])
+        XCTAssertEqual(panel.level, 0.6)
+        XCTAssertNil(saved)
+    }
+
     func testAHoldThatEndsUnderTheShutLidGivesTheBrightnessBackWhenTheLidOpens() {
         let watcher = Watcher()
         let controller = fading(watcher: watcher)

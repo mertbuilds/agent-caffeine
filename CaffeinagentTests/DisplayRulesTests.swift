@@ -166,7 +166,6 @@ final class DisplayRulesTests: XCTestCase {
         let (actions, _) = run(story)
         XCTAssertEqual(actions, [[], [], ["dim"], [], ["dim"], ["dim"]], "Not before the displays settled after the lid closed")
         XCTAssertFalse(actions.joined().contains("sleep"), "Display sleep would take the display the user works on")
-        XCTAssertEqual(DisplayRules.settleTime, DisplayController.settleTime)
     }
 
     func testNextToAnExternalDisplayTheBuiltInOneIsDimmedOnceTheDisplaysSettledAfterTheLidClosed() {

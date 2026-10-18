@@ -313,7 +313,13 @@ final class DisplayController {
     /// `fade` is the setting "Dim the display as the lid closes".
     func update(lidClosed: Bool, holding: Bool, enabled: Bool, fade wantsFade: Bool = false, now: Date) {
         var lidClosed = lidClosed
-        if let lidSwitch, now < lidSwitch.at { lidClosed = lidSwitch.closed }
+        var now = now
+        // A late sample takes the lid and the time of the switch, so no
+        // time before the switch counts as passed under the lid.
+        if let lidSwitch, now < lidSwitch.at {
+            lidClosed = lidSwitch.closed
+            now = lidSwitch.at
+        }
         wanted = Wanted(lidClosed: lidClosed, holding: holding, enabled: enabled, fade: wantsFade)
         displays = nil
         // A call that hung: nothing more is asked of the displays. The
