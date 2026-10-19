@@ -1,6 +1,6 @@
 # Trademarks
 
-The source code of this site is under the AGPL (see [LICENSE](LICENSE)). The name Agent Caffeine, the app icon and the robot are not.
+The source code of this site is under the AGPL (see [LICENSE](../LICENSE)). The name Agent Caffeine, the app icon and the robot are not.
 
 - You may use, change and share the code as the license says.
 - A changed version that you give to other people must have another name and another icon. It must not use the robot.

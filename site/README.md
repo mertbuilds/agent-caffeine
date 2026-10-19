@@ -1,4 +1,4 @@
-# caffeinagent-site
+# Agent Caffeine website
 
 The website of Agent Caffeine at [caffeinagent.com](https://caffeinagent.com). Agent Caffeine is a free and open source macOS menu bar app that keeps a Mac awake while AI coding agents work. The app's own code is at [github.com/mertbuilds/agent-caffeine](https://github.com/mertbuilds/agent-caffeine).
 
@@ -68,7 +68,7 @@ The site is set in Suisse Intl, a licensed typeface. Its files are not in this r
 
 Copyright (C) 2026 Mert Duzgun.
 
-The code of this site is under the GNU Affero General Public License, version 3 (`AGPL-3.0-only`). See [LICENSE](LICENSE).
+The code of this site is under the GNU Affero General Public License, version 3 (`AGPL-3.0-only`). See [LICENSE](../LICENSE).
 
 Three things are not under that license:
 
