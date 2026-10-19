@@ -24,6 +24,6 @@ export const SUPPORT_URL = supportUrl.startsWith("https://") && URL.canParse(sup
 
 export const CONTACT_EMAIL = "hi@caffeinagent.com";
 
-export const PRIVACY_UPDATED = "2026-10-12";
+export const PRIVACY_UPDATED = "2026-10-19";
 
-export const TERMS_UPDATED = "2026-10-12";
+export const TERMS_UPDATED = "2026-10-19";

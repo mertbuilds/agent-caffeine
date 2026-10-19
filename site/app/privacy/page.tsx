@@ -52,8 +52,10 @@ export default function Privacy() {
       <p>
         The app is free. If you choose to support it, you sponsor me on{" "}
         <a href="https://github.com/sponsors/mertbuilds">GitHub Sponsors</a>. GitHub processes the
-        sponsorship. I see your GitHub username and the amount. I see your email address only if
-        you choose to share it in your sponsor settings on GitHub. I never see your card number.
+        sponsorship. I see your GitHub username, your public profile and the amount. GitHub does not
+        give me your email address. If you choose to get email updates from me, GitHub sends them
+        without showing me your address. Unless you make the sponsorship private, GitHub also shows
+        your username on my sponsors page. I never see your card number.
         GitHub&apos;s{" "}
         <a href="https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement">
           privacy statement
