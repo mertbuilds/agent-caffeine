@@ -31,14 +31,14 @@ const TEXT = `# Agent Caffeine
 - Versions before 1.1.0 were sold. From version 1.1.0 the app is free and needs no key, and every earlier payment is refunded.
 - The app updates itself: it checks caffeinagent.com for updates and installs them when you agree.
 - No telemetry and no analytics. It reads the process list, the state and session files of Claude Code, Codex and Cursor in \`~/.claude\`, \`~/.codex\` and \`~/.cursor/projects\`, and the battery level and lid angle, all on your own Mac. Its only network call is the update check to caffeinagent.com. Nothing about you or your agents leaves the Mac.
-- Made by Mert Duzgun, an individual based in Antalya, Türkiye. Support is voluntary, at an amount you choose: ${SITE_URL}/support. GitHub Sponsors handles it. Contact: ${CONTACT_EMAIL}.
+- Made by Mert Duzgun, an individual based in Antalya, Türkiye. Support is voluntary, at an amount you choose: ${SITE_URL}/#support. GitHub Sponsors handles it. Contact: ${CONTACT_EMAIL}.
 
 ## Links
 
 - [Home](${SITE_URL}/): examples of long jobs, the agents it finds, features, a demo, questions
 - [Compare](${SITE_URL}/compare): Agent Caffeine next to Adrafinil, Hold My Lid, LidRun, Clamshell and Amphetamine, with the price first and a source for each tool
 - [Source code](${REPO_URL}): the app's code on GitHub, under the AGPL-3.0
-- [Support](${SITE_URL}/support): pay what you want to support the work
+- [Support](${SITE_URL}/#support): pay what you want to support the work
 - [Privacy](${SITE_URL}/privacy): what the app and the website collect
 - [Terms](${SITE_URL}/terms): the license, support payments, no warranty and liability
 

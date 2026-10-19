@@ -124,8 +124,8 @@ const questions: FaqItem[] = [
     question: "How can I support it?",
     answer: (
       <>
-        On the <a href="/support">support page</a> you can pay an amount you choose. It is
-        voluntary, and the app is the same for everyone.
+        In the <a href="/#support">support section</a> of this page you can pay an amount you
+        choose. It is voluntary, and the app is the same for everyone.
       </>
     ),
   },

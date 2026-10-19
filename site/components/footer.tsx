@@ -85,7 +85,7 @@ export async function Footer() {
             </a>
           </li>
           <li>
-            <Link href="/support" className={LINK}>
+            <Link href="/#support" className={LINK}>
               Support
             </Link>
           </li>

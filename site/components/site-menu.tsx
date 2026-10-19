@@ -9,7 +9,7 @@ import { distance, duration, easing, scale } from "@/lib/motion";
 import type { Release } from "@/lib/release";
 import { useLessMotion } from "@/lib/use-less-motion";
 
-export type MenuLink = { current: boolean; href: string; label: string };
+export type MenuLink = { current: boolean; href: string; label: string; onClick?: () => void };
 
 /** How far the page may run under an open menu before the menu closes, in pixels. */
 const SCROLL_CLOSE = 24;
@@ -147,7 +147,10 @@ export function SiteMenu({
                   key={link.href}
                   href={link.href}
                   aria-current={link.current ? "location" : undefined}
-                  onClick={() => close(true)}
+                  onClick={() => {
+                    link.onClick?.();
+                    close(true);
+                  }}
                   className={`menu-item-in ${ROW}`}
                   style={{ animationDelay: `${place * duration.stagger}s` }}
                 >

@@ -26,8 +26,8 @@ export default function Terms() {
 
       <h2>Support</h2>
       <p>
-        You can support the project with a payment of an amount you choose, on the{" "}
-        <a href="/support">support page</a>. It is voluntary and gives you nothing extra: the app is
+        You can support the project with a payment of an amount you choose, in the{" "}
+        <a href="/#support">support section</a> of the home page. It is voluntary and gives you nothing extra: the app is
         the same for everyone. <a href="https://github.com/sponsors/mertbuilds">GitHub Sponsors</a>{" "}
         handles it, one-time or monthly.
       </p>

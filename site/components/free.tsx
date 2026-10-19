@@ -59,7 +59,7 @@ export async function Free() {
                   Source code
                 </a>
               </div>
-              <Link href="/support" className="text-sm focus-visible:outline-white">
+              <Link href="/#support" className="text-sm focus-visible:outline-white">
                 Support the project
               </Link>
             </div>

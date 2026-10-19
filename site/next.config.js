@@ -14,6 +14,10 @@ module.exports = {
   // The portless dev URLs; without them Next refuses the dev client and the page never hydrates.
   allowedDevOrigins: ["caffeinagent.local", "caffeinagent.localhost"],
   turbopack: hasFonts ? {} : { resolveAlias: { "@/lib/fonts": "./lib/fonts-fallback.ts" } },
+  // The app, the README and old links open `/support`, which is now a section of the home page.
+  async redirects() {
+    return [{ source: "/support", destination: "/#support", permanent: true }];
+  },
   async rewrites() {
     if (!macFilesOrigin) return [];
     return [{ source: "/mac/:path*", destination: `${macFilesOrigin}/mac/:path*` }];

@@ -3,9 +3,28 @@
 import { useSyncExternalStore, type ReactNode } from "react";
 import { downloadLink } from "@/lib/download";
 import { isMacDevice, openSendToMac } from "@/lib/send-to-mac";
-import { rememberedUtm, track, type Placement } from "@/lib/track";
+import { rememberedUtm, track, type Placement, type SupportPlacement } from "@/lib/track";
 
 export type { Placement };
+
+/** A link to the support section or to GitHub Sponsors, counted in the browser with where it sits. */
+export function SupportCta({
+  href,
+  placement,
+  className,
+  children,
+}: {
+  href: string;
+  placement: SupportPlacement;
+  className?: string;
+  children: ReactNode;
+}) {
+  return (
+    <a href={href} onClick={() => track("support_click", { placement })} className={className}>
+      {children}
+    </a>
+  );
+}
 
 const subscribe = () => () => {};
 

@@ -11,6 +11,7 @@ import { SiteMenu } from "@/components/site-menu";
 import { morph } from "@/lib/morph";
 import type { Release } from "@/lib/release";
 import { REPO_URL } from "@/lib/site";
+import { track } from "@/lib/track";
 
 /**
  * How far down the page the pill takes over, and how far back up the open
@@ -27,6 +28,7 @@ const SECTIONS = [
   { hash: "#features", ids: ["features", "small-things"], label: "Features", name: "header-features" },
   { hash: "#demo", ids: ["demo"], label: "Demo", name: "header-demo" },
   { hash: "#faq", ids: ["faq"], label: "FAQ", name: "header-faq" },
+  { hash: "#support", ids: ["support"], label: "Support", name: "header-support" },
 ] as const;
 
 /** The line across the window that a section must lie on to be the one in view: 30% of the way down. */
@@ -61,6 +63,7 @@ export function SiteHeader({ release }: { release: Release | null }) {
     href: `/${section.hash}`,
     label: section.label,
     name: section.name,
+    onClick: section.hash === "#support" ? () => track("support_click", { placement: "header" }) : undefined,
   }));
 
   // One observer for every section. Between two sections the last one stays
@@ -162,6 +165,7 @@ export function SiteHeader({ release }: { release: Release | null }) {
               key={link.name}
               href={link.href}
               aria-current={link.current ? "location" : undefined}
+              onClick={link.onClick}
               {...morphName(link.name)}
               className="whitespace-nowrap text-sm text-muted no-underline transition-colors duration-quick ease-[ease-out] hover:text-fg aria-[current=location]:text-fg motion-reduce:transition-none"
             >

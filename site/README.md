@@ -25,7 +25,7 @@ All of them are optional. None has a value in this repository.
 | --- | --- |
 | `MAC_FILES_ORIGIN` | The origin that serves the app's release files under `/mac/` (see Downloads). |
 | `NEXT_PUBLIC_FAKE_RELEASE` | `1` makes the dev server show a sample release. A production build ignores it. |
-| `NEXT_PUBLIC_SUPPORT_URL` | The GitHub Sponsors page that the button on `/support` opens. Without it the page says that support is not set up yet. |
+| `NEXT_PUBLIC_SUPPORT_URL` | The GitHub Sponsors page that the button of the support section on the home page opens (`/support` redirects there). Without it the section says that support is not set up yet. |
 | `NEXT_PUBLIC_OPENPANEL_CLIENT_ID` | The OpenPanel project that counts page views and downloads. |
 | `OPENPANEL_CLIENT_SECRET` | Lets the server count a download. Server only: never give it a `NEXT_PUBLIC_` name. |
 | `FONT_BUCKET`, `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Where `scripts/fetch-fonts.sh` gets the licensed fonts from (see Fonts). |
