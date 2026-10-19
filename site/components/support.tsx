@@ -97,7 +97,7 @@ function Cup({ play }: { play: boolean }) {
           <path d={d} key={d} opacity={0.6} pathLength={1} style={drawn(play, 900, RISE + index * WISP_NEXT, "var(--ease-smooth-out)")} />
         ))}
       </g>
-      <RobotHead scale={1.3} width={LINE} x={100 - 10.5 * 1.3} y={132} />
+      <RobotHead scale={1.3} width={LINE} x={100 - 10.5 * 1.3} y={138} />
       <g transform={`translate(${HEART.x} ${HEART.y}) scale(${HEART.scale})`}>
         <g
           style={{
