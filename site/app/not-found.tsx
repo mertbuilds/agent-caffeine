@@ -1,17 +1,12 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import type { CSSProperties } from "react";
 import { PILL, SIZES } from "@/components/pill";
 import { Footer } from "@/components/footer";
 
 export const metadata: Metadata = { title: "Page not found · Agent Caffeine" };
 
-/** Each z's place and size when nothing moves: a stair that rises and fades off the robot. */
-const SNORES = [
-  { still: "translate(3px, -5px) scale(0.7)", stillOpacity: 0.9 },
-  { still: "translate(13px, -21px) scale(0.95)", stillOpacity: 0.65 },
-  { still: "translate(24px, -37px) scale(1.2)", stillOpacity: 0.4 },
-];
+/** How many z letters are on their way at once. Their still poses are in app/globals.css. */
+const SNORES = 3;
 const SNORE_PERIOD = 7.2;
 
 /** The menu bar icon's head (components/menu-icon.tsx) drawn as a line at five times its size, its eyes shut. */
@@ -26,16 +21,12 @@ function SleepingRobot() {
         <path d="M50.5 89q7 6 14 0M79.5 89q7 6 14 0" />
       </g>
       <g className="text-muted" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.5">
-        {SNORES.map((snore, index) => {
-          const delay = `${-index * (SNORE_PERIOD / SNORES.length)}s`;
+        {Array.from({ length: SNORES }, (_, index) => {
+          const delay = `${-index * (SNORE_PERIOD / SNORES)}s`;
           return (
-            <g key={index} transform="translate(118 50)">
+            <g className={`snore-still-${index}`} key={index} transform="translate(118 50)">
               <g className="snore-sway" style={{ animationDelay: delay }}>
-                <path
-                  className="snore-rise"
-                  d="M-5-5h10l-10 10h10"
-                  style={{ animationDelay: delay, "--snore-still": snore.still, "--snore-still-opacity": snore.stillOpacity } as CSSProperties}
-                />
+                <path className="snore-rise" d="M-5-5h10l-10 10h10" style={{ animationDelay: delay }} />
               </g>
             </g>
           );

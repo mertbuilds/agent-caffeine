@@ -526,9 +526,19 @@
     animation: none;
   }
 
-  .snore-rise {
-    opacity: var(--snore-still-opacity);
-    transform: var(--snore-still);
+  .snore-still-0 .snore-rise {
+    opacity: 0.9;
+    transform: translate(3px, -5px) scale(0.7);
+  }
+
+  .snore-still-1 .snore-rise {
+    opacity: 0.65;
+    transform: translate(13px, -21px) scale(0.95);
+  }
+
+  .snore-still-2 .snore-rise {
+    opacity: 0.4;
+    transform: translate(24px, -37px) scale(1.2);
   }
 }
 

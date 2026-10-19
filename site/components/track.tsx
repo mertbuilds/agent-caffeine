@@ -7,7 +7,7 @@ import { rememberedUtm, track, type Placement, type SupportPlacement } from "@/l
 
 export type { Placement };
 
-/** A link to the support section or to GitHub Sponsors, counted in the browser with where it sits. */
+/** The support section's link to GitHub Sponsors, counted in the browser with where it sits. */
 export function SupportCta({
   href,
   placement,
