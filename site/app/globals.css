@@ -227,6 +227,68 @@
 }
 
 /*
+ * The support section (components/support.tsx): its parts rise as it comes
+ * into view, the cup's steam draws up into a heart that beats softly, and the
+ * button's heart beats once on hover. A line drawn by `support-draw` starts a
+ * little past its start, so its round cap leaves no dot there before the pen
+ * sets off. With less motion nothing in the section moves.
+ */
+@keyframes support-rise {
+  from {
+    filter: blur(2px);
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+
+@keyframes support-draw {
+  from {
+    stroke-dashoffset: 1.05;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes support-soft-beat {
+  0%,
+  12%,
+  100% {
+    transform: scale(1);
+  }
+  6% {
+    transform: scale(1.06);
+  }
+}
+
+@keyframes support-beat {
+  40% {
+    transform: scale(1.25);
+  }
+}
+
+.support-rise {
+  animation: support-rise 500ms var(--ease-smooth-out) backwards;
+}
+
+.support-hidden {
+  opacity: 0;
+}
+
+@media (hover: hover) and (prefers-reduced-motion: no-preference) {
+  .support-cta:hover .support-cta-heart {
+    animation: support-beat 500ms cubic-bezier(0.34, 1.36, 0.64, 1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .support,
+  .support * {
+    animation: none !important;
+  }
+}
+
+/*
  * The robot of the app's menu (components/robot.tsx), with the app's own times: it floats
  * 2.25 hundredths of its tile up and down in 3.2 seconds, each wisp of steam grows out of
  * the cup and fades in 3.6 seconds, the antenna breathes in 3.1 seconds, a sleeping robot
