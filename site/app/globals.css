@@ -1,0 +1,742 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Arial reshaped to Suisse Intl's measure, so text breaks the same before the font lands. */
+@font-face {
+  ascent-override: 113.02%;
+  descent-override: 53.52%;
+  font-family: 'Suisse Intl Fallback';
+  font-style: normal;
+  font-weight: 400;
+  line-gap-override: 0%;
+  size-adjust: 103.88%;
+  src: local('Arial'), local('ArialMT');
+}
+
+@font-face {
+  ascent-override: 109.79%;
+  descent-override: 52%;
+  font-family: 'Suisse Intl Fallback';
+  font-style: normal;
+  font-weight: 500;
+  line-gap-override: 0%;
+  size-adjust: 106.93%;
+  src: local('Arial'), local('ArialMT');
+}
+
+/*
+ * Each colour is written once as light-dark(light, dark), and `color-scheme` picks the side:
+ * the system's while `data-theme` is absent, the forced one under `data-theme`. Tailwind's
+ * `dark:` follows the same three states (tailwind.config.ts).
+ */
+:root {
+  color-scheme: light dark;
+  --bg: light-dark(#ffffff, #000000);
+  --fg: light-dark(#000000, #ffffff);
+  --muted: light-dark(#6e6e6e, #8a8a8a);
+  --hairline: #8a8a8a;
+  --border: light-dark(#d4d4d4, #3f3f3f);
+  --surface: light-dark(#f5f5f5, #1a1a1a);
+  --shadow: light-dark(rgba(0, 0, 0, 0.08), rgba(0, 0, 0, 0.5));
+  --accent: light-dark(#2a73e8, #5aa2ff);
+  /* The app icon's blue, the same in both themes; white text stays above 4.5:1 on both ends. */
+  --brand-light: #2a70e0;
+  --brand-deep: #1b55c2;
+  /* The app's menu (components/agents-panel.tsx): the window of macOS, its two inks and its hairline. */
+  --panel: light-dark(#ececee, #29292b);
+  --panel-fg: light-dark(rgba(0, 0, 0, 0.85), rgba(255, 255, 255, 0.85));
+  --panel-muted: light-dark(rgba(0, 0, 0, 0.56), rgba(255, 255, 255, 0.55));
+  --panel-line: light-dark(rgba(0, 0, 0, 0.1), rgba(255, 255, 255, 0.12));
+  /* The app's own blue and the amber of an agent that waits, the same in both themes. */
+  --app-blue: #2a73e8;
+  --app-amber: #f59e0a;
+  --duration-quick: 150ms;
+  --duration-fast: 250ms;
+  --duration-slow: 400ms;
+  --ease-smooth-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+/*
+ * Jumps down the page are eased, for everyone who has not asked for less motion. Not the
+ * first one, to the section a page is opened at: components/hash-scroll.tsx sets the
+ * attribute once the page has hydrated.
+ */
+@media (prefers-reduced-motion: no-preference) {
+  html[data-smooth-scroll] {
+    scroll-behavior: smooth;
+  }
+}
+
+/*
+ * The header gathers into its pill and opens back out as a view transition
+ * (lib/morph.ts). The page takes no part in it: it keeps drawing and
+ * scrolling under the moving items, and the pointer goes through to it.
+ */
+:root {
+  view-transition-name: none;
+}
+
+::view-transition {
+  pointer-events: none;
+}
+
+/* Opening back out, the browser's ease per keyframe goes, so the items keep to the ground growing under them. */
+:root:active-view-transition-type(morph-spreading)::view-transition-group(*),
+:root:active-view-transition-type(morph-spreading)::view-transition-old(*),
+:root:active-view-transition-type(morph-spreading)::view-transition-new(*) {
+  animation-timing-function: linear;
+}
+
+/* An item of the header's menu coming in: a short rise out of a blur. */
+@keyframes menu-item-in {
+  from {
+    filter: blur(2px);
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+.menu-item-in {
+  animation: menu-item-in var(--duration-fast) var(--ease-smooth-out) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .menu-item-in {
+    animation: none;
+  }
+}
+
+/*
+ * The popup a download button opens off a Mac (components/send-to-mac-popup.tsx): it and the
+ * dimmed page behind it come in together, briefly.
+ */
+@keyframes popup-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+@keyframes popup-dim-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.popup-in {
+  animation: popup-in var(--duration-fast) var(--ease-smooth-out);
+}
+
+.popup-in::backdrop {
+  animation: popup-dim-in 250ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .popup-in,
+  .popup-in::backdrop {
+    animation: none;
+  }
+}
+
+/*
+ * The how it works demo (components/menu-bar-simulator.tsx): the pointer comes
+ * in, a ring goes out where it presses, the demo tag fills up to the next step
+ * and its dot breathes, and a change on the right pulses once. The demo never
+ * plays with less motion, and these do nothing there.
+ */
+@keyframes demo-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes demo-ring {
+  from {
+    opacity: 0.8;
+    transform: scale(0.3);
+  }
+  50% {
+    opacity: 0.6;
+  }
+  to {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
+@keyframes demo-fill {
+  from {
+    transform: scaleX(0);
+  }
+}
+
+@keyframes demo-live {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@keyframes demo-pulse {
+  from {
+    opacity: 0.45;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(1.9, 2.4);
+  }
+}
+
+.demo-in {
+  animation: demo-in var(--duration-fast) var(--ease-smooth-out);
+}
+
+.demo-ring {
+  animation: demo-ring 600ms var(--ease-smooth-out) both;
+}
+
+.demo-fill {
+  animation: demo-fill linear both;
+}
+
+.demo-live {
+  animation: demo-live 1.6s ease-in-out infinite;
+}
+
+.demo-pulse {
+  animation: demo-pulse 600ms var(--ease-smooth-out) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-in,
+  .demo-ring,
+  .demo-fill,
+  .demo-live,
+  .demo-pulse {
+    animation: none;
+  }
+}
+
+/*
+ * The robot of the app's menu (components/robot.tsx), with the app's own times: it floats
+ * 2.25 hundredths of its tile up and down in 3.2 seconds, each wisp of steam grows out of
+ * the cup and fades in 3.6 seconds, the antenna breathes in 3.1 seconds, a sleeping robot
+ * sends up a z every 4.4 seconds, and the eyes blink now and then, never in a steady beat.
+ * Without motion every part stands as the app's still picture has it.
+ */
+.robot-layer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  width: 100px;
+  height: 100px;
+  max-width: none;
+}
+
+.robot-clip > .robot-layer {
+  top: -2px;
+  left: -2px;
+}
+
+@keyframes robot-float {
+  to {
+    transform: translateY(-2.16px) scale(1.008);
+  }
+}
+
+.robot-float {
+  animation: robot-float 1.6s cubic-bezier(0.37, 0, 0.63, 1) infinite alternate;
+}
+
+@keyframes robot-blink-hide {
+  0%, 13.7%, 32.966%, 48.563%, 69.358%, 82.202%, 99.633%, 14.067%, 33.333%, 48.93%, 69.725%, 82.569%, 100.0% {
+    opacity: 1;
+  }
+  13.884%, 33.15%, 48.746%, 69.541%, 82.385%, 99.817% {
+    opacity: 0;
+  }
+}
+
+@keyframes robot-blink-show {
+  0%, 13.7%, 32.966%, 48.563%, 69.358%, 82.202%, 99.633%, 14.067%, 33.333%, 48.93%, 69.725%, 82.569%, 100.0% {
+    opacity: 0;
+  }
+  13.884%, 33.15%, 48.746%, 69.541%, 82.385%, 99.817% {
+    opacity: 1;
+  }
+}
+
+@keyframes robot-blink-squash {
+  0%, 13.7%, 32.966%, 48.563%, 69.358%, 82.202%, 99.633%, 14.067%, 33.333%, 48.93%, 69.725%, 82.569%, 100.0% {
+    transform: scaleY(1);
+  }
+  13.884%, 33.15%, 48.746%, 69.541%, 82.385%, 99.817% {
+    transform: scaleY(0.1);
+  }
+}
+
+.robot-blink-hide {
+  animation: robot-blink-hide 32.7s linear infinite;
+}
+
+.robot-blink-show {
+  opacity: 0;
+  animation: robot-blink-show 32.7s linear infinite;
+}
+
+.robot-blink-squash {
+  animation: robot-blink-squash 32.7s linear infinite;
+}
+
+.robot-eye-glow {
+  filter: drop-shadow(0 0 1.2px rgba(61, 128, 255, 0.9)) drop-shadow(0 0 3.5px rgba(61, 128, 255, 0.45));
+}
+
+.robot-eye-glow-red {
+  filter: drop-shadow(0 0 1.2px rgba(255, 31, 26, 0.9)) drop-shadow(0 0 3.5px rgba(255, 31, 26, 0.45));
+}
+
+@keyframes robot-glow {
+  from {
+    opacity: var(--glow-low);
+  }
+  to {
+    opacity: var(--glow-high);
+  }
+}
+
+.robot-glow {
+  opacity: var(--glow-still);
+  animation: robot-glow 1.55s ease-in-out infinite alternate;
+}
+
+.robot-glow-blue {
+  --glow-low: 0.225;
+  --glow-high: 0.75;
+  --glow-still: 0.49;
+}
+
+.robot-glow-amber {
+  --glow-low: 0.65;
+  --glow-high: 1;
+  --glow-still: 0.83;
+}
+
+@keyframes robot-wisp-shape {
+  from {
+    transform: scaleY(0.6);
+  }
+  50% {
+    transform: scaleY(1);
+  }
+  to {
+    transform: translateY(-2.5px) scaleY(1.4);
+  }
+}
+
+@keyframes robot-wisp-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.robot-wisp {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  animation:
+    robot-wisp-shape 3.6s linear infinite,
+    robot-wisp-fade 1.8s ease-in-out infinite alternate;
+}
+
+/* Still, the icon's own wisps stand alone. */
+.robot-wisp-second {
+  opacity: 0;
+}
+
+@keyframes robot-sway {
+  from {
+    transform: skewX(-2deg);
+  }
+  to {
+    transform: skewX(2deg);
+  }
+}
+
+.robot-sway {
+  animation: robot-sway 2.3s ease-in-out infinite alternate;
+}
+
+@keyframes robot-snooze-rise {
+  from {
+    transform: translate(0, 0);
+  }
+  to {
+    transform: translate(5px, -11px);
+  }
+}
+
+@keyframes robot-snooze-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.robot-snooze {
+  position: absolute;
+  color: #e0f2ff;
+  font-family: ui-rounded, 'SF Pro Rounded', system-ui, sans-serif;
+  font-weight: 500;
+  line-height: 1.2;
+  opacity: 0.93;
+  text-shadow: 0 0 1.5px rgba(140, 204, 255, 0.8);
+  transform: translate(3.1px, -6.8px);
+  animation:
+    robot-snooze-rise 4.4s linear infinite,
+    robot-snooze-fade 2.2s ease-in-out infinite alternate;
+}
+
+.robot-snooze-second {
+  opacity: 0.81;
+  transform: translate(1.5px, -3.3px);
+}
+
+.robot[data-paused] * {
+  animation-play-state: paused !important;
+}
+
+.robot[data-still] * {
+  animation: none !important;
+}
+
+/*
+ * The ring round an agent's mark in the menu (components/agents-panel.tsx): an arc that goes
+ * round in 1.4 seconds means work, a whole ring that breathes in amber every 2 seconds means
+ * the agent waits.
+ */
+@keyframes ring-sweep {
+  to {
+    stroke-dashoffset: -1;
+  }
+}
+
+@keyframes ring-breathe {
+  from {
+    opacity: 0.4;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.ring-sweep {
+  stroke-dashoffset: -0.125;
+  animation: ring-sweep 1.4s linear infinite;
+}
+
+.ring-breathe {
+  animation: ring-breathe 1s ease-in-out infinite alternate;
+}
+
+.panel-paused :is(.ring-sweep, .ring-breathe),
+.panel-still :is(.ring-sweep, .ring-breathe) {
+  animation-play-state: paused;
+}
+
+.panel-still :is(.ring-sweep, .ring-breathe) {
+  animation: none;
+}
+
+/*
+ * The same arc in the hero (components/hero-scene.tsx), where three of them go round for most of the
+ * loop: a ring cut out of a box by a mask, and under it a wedge that turns. Only a transform moves,
+ * so the browser turns it without working out a style or drawing a frame on the main thread.
+ */
+@keyframes ring-turn {
+  to {
+    transform: rotate(1turn);
+  }
+}
+
+.ring-turn {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border-radius: 10.25px;
+  padding: 1.5px;
+  mask:
+    linear-gradient(#000 0 0) content-box exclude,
+    linear-gradient(#000 0 0);
+}
+
+.ring-turn::before {
+  content: '';
+  position: absolute;
+  inset: -25%;
+  background: conic-gradient(var(--app-blue) 0 75%, transparent 75%);
+  animation: ring-turn 1.4s linear infinite;
+  will-change: transform;
+}
+
+.panel-paused .ring-turn::before {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .robot *,
+  .ring-sweep,
+  .ring-breathe,
+  .ring-turn::before {
+    animation: none !important;
+  }
+}
+
+@layer base {
+  html,
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    /* No rubber-band pull past the top or the foot of the page. */
+    overscroll-behavior-y: none;
+  }
+
+  a {
+    color: inherit;
+    text-decoration-line: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 2px;
+  }
+
+  :where(a, button):focus-visible {
+    outline: 1px solid var(--muted);
+    outline-offset: 2px;
+  }
+
+  @media (hover: hover) {
+    a:hover {
+      text-decoration-thickness: 2px;
+    }
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: #ffffff;
+  }
+}
+
+/* Blog article body, rendered from Markdown. */
+@layer components {
+  .article {
+    line-height: 1.7;
+  }
+
+  .article :where(p, ul, ol, pre, blockquote) {
+    margin-top: 1.25em;
+  }
+
+  .article :where(h2) {
+    margin-top: 2em;
+    font-size: 1.5rem;
+    font-weight: 500;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  .article :where(h3) {
+    margin-top: 2em;
+    font-size: 1.125rem;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+
+  .article :where(h2 + *, h3 + *) {
+    margin-top: 0.75em;
+  }
+
+  .article > :first-child > :first-child {
+    margin-top: 0;
+  }
+
+  .article :where(p, li) {
+    text-wrap: pretty;
+  }
+
+  .article :where(ul) {
+    list-style: disc;
+    padding-left: 1.25em;
+  }
+
+  .article :where(ol) {
+    list-style: decimal;
+    padding-left: 1.5em;
+  }
+
+  .article :where(li + li) {
+    margin-top: 0.4em;
+  }
+
+  .article :where(li)::marker {
+    color: var(--muted);
+  }
+
+  .article :where(strong) {
+    font-weight: 500;
+  }
+
+  .article :where(code) {
+    font-family: theme('fontFamily.mono');
+    font-size: 0.9em;
+  }
+
+  .article :where(:not(pre) > code) {
+    white-space: nowrap;
+  }
+
+  .article :where(pre) {
+    overflow-x: auto;
+    border: 1px solid var(--border);
+    border-radius: 0.5rem;
+    background: var(--surface);
+    padding: 0.875rem 1rem;
+    font-size: 0.875rem;
+    line-height: 1.6;
+  }
+
+  .article :where(pre code) {
+    font-size: inherit;
+  }
+
+  .article :where(blockquote) {
+    border-left: 1px solid var(--border);
+    padding-left: 1em;
+    color: var(--muted);
+  }
+
+  .article :where(.table-scroll) {
+    margin-top: 1.25em;
+    overflow-x: auto;
+  }
+
+  .article :where(.table-scroll):focus-visible {
+    outline: 1px solid var(--muted);
+    outline-offset: 2px;
+  }
+
+  .article :where(table) {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+
+  .article :where(th, td) {
+    border-bottom: 1px solid var(--border);
+    min-width: 6.5rem;
+    padding: 0.625rem 1rem 0.625rem 0;
+    text-align: left;
+    vertical-align: top;
+  }
+
+  .article :where(th) {
+    font-weight: 500;
+    white-space: nowrap;
+  }
+
+  .article :where(th:last-child, td:last-child) {
+    padding-right: 0;
+  }
+
+  .article :where(hr) {
+    margin-top: 2.5em;
+    border-color: var(--border);
+  }
+
+  /* The theme switch's picked segment, read from `<html>` so it is right before hydration. */
+  :root:not([data-theme]) .theme-pick[data-theme-pick='system'],
+  :root[data-theme='light'] .theme-pick[data-theme-pick='light'],
+  :root[data-theme='dark'] .theme-pick[data-theme-pick='dark'] {
+    background: var(--surface);
+    box-shadow: inset 0 0 0 1px var(--border);
+    color: var(--fg);
+  }
+}
+
+/* The agents slide by in two rows, one each way; with less motion they stand as one list. */
+@keyframes agent-slide {
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+.agent-marquee {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.agent-list {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.agent-row {
+  overflow: hidden;
+  mask-image: linear-gradient(to right, transparent, black 15%, black 85%, transparent);
+}
+
+.agent-track {
+  display: flex;
+  width: max-content;
+  animation: agent-slide 110s linear infinite;
+  will-change: transform;
+}
+
+.agent-track-back {
+  animation-direction: reverse;
+  animation-duration: 124s;
+}
+
+.agent-marquee-paused .agent-track,
+.agent-marquee:hover .agent-track,
+.agent-marquee:focus-within .agent-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-marquee {
+    padding-inline: 1rem;
+  }
+
+  .agent-list {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    clip-path: none;
+    white-space: normal;
+  }
+
+  .agent-row {
+    display: none;
+  }
+}

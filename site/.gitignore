@@ -1,0 +1,10 @@
+node_modules/
+.next/
+out/
+.env*.local
+.vercel
+.DS_Store
+*.tsbuildinfo
+next-env.d.ts
+# Licensed fonts: fetched by scripts/fetch-fonts.sh, never committed
+app/fonts/
