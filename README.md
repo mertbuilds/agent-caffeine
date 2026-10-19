@@ -4,6 +4,8 @@ Agent Caffeine is a macOS menu bar app that keeps your Mac awake while AI coding
 
 It is free and open source. There is no license key, no account and no price. If it helps you, you can [support the project](https://caffeinagent.com/support?utm_source=github&utm_medium=readme) with an amount you choose.
 
+This repository holds the app and its website, [caffeinagent.com](https://caffeinagent.com/?utm_source=github&utm_medium=readme). The website is in [`site/`](site/).
+
 ## Install
 
 - Download the disk image from [caffeinagent.com](https://caffeinagent.com/?utm_source=github&utm_medium=readme), open it and drag Agent Caffeine to Applications.
