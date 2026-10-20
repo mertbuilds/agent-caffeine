@@ -262,7 +262,7 @@ final class SkillInstallerTests: XCTestCase {
         XCTAssertThrowsError(try installer.link()) { XCTAssertEqual($0 as? SkillInstallError, .notInApplications) }
         XCTAssertEqual(destination(link), applications)
         XCTAssertEqual(installer.record().link, nil)
-        XCTAssertEqual(SkillInstallError.notInApplications.linkMessage, "Move Agent Caffeine to the Applications folder to link the command.")
+        XCTAssertEqual(SkillInstallError.notInApplications.linkMessage, "Move Agent Caffeine to Applications to link the command")
         let snapshot = installer.snapshot()
         XCTAssertEqual(snapshot.link, .ours(target: applications))
         XCTAssertFalse(snapshot.linkAllowed)

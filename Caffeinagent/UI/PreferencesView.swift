@@ -142,12 +142,14 @@ struct AboutPreferences: View {
                     Button("Check for updates…", action: checkForUpdates)
                         .disabled(!canCheckForUpdates)
                 }
-                Text("While it keeps the Mac awake, Agent Caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. For a closed lid on battery, its helper also turns on the SleepDisabled setting of macOS, and turns it off when Agent Caffeine stops or quits. With Wake for jobs on, the helper also keeps one wake time in the schedule of macOS, and takes it away when Agent Caffeine quits.")
+                Text("Checks caffeinagent.com for updates. Sends nothing about you or your agents.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Text("Agent Caffeine checks caffeinagent.com for updates. It sends nothing about you or your agents.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text("How it keeps your Mac awake")
+                    Spacer()
+                    InfoButton(text: "While it keeps the Mac awake, Agent Caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. For a closed lid on battery, its helper also turns on the SleepDisabled setting of macOS, and turns it off when Agent Caffeine stops or quits. With Wake for jobs on, the helper also keeps one wake time in the schedule of macOS, and takes it away when Agent Caffeine quits.")
+                }
                 HStack(spacing: 4) {
                     Text("a")
                         .foregroundStyle(.secondary)
@@ -167,7 +169,7 @@ struct AboutPreferences: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 row(PanelText.sourceCode) { Link(PanelText.openOnGitHub, destination: AppLinks.sourceCode) }
-                row(PanelText.supportTheProject) { Link(PanelText.payWhatYouWant, destination: AppLinks.support) }
+                row(PanelText.supportTheProject) { Link(PanelText.gitHubSponsors, destination: AppLinks.support) }
                 row(PanelText.acknowledgements) { Link(PanelText.thirdPartyNotices, destination: AppLinks.acknowledgements) }
             }
             Section("Help") {
@@ -175,34 +177,30 @@ struct AboutPreferences: View {
                 row("Contact") { Link(AppLinks.contactAddress, destination: AppLinks.contact) }
             }
             Section("Remove Agent Caffeine") {
-                Text("Do these steps before you move Agent Caffeine to the Trash, so nothing of it stays on your Mac.")
+                Text("Do these steps before you move the app to the Trash")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 step(
                     hooksOn.isEmpty ? "Better detection is off" : "Turn off better detection for \(hooksOn.map(\.displayName).joined(separator: ", "))",
-                    help: "This removes the lines that Agent Caffeine added to the settings files of your agents.",
+                    info: "Removes the lines Agent Caffeine added to the settings files of your agents.",
                     done: hooksOn.isEmpty
                 ) { Button("Turn off") { turnOffHooks(hooksOn) } }
                 step(
                     helperRegistered ? "Remove the helper" : "The helper is not set up",
-                    help: "This removes the background item for a closed lid on battery.",
+                    info: "Removes the background item for a closed lid on battery.",
                     done: !helperRegistered
                 ) { Button("Remove", action: removeHelper) }
                 step(
-                    agentSetupOn ? "Remove the skill and the command agent-caffeine" : "No skill and no command are set up",
-                    help: "This removes the skill from the skills folders of your agents, and the link in ~/.local/bin.",
+                    agentSetupOn ? "Remove the skill and the agent-caffeine command" : "No skill and no command are set up",
+                    info: "Removes the skill from the skills folders of your agents, and the link in ~/.local/bin.",
                     done: !agentSetupOn
                 ) { Button("Remove", action: removeAgentSetup) }
                 step(
                     PanelText.hotspotRemoveStep(saved: hotspotSaved),
-                    help: PanelText.hotspotRemoveHelp,
+                    info: PanelText.hotspotRemoveHelp,
                     done: !hotspotSaved
                 ) { Button("Forget", action: forgetHotspot) }
-                step(
-                    "Quit Agent Caffeine and move it to the Trash",
-                    help: "The app is in your Applications folder.",
-                    done: false
-                ) { Button("Show in Finder", action: showInFinder) }
+                step("Move Agent Caffeine to the Trash", done: false) { Button("Show in Finder", action: showInFinder) }
             }
         }
         .formStyle(.grouped)
@@ -217,14 +215,9 @@ struct AboutPreferences: View {
     }
 
     /// One step: what to do, and its button until it is done.
-    private func step<Action: View>(_ title: String, help: String, done: Bool, @ViewBuilder action: () -> Action) -> some View {
+    private func step<Action: View>(_ title: String, info: String? = nil, done: Bool, @ViewBuilder action: () -> Action) -> some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                Text(help)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
+            Text(title)
             Spacer()
             if done {
                 Image(systemName: "checkmark.circle.fill")
@@ -233,6 +226,7 @@ struct AboutPreferences: View {
             } else {
                 action()
             }
+            if let info { InfoButton(text: info) }
         }
     }
 
@@ -249,7 +243,7 @@ struct GeneralPreferences: View {
     var loginItemError: String?
     var setOpenAtLogin: (Bool) -> Void = { _ in }
     var openLoginItems: () -> Void = {}
-    /// "Join your iPhone hotspot (Beta)", below the offline rule.
+    /// "iPhone hotspot (Beta)", below the offline rule.
     var hotspot = HotspotPreferences()
 
     /// From 30 seconds to 30 minutes.
@@ -262,38 +256,43 @@ struct GeneralPreferences: View {
                     ForEach(AwakeMode.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.menu)
-                .labelsHidden()
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(AwakeMode.allCases) { Text($0.explanation) }
-                }
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                Text(mode.explanation)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
             if !RemoteAccessDetector.detectedTools.isEmpty {
                 Section {
-                    Toggle("Stay reachable while plugged in", isOn: $settings.stayAwakeForRemoteAccess)
-                    Text("This is for Claude Code Remote Control, which sends messages from your phone to an agent on your Mac. While your Mac is plugged in and Remote Control is on, your Mac stays awake, even when no agent is working. On battery, choose \"Stay reachable\" in the timer menu to keep your Mac awake for a set time.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Toggle("Stay reachable while plugged in", isOn: $settings.stayAwakeForRemoteAccess)
+                            InfoButton(text: "Remote Control sends messages from your phone to an agent on your Mac. While your Mac is plugged in and Remote Control is on, your Mac stays awake, even when no agent works. On battery, use Stay reachable in the timer menu.")
+                        }
+                        Text("For Claude Code Remote Control")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
-            Section("How long your Mac stays awake") {
+            Section("Stay awake") {
                 duration(
                     "After an agent finishes", $settings.releaseAfterState,
-                    help: "Claude Code and Codex say when they finish. Your Mac stays awake this long afterwards, so it does not sleep in a short break between two tasks."
+                    info: "Claude Code and Codex say when they finish. This time covers a short break between two tasks."
                 )
                 duration(
                     "After other agents go quiet", $settings.releaseAfterActivity,
-                    help: "Other agents do not say when they finish. For those, Agent Caffeine watches for activity, such as a running command, and your Mac stays awake this long after the last of it."
+                    info: "Other agents do not say when they finish. Agent Caffeine waits this long after their last activity, such as a running command."
                 )
                 duration(
-                    "While an agent is waiting for you", $settings.waitingHold,
-                    help: "Your Mac stays awake this long while an agent is waiting for your answer. After that Agent Caffeine lets it sleep, unless another agent is working."
+                    "While an agent waits for you", $settings.waitingHold,
+                    info: "After this time your Mac can sleep, unless another agent is working."
                 )
                 VStack(alignment: .leading, spacing: 4) {
-                    Picker(PanelText.offlineLimitPicker, selection: $settings.offlineLimitMinutes) {
-                        ForEach(OfflineRule.minuteChoices, id: \.self) { Text(HumaneDuration.counted($0, "minute")).tag($0) }
-                        Text(PanelText.never).tag(OfflineRule.never)
+                    HStack {
+                        Picker(PanelText.offlineLimitPicker, selection: $settings.offlineLimitMinutes) {
+                            ForEach(OfflineRule.minuteChoices, id: \.self) { Text(HumaneDuration.counted($0, "minute")).tag($0) }
+                            Text(PanelText.never).tag(OfflineRule.never)
+                        }
+                        InfoButton(text: PanelText.offlineLimitInfo)
                     }
                     Text(PanelText.offlineLimitExplained)
                         .font(.callout)
@@ -306,12 +305,10 @@ struct GeneralPreferences: View {
                     .disabled(loginItem == .unavailable)
                 switch loginItem {
                 case .on, .off:
-                    Text("Agent Caffeine starts when you log in, so it also runs after a restart of your Mac.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                    EmptyView()
                 case .needsApproval:
                     HStack {
-                        Text("Allow Agent Caffeine in System Settings > General > Login Items to open it at login.")
+                        Text("Allow in System Settings > Login Items.")
                             .font(.callout)
                         Spacer()
                         Button("Open System Settings", action: openLoginItems)
@@ -326,10 +323,8 @@ struct GeneralPreferences: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
-            }
-            Section {
-                Toggle("Show Agent Caffeine in the menu bar", isOn: $showMenuBarIcon)
-                Text("When hidden, open Agent Caffeine again from Applications or Spotlight to see this window.")
+                Toggle("Show in menu bar", isOn: $showMenuBarIcon)
+                Text("When hidden, open Agent Caffeine from Applications to come back here")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -337,17 +332,15 @@ struct GeneralPreferences: View {
         .formStyle(.grouped)
     }
 
-    private func duration(_ title: String, _ value: Binding<TimeInterval>, help: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private func duration(_ title: String, _ value: Binding<TimeInterval>, info: String) -> some View {
+        HStack {
             Picker(title, selection: value) {
                 // A value that is not on the list stays selectable.
                 ForEach(Set(Self.durations + [value.wrappedValue]).sorted(), id: \.self) {
                     Text(Self.text(for: $0)).tag($0)
                 }
             }
-            Text(help)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            InfoButton(text: info)
         }
     }
 
@@ -373,7 +366,7 @@ struct AlertPreferences: View {
             if denied {
                 Section {
                     HStack {
-                        Label("Notifications are off for Agent Caffeine in System Settings", systemImage: "bell.slash")
+                        Label("Notifications are off in System Settings", systemImage: "bell.slash")
                             .foregroundStyle(.orange)
                         Spacer()
                         Button("Open System Settings", action: openSystemSettings)
@@ -381,21 +374,12 @@ struct AlertPreferences: View {
                 }
             }
             Section("Notify me when") {
-                toggle(
-                    "An agent is waiting for you", $notices.waiting,
-                    help: "You get a notification when an agent asks you a question or needs your permission."
-                )
-                toggle(
-                    "An agent finished", $notices.finished,
-                    help: "You get a notification when an agent finishes its work."
-                )
+                Toggle("An agent waits for you", isOn: $notices.waiting)
+                Toggle("An agent finishes", isOn: $notices.finished)
             }
             Section {
-                toggle(
-                    "Only notify when the agent's window is not in front", $notices.onlyWhenAway,
-                    help: "You get no notification while you use the app the agent runs in."
-                )
-                .disabled(!notices.wantsAny)
+                Toggle("Only when its app is not in front", isOn: $notices.onlyWhenAway)
+                    .disabled(!notices.wantsAny)
             }
             if !history.isEmpty {
                 Section("Last notifications") {
@@ -423,15 +407,6 @@ struct AlertPreferences: View {
         }
         .formStyle(.grouped)
     }
-
-    private func toggle(_ title: String, _ value: Binding<Bool>, help: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Toggle(title, isOn: value)
-            Text(help)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
-    }
 }
 
 struct ShortcutPreferences: View {
@@ -451,7 +426,7 @@ struct ShortcutPreferences: View {
                         setRecording: setShortcutRecording
                     )
                 }
-                Text("The shortcuts work in every app. Click a field, then press the keys you want.")
+                Text("Works in every app. Click a field, then press the keys.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -467,7 +442,7 @@ struct AgentPreferences: View {
     var hookRows: [HookRowModel] = []
     var hooksAvailable = true
     var setHooks: (HookCatalogEntry, Bool) -> Void = { _, _ in }
-    /// The menu asked for "Other tools": the tab scrolls there once.
+    /// The menu asked for "Add a tool": the tab scrolls there once.
     var showsOtherTools: Binding<Bool> = .constant(false)
     /// The tool in the copy of the app that runs.
     var commandLine = CommandLineSetup(appPath: AppInstall.running.path)
@@ -506,7 +481,7 @@ struct AgentPreferences: View {
                 model: agentSetup, commandLine: commandLine, setUp: setUpForAgents, install: installSkill,
                 link: linkTool, remove: removeAgentSetup
             )
-            Section("Open on this Mac now") {
+            Section("Open now") {
                 let found = Self.definitions.filter { foundIDs.contains($0.id) }
                 if found.isEmpty {
                     Text("No agent is open")
@@ -518,16 +493,16 @@ struct AgentPreferences: View {
                 HookPreferencesSection(rows: hookRows, available: hooksAvailable, set: setHooks)
             }
             Section("Other agents") {
-                Text("Agents marked Not tested yet are found by name. Agent Caffeine sees them as working while they use the processor or run a command.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text("Not tested yet means found by name only")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    InfoButton(text: "Agent Caffeine counts these as working while they use the processor or run a command.")
+                }
                 ForEach(Self.definitions.filter { !foundIDs.contains($0.id) }, id: \.id, content: row)
             }
-            Section("Other tools") {
-                Text("Add a tool that is not in the list by its process name: the name of the command you type in Terminal to start the tool, for example aider. It counts as working while it is using the processor.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .id(Self.otherToolsID)
+            Section("Add a tool") {
                 ForEach(settings.userAgentNames, id: \.self) { name in
                     HStack {
                         Text(name).font(.system(.body, design: .monospaced))
@@ -540,13 +515,15 @@ struct AgentPreferences: View {
                     }
                 }
                 HStack {
-                    TextField("Process name", text: $newName, prompt: Text("Process name, for example aider"))
+                    TextField("Command name", text: $newName, prompt: Text("Command name, for example aider"))
                         .textFieldStyle(.roundedBorder)
                         .labelsHidden()
                         .onSubmit(add)
                     Button("Add", action: add)
                         .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    InfoButton(text: "The name you type in Terminal to start the tool. It counts as working while it uses the processor.")
                 }
+                .id(Self.otherToolsID)
             }
         }
         .formStyle(.grouped)
@@ -587,7 +564,7 @@ extension AgentRule {
     var title: String {
         switch self {
         case .automatic: return "Automatic"
-        case .alwaysWorkingWhileOpen: return "Always counts as working"
+        case .alwaysWorkingWhileOpen: return "Always working"
         case .ignore: return "Ignore"
         }
     }
@@ -632,7 +609,7 @@ struct LidClosedPreferences: View {
     var body: some View {
         Form {
             Section("Battery limit") {
-                Toggle("Let your Mac sleep when the battery is low", isOn: batteryFloorSwitch)
+                Toggle("Sleep when the battery is low", isOn: batteryFloorSwitch)
                 Stepper(value: $settings.batteryFloorPercent, in: DetectionSettings.batteryFloorRange, step: 5) {
                     Text("Sleep at \(PanelText.percent(settings.batteryFloorPercent))")
                 }
@@ -640,60 +617,58 @@ struct LidClosedPreferences: View {
                 Group {
                     if settings.batteryFloorEnabled {
                         Text(SafetyText.floorOnHelp)
-                        Text("Agent Caffeine also lets your Mac sleep when it gets too hot.")
                     } else {
-                        Label(SafetyText.floorOffWarning, systemImage: "exclamationmark.triangle")
-                        Text(SafetyText.floorOffLidClosed)
-                        Text("Agent Caffeine still lets your Mac sleep when it gets too hot.")
+                        HStack {
+                            Label(SafetyText.floorOffWarning, systemImage: "exclamationmark.triangle")
+                            Spacer()
+                            InfoButton(text: SafetyText.floorOffLidClosed)
+                        }
                     }
                 }
                 .font(.callout)
                 .foregroundStyle(.secondary)
             }
-            Section("Closed lid limit") {
+            Section("Closed lid on battery") {
                 Picker(PanelText.closedLidLimitPicker, selection: $settings.closedLidLimitHours) {
                     ForEach(ClosedLidLimit.hourChoices, id: \.self) { Text(HumaneDuration.counted($0, "hour")).tag($0) }
                     Text(PanelText.noLimit).tag(ClosedLidLimit.noLimit)
                 }
-                Picker("or until the battery lost", selection: $settings.closedLidLimitDrop) {
+                Picker("Or until the battery drops by", selection: $settings.closedLidLimitDrop) {
                     ForEach(ClosedLidLimit.dropChoices, id: \.self) { Text(PanelText.percent($0)).tag($0) }
                     Text(PanelText.noLimit).tag(ClosedLidLimit.noLimit)
                 }
-                Text(PanelText.closedLidLimitExplained)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            Section("Lid closed") {
-                Group {
-                    Text(PanelText.lidClosedExplained)
-                    Text("\(PanelText.helperExplained) \(PanelText.helperRemoveHere)")
-                    Text(PanelText.closedBagWarning)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(PanelText.closedLidLimitExplained)
+                    Text(PanelText.closedLidLimitExceptions)
                 }
                 .font(.callout)
                 .foregroundStyle(.secondary)
+                Toggle("Stay awake with the lid closed", isOn: $settings.stayAwakeLidClosedOnBattery)
+                    .disabled(helper != .enabled)
+                if helper != .enabled {
+                    Text("Set up the helper first")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
                 helperState
                 if let error {
                     Text(error)
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
-                Toggle("Stay awake with the lid closed on battery", isOn: $settings.stayAwakeLidClosedOnBattery)
-                    .disabled(helper != .enabled)
-                if helper != .enabled {
-                    Text("Set up the helper first.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                Toggle("Turn the display off when the lid is closed", isOn: $settings.displayOffLidClosed)
-                Text("With the lid closed, Agent Caffeine keeps the built-in display dark so it does not use the battery or warm your Mac.")
+                Label(PanelText.closedBagWarningInSettings, systemImage: "exclamationmark.triangle")
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.orange)
+                HStack {
+                    Toggle("Turn off the display", isOn: $settings.displayOffLidClosed)
+                    InfoButton(text: "Keeps the built-in display dark with the lid closed, to save battery and heat.")
+                }
                 if hasLidAngleSensor {
-                    Toggle("Dim the display as the lid closes", isOn: $settings.dimAsLidCloses)
-                        .disabled(!settings.displayOffLidClosed)
-                    Text("The built-in display gets darker from 45 degrees and is off when the lid is closed. When you open the lid, your brightness comes back. A lid that rests half open stays bright.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                    HStack {
+                        Toggle("Dim as the lid closes", isOn: $settings.dimAsLidCloses)
+                            .disabled(!settings.displayOffLidClosed)
+                        InfoButton(text: "The display gets darker from 45 degrees and turns off when the lid closes. Your brightness comes back when you open the lid. A lid that rests half open stays bright.")
+                    }
                 }
                 Toggle(PanelText.lidChimeSwitch, isOn: $settings.chimeOnLidClose)
                 LabeledContent("Sound") {
@@ -714,10 +689,10 @@ struct LidClosedPreferences: View {
             WakeForJobsSection(settings: jobSettings, view: jobWake, closeSwitchNotice: closeJobSwitchNotice)
             if needsSudoersCleanup {
                 Section {
-                    Text("An older version of Agent Caffeine added an admin entry to this Mac. It is no longer used.")
+                    Text("An older version added an admin entry. It is no longer used.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                    Button("Remove the old admin entry…", action: removeSudoersEntry)
+                    Button("Remove old admin entry…", action: removeSudoersEntry)
                 }
             }
         }
@@ -741,7 +716,7 @@ struct LidClosedPreferences: View {
                 Text(PanelText.helperRepairing)
             }
         case .notResponding:
-            Label(PanelText.helperNotResponding, systemImage: "exclamationmark.triangle.fill")
+            Label("Cannot reach the helper. Your Mac sleeps when you close the lid on battery.", systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             HStack {
                 Button(PanelText.title(of: .tryHelperAgain), action: tryAgain)
@@ -751,21 +726,23 @@ struct LidClosedPreferences: View {
             }
         case .ready:
             HStack {
-                Label(PanelText.helperIsSetUp, systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                Text("Helper")
                 Spacer()
+                Label("Set up", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
                 Button("Remove", action: remove)
+                InfoButton(text: PanelText.helperInfo)
             }
         case .requiresApproval:
             HStack {
-                Text(PanelText.allowInLoginItems)
+                Text("Allow Agent Caffeine in System Settings > Login Items")
                 Spacer()
                 Button("Open System Settings", action: openLoginItems)
             }
         case .lost:
             if canSetUp {
                 HStack {
-                    Text(PanelText.helperLost)
+                    Text("Set up the helper again")
                     Spacer()
                     Button("Set up…", action: setUp)
                 }
@@ -773,10 +750,16 @@ struct LidClosedPreferences: View {
                 Text(PanelText.moveToApplicationsToSetUp)
             }
         case .notSetUp:
-            if canSetUp {
-                Button("Set up…", action: setUp)
-            } else {
+            HStack {
+                Text("Helper")
+                Spacer()
+                if canSetUp { Button("Set up…", action: setUp) }
+                InfoButton(text: PanelText.helperInfo)
+            }
+            if !canSetUp {
                 Text(PanelText.moveToApplicationsToSetUp)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
         }
     }

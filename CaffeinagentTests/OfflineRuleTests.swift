@@ -399,12 +399,13 @@ final class OfflineRuleTests: XCTestCase {
     /// An agent with a model on this Mac works offline, so the line does
     /// not say that no agent can, and it names the way out.
     func testTheSettingsWords() {
-        XCTAssertEqual(PanelText.offlineLimitPicker, "When your Mac is offline, stop staying awake for agents after")
+        XCTAssertEqual(PanelText.offlineLimitPicker, "Stop when offline for")
+        XCTAssertEqual(PanelText.offlineLimitExplained, "Choose Never if your agents use a model on this Mac")
+        XCTAssertTrue(PanelText.offlineLimitExplained.contains("Choose \(PanelText.never)"))
         XCTAssertEqual(
-            PanelText.offlineLimitExplained,
-            "Most agents cannot work without the internet. If your agents use a model on this Mac, choose Never. Command line holds and scheduled jobs are not stopped. Wi-Fi that is connected but has no internet does not count as offline."
+            PanelText.offlineLimitInfo,
+            "Most agents cannot work without the internet. This stops only agents. Command line holds and scheduled jobs keep your Mac awake. Wi-Fi with no internet does not count as offline."
         )
-        XCTAssertTrue(PanelText.offlineLimitExplained.contains("choose \(PanelText.never)"))
     }
 
     func testTheNotificationNamesTheTimeAndTheAgentsThatWorked() {

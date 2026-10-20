@@ -891,7 +891,7 @@ final class MenuModelTests: XCTestCase {
         input.clock = clock(perAgent, secondsAgo: [1: 600, 2: 600, 3: 7200, 4: 600])
         let groups = MenuModel.groups(input, now: now).inView
         XCTAssertEqual(groups.map(\.header.title), ["Goose", "Codex", "Amp"], "An ignored agent is last")
-        XCTAssertEqual(groups.map(\.header.detail), ["Always counts as working", "Idle for 2 hours", "Ignored"])
+        XCTAssertEqual(groups.map(\.header.detail), ["Always working", "Idle for 2 hours", "Ignored"])
         XCTAssertFalse(groups[2].canToggle, "Nothing to open below an agent that is ignored")
     }
 
@@ -1030,7 +1030,7 @@ final class MenuModelTests: XCTestCase {
         XCTAssertEqual(PanelText.working(.backgroundJob(1), seconds: 5 * 60, startSeen: false), "Running 1 background task for 5 minutes")
         XCTAssertEqual(PanelText.working(.backgroundWork, seconds: 20, startSeen: true), "Running a background command")
         XCTAssertEqual(PanelText.working(.backgroundWork, seconds: 4 * 60, startSeen: true), "Running a background command for 4 minutes")
-        XCTAssertEqual(PanelText.working(.alwaysWorkingByRule, seconds: 600, startSeen: true), "Always counts as working")
+        XCTAssertEqual(PanelText.working(.alwaysWorkingByRule, seconds: 600, startSeen: true), "Always working")
     }
 
     func testNoLineOfTheListIsABareDuration() {

@@ -10,14 +10,14 @@ extension PanelText {
     // MARK: Settings
 
     static let jobsTitle = "Wake for jobs"
-    static let jobsSwitch = "Wake your Mac for scheduled jobs"
+    static let jobsSwitch = "Wake for scheduled jobs"
     static let jobsNoneFound = "No scheduled job was found on this Mac."
-    static let jobsPerJob = "Agent Caffeine wakes your Mac only for the jobs you switch on."
+    static let jobsPerJob = "Switch on the jobs to wake for"
     static let jobsOnPowerOnly = "Only on power"
     /// A wake that was set on power can still come when the Mac was
     /// unplugged while it slept, so this does not say "does not wake".
     static let jobsOnPowerExplained = "On battery, Agent Caffeine sets no wake and keeps your Mac awake for no job."
-    static let jobsOnBatteryWarning = "On battery with the lid closed this is not tested yet. Your Mac can wake in a bag."
+    static let jobsOnBatteryWarning = "Not tested on battery with the lid closed. Your Mac can wake in a bag."
     static let jobsShowHistory = "Show history"
     static let jobsHideHistory = "Hide history"
     static let jobsNoHistory = "Nothing happened yet."
@@ -37,15 +37,15 @@ extension PanelText {
         "\(name) was switched off: two lines of the crontab look the same now."
     }
     static let jobsCloseNotice = "Close"
-    static let jobsNeedHelper = "This needs the helper. Set it up under Lid closed first."
+    static let jobsNeedHelper = "This needs the helper. Set it up under Closed lid on battery first."
 
-    /// "Wakes your Mac 1 minute before a job, keeps it awake while the
-    /// job runs, for 30 minutes at most, then lets it sleep." The limit
-    /// is said, because a job that runs longer is not waited for.
+    /// "Wakes 1 minute before a job and stays awake while it runs, for 30
+    /// minutes at most". The limit is said, because a job that runs
+    /// longer is not waited for.
     static func jobsExplained(leadTime: TimeInterval, holdCap: TimeInterval) -> String {
         let lead = HumaneDuration.length(seconds: leadTime) ?? HumaneDuration.counted(Int(leadTime), "second")
         let cap = HumaneDuration.length(seconds: holdCap) ?? HumaneDuration.counted(Int(holdCap), "second")
-        return "Wakes your Mac \(lead) before a job, keeps it awake while the job runs, for \(cap) at most, then lets it sleep."
+        return "Wakes \(lead) before a job and stays awake while it runs, for \(cap) at most"
     }
 
     /// The quiet line below a job that an agent runs, nil for any other
@@ -114,7 +114,7 @@ extension PanelText {
             return "The helper gave no answer. It can be from an older version. Quit Agent Caffeine and open it again."
         case .asking: return "Setting the wake time…"
         case .alarmSet(let alarm):
-            return "Next wake \(when(alarm.at, now: now, calendar: calendar, locale: locale)) for \(alarm.jobName)."
+            return "Next wake \(when(alarm.at, now: now, calendar: calendar, locale: locale)) for \(alarm.jobName)"
         case .refused(let reason): return "The helper did not set the wake time: \(refusal(reason)). Agent Caffeine tries again."
         case .noAlarm(let reason): return noAlarm(reason, settings: settings)
         }

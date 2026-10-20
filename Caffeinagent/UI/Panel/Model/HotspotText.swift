@@ -17,52 +17,52 @@ struct HotspotStatusLine: Equatable {
 extension PanelText {
     // MARK: Settings
 
-    static let hotspotTitle = "Join your iPhone hotspot (Beta)"
+    static let hotspotTitle = "iPhone hotspot (Beta)"
     static let hotspotSwitch = "Join your iPhone hotspot when Wi-Fi is lost"
-    static let hotspotExplained = "When Wi-Fi is lost while an agent works, your Mac joins this hotspot. This uses the data and the battery of your phone."
-    static let hotspotStays = "Your Mac stays on the hotspot until you change the network, or until it goes back to its Wi-Fi."
-    static let hotspotLeaves = "If you leave the hotspot, your Mac does not join it again by itself."
+    static let hotspotExplained = "Uses the data and battery of your phone"
+    static let hotspotInfo = "Only while an agent works. Your Mac stays on the hotspot until you change the network or it goes back to your Wi-Fi. If you leave the hotspot, your Mac does not join it again by itself. When you switch this off, Agent Caffeine forgets the name and the password."
     static let hotspotName = "Hotspot name"
-    static let hotspotNamePrompt = "The name of your iPhone"
+    static let hotspotNamePrompt = "Name of your iPhone"
     static let hotspotPassword = "Password"
     static let hotspotPasswordSaved = "Saved in your Keychain"
     static let hotspotSave = "Save"
     static let hotspotOpenPrivacy = "Open Privacy settings"
     static let hotspotOpenWiFi = "Open Wi-Fi settings"
-    static let hotspotHopBack = "Go back to your Wi-Fi when your Mac sees it again"
-    static let hotspotHopBackExplained = "On the hotspot, your Mac looks for the Wi-Fi it lost every \(minutes(HotspotHop.backInterval)), and every \(minutes(HotspotHop.backIntervalInBag)) on battery with the lid closed. It goes back when the signal is good on 2 looks in a row, and never to an open network or to one that asks for a user name. Only when Agent Caffeine joined the hotspot itself, and only to a Wi-Fi that was really gone."
-    static let hotspotForgets = "The password is kept in your Keychain. When you switch this off, Agent Caffeine forgets the name and the password."
+    static let hotspotHopBack = "Go back to your Wi-Fi when it returns"
+    static let hotspotHopBackExplained = "Your Mac looks for the lost Wi-Fi every \(minutes(HotspotHop.backInterval)), and every \(minutes(HotspotHop.backIntervalInBag)) on battery with the lid closed. It goes back after a good signal 2 times in a row. It never goes to an open network or to one that asks for a user name. This works only when Agent Caffeine joined the hotspot."
 
     private static func minutes(_ seconds: TimeInterval) -> String {
         HumaneDuration.counted(Int(seconds / 60), "minute")
     }
+
+    /// The row of "Ask to join hotspots" of macOS, with its value.
+    static let hotspotAutoJoinTitle = "Ask to join hotspots"
 
     /// What the feature cannot do. "Ask to join hotspots" has the choice
     /// Automatic from macOS 26 on: only macOS itself can wake the
     /// hotspot of an iPhone.
     static func hotspotLimit(offersAutomatic: Bool) -> String {
         offersAutomatic
-            ? "Your iPhone shows its hotspot only for a short time. If your Mac does not find it, set Ask to join hotspots to Automatic in Wi-Fi settings."
-            : "Your iPhone shows its hotspot only for a short time, so your Mac does not always find it."
+            ? "Your iPhone shows its hotspot only for a short time. With Automatic, your Mac finds it more often."
+            : "Your iPhone shows its hotspot only for a short time"
     }
 
     static func hotspotAutoJoin(_ mode: HotspotAutoJoin) -> String {
         switch mode {
-        case .automatic: return "Ask to join hotspots is set to Automatic"
-        case .notAutomatic: return "Ask to join hotspots is not set to Automatic"
+        case .automatic: return "Automatic"
+        case .notAutomatic: return "Not Automatic"
         }
     }
 
     /// The line next to "Save".
     static func hotspotSaveNote(_ note: HotspotSaveNote) -> String {
         switch note {
-        case .incomplete: return "Type the name and the password of your hotspot"
-        case .keychainFailed: return "Agent Caffeine could not save the password in your Keychain"
+        case .incomplete: return "Type the name and the password"
+        case .keychainFailed: return "Could not save the password in your Keychain"
         case .removeFailed: return "Agent Caffeine could not remove the password from your Keychain. Try again."
-        case .saved(.allowed): return "Saved. Agent Caffeine can see the names of Wi-Fi networks."
-        case .saved(.notNeeded): return "Saved"
-        case .saved(.notAsked): return "Saved. Allow Location when macOS asks, so Agent Caffeine can find the hotspot by its name."
-        case .saved(.denied): return "Saved. Location permission is off, so Agent Caffeine cannot find the hotspot."
+        case .saved(.allowed), .saved(.notNeeded): return "Saved"
+        case .saved(.notAsked): return "Saved. Allow Location when macOS asks."
+        case .saved(.denied): return "Saved, but Location is off, so your Mac cannot find the hotspot."
         }
     }
 
@@ -100,7 +100,7 @@ extension PanelText {
         saved ? "Forget your iPhone hotspot" : "No hotspot is saved"
     }
 
-    static let hotspotRemoveHelp = "This removes the name of the hotspot from the settings and its password from your Keychain."
+    static let hotspotRemoveHelp = "Removes the hotspot name from the settings and its password from your Keychain."
 
     // MARK: Menu
 

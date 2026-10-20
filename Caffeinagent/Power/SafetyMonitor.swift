@@ -162,15 +162,15 @@ enum SafetyText {
     /// Which notifications have no switch.
     static func alwaysTold(batteryFloorEnabled: Bool) -> String {
         batteryFloorEnabled
-            ? "Agent Caffeine always tells you when it lets your Mac sleep because the battery is low or your Mac got too hot. These notifications have no switch, so you do not miss them."
-            : "Agent Caffeine always tells you when it lets your Mac sleep because it got too hot. The battery limit is off, so it also tells you when the battery is at 10% and at 5%. These notifications have no switch, so you do not miss them."
+            ? "You always get a notification when your Mac sleeps for low battery or heat"
+            : "You always get a notification when your Mac sleeps for heat, and when the battery is at 10% and at 5%"
     }
 
-    static let floorOnHelp = "Agent Caffeine lets your Mac sleep when the battery is at this level, even while an agent is working. This applies with the lid open too."
-    static let floorOffWarning = "Your agents keep working until the battery is empty. Your Mac then turns off at once, and work that is not saved is lost."
-    /// Below the warning: the closed lid limit is for agents alone, so
-    /// with the floor off only heat ends what was asked for.
-    static let floorOffLidClosed = "With this off, a command line hold or the mode Always can empty the battery with the lid closed."
+    static let floorOnHelp = "Applies even while an agent works. Your Mac also sleeps if it gets too hot."
+    static let floorOffWarning = "Off: agents can run the battery empty. Your Mac then turns off at once and unsaved work is lost."
+    /// Behind the (i) of the warning: the closed lid limit is for agents
+    /// alone, so with the floor off only heat ends what was asked for.
+    static let floorOffLidClosed = "A command line hold or the mode Always can also empty the battery with the lid closed. Your Mac still sleeps if it gets too hot."
     static let floorOffQuestion = "Let the battery run empty?"
     static let floorOffConsequence = "With this off, Agent Caffeine keeps your Mac awake until the battery is empty. Your Mac then turns off at once, and work that is not saved can be lost."
 }

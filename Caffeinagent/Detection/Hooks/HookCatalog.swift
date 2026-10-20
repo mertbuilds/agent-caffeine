@@ -83,7 +83,7 @@ enum HookCatalog {
             id: "claude", displayName: "Claude Code", configPath: ".claude/settings.json",
             format: .jsonHookGroups(keyPath: ["hooks"]),
             adds: [.waitingForUser],
-            benefit: "Tells Agent Caffeine when Claude Code is waiting for your permission.",
+            benefit: "Tells Agent Caffeine when Claude Code waits for your permission.",
             afterInstall: nil,
             confirmedBy: "code.claude.com/docs/en/hooks, and the file on the test Mac"
         ),
@@ -91,8 +91,8 @@ enum HookCatalog {
             id: "codex", displayName: "Codex", configPath: ".codex/hooks.json",
             format: .jsonHookGroups(keyPath: ["hooks"]),
             adds: [.waitingForUser],
-            benefit: "Tells Agent Caffeine when Codex is waiting for your permission.",
-            afterInstall: "One more step for Codex: type /hooks in Codex and approve Agent Caffeine.",
+            benefit: "Tells Agent Caffeine when Codex waits for your permission.",
+            afterInstall: "Next: type /hooks in Codex and approve Agent Caffeine",
             confirmedBy: "learn.chatgpt.com/docs/hooks, the Codex 0.159 binary, and the file on the test Mac"
         ),
         HookCatalogEntry(
@@ -108,7 +108,7 @@ enum HookCatalog {
             format: .pluginFile,
             adds: [.working, .waitingForUser, .idle],
             benefit: "Tells Agent Caffeine when opencode is working, waiting for you or done.",
-            afterInstall: "opencode loads the plugin the next time it starts.",
+            afterInstall: "Loads the next time opencode starts",
             confirmedBy: "opencode.ai/docs/plugins for the folder, the plugin form and the event names. The event payload and the call of `event` without a wait are from the opencode 1.18.16 binary. A turn was measured live."
         ),
         HookCatalogEntry(
@@ -116,7 +116,7 @@ enum HookCatalog {
             format: .pluginFile,
             adds: [.working, .waitingForUser, .idle],
             benefit: "Lets Agent Caffeine see at once when Pi starts and stops working",
-            afterInstall: "Pi loads the extension the next time it starts, or when you type /reload in Pi.",
+            afterInstall: "Loads the next time Pi starts, or type /reload",
             confirmedBy: "Pi 1.0.4 on the test Mac: docs/extensions.md and docs/configuration.md for the folder and the form, dist/core/extensions/types.d.ts for the event names, dist/core/extensions/runner.js and dist/core/agent-session.js for the wait on each handler and for agent_settled after every run. The extension was loaded by Pi and its session events were recorded. A turn with a model was not run live."
         ),
         HookCatalogEntry(
@@ -132,7 +132,7 @@ enum HookCatalog {
             format: .jsonHookGroups(keyPath: ["hooks"]),
             adds: [],
             benefit: "Lets Agent Caffeine see at once when Grok Build starts and stops working",
-            afterInstall: "Grok Build loads the hooks the next time it starts, or when you type /hooks in Grok Build and press r.",
+            afterInstall: "Loads the next time Grok Build starts, or type /hooks and press r",
             confirmedBy: "Grok Build 0.2.111 on the test Mac: ~/.grok/docs/user-guide/10-hooks.md for the folder, the form, the event names and the input. `grok inspect --json` listed our entries from the file in a home folder of its own. No event was run live: Grok Build does not start a session without an account."
         ),
     ]

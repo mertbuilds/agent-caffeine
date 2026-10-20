@@ -318,9 +318,9 @@ final class LidChimeTests: XCTestCase {
         XCTAssertEqual(LidChimeSound.allCases.map(\.rawValue), ["Tink", "Bottle", "Purr", "Glass"])
     }
 
-    func testTheTextsNameTheBrandAndTheLid() {
-        XCTAssertEqual(PanelText.lidChimeSwitch, "Play a sound when you close the lid and your Mac stays awake")
-        XCTAssertTrue(PanelText.lidChimeExplained.contains("Agent Caffeine"))
+    func testTheTextsNameTheLid() {
+        XCTAssertEqual(PanelText.lidChimeSwitch, "Sound when the lid closes")
+        XCTAssertEqual(PanelText.lidChimeExplained, "Plays only when your Mac stays awake. No sound means it sleeps.")
         XCTAssertEqual(LidChime.Outcome.played.logLine, "lid closed: the chime played")
         XCTAssertEqual(LidChime.Outcome.silent(.helperNotSetUp).logLine, "lid closed: no chime, on battery, and the helper is not set up")
     }

@@ -81,12 +81,11 @@ struct WakeForJobsSection: View {
 
     @ViewBuilder
     private var power: some View {
-        Toggle(PanelText.jobsOnPowerOnly, isOn: $settings.onPowerOnly)
-        if settings.onPowerOnly {
-            Text(PanelText.jobsOnPowerExplained)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        } else {
+        HStack {
+            Toggle(PanelText.jobsOnPowerOnly, isOn: $settings.onPowerOnly)
+            InfoButton(text: PanelText.jobsOnPowerExplained)
+        }
+        if !settings.onPowerOnly {
             Label(PanelText.jobsOnBatteryWarning, systemImage: "exclamationmark.triangle")
                 .font(.callout)
                 .foregroundStyle(.orange)

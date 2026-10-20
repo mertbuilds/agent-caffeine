@@ -2,9 +2,9 @@ import Foundation
 
 /// Which agent notifications the user wants.
 struct AgentNoticeSettings: Equatable {
-    /// "An agent is waiting for your answer".
+    /// "An agent waits for you".
     var waiting = true
-    /// "An agent finished".
+    /// "An agent finishes".
     var finished = false
     /// No notification while the user works in the app the agent runs in.
     var onlyWhenAway = true
@@ -350,9 +350,9 @@ struct AgentNoticeHistory: Equatable {
             switch self {
             case .sending: return "Sending"
             case .sent(.delivered): return "Delivered"
-            case .sent(.noBanner): return "Delivered without a banner: banners are off in System Settings"
-            case .sent(.notAllowed): return "Not shown: notifications are off in System Settings"
-            case .sent(.failed): return "Not shown: macOS did not take it"
+            case .sent(.noBanner): return "Delivered, no banner"
+            case .sent(.notAllowed): return "Not shown: notifications are off"
+            case .sent(.failed): return "Not shown: macOS refused it"
             case .inFront: return "Not sent: you were in the agent's app"
             case .notActive: return "Not sent: Agent Caffeine was off or paused"
             }

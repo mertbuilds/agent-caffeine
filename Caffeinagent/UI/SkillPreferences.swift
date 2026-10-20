@@ -113,8 +113,8 @@ struct AgentSetupModel: Equatable {
         switch status {
         case .notInstalled: return PanelText.skillNotInstalled
         case .installed(let place): return PanelText.skillInstalled(in: folder(place))
-        case .outdated(let place): return PanelText.skillOutdated(in: folder(place))
-        case .foreign(let place): return PanelText.skillForeign(folder(place))
+        case .outdated: return PanelText.skillOutdated
+        case .foreign: return PanelText.skillForeign
         }
     }
 
@@ -132,7 +132,7 @@ struct AgentSetupModel: Equatable {
         switch snapshot.link {
         case .ours: return PanelText.commandLinked
         case .none, .dead: return linkNote ?? PanelText.commandNotLinked
-        case .foreign: return PanelText.skillForeign("~/" + SkillInstaller.linkPath)
+        case .foreign: return PanelText.skillForeign
         }
     }
 }
@@ -141,8 +141,6 @@ struct AgentSetupModel: Equatable {
 /// setup window.
 struct AgentSetupOffer: View {
     let model: AgentSetupModel
-    /// What a skill is, where the page does not say it already.
-    var explains = false
     @State private var showsChanges = false
 
     var body: some View {
@@ -162,13 +160,7 @@ struct AgentSetupOffer: View {
             if !model.changes.isEmpty {
                 DisclosureGroup("Show what changes", isExpanded: $showsChanges) {
                     VStack(alignment: .leading, spacing: 6) {
-                        if explains {
-                            Text(PanelText.agentSetupExplained)
-                                .font(.callout)
-                                .foregroundStyle(.secondary)
-                                .fixedSize(horizontal: false, vertical: true)
-                        }
-                        Text("Agent Caffeine writes these and nothing else. Remove takes them out again.")
+                        Text("Agent Caffeine writes only these. Remove takes them out.")
                             .font(.callout)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -200,7 +192,7 @@ struct AgentSetupSection: View {
     @State private var showsDetails: Bool?
 
     var body: some View {
-        Section {
+        Section(PanelText.agentSetupSection) {
             if !model.available {
                 Text(PanelText.agentSetupUnavailable)
                     .font(.callout)
@@ -239,12 +231,13 @@ struct AgentSetupSection: View {
             HStack(alignment: .firstTextBaseline) {
                 Text(PanelText.agentSetupTitle)
                     .fixedSize(horizontal: false, vertical: true)
+                InfoButton(text: PanelText.agentSetupInfo)
                 Spacer(minLength: 8)
                 Button(PanelText.agentSetupButton, action: setUp)
                     .buttonStyle(.borderedProminent)
                     .disabled(model.summary == nil)
             }
-            AgentSetupOffer(model: model, explains: true)
+            AgentSetupOffer(model: model)
             ForEach(model.snapshot.agents.filter { model.errors[$0.id] != nil }) { agent in
                 failure(model.errors[agent.id] ?? "")
             }
@@ -332,7 +325,7 @@ struct CommandLineByHand: View {
         DisclosureGroup(isExpanded: $isOpen) {
             VStack(alignment: .leading, spacing: 12) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(PanelText.commandLineExplained)
+                    Text(PanelText.commandLineInSettings)
                         .font(.callout)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)

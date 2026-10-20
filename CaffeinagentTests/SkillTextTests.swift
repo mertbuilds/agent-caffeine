@@ -246,21 +246,21 @@ final class SkillTextTests: XCTestCase {
 
     func testWhatTheButtonSaysItDoes() {
         let fresh = model([("claude", .notInstalled), ("codex", .notInstalled), ("opencode", .notInstalled)], planned: [".claude/skills", ".agents/skills"])
-        XCTAssertEqual(fresh.summary, "Adds a skill to Claude Code, Codex and opencode, and links the command agent-caffeine.")
+        XCTAssertEqual(fresh.summary, "Adds a skill to Claude Code, Codex and opencode, and links the agent-caffeine command.")
         XCTAssertEqual(fresh.changes, ["~/.claude/skills/agent-caffeine/SKILL.md", "~/.agents/skills/agent-caffeine/SKILL.md", "~/.local/bin/agent-caffeine"])
         XCTAssertFalse(fresh.isSetUp)
         XCTAssertTrue(fresh.isOffered)
-        XCTAssertEqual(model([("claude", .notInstalled)]).summary, "Adds a skill to Claude Code, and links the command agent-caffeine.")
+        XCTAssertEqual(model([("claude", .notInstalled)]).summary, "Adds a skill to Claude Code, and links the agent-caffeine command.")
         XCTAssertEqual(model([("claude", .notInstalled), ("codex", .notInstalled)], link: .foreign).summary, "Adds a skill to Claude Code and Codex.")
         let none = model([])
-        XCTAssertEqual(none.summary, "Links the command agent-caffeine. No agent that reads skills was found on this Mac.")
+        XCTAssertEqual(none.summary, "Links the agent-caffeine command. No agent that reads skills was found on this Mac.")
         XCTAssertFalse(none.isOffered, "The setup window has no step for a Mac without an agent that reads skills")
         let foreign = model([("claude", .foreign(place: ".claude/skills")), ("droid", .foreign(place: ".factory/skills"))])
         XCTAssertEqual(
-            foreign.summary, "Links the command agent-caffeine. A skill named agent-caffeine that Agent Caffeine did not make is already there.",
+            foreign.summary, "Links the agent-caffeine command. A skill named agent-caffeine that Agent Caffeine did not make is already there.",
             "The agents were found"
         )
-        XCTAssertEqual(PanelText.agentSetupSummary(agents: [], links: true, found: true), "Links the command agent-caffeine.")
+        XCTAssertEqual(PanelText.agentSetupSummary(agents: [], links: true, found: true), "Links the agent-caffeine command.")
         XCTAssertNil(model([("claude", .foreign(place: ".claude/skills"))], link: .foreign).summary)
         XCTAssertNil(model([("claude", .installed(place: ".claude/skills"))], link: .ours(target: "/x")).summary)
         XCTAssertEqual(PanelText.list([]), "")
@@ -276,33 +276,33 @@ final class SkillTextTests: XCTestCase {
         XCTAssertTrue(done.isOffered, "An agent that came later")
         XCTAssertEqual(done.pending.map(\.id), ["codex", "gemini"])
         XCTAssertEqual(done.snapshot.agents.map { AgentSetupModel.detail($0.status) }, [
-            "The skill is in ~/.claude/skills/agent-caffeine",
-            "The skill in ~/.agents/skills/agent-caffeine is from another version of Agent Caffeine.",
+            "In ~/.claude/skills/agent-caffeine",
+            "From an older version",
             "No skill yet",
-            "~/.factory/skills/agent-caffeine was not made by Agent Caffeine, so it is left as it is.",
+            "Not made by Agent Caffeine, left as it is",
         ])
         XCTAssertEqual(done.snapshot.agents.map { AgentSetupModel.action($0.status) }, [nil, "Update", "Install", nil])
         XCTAssertEqual(done.linkDetail, "Linked in ~/.local/bin")
         XCTAssertFalse(done.canLink)
         XCTAssertTrue(model([], link: .ours(target: "/x")).isSetUp, "The link alone is something to remove")
         XCTAssertFalse(model([("droid", .foreign(place: ".factory/skills"))], link: .foreign).isSetUp)
-        XCTAssertEqual(model([], link: .foreign).linkDetail, "~/.local/bin/agent-caffeine was not made by Agent Caffeine, so it is left as it is.")
+        XCTAssertEqual(model([], link: .foreign).linkDetail, "Not made by Agent Caffeine, left as it is")
     }
 
     func testTheOneLineAfterTheSetup() {
         let names = ["Claude Code", "Codex", "opencode", "Cursor", "Gemini CLI", "Droid"]
-        XCTAssertEqual(PanelText.agentSetupDone(agents: names, linked: true), "Set up for Claude Code, Codex and 4 more. The command agent-caffeine is linked.")
+        XCTAssertEqual(PanelText.agentSetupDone(agents: names, linked: true), "Set up for Claude Code, Codex and 4 more. Command linked.")
         XCTAssertEqual(PanelText.agentSetupDone(agents: Array(names.prefix(4)), linked: false), "Set up for Claude Code, Codex and 2 more.")
         XCTAssertEqual(PanelText.agentSetupDone(agents: Array(names.prefix(3)), linked: false), "Set up for Claude Code, Codex and opencode.", "Three names fit")
-        XCTAssertEqual(PanelText.agentSetupDone(agents: ["Pi"], linked: true), "Set up for Pi. The command agent-caffeine is linked.")
-        XCTAssertEqual(PanelText.agentSetupDone(agents: [], linked: true), "The command agent-caffeine is linked.")
+        XCTAssertEqual(PanelText.agentSetupDone(agents: ["Pi"], linked: true), "Set up for Pi. Command linked.")
+        XCTAssertEqual(PanelText.agentSetupDone(agents: [], linked: true), "Command linked.")
         XCTAssertNil(PanelText.agentSetupDone(agents: [], linked: false))
         let done = model(
             [("claude", .installed(place: ".claude/skills")), ("codex", .outdated(place: ".agents/skills")), ("gemini", .notInstalled), ("droid", .foreign(place: ".factory/skills"))],
             link: .ours(target: "/x")
         )
         XCTAssertEqual(done.installed.map(\.id), ["claude", "codex"], "An old skill of ours is a skill")
-        XCTAssertEqual(done.doneSummary, "Set up for Claude Code and Codex. The command agent-caffeine is linked.")
+        XCTAssertEqual(done.doneSummary, "Set up for Claude Code and Codex. Command linked.")
         XCTAssertEqual(model([("claude", .installed(place: ".claude/skills"))], link: .foreign).doneSummary, "Set up for Claude Code.")
         XCTAssertNil(model([("claude", .notInstalled)]).doneSummary)
     }
@@ -337,7 +337,7 @@ final class SkillTextTests: XCTestCase {
     }
 
     func testOutsideTheApplicationsFolderTheLinkIsNotOffered() {
-        let line = "Move Agent Caffeine to the Applications folder to link the command."
+        let line = "Move Agent Caffeine to Applications to link the command"
         let fresh = model([("claude", .notInstalled)], linkAllowed: false, planned: [".claude/skills"])
         XCTAssertFalse(fresh.canLink)
         XCTAssertEqual(fresh.summary, "Adds a skill to Claude Code.")
@@ -361,7 +361,7 @@ final class SkillTextTests: XCTestCase {
         linked.localBinOnPath = false
         XCTAssertNil(linked.pathHint, "A shell with no file we know")
         linked.startupFile = "~/.zshrc"
-        XCTAssertEqual(linked.pathHint, "~/.local/bin does not seem to be on your PATH. If your shell does not find agent-caffeine, add this line to ~/.zshrc.")
+        XCTAssertEqual(linked.pathHint, "Your shell may not find agent-caffeine. Add this line to ~/.zshrc.")
         linked.localBinOnPath = true
         XCTAssertNil(linked.pathHint)
         var unlinked = model([])
@@ -382,7 +382,7 @@ final class SkillTextTests: XCTestCase {
             PanelText.agentSetupByHand, PanelText.agentSetupTitle, PanelText.agentSetupDetails, PanelText.agentSetupUnavailable,
             PanelText.agentSetupDone(agents: ["Pi", "Amp", "goose", "Codex"], linked: true) ?? "", PanelText.commandLinkTitle, PanelText.skillNotInstalled,
             PanelText.commandLinked, PanelText.commandNotLinked, PanelText.commandLinkNeedsApplications, PanelText.localBinNotOnPath(file: "~/.zshrc"),
-            PanelText.skillInstalled(in: "x"), PanelText.skillOutdated(in: "x"), PanelText.skillForeign("x"),
+            PanelText.skillInstalled(in: "x"), PanelText.skillOutdated, PanelText.skillForeign, PanelText.agentSetupInfo, PanelText.agentSetupSection,
             PanelText.agentSetupSummary(agents: ["Pi"], links: true, found: true) ?? "",
             PanelText.agentSetupSummary(agents: [], links: true, found: false) ?? "",
             PanelText.agentSetupSummary(agents: [], links: true, found: true, foreign: true) ?? "",

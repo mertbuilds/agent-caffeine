@@ -9,7 +9,7 @@ enum LoginItemStatus: Equatable {
     case notFound
 }
 
-/// "Open Agent Caffeine at login" as Settings shows it.
+/// "Open at login" as Settings shows it.
 enum LoginItemState: Equatable {
     case on
     case off

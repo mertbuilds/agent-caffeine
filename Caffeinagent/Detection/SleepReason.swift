@@ -12,7 +12,7 @@ struct SleepSnapshot: Equatable {
     var onBattery = false
     /// The helper for a closed lid on battery is allowed.
     var helperSetUp = false
-    /// The setting "Stay awake with the lid closed on battery".
+    /// The setting "Stay awake with the lid closed".
     var lidClosedWanted = true
     var waitingHold: TimeInterval = 300
     /// The agents that worked, by their display names, and no rule

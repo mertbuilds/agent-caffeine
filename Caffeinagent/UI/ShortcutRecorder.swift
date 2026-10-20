@@ -57,10 +57,10 @@ struct ShortcutRecorder: View {
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didResignKeyNotification)) { _ in stop() }
     }
 
-    static let record = "Record shortcut"
+    static let record = "Record"
     static let recording = "Press the keys"
-    static let clear = "Clear shortcut"
-    static let reset = "Restore default shortcut"
+    static let clear = "Clear"
+    static let reset = "Restore default"
     static let none = "None"
 
     private func start() {

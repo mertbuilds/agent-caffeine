@@ -125,8 +125,9 @@ enum PanelText {
         return working.map { "\(text). \(stillWorking($0))" } ?? text
     }
 
-    static let offlineLimitPicker = "When your Mac is offline, stop staying awake for agents after"
-    static let offlineLimitExplained = "Most agents cannot work without the internet. If your agents use a model on this Mac, choose Never. Command line holds and scheduled jobs are not stopped. Wi-Fi that is connected but has no internet does not count as offline."
+    static let offlineLimitPicker = "Stop when offline for"
+    static let offlineLimitExplained = "Choose Never if your agents use a model on this Mac"
+    static let offlineLimitInfo = "Most agents cannot work without the internet. This stops only agents. Command line holds and scheduled jobs keep your Mac awake. Wi-Fi with no internet does not count as offline."
     static let never = "Never"
 
     // MARK: Sleep outlook
@@ -315,37 +316,42 @@ enum PanelText {
     /// Where the hooks are offered.
     static let hooksExplained = "Some agents can tell Agent Caffeine what they are doing. For that, Agent Caffeine adds a few lines to the agent's settings file and saves a copy of the file first. It never reads what you type."
     static let hooksOptionalInSetup = "If you skip this, Agent Caffeine still works."
-    static let hooksOptionalInSettings = "Agent Caffeine still works without this."
+    static let hooksInSettings = "Adds a few lines to the settings file of each agent. Never reads what you type."
+    static let hooksInfo = "Some agents can tell Agent Caffeine what they are doing. Agent Caffeine saves a copy of the settings file first. Agent Caffeine works without this too."
 
     /// Where the helper for a closed lid is offered.
     static let lidClosedExplained = "On battery, macOS puts your Mac to sleep when you close the lid, even while an agent is working. Agent Caffeine can prevent that with a small helper that you allow once."
     static let helperExplained = "The helper is a background item of Agent Caffeine. It changes one sleep setting of macOS while Agent Caffeine keeps your Mac awake, and changes it back after."
-    static let helperRemoveHere = "You can remove it here at any time."
     static let helperRemoveInSettings = "You can remove it in Settings > Battery and lid at any time."
-    static let closedLidLimitPicker = "With the lid closed on battery, keep it awake for agents for at most"
-    static let closedLidLimitExplained = "A last stop for agents, so a session that hangs does not empty the battery in a bag. Command line holds, scheduled jobs and the mode Always are not stopped"
+    /// Behind the (i) of the helper in Settings.
+    static let helperInfo = "On battery, macOS sleeps when you close the lid, even while an agent works. The helper is a background item that changes one sleep setting of macOS while Agent Caffeine keeps your Mac awake, and changes it back after. You allow it once. You can remove it here at any time."
+    static let closedLidLimitPicker = "Keep awake for agents for up to"
+    static let closedLidLimitExplained = "Then your Mac sleeps, so a stuck agent does not empty the battery in a bag"
+    static let closedLidLimitExceptions = "Command line holds, scheduled jobs and the mode Always are not stopped"
     static let noLimit = "No limit"
+    /// In the setup window, at the end of a paragraph.
     static let closedBagWarning = "Do not put your Mac in a closed bag while an agent works."
-    static let lidChimeSwitch = "Play a sound when you close the lid and your Mac stays awake"
-    static let lidChimeExplained = "You hear it only while Agent Caffeine keeps your Mac awake. No sound means your Mac goes to sleep."
+    static let closedBagWarningInSettings = "Do not put your Mac in a closed bag while an agent works"
+    static let lidChimeSwitch = "Sound when the lid closes"
+    static let lidChimeExplained = "Plays only when your Mac stays awake. No sound means it sleeps."
     static let lidChimeInSetup = "You hear a short sound when you close the lid and your Mac stays awake."
     static let allowInLoginItems = "Allow Agent Caffeine in System Settings > General > Login Items."
     static let helperIsSetUp = "The helper is set up"
-    static let moveToApplicationsToSetUp = "Move Agent Caffeine to the Applications folder to set this up."
-    static let moveToApplicationsToUse = "Move Agent Caffeine to the Applications folder to use this."
+    static let moveToApplicationsToSetUp = "Move Agent Caffeine to Applications to set this up"
+    static let moveToApplicationsToUse = "Move Agent Caffeine to Applications to use this."
 
-    static let openAtLogin = "Open Agent Caffeine at login"
+    static let openAtLogin = "Open at login"
     static let openAtLoginInSetup = "Open Agent Caffeine when you log in"
 
     // MARK: Free and open source
 
     /// In Settings > About.
     static let freeAndOpenSource = "Free and open source"
-    static let licenseExplained = "Agent Caffeine is free. You can read and change its source code under the GNU Affero General Public License, version 3."
+    static let licenseExplained = "Free. Source code under the GNU Affero General Public License, version 3."
     static let sourceCode = "Source code"
     static let openOnGitHub = "Open on GitHub"
     static let supportTheProject = "Support the project"
-    static let payWhatYouWant = "Pay what you want"
+    static let gitHubSponsors = "GitHub Sponsors"
     static let acknowledgements = "Acknowledgements"
     static let thirdPartyNotices = "Third-party notices"
 
@@ -448,7 +454,7 @@ enum PanelText {
         switch reason {
         case .alwaysWorkingByRule:
             // The rule says nothing about when work began.
-            return "Always counts as working"
+            return "Always working"
         case .runningCommand, .backgroundJob, .backgroundWork:
             return [reason.text, lasting].compactMap { $0 }.joined(separator: " ")
         default:
@@ -535,21 +541,28 @@ enum PanelText {
 
     // MARK: Settings, command line
 
+    /// In the setup window.
     static let commandLineExplained = "A script or a long job can ask Agent Caffeine to keep your Mac awake, and an agent can ask through MCP. The battery limit, a pause and the switch still let your Mac sleep."
-    static let commandLineInstallExplained = "This command makes a link to the tool in ~/.local/bin. Run it in Terminal."
-    static let commandLineMCPExplained = "Add this to the MCP servers of your agent."
+    /// In "Set up by hand" of Settings.
+    static let commandLineInSettings = "Scripts and agents can ask Agent Caffeine to keep your Mac awake. The battery limit, a pause and the main switch still apply."
+    static let commandLineInstallExplained = "Run in Terminal to link the tool in ~/.local/bin."
+    static let commandLineMCPExplained = "Add to the MCP servers of your agent."
 
     // MARK: Settings, set up for agents
 
     static let agentSetupButton = "Set up for agents"
+    /// In the setup window.
     static let agentSetupExplained = "A skill is a short text that tells an agent when to ask Agent Caffeine to keep your Mac awake, for example before a long build, and how."
+    /// Behind the (i) of the offer in Settings.
+    static let agentSetupInfo = "A skill is a short text that tells an agent when and how to ask Agent Caffeine to keep your Mac awake, for example before a long build."
     static let agentSetupOptional = "If you skip this, Agent Caffeine still works."
-    static let agentSetupRemoveExplained = "Remove takes out the skill and the link, and nothing else."
-    static let agentSetupTitle = "Let your agents keep your Mac awake"
+    static let agentSetupRemoveExplained = "Removes only the skill and the link."
+    static let agentSetupSection = "Agent skill"
+    static let agentSetupTitle = "Let agents keep your Mac awake"
     static let agentSetupDetails = "Details"
     static let agentSetupByHand = "Set up by hand"
     static let agentSetupUnavailable = "The skill is not in this copy of Agent Caffeine."
-    static let commandLinkTitle = "The command agent-caffeine"
+    static let commandLinkTitle = "agent-caffeine command"
 
     /// "Claude Code, Codex and opencode".
     static func list(_ names: [String]) -> String {
@@ -558,18 +571,18 @@ enum PanelText {
     }
 
     /// What the button does, from what is on this Mac: "Adds a skill to
-    /// Claude Code, Codex and opencode, and links the command
-    /// agent-caffeine." Nil when nothing is left to do.
+    /// Claude Code, Codex and opencode, and links the agent-caffeine
+    /// command." Nil when nothing is left to do.
     /// - Parameters:
     ///   - agents: the agents that get the skill.
     ///   - found: an agent that reads skills is on this Mac.
     ///   - foreign: an agent has a skill of that name that is not ours.
     static func agentSetupSummary(agents: [String], links: Bool, found: Bool, foreign: Bool = false) -> String? {
         switch (agents.isEmpty, links) {
-        case (false, true): return "Adds a skill to \(list(agents)), and links the command agent-caffeine."
+        case (false, true): return "Adds a skill to \(list(agents)), and links the agent-caffeine command."
         case (false, false): return "Adds a skill to \(list(agents))."
         case (true, true):
-            let linksOnly = "Links the command agent-caffeine."
+            let linksOnly = "Links the agent-caffeine command."
             if !found { return "\(linksOnly) No agent that reads skills was found on this Mac." }
             return foreign ? "\(linksOnly) A skill named agent-caffeine that Agent Caffeine did not make is already there." : linksOnly
         case (true, false): return nil
@@ -577,37 +590,31 @@ enum PanelText {
     }
 
     /// The one line after the setup: "Set up for Claude Code, Codex and 4
-    /// more. The command agent-caffeine is linked." Nil when nothing of
-    /// ours is there.
+    /// more. Command linked." Nil when nothing of ours is there.
     /// - Parameter agents: the agents that have the skill.
     static func agentSetupDone(agents: [String], linked: Bool) -> String? {
         let named = agents.count > 3 ? Array(agents.prefix(2)) + ["\(agents.count - 2) more"] : agents
         let lines = [
             agents.isEmpty ? nil : "Set up for \(list(named)).",
-            linked ? "The command agent-caffeine is linked." : nil,
+            linked ? "Command linked." : nil,
         ]
         return lines.contains { $0 != nil } ? lines.compactMap { $0 }.joined(separator: " ") : nil
     }
 
     static func skillInstalled(in folder: String) -> String {
-        "The skill is in \(folder)"
+        "In \(folder)"
     }
 
-    static func skillOutdated(in folder: String) -> String {
-        "The skill in \(folder) is from another version of Agent Caffeine."
-    }
-
-    static func skillForeign(_ folder: String) -> String {
-        "\(folder) was not made by Agent Caffeine, so it is left as it is."
-    }
+    static let skillOutdated = "From an older version"
+    static let skillForeign = "Not made by Agent Caffeine, left as it is"
 
     static let skillNotInstalled = "No skill yet"
     static let commandLinked = "Linked in ~/.local/bin"
     static let commandNotLinked = "Not linked"
-    static let commandLinkNeedsApplications = "Move Agent Caffeine to the Applications folder to link the command."
+    static let commandLinkNeedsApplications = "Move Agent Caffeine to Applications to link the command"
 
     static func localBinNotOnPath(file: String) -> String {
-        "~/.local/bin does not seem to be on your PATH. If your shell does not find agent-caffeine, add this line to \(file)."
+        "Your shell may not find agent-caffeine. Add this line to \(file)."
     }
 
     /// What tells a session apart when nothing else does: "since 14:05",

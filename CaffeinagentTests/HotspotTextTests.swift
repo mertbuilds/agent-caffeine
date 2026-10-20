@@ -30,33 +30,29 @@ final class HotspotTextTests: XCTestCase {
     // MARK: Settings
 
     func testTheSectionSaysWhatItDoesAndWhatItCosts() {
-        XCTAssertEqual(PanelText.hotspotTitle, "Join your iPhone hotspot (Beta)")
-        XCTAssertEqual(
-            PanelText.hotspotExplained,
-            "When Wi-Fi is lost while an agent works, your Mac joins this hotspot. This uses the data and the battery of your phone."
-        )
+        XCTAssertEqual(PanelText.hotspotTitle, "iPhone hotspot (Beta)")
+        XCTAssertEqual(PanelText.hotspotExplained, "Uses the data and battery of your phone")
         XCTAssertEqual(
             PanelText.hotspotHopBackExplained,
-            "On the hotspot, your Mac looks for the Wi-Fi it lost every 2 minutes, and every 10 minutes on battery with the lid closed. It goes back when the signal is good on 2 looks in a row, and never to an open network or to one that asks for a user name. Only when Agent Caffeine joined the hotspot itself, and only to a Wi-Fi that was really gone."
+            "Your Mac looks for the lost Wi-Fi every 2 minutes, and every 10 minutes on battery with the lid closed. It goes back after a good signal 2 times in a row. It never goes to an open network or to one that asks for a user name. This works only when Agent Caffeine joined the hotspot."
         )
     }
 
     func testWhatTheMacDoesOnTheHotspotIsSaid() {
-        XCTAssertEqual(PanelText.hotspotStays, "Your Mac stays on the hotspot until you change the network, or until it goes back to its Wi-Fi.")
-        XCTAssertEqual(PanelText.hotspotLeaves, "If you leave the hotspot, your Mac does not join it again by itself.")
+        XCTAssertEqual(
+            PanelText.hotspotInfo,
+            "Only while an agent works. Your Mac stays on the hotspot until you change the network or it goes back to your Wi-Fi. If you leave the hotspot, your Mac does not join it again by itself. When you switch this off, Agent Caffeine forgets the name and the password."
+        )
     }
 
     func testTheLimitIsSaidAndTheAdviceOnlyWhereMacOSHasTheChoice() {
         XCTAssertEqual(
             PanelText.hotspotLimit(offersAutomatic: true),
-            "Your iPhone shows its hotspot only for a short time. If your Mac does not find it, set Ask to join hotspots to Automatic in Wi-Fi settings."
+            "Your iPhone shows its hotspot only for a short time. With Automatic, your Mac finds it more often."
         )
-        XCTAssertEqual(
-            PanelText.hotspotLimit(offersAutomatic: false),
-            "Your iPhone shows its hotspot only for a short time, so your Mac does not always find it."
-        )
-        XCTAssertEqual(PanelText.hotspotAutoJoin(.automatic), "Ask to join hotspots is set to Automatic")
-        XCTAssertEqual(PanelText.hotspotAutoJoin(.notAutomatic), "Ask to join hotspots is not set to Automatic")
+        XCTAssertEqual(PanelText.hotspotLimit(offersAutomatic: false), "Your iPhone shows its hotspot only for a short time")
+        XCTAssertEqual(PanelText.hotspotAutoJoin(.automatic), "Automatic")
+        XCTAssertEqual(PanelText.hotspotAutoJoin(.notAutomatic), "Not Automatic")
     }
 
     func testTheStatusLineSaysTheLastResult() {
@@ -100,15 +96,12 @@ final class HotspotTextTests: XCTestCase {
     }
 
     func testTheLineNextToSave() {
-        XCTAssertEqual(PanelText.hotspotSaveNote(.incomplete), "Type the name and the password of your hotspot")
-        XCTAssertEqual(PanelText.hotspotSaveNote(.keychainFailed), "Agent Caffeine could not save the password in your Keychain")
-        XCTAssertEqual(PanelText.hotspotSaveNote(.saved(.allowed)), "Saved. Agent Caffeine can see the names of Wi-Fi networks.")
+        XCTAssertEqual(PanelText.hotspotSaveNote(.incomplete), "Type the name and the password")
+        XCTAssertEqual(PanelText.hotspotSaveNote(.keychainFailed), "Could not save the password in your Keychain")
+        XCTAssertEqual(PanelText.hotspotSaveNote(.saved(.allowed)), "Saved")
         XCTAssertEqual(PanelText.hotspotSaveNote(.saved(.notNeeded)), "Saved")
-        XCTAssertEqual(
-            PanelText.hotspotSaveNote(.saved(.notAsked)),
-            "Saved. Allow Location when macOS asks, so Agent Caffeine can find the hotspot by its name."
-        )
-        XCTAssertEqual(PanelText.hotspotSaveNote(.saved(.denied)), "Saved. Location permission is off, so Agent Caffeine cannot find the hotspot.")
+        XCTAssertEqual(PanelText.hotspotSaveNote(.saved(.notAsked)), "Saved. Allow Location when macOS asks.")
+        XCTAssertEqual(PanelText.hotspotSaveNote(.saved(.denied)), "Saved, but Location is off, so your Mac cannot find the hotspot.")
         XCTAssertEqual(PanelText.hotspotSaveNote(.removeFailed), "Agent Caffeine could not remove the password from your Keychain. Try again.")
     }
 
@@ -151,7 +144,7 @@ final class HotspotTextTests: XCTestCase {
         var lines = [
             PanelText.hotspotTitle, PanelText.hotspotSwitch, PanelText.hotspotExplained, PanelText.hotspotName, PanelText.hotspotNamePrompt,
             PanelText.hotspotPassword, PanelText.hotspotPasswordSaved, PanelText.hotspotSave, PanelText.hotspotOpenPrivacy,
-            PanelText.hotspotOpenWiFi, PanelText.hotspotStays, PanelText.hotspotLeaves, PanelText.hotspotHopBack, PanelText.hotspotHopBackExplained, PanelText.hotspotForgets,
+            PanelText.hotspotOpenWiFi, PanelText.hotspotInfo, PanelText.hotspotHopBack, PanelText.hotspotHopBackExplained, PanelText.hotspotAutoJoinTitle,
             PanelText.hotspotLimit(offersAutomatic: true), PanelText.hotspotLimit(offersAutomatic: false),
             PanelText.hotspotAutoJoin(.automatic), PanelText.hotspotAutoJoin(.notAutomatic),
             PanelText.hotspotRemoveStep(saved: true), PanelText.hotspotRemoveStep(saved: false), PanelText.hotspotRemoveHelp,
@@ -168,7 +161,7 @@ final class HotspotTextTests: XCTestCase {
             XCTAssertFalse(line.contains("**"), line)
             XCTAssertNil(line.range(of: #"\d+ ?(min|sec|s|m|h|hr)\b"#, options: .regularExpression), line)
             XCTAssertFalse(line.localizedCaseInsensitiveContains("agent caffeine") && !line.contains("Agent Caffeine"), line)
-            XCTAssertEqual(line.first?.isUppercase ?? false || line.hasPrefix("macOS"), true, line)
+            XCTAssertEqual(line.first?.isUppercase ?? false || line.hasPrefix("macOS") || line.hasPrefix("iPhone"), true, line)
         }
     }
 }

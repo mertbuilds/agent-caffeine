@@ -40,9 +40,13 @@ struct HookPreferencesSection: View {
 
     var body: some View {
         Section("Better detection") {
-            Text("\(PanelText.hooksExplained) \(PanelText.hooksOptionalInSettings)")
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            HStack {
+                Text(PanelText.hooksInSettings)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                InfoButton(text: PanelText.hooksInfo)
+            }
             if !available {
                 Text(PanelText.moveToApplicationsToUse)
                     .font(.callout)
@@ -63,16 +67,16 @@ struct HookRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Toggle(row.entry.displayName, isOn: Binding(get: { row.isOn }, set: set))
-                // Off is always possible: it only takes our lines out.
-                .disabled(HookRowModel.toggleDisabled(row, available: available))
-            Text(row.entry.benefit)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            HStack {
+                Toggle(row.entry.displayName, isOn: Binding(get: { row.isOn }, set: set))
+                    // Off is always possible: it only takes our lines out.
+                    .disabled(HookRowModel.toggleDisabled(row, available: available))
+                InfoButton(text: row.entry.benefit)
+            }
             switch row.status {
             case .outdated:
                 HStack {
-                    Text("These lines are from another version of Agent Caffeine.")
+                    Text("From an older version.")
                         .font(.callout)
                     Spacer()
                     Button("Update") { set(true) }
@@ -129,7 +133,7 @@ struct HookChanges: View {
         case .pluginFile:
             return "Agent Caffeine writes this file: \(path). Turning this off removes the file."
         case .jsonHookGroups, .jsonFlatHooks:
-            return "Agent Caffeine adds these lines to \(path) and saves a copy of the file next to it first. Turning this off removes the lines and nothing else. If Agent Caffeine created the file and nothing else is in it, the file is removed too."
+            return "Agent Caffeine adds these lines to \(path) and saves a copy first. Turning this off removes only these lines. An empty file that Agent Caffeine made is removed too."
         }
     }
 }

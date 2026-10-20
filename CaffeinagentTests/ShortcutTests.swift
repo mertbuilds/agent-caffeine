@@ -89,12 +89,12 @@ final class ShortcutTests: XCTestCase {
     }
 
     func testTheWordsOfAProblem() {
-        XCTAssertEqual(ShortcutProblem.usedByAnotherApp.text, "This shortcut is already used by another app")
+        XCTAssertEqual(ShortcutProblem.usedByAnotherApp.text, "Another app uses this shortcut")
         for problem in [ShortcutProblem.needsModifier, .usedBySystem, .usedTwice, .usedByAnotherApp] {
             XCTAssertFalse(problem.text.hasSuffix("."), problem.text)
             XCTAssertFalse(problem.text.contains("\u{2014}"), problem.text)
         }
-        XCTAssertEqual(ShortcutAction.toggle.title, "Turn Agent Caffeine on or off")
+        XCTAssertEqual(ShortcutAction.toggle.title, "Turn on or off")
         XCTAssertEqual(ShortcutAction.pauseOneHour.title, "Pause for 1 hour")
     }
 
