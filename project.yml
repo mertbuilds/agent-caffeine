@@ -255,6 +255,7 @@ targets:
       - Caffeinagent/UI/Panel/PanelFixtures.swift
       - Caffeinagent/UI/MenuBarIcon.swift
       - Caffeinagent/UI/OnboardingModel.swift
+      - Caffeinagent/UI/InfoButton.swift
       - Caffeinagent/UI/HookPreferences.swift
       - Caffeinagent/UI/SkillPreferences.swift
       - Caffeinagent/UI/JobPreferences.swift
