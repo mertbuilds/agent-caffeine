@@ -3,7 +3,8 @@
 import { useSyncExternalStore, type ReactNode } from "react";
 import { downloadLink } from "@/lib/download";
 import { isMacDevice, openSendToMac } from "@/lib/send-to-mac";
-import { rememberedUtm, track, type Placement, type SupportPlacement } from "@/lib/track";
+import { REPO_URL } from "@/lib/site";
+import { rememberedUtm, track, type GitHubPlacement, type Placement, type SupportPlacement } from "@/lib/track";
 
 export type { Placement };
 
@@ -21,6 +22,32 @@ export function SupportCta({
 }) {
   return (
     <a href={href} onClick={() => track("support_click", { placement })} className={className}>
+      {children}
+    </a>
+  );
+}
+
+/** A link to the code on GitHub, in a tab of its own, counted in the browser with where it sits. */
+export function GitHubCta({
+  placement,
+  className,
+  "aria-label": label,
+  children,
+}: {
+  placement: GitHubPlacement;
+  className?: string;
+  "aria-label"?: string;
+  children: ReactNode;
+}) {
+  return (
+    <a
+      href={REPO_URL}
+      target="_blank"
+      rel="noreferrer"
+      aria-label={label}
+      onClick={() => track("github_clicked", { placement })}
+      className={className}
+    >
       {children}
     </a>
   );

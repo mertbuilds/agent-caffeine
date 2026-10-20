@@ -4,7 +4,8 @@ import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FocusEvent, type RefObject } from "react";
 import { DownloadForMac } from "@/components/download-button";
-import { DownloadCta } from "@/components/track";
+import { GitHubMark } from "@/components/github-mark";
+import { DownloadCta, GitHubCta } from "@/components/track";
 import { distance, duration, easing, scale } from "@/lib/motion";
 import type { Release } from "@/lib/release";
 import { useLessMotion } from "@/lib/use-less-motion";
@@ -41,7 +42,7 @@ export function SiteMenu({
   links: ReadonlyArray<MenuLink>;
   /** The name the header's morph carries the button by. */
   morph: string;
-  /** The release the menu's last row downloads. Without one the menu has only its links. */
+  /** The release the menu's last row downloads. Without one the menu has only its links and GitHub. */
   release: Release | null;
 }) {
   const [top, setTop] = useState<number | null>(null);
@@ -157,6 +158,16 @@ export function SiteMenu({
                   {link.label}
                 </Link>
               ))}
+              <div
+                className="menu-item-in"
+                onClick={() => close(false)}
+                style={{ animationDelay: `${links.length * duration.stagger}s` }}
+              >
+                <GitHubCta placement="menu" className={ROW}>
+                  <GitHubMark size={16} />
+                  GitHub
+                </GitHubCta>
+              </div>
             </nav>
             {release !== null ? (
               <>
@@ -164,7 +175,7 @@ export function SiteMenu({
                 <div
                   className="menu-item-in"
                   onClick={() => close(false)}
-                  style={{ animationDelay: `${links.length * duration.stagger}s` }}
+                  style={{ animationDelay: `${(links.length + 1) * duration.stagger}s` }}
                 >
                   <DownloadCta href={release.href} filename={release.filename} placement="header" className={ROW}>
                     <DownloadForMac />

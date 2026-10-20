@@ -5,12 +5,12 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { PILL, SIZES } from "@/components/pill";
 import { DownloadButton, WithAppleMark } from "@/components/download-button";
+import { GitHubMark } from "@/components/github-mark";
 import { SiteMenu } from "@/components/site-menu";
+import { GitHubCta } from "@/components/track";
 import { morph } from "@/lib/morph";
 import type { Release } from "@/lib/release";
-import { REPO_URL } from "@/lib/site";
 import { track } from "@/lib/track";
 
 /**
@@ -41,12 +41,12 @@ function morphName(name: string) {
 
 /**
  * The name and the way home at the left, the home page's sections in the
- * middle, and the download at the right, or the source code while there is no download. The link of the section in
+ * middle, and GitHub's button and the download at the right. The link of the section in
  * view takes the text's own colour. Once the page has
  * run a little way under it, the items gather into a pill in the middle, the
  * mark alone for the name, and open back out near the top. A window too
- * narrow for the links keeps the name and the main action, and has the
- * menu's button at the far edge with the links in the menu it opens.
+ * narrow for the links keeps the name and the download, and has the
+ * menu's button at the far edge with the links and GitHub in the menu it opens.
  *
  * The blur sits on a ground of its own behind the items, never on the header
  * or anything around the page, which Safari on iOS can draw wrong.
@@ -174,13 +174,17 @@ export function SiteHeader({ release }: { release: Release | null }) {
           ))}
         </nav>
         <span className="inline-flex items-center gap-2 justify-self-end">
-          {release === null ? (
-            <span {...morphName("header-primary")} className="inline-flex">
-              <a href={REPO_URL} className={`${PILL} bg-fg text-bg ${SIZES.compact}`}>
-                Source code
-              </a>
-            </span>
-          ) : (
+          {/* A narrow window has no room for it: its menu has the link instead. */}
+          <span {...morphName("header-github")} className="hidden md:inline-flex">
+            <GitHubCta
+              placement="header"
+              aria-label="GitHub"
+              className="flex size-7 items-center justify-center rounded-full border border-border text-muted no-underline transition-colors duration-quick ease-smooth-out hover:text-fg motion-reduce:transition-none"
+            >
+              <GitHubMark size={14} />
+            </GitHubCta>
+          </span>
+          {release === null ? null : (
             <span {...morphName("header-primary")} className="inline-flex">
               <DownloadButton release={release} placement="header" size="compact">
                 <WithAppleMark>Download</WithAppleMark>
