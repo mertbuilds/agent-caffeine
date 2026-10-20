@@ -374,7 +374,7 @@ struct AlertPreferences: View {
             if denied {
                 Section {
                     HStack {
-                        Label("Notifications are off for Agent Caffeine in System Settings", systemImage: "bell.slash")
+                        Label("Notifications are off in System Settings", systemImage: "bell.slash")
                             .foregroundStyle(.orange)
                         Spacer()
                         Button("Open System Settings", action: openSystemSettings)
@@ -382,21 +382,12 @@ struct AlertPreferences: View {
                 }
             }
             Section("Notify me when") {
-                toggle(
-                    "An agent is waiting for you", $notices.waiting,
-                    help: "You get a notification when an agent asks you a question or needs your permission."
-                )
-                toggle(
-                    "An agent finished", $notices.finished,
-                    help: "You get a notification when an agent finishes its work."
-                )
+                Toggle("An agent waits for you", isOn: $notices.waiting)
+                Toggle("An agent finishes", isOn: $notices.finished)
             }
             Section {
-                toggle(
-                    "Only notify when the agent's window is not in front", $notices.onlyWhenAway,
-                    help: "You get no notification while you use the app the agent runs in."
-                )
-                .disabled(!notices.wantsAny)
+                Toggle("Only when its app is not in front", isOn: $notices.onlyWhenAway)
+                    .disabled(!notices.wantsAny)
             }
             if !history.isEmpty {
                 Section("Last notifications") {
@@ -423,15 +414,6 @@ struct AlertPreferences: View {
             }
         }
         .formStyle(.grouped)
-    }
-
-    private func toggle(_ title: String, _ value: Binding<Bool>, help: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Toggle(title, isOn: value)
-            Text(help)
-                .font(.callout)
-                .foregroundStyle(.secondary)
-        }
     }
 }
 

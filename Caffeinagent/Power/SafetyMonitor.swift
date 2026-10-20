@@ -162,8 +162,8 @@ enum SafetyText {
     /// Which notifications have no switch.
     static func alwaysTold(batteryFloorEnabled: Bool) -> String {
         batteryFloorEnabled
-            ? "Agent Caffeine always tells you when it lets your Mac sleep because the battery is low or your Mac got too hot. These notifications have no switch, so you do not miss them."
-            : "Agent Caffeine always tells you when it lets your Mac sleep because it got too hot. The battery limit is off, so it also tells you when the battery is at 10% and at 5%. These notifications have no switch, so you do not miss them."
+            ? "You always get a notification when your Mac sleeps for low battery or heat"
+            : "You always get a notification when your Mac sleeps for heat, and when the battery is at 10% and at 5%"
     }
 
     static let floorOnHelp = "Agent Caffeine lets your Mac sleep when the battery is at this level, even while an agent is working. This applies with the lid open too."
