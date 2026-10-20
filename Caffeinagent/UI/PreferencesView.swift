@@ -489,7 +489,7 @@ struct AgentPreferences: View {
                 model: agentSetup, commandLine: commandLine, setUp: setUpForAgents, install: installSkill,
                 link: linkTool, remove: removeAgentSetup
             )
-            Section("Open on this Mac now") {
+            Section("Open now") {
                 let found = Self.definitions.filter { foundIDs.contains($0.id) }
                 if found.isEmpty {
                     Text("No agent is open")
@@ -501,16 +501,16 @@ struct AgentPreferences: View {
                 HookPreferencesSection(rows: hookRows, available: hooksAvailable, set: setHooks)
             }
             Section("Other agents") {
-                Text("Agents marked Not tested yet are found by name. Agent Caffeine sees them as working while they use the processor or run a command.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text("Not tested yet means found by name only")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    InfoButton(text: "Agent Caffeine counts these as working while they use the processor or run a command.")
+                }
                 ForEach(Self.definitions.filter { !foundIDs.contains($0.id) }, id: \.id, content: row)
             }
-            Section("Other tools") {
-                Text("Add a tool that is not in the list by its process name: the name of the command you type in Terminal to start the tool, for example aider. It counts as working while it is using the processor.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                    .id(Self.otherToolsID)
+            Section("Add a tool") {
                 ForEach(settings.userAgentNames, id: \.self) { name in
                     HStack {
                         Text(name).font(.system(.body, design: .monospaced))
@@ -523,13 +523,15 @@ struct AgentPreferences: View {
                     }
                 }
                 HStack {
-                    TextField("Process name", text: $newName, prompt: Text("Process name, for example aider"))
+                    TextField("Command name", text: $newName, prompt: Text("Command name, for example aider"))
                         .textFieldStyle(.roundedBorder)
                         .labelsHidden()
                         .onSubmit(add)
                     Button("Add", action: add)
                         .disabled(newName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    InfoButton(text: "The name you type in Terminal to start the tool. It counts as working while it uses the processor.")
                 }
+                .id(Self.otherToolsID)
             }
         }
         .formStyle(.grouped)
@@ -570,7 +572,7 @@ extension AgentRule {
     var title: String {
         switch self {
         case .automatic: return "Automatic"
-        case .alwaysWorkingWhileOpen: return "Always counts as working"
+        case .alwaysWorkingWhileOpen: return "Always working"
         case .ignore: return "Ignore"
         }
     }
