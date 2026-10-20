@@ -178,7 +178,7 @@ jobs:
           MAC_R2_S3_ACCESS_KEY_ID: ${{ env.DRY_RUN != 'true' && secrets.MAC_R2_S3_ACCESS_KEY_ID || '' }}
           MAC_R2_S3_SECRET_ACCESS_KEY: ${{ env.DRY_RUN != 'true' && secrets.MAC_R2_S3_SECRET_ACCESS_KEY || '' }}
           MAC_CLOUDFLARE_ACCOUNT_ID: ${{ env.DRY_RUN != 'true' && secrets.MAC_CLOUDFLARE_ACCOUNT_ID || '' }}
-          MAC_R2_BUCKET: ${{ vars.MAC_R2_BUCKET }}
+          MAC_R2_BUCKET: ${{ env.DRY_RUN != 'true' && secrets.MAC_R2_BUCKET || '' }}
         run: |
           set -euo pipefail
           missing=0
@@ -253,7 +253,6 @@ jobs:
         env:
           NOTARY_API_KEY_ID: ${{ secrets.MAC_NOTARY_API_KEY_ID }}
           NOTARY_API_ISSUER_ID: ${{ secrets.MAC_NOTARY_API_ISSUER_ID }}
-          R2_BUCKET: ${{ vars.MAC_R2_BUCKET }}
         run: bash scripts/release.sh --dry-run --notarize
 
       # release.sh reaches the bucket through its S3 endpoint with curl, tests
@@ -267,8 +266,16 @@ jobs:
           R2_S3_ACCESS_KEY_ID: ${{ secrets.MAC_R2_S3_ACCESS_KEY_ID }}
           R2_S3_SECRET_ACCESS_KEY: ${{ secrets.MAC_R2_S3_SECRET_ACCESS_KEY }}
           R2_S3_ENDPOINT: https://${{ secrets.MAC_CLOUDFLARE_ACCOUNT_ID }}.r2.cloudflarestorage.com
-          R2_BUCKET: ${{ vars.MAC_R2_BUCKET }}
+          R2_BUCKET: ${{ secrets.MAC_R2_BUCKET }}
         run: bash scripts/release.sh
+
+      # No step after this one needs a key, so none is on the runner while the
+      # tap's code runs.
+      - name: Remove the keys
+        if: always()
+        run: |
+          security delete-keychain "$RUNNER_TEMP/mac-release.keychain-db" 2> /dev/null || true
+          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/notary-key.p8" "$RUNNER_TEMP/sparkle-ed25519.key"
 
       # What the jobs after this one need, read from the latest.json that was
       # uploaded, and each value checked as a whole string before it is passed on.
@@ -360,12 +367,9 @@ jobs:
             exit 1
           fi
 
-      - name: Remove the keys
+      - name: Remove the tap's clone
         if: always()
-        run: |
-          security delete-keychain "$RUNNER_TEMP/mac-release.keychain-db" 2> /dev/null || true
-          rm -f "$RUNNER_TEMP/developer-id.p12" "$RUNNER_TEMP/notary-key.p8" "$RUNNER_TEMP/sparkle-ed25519.key"
-          rm -rf homebrew-tap
+        run: rm -rf homebrew-tap
 
   # The tag and the GitHub release are a record of what was released, written
   # after the fact. A tag pushed with the built-in token starts no workflow.
@@ -397,24 +401,29 @@ jobs:
           set -euo pipefail
           tag="v$VERSION"
           by_hand="The release is live; only the tag and the GitHub release are missing. The owner can add them: gh release create $tag --target $GITHUB_SHA"
-          if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
-            echo "::notice::the GitHub release $tag is already there, so it was left as it is"
-            exit 0
-          fi
           repo="repos/$GITHUB_REPOSITORY"
+          # A new build of the same version finds the tag of the earlier build.
+          # The tag is a record and is never moved.
           if ref=$(gh api "$repo/git/ref/tags/$tag" 2> "$RUNNER_TEMP/ref-error"); then
             sha=$(printf '%s' "$ref" | jq -r '.object.sha')
             if [ "$(printf '%s' "$ref" | jq -r '.object.type')" = "tag" ]; then
               sha=$(gh api "$repo/git/tags/$sha" --jq '.object.sha')
             fi
             if [ "$sha" != "$GITHUB_SHA" ]; then
-              echo "::error::the tag $tag is already there, on $sha and not on the released commit $GITHUB_SHA. $by_hand"
-              exit 1
+              echo "::warning::build $BUILD was released from $GITHUB_SHA, but the tag $tag is already on $sha, so the tag and the GitHub release were left as they are"
+              exit 0
+            fi
+            if gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+              echo "the tag and the GitHub release $tag are already there on $GITHUB_SHA"
+              exit 0
             fi
           elif ! grep -q "HTTP 404" "$RUNNER_TEMP/ref-error"; then
             cat "$RUNNER_TEMP/ref-error" >&2
             echo "::error::could not ask whether the tag $tag is there. $by_hand"
             exit 1
+          elif gh release view "$tag" --repo "$GITHUB_REPOSITORY" > /dev/null 2>&1; then
+            echo "::warning::build $BUILD was released from $GITHUB_SHA, but a GitHub release $tag is already there without its tag, so it was left as it is"
+            exit 0
           fi
           NOTES="$RUNNER_TEMP/notes.md"
           {

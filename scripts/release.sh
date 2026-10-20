@@ -314,7 +314,7 @@ PUBLISHED_APPCAST="$BUILD_DIR/appcast.published.xml"
 if [ -n "${R2_BUCKET:-}" ] \
   && r2_get mac/appcast.xml "$PUBLISHED_APPCAST" \
   && [ -s "$PUBLISHED_APPCAST" ]; then
-  echo "    from r2: $R2_BUCKET/mac/appcast.xml"
+  echo "    from the bucket: mac/appcast.xml"
 else
   STATUS=$(curl -sS -o "$PUBLISHED_APPCAST" -w '%{http_code}' "$BUCKET_URL/appcast.xml") || STATUS="no response"
   case "$STATUS" in
@@ -744,19 +744,19 @@ r2_put() {
   type="$3"
   if [ "$R2_TRANSPORT" = cf ]; then
     if [ "$DRY_RUN" = 1 ]; then
-      echo "    would run: cf r2 objects put $key --bucket-name ${R2_BUCKET:-<R2_BUCKET>} --file \"$file\" --content-type $type"
+      echo "    would run: cf r2 objects put $key --bucket-name <R2_BUCKET> --file \"$file\" --content-type $type"
     else
-      echo "    $R2_BUCKET/$key"
+      echo "    $key"
       cf r2 objects put "$key" --bucket-name "$R2_BUCKET" --file "$file" --content-type "$type"
     fi
     return
   fi
   url="$R2_S3_ENDPOINT/$R2_BUCKET/$key"
   if [ "$DRY_RUN" = 1 ]; then
-    echo "    would run: curl --aws-sigv4 aws:amz:auto:s3 --upload-file \"$file\" -H \"Content-Type: $type\" <R2_S3_ENDPOINT>/$R2_BUCKET/$key"
+    echo "    would run: curl --aws-sigv4 aws:amz:auto:s3 --upload-file \"$file\" -H \"Content-Type: $type\" <R2_S3_ENDPOINT>/<R2_BUCKET>/$key"
     return
   fi
-  echo "    $R2_BUCKET/$key"
+  echo "    $key"
   # The Content-Type is all that is stored beside the object, as with cf. The
   # hash goes into the signature, so the bucket refuses any other bytes.
   sha=$(/usr/bin/shasum -a 256 "$file" | cut -d' ' -f1)
