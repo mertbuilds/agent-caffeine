@@ -1,0 +1,64 @@
+name: Mac CI
+
+# Builds the app and runs the unit tests. No secret: a Debug build signs ad hoc.
+# The website in site/ is not part of it.
+
+on:
+  pull_request:
+    paths:
+      - Caffeinagent/**
+      - CaffeinagentCLI/**
+      - CaffeinagentHelper/**
+      - CaffeinagentHook/**
+      - CaffeinagentTests/**
+      - Resources/**
+      - skills/**
+      - THIRD_PARTY_NOTICES.md
+      - project.yml
+      - .github/workflows/mac-ci.yml
+  push:
+    branches: [main]
+    paths:
+      - Caffeinagent/**
+      - CaffeinagentCLI/**
+      - CaffeinagentHelper/**
+      - CaffeinagentHook/**
+      - CaffeinagentTests/**
+      - Resources/**
+      - skills/**
+      - THIRD_PARTY_NOTICES.md
+      - project.yml
+      - .github/workflows/mac-ci.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mac-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    # Apple Silicon. Keep the image and the Xcode the same as in mac-release.yml.
+    runs-on: macos-26
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Select Xcode 26.6
+        run: sudo xcode-select --switch /Applications/Xcode_26.6.app
+      # The release binary of the version the project is generated with on the
+      # owner's Mac, checked against its sha256. Homebrew has only the newest.
+      - name: Install xcodegen 2.45.4
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/xcodegen.zip" https://github.com/yonaskolb/XcodeGen/releases/download/2.45.4/xcodegen.zip
+          echo "090ec29491aad50aec10631bf6e62253fed733c50f3aab0f5ffc86bc170bdbef  $RUNNER_TEMP/xcodegen.zip" | shasum -a 256 -c -
+          unzip -q "$RUNNER_TEMP/xcodegen.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/xcodegen/bin" >> "$GITHUB_PATH"
+      - run: xcodegen generate
+      - name: Build
+        run: xcodebuild build -project Caffeinagent.xcodeproj -scheme Caffeinagent -configuration Debug -destination 'platform=macOS,arch=arm64' -quiet
+      - name: Test
+        run: xcodebuild test -project Caffeinagent.xcodeproj -scheme Caffeinagent -destination 'platform=macOS,arch=arm64'
