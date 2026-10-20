@@ -347,11 +347,11 @@ enum PanelText {
 
     /// In Settings > About.
     static let freeAndOpenSource = "Free and open source"
-    static let licenseExplained = "Agent Caffeine is free. You can read and change its source code under the GNU Affero General Public License, version 3."
+    static let licenseExplained = "Free. Source code under the GNU Affero General Public License, version 3."
     static let sourceCode = "Source code"
     static let openOnGitHub = "Open on GitHub"
     static let supportTheProject = "Support the project"
-    static let payWhatYouWant = "Pay what you want"
+    static let gitHubSponsors = "GitHub Sponsors"
     static let acknowledgements = "Acknowledgements"
     static let thirdPartyNotices = "Third-party notices"
 

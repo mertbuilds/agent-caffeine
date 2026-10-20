@@ -142,12 +142,14 @@ struct AboutPreferences: View {
                     Button("Check for updates…", action: checkForUpdates)
                         .disabled(!canCheckForUpdates)
                 }
-                Text("While it keeps the Mac awake, Agent Caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. For a closed lid on battery, its helper also turns on the SleepDisabled setting of macOS, and turns it off when Agent Caffeine stops or quits. With Wake for jobs on, the helper also keeps one wake time in the schedule of macOS, and takes it away when Agent Caffeine quits.")
+                Text("Checks caffeinagent.com for updates. Sends nothing about you or your agents.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
-                Text("Agent Caffeine checks caffeinagent.com for updates. It sends nothing about you or your agents.")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+                HStack {
+                    Text("How it keeps your Mac awake")
+                    Spacer()
+                    InfoButton(text: "While it keeps the Mac awake, Agent Caffeine holds a PreventUserIdleSystemSleep assertion, plus PreventSystemSleep, so the Mac stays awake on battery and when plugged in. The display may still sleep. For a closed lid on battery, its helper also turns on the SleepDisabled setting of macOS, and turns it off when Agent Caffeine stops or quits. With Wake for jobs on, the helper also keeps one wake time in the schedule of macOS, and takes it away when Agent Caffeine quits.")
+                }
                 HStack(spacing: 4) {
                     Text("a")
                         .foregroundStyle(.secondary)
@@ -167,7 +169,7 @@ struct AboutPreferences: View {
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 row(PanelText.sourceCode) { Link(PanelText.openOnGitHub, destination: AppLinks.sourceCode) }
-                row(PanelText.supportTheProject) { Link(PanelText.payWhatYouWant, destination: AppLinks.support) }
+                row(PanelText.supportTheProject) { Link(PanelText.gitHubSponsors, destination: AppLinks.support) }
                 row(PanelText.acknowledgements) { Link(PanelText.thirdPartyNotices, destination: AppLinks.acknowledgements) }
             }
             Section("Help") {
@@ -175,34 +177,30 @@ struct AboutPreferences: View {
                 row("Contact") { Link(AppLinks.contactAddress, destination: AppLinks.contact) }
             }
             Section("Remove Agent Caffeine") {
-                Text("Do these steps before you move Agent Caffeine to the Trash, so nothing of it stays on your Mac.")
+                Text("Do these steps before you move the app to the Trash")
                     .font(.callout)
                     .foregroundStyle(.secondary)
                 step(
                     hooksOn.isEmpty ? "Better detection is off" : "Turn off better detection for \(hooksOn.map(\.displayName).joined(separator: ", "))",
-                    help: "This removes the lines that Agent Caffeine added to the settings files of your agents.",
+                    info: "Removes the lines Agent Caffeine added to the settings files of your agents.",
                     done: hooksOn.isEmpty
                 ) { Button("Turn off") { turnOffHooks(hooksOn) } }
                 step(
                     helperRegistered ? "Remove the helper" : "The helper is not set up",
-                    help: "This removes the background item for a closed lid on battery.",
+                    info: "Removes the background item for a closed lid on battery.",
                     done: !helperRegistered
                 ) { Button("Remove", action: removeHelper) }
                 step(
-                    agentSetupOn ? "Remove the skill and the command agent-caffeine" : "No skill and no command are set up",
-                    help: "This removes the skill from the skills folders of your agents, and the link in ~/.local/bin.",
+                    agentSetupOn ? "Remove the skill and the agent-caffeine command" : "No skill and no command are set up",
+                    info: "Removes the skill from the skills folders of your agents, and the link in ~/.local/bin.",
                     done: !agentSetupOn
                 ) { Button("Remove", action: removeAgentSetup) }
                 step(
                     PanelText.hotspotRemoveStep(saved: hotspotSaved),
-                    help: PanelText.hotspotRemoveHelp,
+                    info: PanelText.hotspotRemoveHelp,
                     done: !hotspotSaved
                 ) { Button("Forget", action: forgetHotspot) }
-                step(
-                    "Quit Agent Caffeine and move it to the Trash",
-                    help: "The app is in your Applications folder.",
-                    done: false
-                ) { Button("Show in Finder", action: showInFinder) }
+                step("Move Agent Caffeine to the Trash", done: false) { Button("Show in Finder", action: showInFinder) }
             }
         }
         .formStyle(.grouped)
@@ -217,14 +215,9 @@ struct AboutPreferences: View {
     }
 
     /// One step: what to do, and its button until it is done.
-    private func step<Action: View>(_ title: String, help: String, done: Bool, @ViewBuilder action: () -> Action) -> some View {
+    private func step<Action: View>(_ title: String, info: String? = nil, done: Bool, @ViewBuilder action: () -> Action) -> some View {
         HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                Text(help)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
+            Text(title)
             Spacer()
             if done {
                 Image(systemName: "checkmark.circle.fill")
@@ -233,6 +226,7 @@ struct AboutPreferences: View {
             } else {
                 action()
             }
+            if let info { InfoButton(text: info) }
         }
     }
 

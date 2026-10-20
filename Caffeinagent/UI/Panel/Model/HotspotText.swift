@@ -100,7 +100,7 @@ extension PanelText {
         saved ? "Forget your iPhone hotspot" : "No hotspot is saved"
     }
 
-    static let hotspotRemoveHelp = "This removes the name of the hotspot from the settings and its password from your Keychain."
+    static let hotspotRemoveHelp = "Removes the hotspot name from the settings and its password from your Keychain."
 
     // MARK: Menu
 
