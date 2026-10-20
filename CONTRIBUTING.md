@@ -66,7 +66,7 @@ The environment `mac-release` needs a required reviewer, so that no run gets the
 
 A dry run never gets the R2 secrets or the tap token.
 
-On the Mac, `scripts/release.sh` works as before, with the keys in the login keychain, `cf` for the bucket and the bucket name in `~/.config/agent-caffeine/release.env`. `scripts/release.sh --dry-run` builds and signs but notarizes and uploads nothing. The header of the script lists the environment variables the workflow sets in their place.
+On the Mac, `scripts/release.sh` works as before, with the keys in the login keychain, `cf` for the bucket and the bucket name in `~/.config/agent-caffeine/release.env`. `scripts/release.sh --dry-run` builds and signs but notarizes and uploads nothing. The header of the script lists the environment variables the workflow sets in their place. `release.env` can also hold `R2_S3_ACCESS_KEY_ID`, `R2_S3_SECRET_ACCESS_KEY`, `R2_S3_ENDPOINT`, `SPARKLE_ED_KEY_FILE` and `NOTARY_API_KEY_FILE`, `NOTARY_API_KEY_ID`, `NOTARY_API_ISSUER_ID`. With them a local release needs neither the `cf` login nor the keychain items. A variable set in the environment wins over the same one in the file.
 
 ## Sign-off
 
