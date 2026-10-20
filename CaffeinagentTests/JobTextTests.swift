@@ -30,19 +30,19 @@ final class JobTextTests: XCTestCase {
         XCTAssertEqual(PanelText.jobsTitle, "Wake for jobs")
         XCTAssertEqual(
             PanelText.jobsExplained(leadTime: JobSettings().leadTime, holdCap: JobSettings().holdCap),
-            "Wakes your Mac 1 minute before a job, keeps it awake while the job runs, for 30 minutes at most, then lets it sleep."
+            "Wakes 1 minute before a job and stays awake while it runs, for 30 minutes at most"
         )
         XCTAssertEqual(
             PanelText.jobsExplained(leadTime: 300, holdCap: 7200),
-            "Wakes your Mac 5 minutes before a job, keeps it awake while the job runs, for 2 hours at most, then lets it sleep."
+            "Wakes 5 minutes before a job and stays awake while it runs, for 2 hours at most"
         )
         XCTAssertEqual(
             PanelText.jobsExplained(leadTime: 30, holdCap: 300),
-            "Wakes your Mac 30 seconds before a job, keeps it awake while the job runs, for 5 minutes at most, then lets it sleep."
+            "Wakes 30 seconds before a job and stays awake while it runs, for 5 minutes at most"
         )
         XCTAssertEqual(PanelText.jobsOnPowerOnly, "Only on power")
         XCTAssertEqual(PanelText.jobsOnPowerExplained, "On battery, Agent Caffeine sets no wake and keeps your Mac awake for no job.")
-        XCTAssertEqual(PanelText.jobsOnBatteryWarning, "On battery with the lid closed this is not tested yet. Your Mac can wake in a bag.")
+        XCTAssertEqual(PanelText.jobsOnBatteryWarning, "Not tested on battery with the lid closed. Your Mac can wake in a bag.")
         XCTAssertEqual(PanelText.jobsShowHistory, "Show history")
     }
 
@@ -64,11 +64,11 @@ final class JobTextTests: XCTestCase {
         XCTAssertNil(status(.off))
         XCTAssertNil(status(.noAlarm(.featureOff)))
         XCTAssertEqual(status(.needsApplications), PanelText.moveToApplicationsToUse)
-        XCTAssertEqual(status(.needsHelper), "This needs the helper. Set it up under Lid closed first.")
+        XCTAssertEqual(status(.needsHelper), "This needs the helper. Set it up under Closed lid on battery first.")
         XCTAssertEqual(status(.helperSilent), "The helper gave no answer. It can be from an older version. Quit Agent Caffeine and open it again.")
         XCTAssertEqual(status(.asking), "Setting the wake time…")
-        XCTAssertEqual(status(.alarmSet(alarm("2026-10-10 20:59"))), "Next wake at 20:59 for backup.sh.")
-        XCTAssertEqual(status(.alarmSet(alarm("2026-10-11 02:59"))), "Next wake tomorrow at 02:59 for backup.sh.")
+        XCTAssertEqual(status(.alarmSet(alarm("2026-10-10 20:59"))), "Next wake at 20:59 for backup.sh")
+        XCTAssertEqual(status(.alarmSet(alarm("2026-10-11 02:59"))), "Next wake tomorrow at 02:59 for backup.sh")
         XCTAssertEqual(status(.refused(.tooOften)), "The helper did not set the wake time: the time changed too often in one hour. Agent Caffeine tries again.")
         XCTAssertEqual(status(.noAlarm(.onBattery)), "No wake is set while your Mac is on battery.")
         XCTAssertEqual(status(.noAlarm(.noJobSwitchedOn)), "Switch on a job, and Agent Caffeine wakes your Mac for it.")

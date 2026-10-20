@@ -300,7 +300,7 @@ final class SafetyMonitorTests: XCTestCase {
         XCTAssertEqual(SafetyText.stillSleeps(settings), "Your Mac still sleeps when it gets too hot. The battery limit is off.")
         XCTAssertTrue(SafetyText.alwaysTold(batteryFloorEnabled: true).contains("for low battery or heat"))
         XCTAssertFalse(SafetyText.alwaysTold(batteryFloorEnabled: false).contains("low battery"))
-        XCTAssertEqual(SafetyText.floorOffLidClosed, "With this off, a command line hold or the mode Always can empty the battery with the lid closed.")
+        XCTAssertEqual(SafetyText.floorOffLidClosed, "A command line hold or the mode Always can also empty the battery with the lid closed. Your Mac still sleeps if it gets too hot.")
         XCTAssertTrue(SafetyText.floorOffLidClosed.contains(AwakeMode.always.title))
         for text in [SafetyText.floorOnHelp, SafetyText.floorOffWarning, SafetyText.floorOffLidClosed, SafetyText.floorOffQuestion, SafetyText.floorOffConsequence,
                      SafetyText.alwaysTold(batteryFloorEnabled: true), SafetyText.alwaysTold(batteryFloorEnabled: false)] {

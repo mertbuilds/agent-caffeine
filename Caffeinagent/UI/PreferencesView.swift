@@ -617,7 +617,7 @@ struct LidClosedPreferences: View {
     var body: some View {
         Form {
             Section("Battery limit") {
-                Toggle("Let your Mac sleep when the battery is low", isOn: batteryFloorSwitch)
+                Toggle("Sleep when the battery is low", isOn: batteryFloorSwitch)
                 Stepper(value: $settings.batteryFloorPercent, in: DetectionSettings.batteryFloorRange, step: 5) {
                     Text("Sleep at \(PanelText.percent(settings.batteryFloorPercent))")
                 }
@@ -625,60 +625,58 @@ struct LidClosedPreferences: View {
                 Group {
                     if settings.batteryFloorEnabled {
                         Text(SafetyText.floorOnHelp)
-                        Text("Agent Caffeine also lets your Mac sleep when it gets too hot.")
                     } else {
-                        Label(SafetyText.floorOffWarning, systemImage: "exclamationmark.triangle")
-                        Text(SafetyText.floorOffLidClosed)
-                        Text("Agent Caffeine still lets your Mac sleep when it gets too hot.")
+                        HStack {
+                            Label(SafetyText.floorOffWarning, systemImage: "exclamationmark.triangle")
+                            Spacer()
+                            InfoButton(text: SafetyText.floorOffLidClosed)
+                        }
                     }
                 }
                 .font(.callout)
                 .foregroundStyle(.secondary)
             }
-            Section("Closed lid limit") {
+            Section("Closed lid on battery") {
                 Picker(PanelText.closedLidLimitPicker, selection: $settings.closedLidLimitHours) {
                     ForEach(ClosedLidLimit.hourChoices, id: \.self) { Text(HumaneDuration.counted($0, "hour")).tag($0) }
                     Text(PanelText.noLimit).tag(ClosedLidLimit.noLimit)
                 }
-                Picker("or until the battery lost", selection: $settings.closedLidLimitDrop) {
+                Picker("Or until the battery drops by", selection: $settings.closedLidLimitDrop) {
                     ForEach(ClosedLidLimit.dropChoices, id: \.self) { Text(PanelText.percent($0)).tag($0) }
                     Text(PanelText.noLimit).tag(ClosedLidLimit.noLimit)
                 }
-                Text(PanelText.closedLidLimitExplained)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-            }
-            Section("Lid closed") {
-                Group {
-                    Text(PanelText.lidClosedExplained)
-                    Text("\(PanelText.helperExplained) \(PanelText.helperRemoveHere)")
-                    Text(PanelText.closedBagWarning)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(PanelText.closedLidLimitExplained)
+                    Text(PanelText.closedLidLimitExceptions)
                 }
                 .font(.callout)
                 .foregroundStyle(.secondary)
+                Toggle("Stay awake with the lid closed", isOn: $settings.stayAwakeLidClosedOnBattery)
+                    .disabled(helper != .enabled)
+                if helper != .enabled {
+                    Text("Set up the helper first")
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
                 helperState
                 if let error {
                     Text(error)
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
-                Toggle("Stay awake with the lid closed on battery", isOn: $settings.stayAwakeLidClosedOnBattery)
-                    .disabled(helper != .enabled)
-                if helper != .enabled {
-                    Text("Set up the helper first.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                }
-                Toggle("Turn the display off when the lid is closed", isOn: $settings.displayOffLidClosed)
-                Text("With the lid closed, Agent Caffeine keeps the built-in display dark so it does not use the battery or warm your Mac.")
+                Text(PanelText.closedBagWarningInSettings)
                     .font(.callout)
                     .foregroundStyle(.secondary)
+                HStack {
+                    Toggle("Turn off the display", isOn: $settings.displayOffLidClosed)
+                    InfoButton(text: "Keeps the built-in display dark with the lid closed, to save battery and heat.")
+                }
                 if hasLidAngleSensor {
-                    Toggle("Dim the display as the lid closes", isOn: $settings.dimAsLidCloses)
-                        .disabled(!settings.displayOffLidClosed)
-                    Text("The built-in display gets darker from 45 degrees and is off when the lid is closed. When you open the lid, your brightness comes back. A lid that rests half open stays bright.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                    HStack {
+                        Toggle("Dim as the lid closes", isOn: $settings.dimAsLidCloses)
+                            .disabled(!settings.displayOffLidClosed)
+                        InfoButton(text: "The display gets darker from 45 degrees and turns off when the lid closes. Your brightness comes back when you open the lid. A lid that rests half open stays bright.")
+                    }
                 }
                 Toggle(PanelText.lidChimeSwitch, isOn: $settings.chimeOnLidClose)
                 LabeledContent("Sound") {
@@ -699,10 +697,10 @@ struct LidClosedPreferences: View {
             WakeForJobsSection(settings: jobSettings, view: jobWake, closeSwitchNotice: closeJobSwitchNotice)
             if needsSudoersCleanup {
                 Section {
-                    Text("An older version of Agent Caffeine added an admin entry to this Mac. It is no longer used.")
+                    Text("An older version added an admin entry. It is no longer used.")
                         .font(.callout)
                         .foregroundStyle(.secondary)
-                    Button("Remove the old admin entry…", action: removeSudoersEntry)
+                    Button("Remove old admin entry…", action: removeSudoersEntry)
                 }
             }
         }
@@ -726,7 +724,7 @@ struct LidClosedPreferences: View {
                 Text(PanelText.helperRepairing)
             }
         case .notResponding:
-            Label(PanelText.helperNotResponding, systemImage: "exclamationmark.triangle.fill")
+            Label("Cannot reach the helper. Your Mac sleeps when you close the lid on battery.", systemImage: "exclamationmark.triangle.fill")
                 .foregroundStyle(.orange)
             HStack {
                 Button(PanelText.title(of: .tryHelperAgain), action: tryAgain)
@@ -736,21 +734,23 @@ struct LidClosedPreferences: View {
             }
         case .ready:
             HStack {
-                Label(PanelText.helperIsSetUp, systemImage: "checkmark.circle.fill")
-                    .foregroundStyle(.green)
+                Text("Helper")
                 Spacer()
+                Label("Set up", systemImage: "checkmark.circle.fill")
+                    .foregroundStyle(.green)
                 Button("Remove", action: remove)
+                InfoButton(text: PanelText.helperInfo)
             }
         case .requiresApproval:
             HStack {
-                Text(PanelText.allowInLoginItems)
+                Text("Allow Agent Caffeine in System Settings > Login Items")
                 Spacer()
                 Button("Open System Settings", action: openLoginItems)
             }
         case .lost:
             if canSetUp {
                 HStack {
-                    Text(PanelText.helperLost)
+                    Text("Set up the helper again")
                     Spacer()
                     Button("Set up…", action: setUp)
                 }
@@ -758,10 +758,16 @@ struct LidClosedPreferences: View {
                 Text(PanelText.moveToApplicationsToSetUp)
             }
         case .notSetUp:
-            if canSetUp {
-                Button("Set up…", action: setUp)
-            } else {
+            HStack {
+                Text("Helper")
+                Spacer()
+                if canSetUp { Button("Set up…", action: setUp) }
+                InfoButton(text: PanelText.helperInfo)
+            }
+            if !canSetUp {
                 Text(PanelText.moveToApplicationsToSetUp)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
         }
     }

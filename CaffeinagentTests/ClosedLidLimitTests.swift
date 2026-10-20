@@ -818,11 +818,9 @@ final class ClosedLidLimitTests: XCTestCase {
     }
 
     func testTheSettingsWords() {
-        XCTAssertEqual(PanelText.closedLidLimitPicker, "With the lid closed on battery, keep it awake for agents for at most")
-        XCTAssertEqual(
-            PanelText.closedLidLimitExplained,
-            "A last stop for agents, so a session that hangs does not empty the battery in a bag. Command line holds, scheduled jobs and the mode Always are not stopped"
-        )
+        XCTAssertEqual(PanelText.closedLidLimitPicker, "Keep awake for agents for up to")
+        XCTAssertEqual(PanelText.closedLidLimitExplained, "Then your Mac sleeps, so a stuck agent does not empty the battery in a bag")
+        XCTAssertEqual(PanelText.closedLidLimitExceptions, "Command line holds, scheduled jobs and the mode Always are not stopped")
         XCTAssertEqual(PanelText.noLimit, "No limit")
         XCTAssertEqual(ClosedLidLimit.hourChoices, [1, 2, 3, 6, 12])
         XCTAssertEqual(ClosedLidLimit.dropChoices, [15, 30, 50])

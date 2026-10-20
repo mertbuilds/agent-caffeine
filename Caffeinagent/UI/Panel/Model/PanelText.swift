@@ -322,18 +322,22 @@ enum PanelText {
     /// Where the helper for a closed lid is offered.
     static let lidClosedExplained = "On battery, macOS puts your Mac to sleep when you close the lid, even while an agent is working. Agent Caffeine can prevent that with a small helper that you allow once."
     static let helperExplained = "The helper is a background item of Agent Caffeine. It changes one sleep setting of macOS while Agent Caffeine keeps your Mac awake, and changes it back after."
-    static let helperRemoveHere = "You can remove it here at any time."
     static let helperRemoveInSettings = "You can remove it in Settings > Battery and lid at any time."
-    static let closedLidLimitPicker = "With the lid closed on battery, keep it awake for agents for at most"
-    static let closedLidLimitExplained = "A last stop for agents, so a session that hangs does not empty the battery in a bag. Command line holds, scheduled jobs and the mode Always are not stopped"
+    /// Behind the (i) of the helper in Settings.
+    static let helperInfo = "On battery, macOS sleeps when you close the lid, even while an agent works. The helper is a background item that changes one sleep setting of macOS while Agent Caffeine keeps your Mac awake, and changes it back after. You allow it once. You can remove it here at any time."
+    static let closedLidLimitPicker = "Keep awake for agents for up to"
+    static let closedLidLimitExplained = "Then your Mac sleeps, so a stuck agent does not empty the battery in a bag"
+    static let closedLidLimitExceptions = "Command line holds, scheduled jobs and the mode Always are not stopped"
     static let noLimit = "No limit"
+    /// In the setup window, at the end of a paragraph.
     static let closedBagWarning = "Do not put your Mac in a closed bag while an agent works."
-    static let lidChimeSwitch = "Play a sound when you close the lid and your Mac stays awake"
-    static let lidChimeExplained = "You hear it only while Agent Caffeine keeps your Mac awake. No sound means your Mac goes to sleep."
+    static let closedBagWarningInSettings = "Do not put your Mac in a closed bag while an agent works"
+    static let lidChimeSwitch = "Sound when the lid closes"
+    static let lidChimeExplained = "Plays only when your Mac stays awake. No sound means it sleeps."
     static let lidChimeInSetup = "You hear a short sound when you close the lid and your Mac stays awake."
     static let allowInLoginItems = "Allow Agent Caffeine in System Settings > General > Login Items."
     static let helperIsSetUp = "The helper is set up"
-    static let moveToApplicationsToSetUp = "Move Agent Caffeine to the Applications folder to set this up."
+    static let moveToApplicationsToSetUp = "Move Agent Caffeine to Applications to set this up"
     static let moveToApplicationsToUse = "Move Agent Caffeine to Applications to use this."
 
     static let openAtLogin = "Open at login"
