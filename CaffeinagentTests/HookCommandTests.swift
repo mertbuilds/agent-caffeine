@@ -247,9 +247,25 @@ final class HookCommandTests: XCTestCase {
         took = seconds { input = HookCommand.readInput(from: open.read) }
         XCTAssertEqual(input, text)
         XCTAssertLessThan(took, 0.6, "The short wait after a part, not the long one")
-        // A writer that never stops is cut at the total.
+        // More than the limit comes and the pipe is not closed. The rest is
+        // read and dropped, so nothing is left in the pipe.
+        let long = try pipe()
+        defer { close(long.read); close(long.write) }
+        let bytes = [UInt8](repeating: 120, count: 64)
+        XCTAssertEqual(write(long.write, bytes, bytes.count), bytes.count)
+        took = seconds { input = HookCommand.readInput(from: long.read, limit: 8, total: 0.5) }
+        XCTAssertEqual(input.count, 8, "Kept up to the limit")
+        XCTAssertEqual(fcntl(long.read, F_SETFL, fcntl(long.read, F_GETFL) | O_NONBLOCK), 0)
+        var left: [UInt8] = [0]
+        XCTAssertEqual(read(long.read, &left, 1), -1)
+        XCTAssertEqual(errno, EAGAIN, "The rest is read and dropped")
+        XCTAssertLessThan(took, 1)
+        // A writer that never stops is cut at the total. The pipe holds more
+        // than the limit before the read starts, so the count does not depend
+        // on how fast the writer runs.
         let endless = try pipe()
         defer { close(endless.read) }
+        XCTAssertEqual(write(endless.write, bytes, bytes.count), bytes.count)
         let stop = DispatchSemaphore(value: 0)
         DispatchQueue.global().async {
             let byte: [UInt8] = [120]
