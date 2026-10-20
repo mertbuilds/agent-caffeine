@@ -8,7 +8,7 @@ enum ShortcutAction: String, CaseIterable {
 
     var title: String {
         switch self {
-        case .toggle: return "Turn Agent Caffeine on or off"
+        case .toggle: return "Turn on or off"
         case .pauseOneHour: return PanelText.title(of: .pause(.oneHour))
         }
     }
@@ -113,10 +113,10 @@ enum ShortcutProblem: Equatable {
 
     var text: String {
         switch self {
-        case .needsModifier: return "Add Command, Control or Option to the shortcut"
-        case .usedBySystem: return "macOS already uses this shortcut"
-        case .usedTwice: return "The other shortcut of Agent Caffeine already uses these keys"
-        case .usedByAnotherApp: return "This shortcut is already used by another app"
+        case .needsModifier: return "Add Command, Control or Option"
+        case .usedBySystem: return "macOS uses this shortcut"
+        case .usedTwice: return "Your other shortcut uses these keys"
+        case .usedByAnotherApp: return "Another app uses this shortcut"
         }
     }
 }

@@ -434,7 +434,7 @@ struct ShortcutPreferences: View {
                         setRecording: setShortcutRecording
                     )
                 }
-                Text("The shortcuts work in every app. Click a field, then press the keys you want.")
+                Text("Works in every app. Click a field, then press the keys.")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
