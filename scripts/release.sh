@@ -23,6 +23,8 @@
 #
 # Run it from a local Terminal on the Mac. Sparkle signs with the private key in
 # the login keychain, and the keychain refuses SSH and scripted sessions.
+# GitHub Actions runs it too (.github/workflows/mac-release.yml), with the keys
+# in the environment: see the end of this header.
 #
 #   --dry-run  do everything local (build, sign, smoke test, dmg, appcast,
 #              latest.json) but notarize nothing and upload nothing, and print
@@ -30,6 +32,9 @@
 #   --allow-dirty  only with --dry-run: build from a working tree with changes
 #              that are not committed. A release is always built from a clean
 #              tree, so what ships is what a commit holds.
+#   --notarize  only with --dry-run: notarize and staple the app and the dmg
+#              all the same, and still upload nothing. The workflow's dry run
+#              uses it.
 #
 # One-time setup before first run:
 #   1. In Xcode → Settings → Accounts → your account → Manage Certificates,
@@ -52,6 +57,23 @@
 #      Cloudflare's cf cli, and it makes every R2 call here.
 #   5. Put the bucket name in ~/.config/agent-caffeine/release.env (mode 600),
 #      as R2_BUCKET=<bucket>.
+#
+# The runner has none of that setup, so the workflow sets these instead. With
+# none of them set the script runs as it always has:
+#   NOTARY_API_KEY_FILE, NOTARY_API_KEY_ID, NOTARY_API_ISSUER_ID
+#                         an App Store Connect API key (.p8 file), its id and
+#                         its issuer. With all three set, notarytool uses them
+#                         in place of the keychain profile.
+#   SPARKLE_ED_KEY_FILE   the Sparkle private key as a file, in place of the
+#                         login keychain.
+#   R2_BUCKET             the bucket, when release.env is not there.
+#   R2_S3_ACCESS_KEY_ID, R2_S3_SECRET_ACCESS_KEY, R2_S3_ENDPOINT
+#                         the S3 key pair of an R2 API token for the bucket and
+#                         https://<account id>.r2.cloudflarestorage.com. With
+#                         all three set, curl makes every bucket call with
+#                         --aws-sigv4 and cf is not needed.
+# The Developer ID certificate is found the same way in both: the workflow puts
+# it in a keychain of its own and makes that the default keychain.
 
 set -euo pipefail
 
@@ -71,10 +93,12 @@ SITE_DIR="$BUILD_DIR/site"
 
 DRY_RUN=0
 ALLOW_DIRTY=0
+NOTARIZE_DRY_RUN=0
 for arg in "$@"; do
   case "$arg" in
     --dry-run) DRY_RUN=1 ;;
     --allow-dirty) ALLOW_DIRTY=1 ;;
+    --notarize) NOTARIZE_DRY_RUN=1 ;;
     *) echo "unknown option: $arg" >&2; exit 2 ;;
   esac
 done
@@ -83,6 +107,123 @@ if [ "$ALLOW_DIRTY" = 1 ] && [ "$DRY_RUN" = 0 ]; then
   echo "       clean working tree." >&2
   exit 2
 fi
+if [ "$NOTARIZE_DRY_RUN" = 1 ] && [ "$DRY_RUN" = 0 ]; then
+  echo "error: --notarize is only for --dry-run. a release always notarizes." >&2
+  exit 2
+fi
+NOTARIZE=1
+if [ "$DRY_RUN" = 1 ] && [ "$NOTARIZE_DRY_RUN" = 0 ]; then
+  NOTARIZE=0
+fi
+
+# All three, or none and the keychain profile.
+if [ -n "${NOTARY_API_KEY_FILE:-}${NOTARY_API_KEY_ID:-}${NOTARY_API_ISSUER_ID:-}" ]; then
+  if [ -z "${NOTARY_API_KEY_FILE:-}" ] || [ -z "${NOTARY_API_KEY_ID:-}" ] || [ -z "${NOTARY_API_ISSUER_ID:-}" ]; then
+    echo "error: set all three of NOTARY_API_KEY_FILE, NOTARY_API_KEY_ID and" >&2
+    echo "       NOTARY_API_ISSUER_ID, or none of them." >&2
+    exit 2
+  fi
+  if [ ! -s "$NOTARY_API_KEY_FILE" ]; then
+    echo "error: NOTARY_API_KEY_FILE names no file with a key in it." >&2
+    exit 2
+  fi
+fi
+notary_submit() {
+  if [ -n "${NOTARY_API_KEY_FILE:-}" ]; then
+    xcrun notarytool submit "$1" \
+      --key "$NOTARY_API_KEY_FILE" \
+      --key-id "$NOTARY_API_KEY_ID" \
+      --issuer "$NOTARY_API_ISSUER_ID" \
+      --wait
+  else
+    xcrun notarytool submit "$1" \
+      --keychain-profile "$NOTARY_PROFILE" \
+      --wait
+  fi
+}
+
+if [ -n "${SPARKLE_ED_KEY_FILE:-}" ] && [ ! -s "$SPARKLE_ED_KEY_FILE" ]; then
+  echo "error: SPARKLE_ED_KEY_FILE names no file with a key in it." >&2
+  exit 2
+fi
+# The key file when there is one, else the key in the login keychain under
+# SPARKLE_ACCOUNT, never Sparkle's default account.
+sparkle_tool() {
+  tool="$1"
+  shift
+  if [ -n "${SPARKLE_ED_KEY_FILE:-}" ]; then
+    "$SPARKLE_BIN/$tool" --ed-key-file "$SPARKLE_ED_KEY_FILE" "$@"
+  else
+    "$SPARKLE_BIN/$tool" --account "$SPARKLE_ACCOUNT" "$@"
+  fi
+}
+
+# The bucket is reached through cf, or through its S3 endpoint when the key pair
+# is in the environment. r2_get and r2_put below are the only two callers.
+R2_TRANSPORT=cf
+if [ -n "${R2_S3_ACCESS_KEY_ID:-}${R2_S3_SECRET_ACCESS_KEY:-}${R2_S3_ENDPOINT:-}" ]; then
+  if [ -z "${R2_S3_ACCESS_KEY_ID:-}" ] || [ -z "${R2_S3_SECRET_ACCESS_KEY:-}" ] || [ -z "${R2_S3_ENDPOINT:-}" ]; then
+    echo "error: set all three of R2_S3_ACCESS_KEY_ID, R2_S3_SECRET_ACCESS_KEY and" >&2
+    echo "       R2_S3_ENDPOINT, or none of them." >&2
+    exit 2
+  fi
+  # The key pair signs requests to this host, so it is R2's own or nothing.
+  if ! [[ "$R2_S3_ENDPOINT" =~ ^https://[0-9a-f]{32}(\.(eu|fedramp))?\.r2\.cloudflarestorage\.com$ ]]; then
+    echo "error: R2_S3_ENDPOINT is not https://<account id>.r2.cloudflarestorage.com" >&2
+    echo "       (or its .eu or .fedramp form)." >&2
+    exit 2
+  fi
+  R2_TRANSPORT=s3
+  # What the bucket answered, kept to show the reason when a request fails.
+  S3_BODY=$(mktemp)
+  trap 'rm -f "$S3_BODY"' EXIT
+fi
+
+# One signed request to the S3 endpoint. It prints the http status and nothing
+# else. The key pair goes to curl as a config on stdin, so it is in no argument
+# list and no log. curl signs again on every retry, and a 4xx is never tried
+# again.
+s3_curl() {
+  printf 'user = "%s:%s"\n' "$R2_S3_ACCESS_KEY_ID" "$R2_S3_SECRET_ACCESS_KEY" \
+    | curl -sS -K - --proto '=https' --aws-sigv4 "aws:amz:auto:s3" \
+      --connect-timeout 20 --retry 3 --retry-all-errors -w '%{http_code}' "$@"
+}
+
+# The first 500 bytes of the bucket's answer, which name the reason.
+s3_reason() {
+  if [ -s "$1" ]; then
+    head -c 500 "$1" >&2
+    echo >&2
+  fi
+}
+
+# Writes the object to a file. Returns 1 when it could not be read: through cf
+# that is any failure, through S3 only a 404, and any other answer stops the
+# script.
+r2_get() {
+  key="$1"
+  file="$2"
+  if [ "$R2_TRANSPORT" = cf ]; then
+    command -v cf > /dev/null 2>&1 || return 1
+    cf r2 objects get "$key" --bucket-name "$R2_BUCKET" > "$file" 2> /dev/null
+    return
+  fi
+  body="$file"
+  if [ "$file" = /dev/null ]; then
+    body="$S3_BODY"
+  fi
+  : > "$body"
+  STATUS=$(s3_curl -o "$body" "$R2_S3_ENDPOINT/$R2_BUCKET/$key") || STATUS="no response"
+  case "$STATUS" in
+    200) return 0 ;;
+    404) return 1 ;;
+    *)
+      echo "error: could not read $key from the bucket over S3 ($STATUS)." >&2
+      s3_reason "$body"
+      exit 1
+      ;;
+  esac
+}
 
 # What ships has to be what a commit holds. Untracked files count: the build
 # takes every source file in the folders, tracked or not.
@@ -117,13 +258,28 @@ if [ -f "$RELEASE_ENV" ]; then
   . "$RELEASE_ENV"
 fi
 
-if [ "$DRY_RUN" = 0 ]; then
-  if [ -z "${R2_BUCKET:-}" ]; then
-    echo "error: R2_BUCKET is not set. Put the bucket the site serves /mac/ from" >&2
-    echo "       in $RELEASE_ENV (mode 600):" >&2
-    echo "         R2_BUCKET=<bucket>" >&2
+if [ "$DRY_RUN" = 0 ] && [ -z "${R2_BUCKET:-}" ]; then
+  echo "error: R2_BUCKET is not set. Put the bucket the site serves /mac/ from" >&2
+  echo "       in $RELEASE_ENV (mode 600):" >&2
+  echo "         R2_BUCKET=<bucket>" >&2
+  exit 1
+fi
+if [ "$R2_TRANSPORT" = s3 ] && [ -z "${R2_BUCKET:-}" ]; then
+  echo "error: R2_BUCKET is not set, so the S3 key pair has no bucket to reach." >&2
+  exit 1
+fi
+
+# The key pair has to read the bucket before anything is built or notarized.
+if [ "$DRY_RUN" = 0 ] && [ "$R2_TRANSPORT" = s3 ]; then
+  echo "==> check that the S3 key pair reaches the bucket"
+  if ! r2_get mac/latest.json /dev/null; then
+    echo "error: the bucket has no mac/latest.json (404 over S3), so the release" >&2
+    echo "       was not started. check R2_S3_ENDPOINT and R2_BUCKET." >&2
     exit 1
   fi
+fi
+
+if [ "$DRY_RUN" = 0 ] && [ "$R2_TRANSPORT" = cf ]; then
   if ! command -v cf > /dev/null 2>&1; then
     echo "error: Cloudflare's cf cli is not installed, so the release cannot be" >&2
     echo "       uploaded. install it, or run this script with --dry-run." >&2
@@ -156,7 +312,7 @@ mkdir -p "$BUILD_DIR"
 echo "==> fetch the published appcast"
 PUBLISHED_APPCAST="$BUILD_DIR/appcast.published.xml"
 if [ -n "${R2_BUCKET:-}" ] \
-  && cf r2 objects get mac/appcast.xml --bucket-name "$R2_BUCKET" > "$PUBLISHED_APPCAST" 2> /dev/null \
+  && r2_get mac/appcast.xml "$PUBLISHED_APPCAST" \
   && [ -s "$PUBLISHED_APPCAST" ]; then
   echo "    from r2: $R2_BUCKET/mac/appcast.xml"
 else
@@ -446,7 +602,7 @@ check_new_release "$VERSION" "$BUILD"
 DMG_NAME=$(dmg_name "$VERSION" "$BUILD")
 DMG_URL="$SITE_URL/$DMG_NAME"
 
-if [ "$DRY_RUN" = 1 ]; then
+if [ "$NOTARIZE" = 0 ]; then
   echo "==> skip notarization (--dry-run)"
 else
   echo "==> zip for notarization"
@@ -454,9 +610,7 @@ else
   /usr/bin/ditto -c -k --keepParent "$APP" "$SUBMIT_ZIP"
 
   echo "==> submit to apple notary service (waits up to 30 min)"
-  xcrun notarytool submit "$SUBMIT_ZIP" \
-    --keychain-profile "$NOTARY_PROFILE" \
-    --wait
+  notary_submit "$SUBMIT_ZIP"
 
   echo "==> staple notarization ticket"
   xcrun stapler staple "$APP"
@@ -511,11 +665,9 @@ DMG_BACKGROUND="$(pwd)/scripts/dmg-background.png" \
 echo "==> sign dmg"
 codesign --sign "Developer ID Application: Mert Duzgun (${TEAM_ID})" --timestamp "$RELEASE_DMG"
 
-if [ "$DRY_RUN" = 0 ]; then
+if [ "$NOTARIZE" = 1 ]; then
   echo "==> notarize dmg"
-  xcrun notarytool submit "$RELEASE_DMG" \
-    --keychain-profile "$NOTARY_PROFILE" \
-    --wait
+  notary_submit "$RELEASE_DMG"
 
   echo "==> staple dmg"
   xcrun stapler staple "$RELEASE_DMG"
@@ -554,12 +706,11 @@ NOTESFILE
 fi
 
 echo "==> sign dmg for sparkle"
-ED_SIGNATURE=$("$SPARKLE_BIN/sign_update" --account "$SPARKLE_ACCOUNT" -p "$SITE_DMG")
+ED_SIGNATURE=$(sparkle_tool sign_update -p "$SITE_DMG")
 
 # --maximum-versions 0 keeps every older item instead of the newest three.
 echo "==> generate appcast"
-"$SPARKLE_BIN/generate_appcast" \
-  --account "$SPARKLE_ACCOUNT" \
+sparkle_tool generate_appcast \
   --download-url-prefix "$SITE_URL/" \
   --embed-release-notes \
   --maximum-versions 0 \
@@ -591,12 +742,35 @@ r2_put() {
   key="$1"
   file="$2"
   type="$3"
-  if [ "$DRY_RUN" = 1 ]; then
-    echo "    would run: cf r2 objects put $key --bucket-name ${R2_BUCKET:-<R2_BUCKET>} --file \"$file\" --content-type $type"
-  else
-    echo "    $R2_BUCKET/$key"
-    cf r2 objects put "$key" --bucket-name "$R2_BUCKET" --file "$file" --content-type "$type"
+  if [ "$R2_TRANSPORT" = cf ]; then
+    if [ "$DRY_RUN" = 1 ]; then
+      echo "    would run: cf r2 objects put $key --bucket-name ${R2_BUCKET:-<R2_BUCKET>} --file \"$file\" --content-type $type"
+    else
+      echo "    $R2_BUCKET/$key"
+      cf r2 objects put "$key" --bucket-name "$R2_BUCKET" --file "$file" --content-type "$type"
+    fi
+    return
   fi
+  url="$R2_S3_ENDPOINT/$R2_BUCKET/$key"
+  if [ "$DRY_RUN" = 1 ]; then
+    echo "    would run: curl --aws-sigv4 aws:amz:auto:s3 --upload-file \"$file\" -H \"Content-Type: $type\" <R2_S3_ENDPOINT>/$R2_BUCKET/$key"
+    return
+  fi
+  echo "    $R2_BUCKET/$key"
+  # The Content-Type is all that is stored beside the object, as with cf. The
+  # hash goes into the signature, so the bucket refuses any other bytes.
+  sha=$(/usr/bin/shasum -a 256 "$file" | cut -d' ' -f1)
+  : > "$S3_BODY"
+  STATUS=$(s3_curl -o "$S3_BODY" --upload-file "$file" -H "Content-Type: $type" \
+    -H "x-amz-content-sha256: $sha" "$url") || STATUS="no response"
+  case "$STATUS" in
+    2??) ;;
+    *)
+      echo "error: could not upload $key to the bucket over S3 ($STATUS)." >&2
+      s3_reason "$S3_BODY"
+      exit 1
+      ;;
+  esac
 }
 
 # The dmg goes up first and the feed last, so neither small file ever points at
@@ -647,7 +821,7 @@ echo "  version: $VERSION (build $BUILD)"
 echo "  dmg sha256: $DMG_SHA"
 echo "  download url: $DMG_URL"
 echo "  signed by: $(codesign -dvv "$APP" 2>&1 | grep 'Authority=' | head -1)"
-if [ "$DRY_RUN" = 1 ]; then
+if [ "$NOTARIZE" = 0 ]; then
   echo "  notarized: no (--dry-run)"
 else
   echo "  notarized app: $(xcrun stapler validate "$APP" 2>&1 | tail -1)"
@@ -658,6 +832,9 @@ if [ "$DRY_RUN" = 1 ]; then
   echo ""
   echo "  nothing was uploaded (--dry-run), so the site still serves the"
   echo "  release before this one."
+elif [ -n "${GITHUB_ACTIONS:-}" ]; then
+  echo ""
+  echo "  next: the workflow writes the tag v$VERSION and the GitHub release."
 else
   echo ""
   echo "  next: create the GitHub release v$VERSION from this commit, with"
