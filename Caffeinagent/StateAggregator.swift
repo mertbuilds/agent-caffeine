@@ -180,7 +180,7 @@ final class StateAggregator: ObservableObject {
     @PublishedOnChange private(set) var shortcutProblems: [ShortcutAction: ShortcutProblem] = [:]
     /// The tab Preferences shows, so the menu can open one.
     @PublishedOnChange var preferencesTab = PreferencesTab.general
-    /// The menu asked for "Other tools" of the tab Agents. The tab clears
+    /// The menu asked for "Add a tool" of the tab Agents. The tab clears
     /// it once it is there.
     @PublishedOnChange var showsOtherTools = false
     /// "Open Agent Caffeine at login", as macOS has it.

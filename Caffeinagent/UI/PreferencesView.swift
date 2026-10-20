@@ -444,7 +444,7 @@ struct AgentPreferences: View {
     var hookRows: [HookRowModel] = []
     var hooksAvailable = true
     var setHooks: (HookCatalogEntry, Bool) -> Void = { _, _ in }
-    /// The menu asked for "Other tools": the tab scrolls there once.
+    /// The menu asked for "Add a tool": the tab scrolls there once.
     var showsOtherTools: Binding<Bool> = .constant(false)
     /// The tool in the copy of the app that runs.
     var commandLine = CommandLineSetup(appPath: AppInstall.running.path)
