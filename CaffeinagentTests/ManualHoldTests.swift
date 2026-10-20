@@ -527,7 +527,7 @@ final class ManualHoldTests: XCTestCase {
     }
 
     func testTheTextsOfTheSectionFollowTheHouseStyle() {
-        for text in [PanelText.commandLineExplained, PanelText.commandLineInstallExplained, PanelText.commandLineMCPExplained, PanelText.holdHint] {
+        for text in [PanelText.commandLineInSettings, PanelText.commandLineExplained, PanelText.commandLineInstallExplained, PanelText.commandLineMCPExplained, PanelText.holdHint] {
             XCTAssertFalse(text.contains("agent caffeine"), text)
             XCTAssertFalse(text.contains("\u{2014}"), text)
         }

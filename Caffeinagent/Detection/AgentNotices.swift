@@ -2,9 +2,9 @@ import Foundation
 
 /// Which agent notifications the user wants.
 struct AgentNoticeSettings: Equatable {
-    /// "An agent is waiting for your answer".
+    /// "An agent waits for you".
     var waiting = true
-    /// "An agent finished".
+    /// "An agent finishes".
     var finished = false
     /// No notification while the user works in the app the agent runs in.
     var onlyWhenAway = true

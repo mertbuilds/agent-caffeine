@@ -323,8 +323,6 @@ struct GeneralPreferences: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
-            }
-            Section {
                 Toggle("Show in menu bar", isOn: $showMenuBarIcon)
                 Text("When hidden, open Agent Caffeine from Applications to come back here")
                     .font(.callout)
@@ -658,9 +656,9 @@ struct LidClosedPreferences: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
-                Text(PanelText.closedBagWarningInSettings)
+                Label(PanelText.closedBagWarningInSettings, systemImage: "exclamationmark.triangle")
                     .font(.callout)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.orange)
                 HStack {
                     Toggle("Turn off the display", isOn: $settings.displayOffLidClosed)
                     InfoButton(text: "Keeps the built-in display dark with the lid closed, to save battery and heat.")

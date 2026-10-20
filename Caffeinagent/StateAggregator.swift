@@ -183,7 +183,7 @@ final class StateAggregator: ObservableObject {
     /// The menu asked for "Add a tool" of the tab Agents. The tab clears
     /// it once it is there.
     @PublishedOnChange var showsOtherTools = false
-    /// "Open Agent Caffeine at login", as macOS has it.
+    /// "Open at login", as macOS has it.
     @PublishedOnChange private(set) var loginItem = LoginItemState.unavailable
     @PublishedOnChange private(set) var loginItemError: String?
     /// Why the Mac slept under an agent, until the user dismisses it or
