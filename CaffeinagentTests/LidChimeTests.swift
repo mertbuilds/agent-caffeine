@@ -298,19 +298,19 @@ final class LidChimeTests: XCTestCase {
 
     // MARK: The setting
 
-    func testTheChimeIsOnWithTheFirstSoundUnlessSaved() throws {
+    func testTheChimeIsOnWithGlassUnlessSaved() throws {
         XCTAssertTrue(DetectionSettings().chimeOnLidClose)
-        XCTAssertEqual(DetectionSettings().lidChimeSound, .tink)
+        XCTAssertEqual(DetectionSettings().lidChimeSound, .glass)
         let old = try JSONDecoder().decode(DetectionSettings.self, from: Data(#"{"waitingHold":60}"#.utf8))
         XCTAssertTrue(old.chimeOnLidClose, "On for settings of a build that did not have it")
-        XCTAssertEqual(old.lidChimeSound, .tink)
+        XCTAssertEqual(old.lidChimeSound, .glass)
         var settings = DetectionSettings()
         settings.chimeOnLidClose = false
         settings.lidChimeSound = .bottle
         let saved = try JSONDecoder().decode(DetectionSettings.self, from: JSONEncoder().encode(settings))
         XCTAssertEqual(saved, settings)
         let unknown = try JSONDecoder().decode(DetectionSettings.self, from: Data(#"{"lidChimeSound":"Gong","chimeOnLidClose":false}"#.utf8))
-        XCTAssertEqual(unknown.lidChimeSound, .tink, "A sound this build does not know is the default one")
+        XCTAssertEqual(unknown.lidChimeSound, .glass, "A sound this build does not know is the default one")
         XCTAssertFalse(unknown.chimeOnLidClose)
     }
 

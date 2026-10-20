@@ -46,7 +46,7 @@ struct DetectionSettings: Codable, Equatable {
     /// A short sound when the lid closes and the Mac stays awake because
     /// of Agent Caffeine. See `LidChime`.
     var chimeOnLidClose = true
-    var lidChimeSound = LidChimeSound.tink
+    var lidChimeSound = LidChimeSound.glass
     /// On power, the Mac stays awake while a tool's phone access is on,
     /// also with no agent at work.
     var stayAwakeForRemoteAccess = true
