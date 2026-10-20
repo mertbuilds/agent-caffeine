@@ -34,6 +34,40 @@ The unit tests never start the app. They compile the logic files directly, so th
 - A change of behaviour comes with a test.
 - A change of the text of the skill (`skills/agent-caffeine/SKILL.md`) needs a new `SkillCatalog.version` and its digest in `SkillTextTests`. The texts of released plugin files in `HookPluginHistory` never change.
 
+## Release
+
+Only the owner releases. `scripts/release.sh` is the one release path. It builds, signs, notarizes and staples the app, makes the dmg, signs the update for Sparkle and writes `appcast.xml` and `latest.json`. Then it uploads the dmg first and the two feeds last to the bucket, under `mac/`, and checks on `https://files.caffeinagent.com/mac/` that the dmg has the same size and sha256 and that the appcast lists the build. Each upload is live at once.
+
+The workflow `.github/workflows/mac-release.yml` runs the same script on GitHub Actions:
+
+1. Write the notes in `release-notes/<version>.md`.
+2. Raise `CURRENT_PROJECT_VERSION` in `project.yml` (and `MARKETING_VERSION` for a new version), and push to `main`.
+3. The job `detect` compares the build with the highest build in `https://files.caffeinagent.com/mac/appcast.xml`. When it is higher, the job `release` waits for the approval of the environment `mac-release`.
+4. Before you approve, you can start a dry run: Actions, "Mac release", "Run workflow" on `main`, with "dry run" on (the default). It does everything but the uploads, notarization included, and keeps the dmg, `appcast.xml` and `latest.json` as an artifact of the run for 7 days.
+5. Approve the real run. After the upload it writes the tag `v<version>` and a GitHub release with the notes, the link to the dmg and its sha256. A new build of a version that already has its tag leaves the tag where it is and shows a warning. With `HOMEBREW_TAP_TOKEN` set it also bumps the cask in `mertbuilds/homebrew-tap` with that repository's `scripts/bump-cask.sh`.
+
+"Run workflow" with "dry run" off is a real release, started by hand. Both kinds of run start only from `main`. A build that is not above the published one is never released.
+
+The environment `mac-release` needs a required reviewer, so that no run gets the keys without the owner's approval. It holds these secrets:
+
+| Secret | What |
+| --- | --- |
+| `MAC_DEVELOPER_ID_P12_BASE64` | The Developer ID Application certificate and its private key, as a .p12 file in base64 |
+| `MAC_DEVELOPER_ID_P12_PASSWORD` | The password of that .p12 file |
+| `MAC_NOTARY_API_KEY_P8_BASE64` | An App Store Connect API key for the notary service, the .p8 file in base64 |
+| `MAC_NOTARY_API_KEY_ID` | The id of that key |
+| `MAC_NOTARY_API_ISSUER_ID` | The issuer id of that key |
+| `MAC_SPARKLE_ED25519_PRIVATE_KEY` | The Sparkle private key of the account `agent-caffeine`, the text of the file that `generate_keys --account agent-caffeine -x <file>` writes |
+| `MAC_R2_S3_ACCESS_KEY_ID` | The S3 access key id of an R2 API token that can read and write the bucket |
+| `MAC_R2_S3_SECRET_ACCESS_KEY` | The S3 secret access key of that token |
+| `MAC_CLOUDFLARE_ACCOUNT_ID` | The Cloudflare account that holds the bucket |
+| `MAC_R2_BUCKET` | The name of the bucket. A secret, so that the log does not show it |
+| `HOMEBREW_TAP_TOKEN` | Optional. A token that can push to `mertbuilds/homebrew-tap`. Without it the cask is not bumped |
+
+A dry run never gets the R2 secrets or the tap token.
+
+On the Mac, `scripts/release.sh` works as before, with the keys in the login keychain, `cf` for the bucket and the bucket name in `~/.config/agent-caffeine/release.env`. `scripts/release.sh --dry-run` builds and signs but notarizes and uploads nothing. The header of the script lists the environment variables the workflow sets in their place.
+
 ## Sign-off
 
 Your contribution is under the license of this repository, AGPL-3.0-only (see [LICENSE](LICENSE)). The small files that the app writes into agent folders are also under the MIT license (see [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)).
@@ -54,9 +88,10 @@ The release of Agent Caffeine is signed with the owner's Developer ID and its up
 | --- | --- | --- |
 | The team id `3HGP3W3TLD` in the code signing requirement of the helper | `teamID` in `Caffeinagent/Power/SleepFlagHelperProtocol.swift` | The helper and the app accept each other only when this team signed both. With the owner's id your build and its helper refuse each other. This check is the security boundary of the root helper: keep it strict. |
 | The team id for release signing | `DEVELOPMENT_TEAM` in `project.yml`, `TEAM_ID` in `scripts/release.sh` | You need your own Developer ID Application certificate. |
-| The notary profile `caffeinagent-notary` | `NOTARY_PROFILE` in `scripts/release.sh` | Your own `notarytool` keychain profile. |
+| The notary profile `caffeinagent-notary` | `NOTARY_PROFILE` in `scripts/release.sh` | Your own `notarytool` keychain profile, or your own API key in the workflow's secrets. |
 | The bundle ids `com.caffeinagent.app`, `.helper`, `.hook`, `.cli` | `bundleIdPrefix` and each `PRODUCT_BUNDLE_IDENTIFIER` in `project.yml`, `appBundleID` and `label` in `SleepFlagHelperProtocol.swift`, `CaffeinagentHelper/com.caffeinagent.app.helper.plist`, and the sources that name `com.caffeinagent.app` for support folders, settings and logs | Two apps with the same helper label cannot both register the launch daemon, and they would share settings. |
 | The update feed `SUFeedURL` | `project.yml` | With the owner's feed your users would be offered the owner's build, and Sparkle would replace your fork with it. |
 | The update key `SUPublicEDKey`, and the keychain account `agent-caffeine` of its private half | `project.yml`, `SPARKLE_ACCOUNT` in `scripts/release.sh` | You cannot sign an update for the owner's public key. Make your own EdDSA key pair. |
-| The R2 bucket and the addresses `https://files.caffeinagent.com` and `https://caffeinagent.com/mac` | `R2_BUCKET` in `~/.config/agent-caffeine/release.env`, `BUCKET_URL` and `SITE_URL` in `scripts/release.sh` | Your own host for the dmg, `appcast.xml` and `latest.json`. |
+| The R2 bucket and the addresses `https://files.caffeinagent.com` and `https://caffeinagent.com/mac` | `R2_BUCKET` in `~/.config/agent-caffeine/release.env` (or the secret `MAC_R2_BUCKET`), `BUCKET_URL` and `SITE_URL` in `scripts/release.sh`, `APPCAST_URL` in `scripts/release-request.sh`, the url checks in `.github/workflows/mac-release.yml` | Your own host for the dmg, `appcast.xml` and `latest.json`. |
+| The Homebrew tap `mertbuilds/homebrew-tap` | `.github/workflows/mac-release.yml` | Leave `HOMEBREW_TAP_TOKEN` unset, or point the workflow at your own tap. |
 | The links in the app | `Caffeinagent/Models/AppLinks.swift`, `builderURL` in `Caffeinagent/UI/PreferencesView.swift` | Your own help, contact, source code and support pages. The link to the source code must stay a link to the source of the version you give out. |

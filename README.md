@@ -208,10 +208,11 @@ A Debug build is signed ad hoc and needs no Apple account. Two things do not wor
 The app updates itself with [Sparkle](https://sparkle-project.org). It reads the feed at `https://caffeinagent.com/mac/appcast.xml` once a day, and from "Check for updates…" in Settings. Debug builds never check.
 
 - `scripts/release.sh` is the only way to publish a release. It builds, signs, notarizes, writes the dmg, signs it for Sparkle, adds it to the appcast, uploads the dmg, `appcast.xml` and `latest.json` to `mac/` in the R2 bucket the site serves (named in `~/.config/agent-caffeine/release.env`, public to read at `https://files.caffeinagent.com`). `--dry-run` does everything local and uploads and notarizes nothing. A release stops at the start when the working tree has changes that are not committed (`--dry-run --allow-dirty` builds them all the same, and `scripts/build-on-request.sh` uses that), runs the unit tests before it builds, and asks Gatekeeper (`spctl`) about the notarized app and the dmg before the first upload. The header of the script lists the one-time setup.
-- Updates are signed with the EdDSA key in the login keychain under the account `agent-caffeine`. Its public half is `SUPublicEDKey` in `project.yml`. Every Sparkle tool call passes `--account agent-caffeine`.
-- Run the script from a local Terminal: the keychain refuses SSH and scripted sessions.
+- The workflow `.github/workflows/mac-release.yml` runs the same script on GitHub Actions when a push to `main` raises the build number, after the owner approves the run. "Run workflow" starts a dry run by hand. See "Release" in [CONTRIBUTING.md](CONTRIBUTING.md).
+- Updates are signed with the EdDSA key in the login keychain under the account `agent-caffeine`. Its public half is `SUPublicEDKey` in `project.yml`. Every Sparkle tool call passes `--account agent-caffeine`, or, in the workflow, the same key as a file.
+- On the Mac, run the script from a local Terminal: the keychain refuses SSH and scripted sessions.
 - The app and its helper are signed with the Developer ID of the owner (team `3HGP3W3TLD`) and notarized by Apple. The helper takes calls only from an app that this team signed.
-- Each release is built from one commit of this repository, and that commit has the tag of the version (`v1.1.0`). The GitHub release of the tag holds the same dmg as the site.
+- Each release is built from one commit of this repository, and that commit has the tag of the version (`v1.1.0`). The GitHub release of the tag links the dmg on the site and gives its sha256.
 - The license of the app, `THIRD_PARTY_NOTICES.md` and the texts in `Resources/Licenses/` are bundled into the app.
 
 ## Names
