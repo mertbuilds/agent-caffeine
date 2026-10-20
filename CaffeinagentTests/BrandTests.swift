@@ -19,7 +19,7 @@ final class BrandTests: XCTestCase {
         }
         let samples = [
             PanelText.offTitle, PanelText.pausedTitle, PanelText.stoppedTitle, PanelText.quit, PanelText.mainSwitch,
-            PanelText.openAtLogin, PanelText.menuBar("Your Mac stays awake"),
+            PanelText.openAtLoginInSetup, PanelText.menuBar("Your Mac stays awake"),
         ]
         for text in samples {
             XCTAssertFalse(text.contains(Self.lowercaseBrand), text)

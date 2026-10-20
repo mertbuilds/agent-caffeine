@@ -24,11 +24,12 @@ enum AwakeMode: String, CaseIterable, Identifiable {
         }
     }
 
+    /// The line below the menu in Settings, for the mode that is chosen.
     var explanation: String {
         switch self {
-        case .always: return "Always: your Mac stays awake until you turn Agent Caffeine off, even when no agent is open."
-        case .agentOpen: return "While an agent is open: your Mac stays awake as long as an agent is open, even when it is idle."
-        case .agentWorking: return "While an agent is working: your Mac stays awake only while an agent is working, and can sleep when every agent is idle."
+        case .always: return "Until you turn Agent Caffeine off."
+        case .agentOpen: return "Even when the agent is idle."
+        case .agentWorking: return "Your Mac can sleep when every agent is idle."
         }
     }
 }

@@ -249,7 +249,7 @@ struct GeneralPreferences: View {
     var loginItemError: String?
     var setOpenAtLogin: (Bool) -> Void = { _ in }
     var openLoginItems: () -> Void = {}
-    /// "Join your iPhone hotspot (Beta)", below the offline rule.
+    /// "iPhone hotspot (Beta)", below the offline rule.
     var hotspot = HotspotPreferences()
 
     /// From 30 seconds to 30 minutes.
@@ -262,38 +262,43 @@ struct GeneralPreferences: View {
                     ForEach(AwakeMode.allCases) { Text($0.title).tag($0) }
                 }
                 .pickerStyle(.menu)
-                .labelsHidden()
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(AwakeMode.allCases) { Text($0.explanation) }
-                }
-                .font(.callout)
-                .foregroundStyle(.secondary)
+                Text(mode.explanation)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
             }
             if !RemoteAccessDetector.detectedTools.isEmpty {
                 Section {
-                    Toggle("Stay reachable while plugged in", isOn: $settings.stayAwakeForRemoteAccess)
-                    Text("This is for Claude Code Remote Control, which sends messages from your phone to an agent on your Mac. While your Mac is plugged in and Remote Control is on, your Mac stays awake, even when no agent is working. On battery, choose \"Stay reachable\" in the timer menu to keep your Mac awake for a set time.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Toggle("Stay reachable while plugged in", isOn: $settings.stayAwakeForRemoteAccess)
+                            InfoButton(text: "Remote Control sends messages from your phone to an agent on your Mac. While your Mac is plugged in and Remote Control is on, your Mac stays awake, even when no agent works. On battery, use Stay reachable in the timer menu.")
+                        }
+                        Text("For Claude Code Remote Control")
+                            .font(.callout)
+                            .foregroundStyle(.secondary)
+                    }
                 }
             }
-            Section("How long your Mac stays awake") {
+            Section("Stay awake") {
                 duration(
                     "After an agent finishes", $settings.releaseAfterState,
-                    help: "Claude Code and Codex say when they finish. Your Mac stays awake this long afterwards, so it does not sleep in a short break between two tasks."
+                    info: "Claude Code and Codex say when they finish. This time covers a short break between two tasks."
                 )
                 duration(
                     "After other agents go quiet", $settings.releaseAfterActivity,
-                    help: "Other agents do not say when they finish. For those, Agent Caffeine watches for activity, such as a running command, and your Mac stays awake this long after the last of it."
+                    info: "Other agents do not say when they finish. Agent Caffeine waits this long after their last activity, such as a running command."
                 )
                 duration(
-                    "While an agent is waiting for you", $settings.waitingHold,
-                    help: "Your Mac stays awake this long while an agent is waiting for your answer. After that Agent Caffeine lets it sleep, unless another agent is working."
+                    "While an agent waits for you", $settings.waitingHold,
+                    info: "After this time your Mac can sleep, unless another agent is working."
                 )
                 VStack(alignment: .leading, spacing: 4) {
-                    Picker(PanelText.offlineLimitPicker, selection: $settings.offlineLimitMinutes) {
-                        ForEach(OfflineRule.minuteChoices, id: \.self) { Text(HumaneDuration.counted($0, "minute")).tag($0) }
-                        Text(PanelText.never).tag(OfflineRule.never)
+                    HStack {
+                        Picker(PanelText.offlineLimitPicker, selection: $settings.offlineLimitMinutes) {
+                            ForEach(OfflineRule.minuteChoices, id: \.self) { Text(HumaneDuration.counted($0, "minute")).tag($0) }
+                            Text(PanelText.never).tag(OfflineRule.never)
+                        }
+                        InfoButton(text: PanelText.offlineLimitInfo)
                     }
                     Text(PanelText.offlineLimitExplained)
                         .font(.callout)
@@ -306,12 +311,10 @@ struct GeneralPreferences: View {
                     .disabled(loginItem == .unavailable)
                 switch loginItem {
                 case .on, .off:
-                    Text("Agent Caffeine starts when you log in, so it also runs after a restart of your Mac.")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                    EmptyView()
                 case .needsApproval:
                     HStack {
-                        Text("Allow Agent Caffeine in System Settings > General > Login Items to open it at login.")
+                        Text("Allow in System Settings > Login Items.")
                             .font(.callout)
                         Spacer()
                         Button("Open System Settings", action: openLoginItems)
@@ -328,8 +331,8 @@ struct GeneralPreferences: View {
                 }
             }
             Section {
-                Toggle("Show Agent Caffeine in the menu bar", isOn: $showMenuBarIcon)
-                Text("When hidden, open Agent Caffeine again from Applications or Spotlight to see this window.")
+                Toggle("Show in menu bar", isOn: $showMenuBarIcon)
+                Text("When hidden, open Agent Caffeine from Applications to come back here")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -337,17 +340,15 @@ struct GeneralPreferences: View {
         .formStyle(.grouped)
     }
 
-    private func duration(_ title: String, _ value: Binding<TimeInterval>, help: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private func duration(_ title: String, _ value: Binding<TimeInterval>, info: String) -> some View {
+        HStack {
             Picker(title, selection: value) {
                 // A value that is not on the list stays selectable.
                 ForEach(Set(Self.durations + [value.wrappedValue]).sorted(), id: \.self) {
                     Text(Self.text(for: $0)).tag($0)
                 }
             }
-            Text(help)
-                .font(.callout)
-                .foregroundStyle(.secondary)
+            InfoButton(text: info)
         }
     }
 

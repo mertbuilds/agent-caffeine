@@ -125,8 +125,9 @@ enum PanelText {
         return working.map { "\(text). \(stillWorking($0))" } ?? text
     }
 
-    static let offlineLimitPicker = "When your Mac is offline, stop staying awake for agents after"
-    static let offlineLimitExplained = "Most agents cannot work without the internet. If your agents use a model on this Mac, choose Never. Command line holds and scheduled jobs are not stopped. Wi-Fi that is connected but has no internet does not count as offline."
+    static let offlineLimitPicker = "Stop when offline for"
+    static let offlineLimitExplained = "Choose Never if your agents use a model on this Mac"
+    static let offlineLimitInfo = "Most agents cannot work without the internet. This stops only agents. Command line holds and scheduled jobs keep your Mac awake. Wi-Fi with no internet does not count as offline."
     static let never = "Never"
 
     // MARK: Sleep outlook
@@ -332,9 +333,9 @@ enum PanelText {
     static let allowInLoginItems = "Allow Agent Caffeine in System Settings > General > Login Items."
     static let helperIsSetUp = "The helper is set up"
     static let moveToApplicationsToSetUp = "Move Agent Caffeine to the Applications folder to set this up."
-    static let moveToApplicationsToUse = "Move Agent Caffeine to the Applications folder to use this."
+    static let moveToApplicationsToUse = "Move Agent Caffeine to Applications to use this."
 
-    static let openAtLogin = "Open Agent Caffeine at login"
+    static let openAtLogin = "Open at login"
     static let openAtLoginInSetup = "Open Agent Caffeine when you log in"
 
     // MARK: Free and open source

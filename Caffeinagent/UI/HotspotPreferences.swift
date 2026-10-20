@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// "Join your iPhone hotspot (Beta)" in the tab General. Drawn from
+/// "iPhone hotspot (Beta)" in the tab General. Drawn from
 /// plain values, so a preview needs no Wi-Fi and no Keychain.
 struct HotspotPreferences: View {
     var hotspot = HotspotView()
@@ -20,7 +20,10 @@ struct HotspotPreferences: View {
     var body: some View {
         Section(PanelText.hotspotTitle) {
             VStack(alignment: .leading, spacing: 4) {
-                Toggle(PanelText.hotspotSwitch, isOn: Binding(get: { hotspot.settings.on }, set: setOn))
+                HStack {
+                    Toggle(PanelText.hotspotSwitch, isOn: Binding(get: { hotspot.settings.on }, set: setOn))
+                    InfoButton(text: PanelText.hotspotInfo)
+                }
                 Text(PanelText.hotspotExplained)
                     .font(.callout)
                     .foregroundStyle(.secondary)
@@ -35,18 +38,10 @@ struct HotspotPreferences: View {
                     }
                 }
                 limit
-                Text("\(PanelText.hotspotStays) \(PanelText.hotspotLeaves)")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                VStack(alignment: .leading, spacing: 4) {
+                HStack {
                     Toggle(PanelText.hotspotHopBack, isOn: Binding(get: { hotspot.settings.hopBack }, set: setHopBack))
-                    Text(PanelText.hotspotHopBackExplained)
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
+                    InfoButton(text: PanelText.hotspotHopBackExplained)
                 }
-                Text(PanelText.hotspotForgets)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
             } else if hotspot.saveNote == .removeFailed {
                 // Off, and the password is still in the Keychain.
                 Text(PanelText.hotspotSaveNote(.removeFailed))
@@ -92,17 +87,26 @@ struct HotspotPreferences: View {
         }
     }
 
+    /// "Ask to join hotspots" with its value, or on a macOS without the
+    /// choice Automatic one line.
+    @ViewBuilder
     private var limit: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(PanelText.hotspotLimit(offersAutomatic: offersAutomatic))
-                if let autoJoin { Text(PanelText.hotspotAutoJoin(autoJoin)) }
+        if offersAutomatic {
+            HStack {
+                Text(PanelText.hotspotAutoJoinTitle)
+                Spacer()
+                if let autoJoin {
+                    Text(PanelText.hotspotAutoJoin(autoJoin))
+                        .foregroundStyle(.secondary)
+                }
+                Button(PanelText.hotspotOpenWiFi, action: openWiFi)
+                InfoButton(text: PanelText.hotspotLimit(offersAutomatic: true))
             }
-            .font(.callout)
-            .foregroundStyle(.secondary)
-            .fixedSize(horizontal: false, vertical: true)
-            Spacer()
-            if offersAutomatic { Button(PanelText.hotspotOpenWiFi, action: openWiFi) }
+        } else {
+            Text(PanelText.hotspotLimit(offersAutomatic: false))
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }
