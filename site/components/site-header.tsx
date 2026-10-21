@@ -179,7 +179,7 @@ export function SiteHeader({ release }: { release: Release | null }) {
             <GitHubCta
               placement="header"
               aria-label="GitHub"
-              className="flex size-7 items-center justify-center rounded-full border border-border text-muted no-underline transition-colors duration-quick ease-smooth-out hover:text-fg motion-reduce:transition-none"
+              className="flex size-7 items-center justify-center rounded-full border border-border text-fg no-underline transition-colors duration-quick ease-smooth-out [@media(hover:hover)]:hover:bg-surface motion-reduce:transition-none"
             >
               <GitHubMark size={14} />
             </GitHubCta>
