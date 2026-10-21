@@ -7,9 +7,14 @@ enum DetectionSettingsStore {
     /// names those builds knew.
     static let legacyAllowlistKey = "ProcessWatcher.allowlist"
     static let legacyKnownDefaultsKey = "ProcessWatcher.knownDefaults"
+    /// Set at the first load of a build that has this. Any saved Tink became
+    /// Glass then, also one picked on purpose, since the two cannot be told
+    /// apart. A sound picked after that is kept, Tink too.
+    static let glassChimeKey = "DetectionSettings.glassChimeOnce"
 
     /// Settings that cannot be read give the defaults. The old name list is
-    /// carried over once, then its keys are removed.
+    /// carried over once, then its keys are removed. A saved Tink becomes
+    /// Glass once.
     static func load(from defaults: UserDefaults, catalog: AgentCatalog = .standard) -> DetectionSettings {
         var settings = defaults.data(forKey: key).flatMap { try? JSONDecoder().decode(DetectionSettings.self, from: $0) }
         if settings == nil, let allowlist = defaults.array(forKey: legacyAllowlistKey) as? [String] {
@@ -21,6 +26,13 @@ enum DetectionSettingsStore {
         }
         defaults.removeObject(forKey: legacyAllowlistKey)
         defaults.removeObject(forKey: legacyKnownDefaultsKey)
+        if !defaults.bool(forKey: glassChimeKey) {
+            if settings?.lidChimeSound == .tink {
+                settings?.lidChimeSound = .glass
+                settings.map { save($0, to: defaults) }
+            }
+            defaults.set(true, forKey: glassChimeKey)
+        }
         return settings ?? DetectionSettings()
     }
 
