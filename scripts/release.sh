@@ -72,6 +72,10 @@
 #                         https://<account id>.r2.cloudflarestorage.com. With
 #                         all three set, curl makes every bucket call with
 #                         --aws-sigv4 and cf is not needed.
+# On the Mac, release.env can hold any of these too, so a local release needs
+# neither the cf login nor the keychain items. The script reads release.env
+# before it picks a mode, and a variable set in the environment wins over the
+# same one in the file.
 # The Developer ID certificate is found the same way in both: the workflow puts
 # it in a keychain of its own and makes that the default keychain.
 
@@ -114,6 +118,15 @@ fi
 NOTARIZE=1
 if [ "$DRY_RUN" = 1 ] && [ "$NOTARIZE_DRY_RUN" = 0 ]; then
   NOTARIZE=0
+fi
+
+# Read before any of the modes below is picked. A variable already in the
+# environment keeps its value: the file only fills in the ones that are unset.
+if [ -f "$RELEASE_ENV" ]; then
+  ENV_BEFORE=$(export -p)
+  . "$RELEASE_ENV"
+  eval "$ENV_BEFORE"
+  unset ENV_BEFORE
 fi
 
 # All three, or none and the keychain profile.
@@ -178,6 +191,7 @@ if [ -n "${R2_S3_ACCESS_KEY_ID:-}${R2_S3_SECRET_ACCESS_KEY:-}${R2_S3_ENDPOINT:-}
   S3_BODY=$(mktemp)
   trap 'rm -f "$S3_BODY"' EXIT
 fi
+echo "==> bucket access: $R2_TRANSPORT"
 
 # One signed request to the S3 endpoint. It prints the http status and nothing
 # else. The key pair goes to curl as a config on stdin, so it is in no argument
@@ -252,10 +266,6 @@ if [ -z "$PUBLIC_KEY" ] || [ "$PUBLIC_KEY" = "$KEY_PLACEHOLDER" ]; then
   echo "         build/tools/SourcePackages/artifacts/sparkle/Sparkle/bin/generate_keys --account $SPARKLE_ACCOUNT" >&2
   echo "       and paste the printed key into project.yml as SUPublicEDKey." >&2
   exit 1
-fi
-
-if [ -f "$RELEASE_ENV" ]; then
-  . "$RELEASE_ENV"
 fi
 
 if [ "$DRY_RUN" = 0 ] && [ -z "${R2_BUCKET:-}" ]; then
