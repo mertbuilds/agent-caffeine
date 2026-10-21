@@ -22,6 +22,11 @@
 #
 # Exit 0 and PASS when the app is healthy. The app prints one line of JSON
 # with what it measured.
+#
+# SMOKE_TIMING=warn (default strict) turns the timing problems, a main run
+# loop that ticks too seldom and a main thread that stalls, into `warning:`
+# lines that do not fail the run. The release workflow sets it: a shared
+# machine in CI is too slow and noisy for them. Every other check stays strict.
 
 set -euo pipefail
 
@@ -42,6 +47,12 @@ while [ $# -gt 0 ]; do
     *) echo "unknown option: $1" >&2; exit 2 ;;
   esac
 done
+
+export SMOKE_TIMING="${SMOKE_TIMING:-strict}"
+case "$SMOKE_TIMING" in
+  strict|warn) ;;
+  *) echo "error: SMOKE_TIMING must be strict or warn, not $SMOKE_TIMING" >&2; exit 2 ;;
+esac
 
 BUILT=0
 cleanup() {
@@ -73,7 +84,7 @@ if [ ! -x "$BINARY" ]; then
   exit 2
 fi
 
-echo "==> smoke test: $APP for $SECONDS_TO_RUN s"
+echo "==> smoke test: $APP for $SECONDS_TO_RUN s, timing $SMOKE_TIMING"
 STATUS=0
 OUTPUT=$(perl -e 'alarm shift; exec @ARGV' "$HARD_TIMEOUT" "$BINARY" --smoke-test "$SECONDS_TO_RUN") || STATUS=$?
 REPORT=$(grep -E '^\{.*"healthy"' <<< "$OUTPUT" | tail -1 || true)

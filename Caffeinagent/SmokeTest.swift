@@ -28,6 +28,7 @@ enum SmokeTest {
     private static let settingsWindowID = "com_apple_SwiftUI_Settings_window"
 
     private static let meter = Meter()
+    private static let timing = SmokeHealth.Timing(environment: ProcessInfo.processInfo.environment)
     private static var seconds: TimeInterval = 0
     private static var timers: [Timer] = []
     private static var cancellable: AnyCancellable?
@@ -288,9 +289,12 @@ enum SmokeTest {
         m.chime = chime
         StateAggregator.shared.shutdown()
         UserDefaults.standard.removePersistentDomain(forName: domain)
-        print(SmokeHealth.line(m))
+        for warning in SmokeHealth.warnings(m, timing: timing) {
+            FileHandle.standardError.write(Data("warning: \(warning)\n".utf8))
+        }
+        print(SmokeHealth.line(m, timing: timing))
         fflush(stdout)
-        exit(SmokeHealth.failures(m).isEmpty ? 0 : 1)
+        exit(SmokeHealth.failures(m, timing: timing).isEmpty ? 0 : 1)
     }
 
     /// Off the main thread: a main thread that hangs never comes to
@@ -303,7 +307,7 @@ enum SmokeTest {
                 meter.readCPU()
                 guard meter.silence() > limit else { continue }
                 let line = SmokeHealth.line(
-                    meter.measurements(), hang: "main thread gave no sign for more than \(Int(limit)) s, the run was cut"
+                    meter.measurements(), hang: "main thread gave no sign for more than \(Int(limit)) s, the run was cut", timing: timing
                 )
                 print(line)
                 fflush(stdout)

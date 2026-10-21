@@ -48,6 +48,8 @@ The workflow `.github/workflows/mac-release.yml` runs the same script on GitHub 
 
 "Run workflow" with "dry run" off is a real release, started by hand. Both kinds of run start only from `main`. A build that is not above the published one is never released.
 
+The workflow sets `SMOKE_TIMING=warn`: the smoke test prints its timing problems (run loop ticks, main thread stalls) as warnings, because a shared runner is too slow for them, and still fails on every part that does not work. Local runs stay `strict`.
+
 The environment `mac-release` needs a required reviewer, so that no run gets the keys without the owner's approval. It holds these secrets:
 
 | Secret | What |

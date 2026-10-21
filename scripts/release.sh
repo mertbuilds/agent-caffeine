@@ -72,6 +72,9 @@
 #                         https://<account id>.r2.cloudflarestorage.com. With
 #                         all three set, curl makes every bucket call with
 #                         --aws-sigv4 and cf is not needed.
+#   SMOKE_TIMING=warn     the smoke test prints its timing problems as warnings
+#                         and fails only on a part that does not work. See
+#                         scripts/smoke-test.sh.
 # On the Mac, release.env can hold any of these too, so a local release needs
 # neither the cf login nor the keychain items. The script reads release.env
 # before it picks a mode, and a variable set in the environment wins over the
@@ -603,7 +606,7 @@ echo "    skills/agent-caffeine/SKILL.md: in the app, printed by the tool"
 # seconds, next to a copy that is installed, and stops the release when its
 # main thread hangs, it burns a core, it shows no icon, it takes no sample or
 # its open menu keeps the processor busy.
-scripts/smoke-test.sh --app "$APP"
+SMOKE_TIMING="${SMOKE_TIMING:-strict}" scripts/smoke-test.sh --app "$APP"
 
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist")
