@@ -606,7 +606,7 @@ echo "    skills/agent-caffeine/SKILL.md: in the app, printed by the tool"
 # seconds, next to a copy that is installed, and stops the release when its
 # main thread hangs, it burns a core, it shows no icon, it takes no sample or
 # its open menu keeps the processor busy.
-scripts/smoke-test.sh --app "$APP"
+SMOKE_TIMING="${SMOKE_TIMING:-strict}" scripts/smoke-test.sh --app "$APP"
 
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$APP/Contents/Info.plist")
 BUILD=$(/usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$APP/Contents/Info.plist")
