@@ -137,4 +137,49 @@ final class DetectionSettingsStoreTests: XCTestCase {
         XCTAssertEqual(DetectionSettingsStore.load(from: defaults).userAgentNames, ["kept"])
         XCTAssertNil(defaults.object(forKey: DetectionSettingsStore.legacyAllowlistKey))
     }
+
+    private func saveSound(_ sound: LidChimeSound) {
+        var settings = DetectionSettings()
+        settings.lidChimeSound = sound
+        DetectionSettingsStore.save(settings, to: defaults)
+    }
+
+    private var glassChimeRecorded: Bool { defaults.bool(forKey: DetectionSettingsStore.glassChimeKey) }
+
+    func testASavedTinkBecomesGlassOnce() {
+        saveSound(.tink)
+        XCTAssertEqual(DetectionSettingsStore.load(from: defaults).lidChimeSound, .glass)
+        XCTAssertTrue(glassChimeRecorded)
+        let saved = defaults.data(forKey: DetectionSettingsStore.key)
+        XCTAssertEqual(DetectionSettingsStore.load(from: defaults).lidChimeSound, .glass)
+        XCTAssertEqual(defaults.data(forKey: DetectionSettingsStore.key), saved, "Nothing changes the second time")
+    }
+
+    func testTinkPickedAfterTheChangeIsKept() {
+        saveSound(.tink)
+        _ = DetectionSettingsStore.load(from: defaults)
+        saveSound(.tink)
+        XCTAssertEqual(DetectionSettingsStore.load(from: defaults).lidChimeSound, .tink)
+        XCTAssertEqual(DetectionSettingsStore.load(from: defaults).lidChimeSound, .tink)
+    }
+
+    func testASavedTinkWithTheMarkerStaysTink() {
+        saveSound(.tink)
+        defaults.set(true, forKey: DetectionSettingsStore.glassChimeKey)
+        XCTAssertEqual(DetectionSettingsStore.load(from: defaults).lidChimeSound, .tink)
+    }
+
+    func testAnotherSavedSoundIsKept() {
+        saveSound(.bottle)
+        XCTAssertEqual(DetectionSettingsStore.load(from: defaults).lidChimeSound, .bottle)
+        XCTAssertTrue(glassChimeRecorded)
+    }
+
+    func testAFreshInstallGetsGlass() {
+        XCTAssertEqual(DetectionSettingsStore.load(from: defaults).lidChimeSound, .glass)
+        XCTAssertTrue(glassChimeRecorded)
+        XCTAssertNil(defaults.data(forKey: DetectionSettingsStore.key))
+        saveSound(.tink)
+        XCTAssertEqual(DetectionSettingsStore.load(from: defaults).lidChimeSound, .tink, "A Tink picked later is kept")
+    }
 }
