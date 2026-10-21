@@ -52,6 +52,43 @@ final class SmokeHealthTests: XCTestCase {
         XCTAssertEqual(failures { $0.iconToggle = .skipped }, [])
     }
 
+    func testTimingProblemsAreOfTheirOwnKind() {
+        var slow = good
+        slow.ticks = 63
+        slow.longestStallMs = 1525
+        XCTAssertEqual(SmokeHealth.problems(slow), [
+            SmokeHealth.Problem(kind: .timing, text: "main run loop ticked 63 times, expected about 80"),
+            SmokeHealth.Problem(kind: .timing, text: "main thread stalled for 1525 ms"),
+        ])
+        XCTAssertEqual(SmokeHealth.failures(slow).count, 2)
+        XCTAssertEqual(SmokeHealth.failures(slow, timing: .warn), [])
+        XCTAssertEqual(SmokeHealth.warnings(slow, timing: .warn), ["main run loop ticked 63 times, expected about 80", "main thread stalled for 1525 ms"])
+        XCTAssertEqual(SmokeHealth.warnings(slow, timing: .strict), [])
+    }
+
+    func testWarnKeepsEveryFunctionStrict() {
+        let broken: [(inout SmokeMeasurements) -> Void] = [
+            { $0.statusItem = false }, { $0.statusItemImage = false }, { $0.samples = 1 },
+            { $0.iconToggle = .failed }, { $0.settingsWindow = .notRun }, { $0.panel = .failed }, { $0.chime = .failed },
+            { $0.sceneEvaluations = 400 }, { $0.cpuBySecond = Array(repeating: 100, count: 10) },
+        ]
+        for change in broken {
+            var m = good
+            m.longestStallMs = 1525
+            change(&m)
+            XCTAssertEqual(SmokeHealth.failures(m, timing: .warn), SmokeHealth.failures(m).filter { !$0.hasPrefix("main thread stalled") })
+            XCTAssertFalse(SmokeHealth.failures(m, timing: .warn).isEmpty)
+            XCTAssertEqual(SmokeHealth.warnings(m, timing: .warn), ["main thread stalled for 1525 ms"])
+        }
+    }
+
+    func testTimingComesFromTheEnvironment() {
+        XCTAssertEqual(SmokeHealth.Timing(environment: [:]), .strict)
+        XCTAssertEqual(SmokeHealth.Timing(environment: ["SMOKE_TIMING": "strict"]), .strict)
+        XCTAssertEqual(SmokeHealth.Timing(environment: ["SMOKE_TIMING": "warn"]), .warn)
+        XCTAssertEqual(SmokeHealth.Timing(environment: ["SMOKE_TIMING": "WARN"]), .strict)
+    }
+
     private func cpuFailures(_ cpuBySecond: [Double], steps: [Int] = [1, 2, 3]) -> [String] {
         failures {
             $0.cpuBySecond = cpuBySecond
@@ -126,6 +163,7 @@ final class SmokeHealthTests: XCTestCase {
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any])
         XCTAssertEqual(object["healthy"] as? Bool, true)
         XCTAssertEqual(object["failures"] as? [String], [])
+        XCTAssertEqual(object["warnings"] as? [String], [])
         XCTAssertEqual(object["ticks"] as? Int, 79)
         XCTAssertEqual(object["longestStallMs"] as? Int, 104)
         XCTAssertEqual(object["cpuPercent"] as? Double, 5.9)
@@ -145,5 +183,17 @@ final class SmokeHealthTests: XCTestCase {
         let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any])
         XCTAssertEqual(object["healthy"] as? Bool, false)
         XCTAssertEqual(object["failures"] as? [String], ["main thread gave no sign for 3 s"])
+    }
+
+    func testWarnStaysHealthyWithTimingWarningsInTheLine() throws {
+        var slow = good
+        slow.longestStallMs = 1525
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(SmokeHealth.line(slow, timing: .warn).utf8)) as? [String: Any])
+        XCTAssertEqual(object["healthy"] as? Bool, true)
+        XCTAssertEqual(object["failures"] as? [String], [])
+        XCTAssertEqual(object["warnings"] as? [String], ["main thread stalled for 1525 ms"])
+        let hung = SmokeHealth.line(slow, hang: "main thread gave no sign for 3 s", timing: .warn)
+        let cut = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(hung.utf8)) as? [String: Any])
+        XCTAssertEqual(cut["healthy"] as? Bool, false)
     }
 }

@@ -52,6 +52,31 @@ struct SmokeMeasurements: Codable, Equatable {
 
 /// Whether a build that starts also runs. Pure, so the limits are tested.
 enum SmokeHealth {
+    /// How the timing problems count. `SMOKE_TIMING=warn` makes them
+    /// warnings, for a shared machine in CI that is too slow and noisy for
+    /// them. Every other problem still fails the run.
+    enum Timing: String {
+        case strict
+        case warn
+
+        /// `.strict` when the variable is not set or has another value.
+        init(environment: [String: String]) {
+            self = environment["SMOKE_TIMING"].flatMap(Timing.init(rawValue:)) ?? .strict
+        }
+    }
+
+    struct Problem: Equatable {
+        enum Kind: Equatable {
+            /// A part of the app that does not work, or a loop.
+            case function
+            /// The main thread came late: a slow or busy machine can do that too.
+            case timing
+        }
+
+        var kind: Kind
+        var text: String
+    }
+
     static let tickInterval: TimeInterval = 0.1
     static let minTickShare = 0.8
     static let maxStallMs = 500
@@ -118,70 +143,84 @@ enum SmokeHealth {
         (percent * 10).rounded() / 10
     }
 
-    /// What is wrong, in words. Empty for a healthy run.
-    static func failures(_ m: SmokeMeasurements) -> [String] {
-        var failures: [String] = []
+    /// What is wrong, in words, with its kind. Empty for a healthy run.
+    static func problems(_ m: SmokeMeasurements) -> [Problem] {
+        var problems: [Problem] = []
+        func fail(_ text: String) { problems.append(Problem(kind: .function, text: text)) }
+        func late(_ text: String) { problems.append(Problem(kind: .timing, text: text)) }
         let expected = expectedTicks(seconds: m.seconds)
         if Double(m.ticks) < Double(expected) * minTickShare {
-            failures.append("main run loop ticked \(m.ticks) times, expected about \(expected)")
+            late("main run loop ticked \(m.ticks) times, expected about \(expected)")
         }
         if m.longestStallMs >= maxStallMs {
-            failures.append("main thread stalled for \(m.longestStallMs) ms")
+            late("main thread stalled for \(m.longestStallMs) ms")
         }
         let steady = steadyCPU(m)
         if steady.count < minSteadySeconds {
-            failures.append("\(steady.count) steady seconds to judge the processor time by, expected \(minSteadySeconds) or more")
+            fail("\(steady.count) steady seconds to judge the processor time by, expected \(minSteadySeconds) or more")
         } else {
             let median = median(steady), mean = steady.reduce(0, +) / Double(steady.count)
             if median >= maxCPUPercent {
-                failures.append("used \(rounded(median))% of one core in the median steady second")
+                fail("used \(rounded(median))% of one core in the median steady second")
             }
             if mean >= maxMeanCPUPercent {
-                failures.append("used \(rounded(mean))% of one core over the steady seconds")
+                fail("used \(rounded(mean))% of one core over the steady seconds")
             }
         }
         if m.panel == .ok {
             let open = panelCPU(m)
             if open.count < minSteadySeconds {
-                failures.append("\(open.count) seconds with the menu open to judge the processor time by, expected \(minSteadySeconds) or more")
+                fail("\(open.count) seconds with the menu open to judge the processor time by, expected \(minSteadySeconds) or more")
             } else if median(open) >= maxPanelCPUPercent {
-                failures.append("used \(rounded(median(open)))% of one core in the median second with the menu open")
+                fail("used \(rounded(median(open)))% of one core in the median second with the menu open")
             }
         } else if m.panel == .failed || m.panel == .notRun {
-            failures.append("showing the menu: \(m.panel.rawValue)")
+            fail("showing the menu: \(m.panel.rawValue)")
         }
         let rate = sceneEvaluationsPerSecond(m)
         if rate >= maxSceneEvaluationsPerSecond {
-            failures.append("scenes worked out \(Int(rate)) times per second")
+            fail("scenes worked out \(Int(rate)) times per second")
         }
         if !m.statusItem {
-            failures.append("no status item")
+            fail("no status item")
         } else if !m.statusItemImage {
-            failures.append("status item has no image")
+            fail("status item has no image")
         }
         if m.samples < minSamples {
-            failures.append("engine gave \(m.samples) samples, expected \(minSamples) or more")
+            fail("engine gave \(m.samples) samples, expected \(minSamples) or more")
         }
         if m.iconToggle == .failed || m.iconToggle == .notRun {
-            failures.append("hiding and showing the icon: \(m.iconToggle.rawValue)")
+            fail("hiding and showing the icon: \(m.iconToggle.rawValue)")
         }
         if m.settingsWindow == .failed || m.settingsWindow == .notRun {
-            failures.append("opening Preferences: \(m.settingsWindow.rawValue)")
+            fail("opening Preferences: \(m.settingsWindow.rawValue)")
         }
         if m.chime == .failed || m.chime == .notRun {
-            failures.append("the lid chime with no sound: \(m.chime.rawValue)")
+            fail("the lid chime with no sound: \(m.chime.rawValue)")
         }
-        return failures
+        return problems
     }
 
-    /// One line of JSON: the measurements, `healthy` and `failures`.
-    /// `hang` is set when the main thread stopped and the run was cut.
-    static func line(_ m: SmokeMeasurements, hang: String? = nil) -> String {
-        var failures = failures(m)
+    /// The problems that make the run unhealthy. With `.warn` the timing
+    /// problems are left out: they are `warnings`.
+    static func failures(_ m: SmokeMeasurements, timing: Timing = .strict) -> [String] {
+        problems(m).filter { timing == .strict || $0.kind != .timing }.map(\.text)
+    }
+
+    /// The timing problems that `.warn` keeps out of the failures.
+    static func warnings(_ m: SmokeMeasurements, timing: Timing) -> [String] {
+        timing == .warn ? problems(m).filter { $0.kind == .timing }.map(\.text) : []
+    }
+
+    /// One line of JSON: the measurements, `healthy`, `failures` and
+    /// `warnings`. `hang` is set when the main thread stopped and the run
+    /// was cut.
+    static func line(_ m: SmokeMeasurements, hang: String? = nil, timing: Timing = .strict) -> String {
+        var failures = failures(m, timing: timing)
         if let hang { failures.insert(hang, at: 0) }
         let report = Report(
             measurements: m, sceneEvaluationsPerSecond: (sceneEvaluationsPerSecond(m) * 10).rounded() / 10,
-            healthy: failures.isEmpty, failures: failures
+            healthy: failures.isEmpty, failures: failures, warnings: warnings(m, timing: timing)
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
@@ -196,9 +235,10 @@ enum SmokeHealth {
         var sceneEvaluationsPerSecond: Double
         var healthy: Bool
         var failures: [String]
+        var warnings: [String]
 
         private enum Key: String, CodingKey {
-            case sceneEvaluationsPerSecond, healthy, failures
+            case sceneEvaluationsPerSecond, healthy, failures, warnings
         }
 
         func encode(to encoder: Encoder) throws {
@@ -207,6 +247,7 @@ enum SmokeHealth {
             try container.encode(sceneEvaluationsPerSecond, forKey: .sceneEvaluationsPerSecond)
             try container.encode(healthy, forKey: .healthy)
             try container.encode(failures, forKey: .failures)
+            try container.encode(warnings, forKey: .warnings)
         }
     }
 }
