@@ -50,7 +50,7 @@ Every price on the site comes from `apps/web/src/lib/pricing.ts`: the full price
 
 ## Analytics
 
-OpenPanel counts page views on `caffeinagent.com` and `www.caffeinagent.com` only. A local run or a preview loads no script and sends nothing. The OpenPanel project is `VITE_OPENPANEL_CLIENT_ID`, read at build time; without it nothing loads. The browser reaches OpenPanel through `/api/op` on the site itself, so a content blocker does not drop it.
+OpenPanel counts page views on `caffeinagent.com` and `www.caffeinagent.com` only. A local run or a preview loads no script and sends nothing. The OpenPanel project is `VITE_OPENPANEL_CLIENT_ID`, read at build time; without it nothing loads. The browser reaches OpenPanel through `/api/op` on the site itself, so a content blocker does not drop it. Downloads are counted on the server: `/download` sends a person's download on a Mac to OpenPanel when the Worker secret `OPENPANEL_CLIENT_SECRET` is set, and always answers with the redirect.
 
 ## Fonts
 
@@ -60,12 +60,33 @@ The site is set in Suisse Intl, a licensed typeface. Its files are not in this r
 - `pnpm fonts` (`scripts/fetch-fonts.sh`) fetches `SuisseIntl-Regular.woff2` and `SuisseIntl-Medium.woff2` from a private Cloudflare R2 bucket into `packages/ui/fonts/`, over the R2 S3 API. It needs `FONT_BUCKET`, `CLOUDFLARE_ACCOUNT_ID`, and an R2 S3 access key that may only read that bucket in `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` (one key per job, `../docs/adr/0002-release-keys-scoped-per-job.md`). It never stops a build.
 - If you have your own license for Suisse Intl, put the two files in `packages/ui/fonts/` yourself.
 
+## Mac files and the download
+
+The Worker answers `/mac/<file>` from a private R2 bucket (binding `MAC_FILES` in `apps/web/cloudflare.config.ts`, bucket `caffeinagent-mac`, key = the path without its leading slash) through `apps/web/src/lib/mac-files.ts`, and `/download` with a 302 to the dmg that `mac/latest.json` names, or to `/` while there is none (`apps/web/src/lib/download.ts`). Pages read the newest release with `getLatestRelease` (`apps/web/src/lib/latest-release.functions.ts`). `scripts/release.sh` at the repository root uploads the files. Why: `../docs/adr/0003-site-on-workers-from-cleanstarter.md`.
+
+`vite dev` reads a simulated bucket under `apps/web/.cloudflare/state`, empty at first, so `/download` goes home. To try a release locally, seed it from `apps/web`:
+
+```sh
+pnpm exec cf r2 objects put mac/agent-caffeine-0.3.0-20.dmg --bucket-name caffeinagent-mac --file <any file> --content-type application/x-apple-diskimage --local --persist-to .cloudflare/state
+pnpm exec cf r2 objects put mac/latest.json --bucket-name caffeinagent-mac --file latest.json --content-type application/json --local --persist-to .cloudflare/state
+```
+
+`latest.json` as `release.sh` writes it: `{"version": "0.3.0", "build": "20", "url": "https://caffeinagent.com/mac/agent-caffeine-0.3.0-20.dmg", "filename": "agent-caffeine-0.3.0.dmg", "size": 4096}`. Without `--persist-to`, cf writes to `~/.config/cloudflare/state`, which `vite dev` never reads. `rm -rf apps/web/.cloudflare/state` empties it again.
+
+## Blog
+
+The articles are `apps/web/content/blog/*.md`, with frontmatter (`title`, `description`, `date`, `updated`, `faq`). `apps/web/vite-plugin-blog.ts` reads and renders them at build time (gray-matter and marked) into two virtual modules: `virtual:blog/index` for lists and `virtual:blog/posts` for the bodies, which load only on a post. A post names the price as `{{price}}`, so it follows `lib/pricing.ts`. `/compare`, `/llms.txt`, `/sitemap.xml` and `/robots.txt` are routes in `apps/web/src/routes/`.
+
+## Share picture
+
+`apps/web/public/og.png` is a picture of the dev-only page `/og-image`. With the dev server up, `bash scripts/og-image.sh` takes it again (ego-browser, devknobs hidden, converted to sRGB). `OG_URL` names another address for the page. After a change to the price, the headline or the icon, take it again and commit the new `og.png`.
+
 ## Going to production
 
 Not set up yet. Local dev needs none of these. Production needs:
 
-- [ ] **Cloudflare**: the Worker `caffeinagent-web`; secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` in GitHub, and for the fonts `FONT_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (a read-only key for the fonts bucket); deploys ship only after `scripts/smoke-web.sh` sees the built site render
-- [ ] **OpenPanel**: the variable `OPENPANEL_CLIENT_ID`, passed to the build as `VITE_OPENPANEL_CLIENT_ID`
+- [ ] **Cloudflare**: the Worker `caffeinagent-web`; the private R2 bucket `caffeinagent-mac` (binding `MAC_FILES`) with the release files copied over from the public one, then `files.caffeinagent.com` removed; secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` in GitHub, and for the fonts `FONT_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (a read-only key for the fonts bucket); deploys ship only after `scripts/smoke-web.sh` sees the built site render
+- [ ] **OpenPanel**: the variable `OPENPANEL_CLIENT_ID`, passed to the build as `VITE_OPENPANEL_CLIENT_ID`, and the Worker secret `OPENPANEL_CLIENT_SECRET` for the download count
 - [ ] **Axiom** (optional): dataset + token for evlog drain, then turn Workers `observability` off in `apps/web/cloudflare.config.ts`
 - [ ] **Turbo remote cache** (optional): `TURBO_TOKEN` secret + `TURBO_TEAM` var
 

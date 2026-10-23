@@ -4,6 +4,7 @@ import { unplugin as stylex } from '@stylexjs/unplugin';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { blog } from './vite-plugin-blog.ts';
 
 export default defineConfig(({ command, mode }) => {
   // The repo-root .env sets NODE_ENV=development and Vite applies it whenever NODE_ENV
@@ -36,6 +37,7 @@ export default defineConfig(({ command, mode }) => {
     // VITE_* vars live in the repo-root .env (single env file for the whole monorepo).
     envDir: '../..',
     plugins: [
+      blog(),
       cloudflare({ viteEnvironment: { name: 'ssr' } }),
       // nodenext needs extensions on relative imports; without them routeTree.gen.ts
       // resolves every route to `any` (the file is @ts-nocheck, so nothing reports it).

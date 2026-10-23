@@ -9,6 +9,7 @@ import {
 import { create, props } from '@stylexjs/stylex';
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
+import { getPosts } from '../lib/blog.ts';
 import { PORTAL_URL } from '../lib/pricing.ts';
 import { CONTACT_EMAIL, MERTBUILDS_URL } from '../lib/site.ts';
 import { m } from '../paraglide/messages.js';
@@ -95,6 +96,9 @@ const styles = create({
     display: 'inline-flex',
     gap: spacing.s1,
   },
+  pretty: {
+    textWrap: 'pretty',
+  },
   read: {
     gridColumn: { [breakpoints.sm]: 'span 1', default: 'span 2' },
   },
@@ -170,7 +174,11 @@ export function Footer() {
           )}
           <FooterLink href="/#pricing">{m.header_pricing()}</FooterLink>
           <FooterLink href="/#faq">{m.header_faq()}</FooterLink>
-          <FooterLink href="/compare">{m.footer_compare()}</FooterLink>
+          <li>
+            <Link to="/compare" {...props(styles.link)}>
+              {m.footer_compare()}
+            </Link>
+          </li>
           <li>
             <a
               href={PORTAL_URL}
@@ -195,11 +203,34 @@ export function Footer() {
           </li>
         </Column>
         <Column title={m.footer_read()} wide>
-          <FooterLink href="/blog">{m.footer_blog()}</FooterLink>
+          <li>
+            <Link to="/blog" {...props(styles.link)}>
+              {m.footer_blog()}
+            </Link>
+          </li>
+          {getPosts().map((post) => (
+            <li key={post.slug}>
+              <Link
+                params={{ slug: post.slug }}
+                to="/blog/$slug"
+                {...props(styles.link, styles.pretty)}
+              >
+                {post.title}
+              </Link>
+            </li>
+          ))}
         </Column>
         <Column title={m.footer_legal()}>
-          <FooterLink href="/privacy">{m.footer_privacy()}</FooterLink>
-          <FooterLink href="/terms">{m.footer_terms()}</FooterLink>
+          <li>
+            <Link to="/privacy" {...props(styles.link)}>
+              {m.footer_privacy()}
+            </Link>
+          </li>
+          <li>
+            <Link to="/terms" {...props(styles.link)}>
+              {m.footer_terms()}
+            </Link>
+          </li>
           <FooterLink href={`mailto:${CONTACT_EMAIL}`}>{m.footer_contact()}</FooterLink>
         </Column>
       </div>

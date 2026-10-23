@@ -36,13 +36,13 @@ The unit tests never start the app. They compile the logic files directly, so th
 
 ## Release
 
-Only the owner releases. `scripts/release.sh` is the one release path. It builds, signs, notarizes and staples the app, makes the dmg, signs the update for Sparkle and writes `appcast.xml` and `latest.json`. Then it uploads the dmg first and the two feeds last to the bucket, under `mac/`, and checks on `https://files.caffeinagent.com/mac/` that the dmg has the same size and sha256 and that the appcast lists the build. Each upload is live at once.
+Only the owner releases. `scripts/release.sh` is the one release path. It builds, signs, notarizes and staples the app, makes the dmg, signs the update for Sparkle and writes `appcast.xml` and `latest.json`. Then it uploads the dmg first and the two feeds last to the bucket, under `mac/`, and checks on `https://caffeinagent.com/mac/` that the dmg has the same size and sha256 and that the appcast lists the build. Each upload is live at once.
 
 The workflow `.github/workflows/mac-release.yml` runs the same script on GitHub Actions:
 
 1. Write the notes in `release-notes/<version>.md`.
 2. Raise `CURRENT_PROJECT_VERSION` in `project.yml` (and `MARKETING_VERSION` for a new version), and push to `main`.
-3. The job `detect` compares the build with the highest build in `https://files.caffeinagent.com/mac/appcast.xml`. When it is higher, the job `release` waits for the approval of the environment `mac-release`.
+3. The job `detect` compares the build with the highest build in `https://caffeinagent.com/mac/appcast.xml`. When it is higher, the job `release` waits for the approval of the environment `mac-release`.
 4. Before you approve, you can start a dry run: Actions, "Mac release", "Run workflow" on `main`, with "dry run" on (the default). It does everything but the uploads, notarization included, and keeps the dmg, `appcast.xml` and `latest.json` as an artifact of the run for 7 days.
 5. Approve the real run. After the upload it writes the tag `v<version>` and a GitHub release with the notes, the link to the dmg and its sha256. A new build of a version that already has its tag leaves the tag where it is and shows a warning. With `HOMEBREW_TAP_TOKEN` set it also bumps the cask in `mertbuilds/homebrew-tap` with that repository's `scripts/bump-cask.sh`.
 
@@ -94,6 +94,6 @@ The release of Agent Caffeine is signed with the owner's Developer ID and its up
 | The bundle ids `com.caffeinagent.app`, `.helper`, `.hook`, `.cli` | `bundleIdPrefix` and each `PRODUCT_BUNDLE_IDENTIFIER` in `project.yml`, `appBundleID` and `label` in `SleepFlagHelperProtocol.swift`, `CaffeinagentHelper/com.caffeinagent.app.helper.plist`, and the sources that name `com.caffeinagent.app` for support folders, settings and logs | Two apps with the same helper label cannot both register the launch daemon, and they would share settings. |
 | The update feed `SUFeedURL` | `project.yml` | With the owner's feed your users would be offered the owner's build, and Sparkle would replace your fork with it. |
 | The update key `SUPublicEDKey`, and the keychain account `agent-caffeine` of its private half | `project.yml`, `SPARKLE_ACCOUNT` in `scripts/release.sh` | You cannot sign an update for the owner's public key. Make your own EdDSA key pair. |
-| The R2 bucket and the addresses `https://files.caffeinagent.com` and `https://caffeinagent.com/mac` | `R2_BUCKET` in `~/.config/agent-caffeine/release.env` (or the secret `MAC_R2_BUCKET`), `BUCKET_URL` and `SITE_URL` in `scripts/release.sh`, `APPCAST_URL` in `scripts/release-request.sh`, the url checks in `.github/workflows/mac-release.yml` | Your own host for the dmg, `appcast.xml` and `latest.json`. |
+| The R2 bucket and the address `https://caffeinagent.com/mac` | `R2_BUCKET` in `~/.config/agent-caffeine/release.env` (or the secret `MAC_R2_BUCKET`), `SITE_URL` in `scripts/release.sh`, `APPCAST_URL` in `scripts/release-request.sh`, the url checks in `.github/workflows/mac-release.yml` | Your own host for the dmg, `appcast.xml` and `latest.json`. |
 | The Homebrew tap `mertbuilds/homebrew-tap` | `.github/workflows/mac-release.yml` | Leave `HOMEBREW_TAP_TOKEN` unset, or point the workflow at your own tap. |
 | The links in the app | `Caffeinagent/Models/AppLinks.swift`, `builderURL` in `Caffeinagent/UI/PreferencesView.swift` | Your own help, contact, source code and support pages. The link to the source code must stay a link to the source of the version you give out. |

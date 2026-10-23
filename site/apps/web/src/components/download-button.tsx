@@ -2,7 +2,7 @@ import { create, props, type StyleXStyles } from '@stylexjs/stylex';
 import { rootRouteId, useLoaderData } from '@tanstack/react-router';
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { downloadLink } from '../lib/download.ts';
-import type { Release } from '../lib/release.ts';
+import type { Release } from '../lib/latest-release.ts';
 import { isMacDevice, openSendToMac } from '../lib/send-to-mac.ts';
 import { rememberedUtm, track, type Placement } from '../lib/track.ts';
 import { m } from '../paraglide/messages.js';
@@ -69,8 +69,7 @@ export function TryFree({ small = false }: { small?: boolean }) {
 
 /**
  * A link to the dmg, by way of `/download`, where the server counts it. The
- * release's `href` tells a sample release, which has no file, from a real one.
- * The click is also counted in the browser with where it sits.
+ * click is also counted in the browser with where it sits.
  *
  * The link is the same for everyone, so it works with no script. Off a Mac,
  * where the app cannot run, a click starts no download: it opens the popup
@@ -91,7 +90,7 @@ export function DownloadLink({
   const utm = useSyncExternalStore(subscribe, rememberedUtm, onServer);
   return (
     <a
-      download={release.href.startsWith('#') ? undefined : release.filename}
+      download={release.filename}
       href={downloadLink(placement, utm)}
       onClick={(event) => {
         if (isMacDevice(navigator.userAgent, navigator.maxTouchPoints)) {

@@ -245,7 +245,7 @@ jobs:
           echo "SPARKLE_ED_KEY_FILE=$KEY_FILE" >> "$GITHUB_ENV"
 
       # No key pair for the bucket here: without one, release.sh reads the
-      # published appcast from files.caffeinagent.com, and a dry run uploads
+      # published appcast from caffeinagent.com/mac, and a dry run uploads
       # nothing. It notarizes all the same, so the files it keeps are the ones
       # a release would upload.
       - name: Release (dry run)
@@ -258,7 +258,7 @@ jobs:
 
       # release.sh reaches the bucket through its S3 endpoint with curl, tests
       # the key pair against the bucket before it builds, uploads the dmg first
-      # and the feeds last, and checks the files on files.caffeinagent.com.
+      # and the feeds last, and checks the files on caffeinagent.com/mac.
       - name: Release
         if: env.DRY_RUN != 'true'
         env:

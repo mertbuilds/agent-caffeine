@@ -1,10 +1,12 @@
 import type { Utm } from './attribution.ts';
-import type { Release } from './release.ts';
+import type { Release } from './latest-release.ts';
+import { readLatestRelease } from './latest-release.ts';
+import type { MacFilesBucket } from './mac-files.ts';
 import { OPENPANEL_API_URL } from './site.ts';
 import { isLiveHost } from './track.ts';
 
 /** The address every download link goes to. The server counts the download there, then sends the browser on to the dmg. */
-const DOWNLOAD_PATH = '/download';
+export const DOWNLOAD_PATH = '/download';
 
 const PLACEMENTS = ['header', 'menu', 'hero', 'pricing', 'blog', 'footer'] as const;
 
@@ -170,4 +172,60 @@ export function trackRequest(
     },
     url: `${OPENPANEL_API_URL}/track`,
   };
+}
+
+/** How long the count may take. The browser has its redirect already; this only bounds the work after it. */
+const TRACK_TIMEOUT_MS = 1500;
+
+/** Sends the count to OpenPanel. A failure is logged and never reaches the visitor. */
+export async function sendDownloadEvent(
+  event: DownloadEvent,
+  clientId: string,
+  clientSecret: string,
+): Promise<void> {
+  const { init, url } = trackRequest(event, clientId, clientSecret);
+  try {
+    const response = await fetch(url, { ...init, signal: AbortSignal.timeout(TRACK_TIMEOUT_MS) });
+    if (!response.ok) {
+      // oxlint-disable-next-line no-console -- Workers observability keeps the console; a lost count
+      console.error(`download: ${url} answered ${response.status}`);
+    }
+  } catch (error) {
+    // oxlint-disable-next-line no-console -- Workers observability keeps the console; a lost count
+    console.error(`download: could not reach ${url}`, error);
+  }
+}
+
+/**
+ * Answers `/download` with a 302 to the newest dmg, or to the home page while
+ * there is none, never cached, and hands a person's download on a Mac to
+ * `count`. `count` is null when the server may not count. `null` for any other path.
+ */
+export async function downloadRedirect(
+  request: Request,
+  url: URL,
+  bucket: MacFilesBucket,
+  count: ((event: DownloadEvent) => void) | null,
+): Promise<Response | null> {
+  if (url.pathname !== DOWNLOAD_PATH) {
+    return null;
+  }
+  if (request.method !== 'GET' && request.method !== 'HEAD') {
+    return new Response(null, { headers: { allow: 'GET, HEAD' }, status: 405 });
+  }
+  const { event, redirectTo } = decideDownload({
+    headers: request.headers,
+    host: url.host,
+    method: request.method,
+    release: await readLatestRelease(bucket),
+    search: url.search,
+    secretSet: count !== null,
+  });
+  if (event !== null && count !== null) {
+    count(event);
+  }
+  return new Response(null, {
+    headers: { 'cache-control': 'no-store', location: redirectTo },
+    status: 302,
+  });
 }

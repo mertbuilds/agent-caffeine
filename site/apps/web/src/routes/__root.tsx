@@ -9,7 +9,7 @@ import { NotFound } from '../components/not-found.tsx';
 import { SendToMacPopup } from '../components/send-to-mac-popup.tsx';
 import { SiteHeader } from '../components/site-header.tsx';
 import { PRICE } from '../lib/pricing.ts';
-import { getLatestRelease } from '../lib/release.ts';
+import { getLatestRelease } from '../lib/latest-release.functions.ts';
 import { THEME_SCRIPT } from '../lib/theme.ts';
 import { m } from '../paraglide/messages.js';
 import { getLocale } from '../paraglide/runtime.js';

@@ -1,18 +1,24 @@
 // @vitest-environment node
-import { describe, expect, it } from 'vitest';
+// Worker code: Node has the fetch types and Blob.stream() that jsdom lacks.
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   clientIp,
   decideDownload,
+  DOWNLOAD_PATH,
   downloadLink,
+  downloadRedirect,
   downloadUtmFrom,
   hostnameOf,
   isBot,
   isMacBrowser,
   isPrefetch,
   placementFrom,
+  sendDownloadEvent,
   trackRequest,
 } from './download.ts';
-import type { Release } from './release.ts';
+import type { DownloadEvent } from './download.ts';
+import type { Release } from './latest-release.ts';
+import type { MacFilesBucket } from './mac-files.ts';
 
 const SAFARI =
   'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Safari/605.1.15';
@@ -265,5 +271,141 @@ describe('download', () => {
     const { headers } = trackRequest(event, 'client-id', 'client-secret').init;
     expect('openpanel-client-ip' in headers).toBe(false);
     expect('x-client-ip' in headers).toBe(false);
+  });
+});
+
+const LATEST = JSON.stringify({
+  build: '2',
+  filename: 'agent-caffeine-0.1.0.dmg',
+  size: 7_193_211,
+  url: 'https://caffeinagent.com/mac/agent-caffeine-0.1.0-2.dmg',
+  version: '0.1.0',
+});
+
+function file(text: string) {
+  return {
+    body: new Blob([text]).stream(),
+    httpEtag: '"etag"',
+    size: text.length,
+    writeHttpMetadata: () => {},
+  };
+}
+
+/** A bucket whose `mac/latest.json` holds `body`, or none when `body` is null. */
+function bucketWith(body: string | null, asked: Array<string> = []): MacFilesBucket {
+  return {
+    get: (key) => {
+      asked.push(key);
+      return Promise.resolve(body === null ? null : file(body));
+    },
+    head: () => Promise.resolve(null),
+  };
+}
+
+async function ask(
+  bucket: MacFilesBucket,
+  init?: RequestInit,
+  path = '/download',
+  count: ((event: DownloadEvent) => void) | null = null,
+) {
+  const url = new URL(path, 'https://caffeinagent.com');
+  return downloadRedirect(new Request(url, init), url, bucket, count);
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+describe('downloadRedirect', () => {
+  it('is the route every download button links to', () => {
+    expect(DOWNLOAD_PATH).toBe('/download');
+  });
+
+  it('sends GET and HEAD to the newest dmg, never cached', async () => {
+    const asked: Array<string> = [];
+    for (const method of ['GET', 'HEAD']) {
+      const response = await ask(bucketWith(LATEST, asked), { method });
+      expect(response?.status, method).toBe(302);
+      expect(response?.headers.get('location'), method).toBe('/mac/agent-caffeine-0.1.0-2.dmg');
+      expect(response?.headers.get('cache-control'), method).toBe('no-store');
+    }
+    expect(asked).toEqual(['mac/latest.json', 'mac/latest.json']);
+  });
+
+  it("hands a person's GET on a Mac to the count, and no HEAD, bot or other system", async () => {
+    const counted: Array<DownloadEvent> = [];
+    const count = (event: DownloadEvent) => counted.push(event);
+    const get = { headers: { 'user-agent': SAFARI } };
+    await ask(bucketWith(LATEST), get, '/download?from=pricing', count);
+    await ask(bucketWith(LATEST), { ...get, method: 'HEAD' }, '/download', count);
+    await ask(bucketWith(LATEST), { headers: { 'user-agent': 'curl/8.7.1' } }, '/download', count);
+    await ask(bucketWith(LATEST), { headers: { 'user-agent': NOT_A_MAC[3] ?? '' } }, '/download', count);
+    expect(counted.map((event) => event.properties)).toEqual([
+      { build: '2', placement: 'pricing', version: '0.1.0' },
+    ]);
+  });
+
+  it('sends the browser home while the bucket holds no latest.json', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const response = await ask(bucketWith(null));
+    expect(response?.status).toBe(302);
+    expect(response?.headers.get('location')).toBe('/');
+    expect(error).not.toHaveBeenCalled();
+  });
+
+  it('sends the browser home, and logs why, for a latest.json that is broken', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    expect((await ask(bucketWith('<html>')))?.headers.get('location')).toBe('/');
+    expect(String(error.mock.calls[0]?.[0])).toMatch(/could not be read/u);
+    expect((await ask(bucketWith('{"version":1}')))?.headers.get('location')).toBe('/');
+    expect(String(error.mock.calls[1]?.[0])).toMatch(/needs a version/u);
+  });
+
+  it('sends the browser home, and logs why, when the bucket fails', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failing: MacFilesBucket = {
+      get: () => Promise.reject(new Error('R2 down')),
+      head: () => Promise.resolve(null),
+    };
+    expect((await ask(failing))?.headers.get('location')).toBe('/');
+    expect(error).toHaveBeenCalledOnce();
+  });
+
+  it('refuses another method, and leaves every other path to the site', async () => {
+    const refused = await ask(bucketWith(LATEST), { method: 'POST' });
+    expect(refused?.status).toBe(405);
+    expect(refused?.headers.get('allow')).toBe('GET, HEAD');
+    for (const path of ['/', '/download/', '/downloads', '/mac/latest.json']) {
+      expect(await ask(bucketWith(LATEST), undefined, path), path).toBeNull();
+    }
+  });
+});
+
+describe('sendDownloadEvent', () => {
+  const event: DownloadEvent = {
+    ip: null,
+    name: 'download',
+    properties: { placement: 'hero', version: '1.0.0' },
+    userAgent: SAFARI,
+  };
+
+  it('posts the count to OpenPanel with a timeout', async () => {
+    const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(null));
+    await sendDownloadEvent(event, 'client-id', 'client-secret');
+    const [url, init] = fetchMock.mock.calls[0] ?? [];
+    expect(url).toBe('https://analytics.vinena.studio/api/track');
+    expect(init?.method).toBe('POST');
+    expect(init?.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it('logs a refused or failed count and never throws', async () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(new Response(null, { status: 401 }))
+      .mockRejectedValueOnce(new Error('offline'));
+    await sendDownloadEvent(event, 'client-id', 'client-secret');
+    await sendDownloadEvent(event, 'client-id', 'client-secret');
+    expect(String(error.mock.calls[0]?.[0])).toMatch(/answered 401/u);
+    expect(String(error.mock.calls[1]?.[0])).toMatch(/could not reach/u);
   });
 });
