@@ -9,7 +9,7 @@ With 1.1.0 Agent Caffeine became free and open source under the AGPL, and volunt
 ## Decision
 
 - One product on Polar (organization `mertbuilds`): a lifetime key for $14, one payment. A launch price of $9 is an automatic discount at checkout. The site shows the price, and the app only opens the checkout link.
-- A key runs on 3 Macs. Keys have the prefix `AGENTCAF`.
+- A key runs on 3 Macs. Keys have the prefix `AGENTCAF`. The product has only this license key benefit: buyers download the app from caffeinagent.com, and a release publishes nothing to Polar.
 - A key runs every build released within 365 days of its purchase, for ever. A build released later needs a new key. Sparkle does not offer such a build to a Mac with that key, and Settings says that its updates ended. The build carries its release date in Info.plist (`ACReleaseDate`, set by `scripts/release.sh`), and the purchase date is the `created_at` of the key from Polar.
 - A 7-day trial from the first launch of a paid build. People who come from the free 1.1.x builds or the paid 1.0.x builds get a full trial: the trial is stored under new names.
 - Keys of the earlier products (1 Mac and 3 Macs) keep working, and follow the same year of updates from their purchase.
