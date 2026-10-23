@@ -76,7 +76,7 @@ targets:
         CFBundleIconName: AppIcon
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         LSUIElement: true
-        NSHumanReadableCopyright: "Copyright © 2026 Mert Duzgun"
+        NSHumanReadableCopyright: "Copyright © 2026 Mert Düzgün. All rights reserved."
         NSSupportsAutomaticTermination: false
         NSSupportsSuddenTermination: false
         # "Join your iPhone hotspot": from macOS 14 on, macOS shows the

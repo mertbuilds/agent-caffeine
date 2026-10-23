@@ -361,17 +361,12 @@ enum PanelText {
     static let openAtLogin = "Open at login"
     static let openAtLoginInSetup = "Open Agent Caffeine when you log in"
 
-    // MARK: Free and open source
+    // MARK: Acknowledgements
 
     /// In Settings > About.
-    static let freeAndOpenSource = "Free and open source"
-    static let licenseExplained = "Free. Source code under the GNU Affero General Public License, version 3."
-    static let sourceCode = "Source code"
-    static let openOnGitHub = "Open on GitHub"
-    static let supportTheProject = "Support the project"
-    static let gitHubSponsors = "GitHub Sponsors"
     static let acknowledgements = "Acknowledgements"
     static let thirdPartyNotices = "Third-party notices"
+    static let openNotices = "Open"
 
     // MARK: Trial
 

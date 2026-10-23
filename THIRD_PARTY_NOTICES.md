@@ -1,9 +1,7 @@
 # Third-party notices
 
-Agent Caffeine for Mac is under the GNU Affero General Public License,
-version 3 (SPDX `AGPL-3.0-only`), Copyright (C) 2026 Mert Duzgun: see
-`LICENSE` beside this file. The source code is at
-<https://github.com/mertbuilds/agent-caffeine>.
+Agent Caffeine for Mac is Copyright (C) 2026 Mert Düzgün. All rights
+reserved. See `LICENSE` beside this file.
 
 The app carries the components below, each under its own license. The full
 license texts are in `Resources/Licenses/` beside this file, and in
@@ -20,8 +18,6 @@ Sparkle comes in as a Swift package: `project.yml` asks for exactly 2.10.0.
 
 License texts, by file name in `Resources/Licenses/`:
 
-- `AGPL-3.0.txt`: the license of Agent Caffeine itself, the same text as
-  `LICENSE`.
 - `Sparkle.txt`: the MIT license of Sparkle with its copyright lines, followed
   by the licenses of the code Sparkle itself includes (bsdiff, sais-lite,
   ed25519 and SUSignatureVerifier).
@@ -54,8 +50,9 @@ Agent Caffeine writes small files into the configuration of your agents: the
 hook lines it adds to the settings files of the agents, the opencode plugin,
 the Pi extension and the skill `agent-caffeine` (`SKILL.md`). You may also use
 these files under the MIT license in `Resources/Licenses/MIT-agent-files.txt`,
-Copyright (c) 2026 Mert Duzgun. So they put no term of the AGPL on your own
-agent configuration, and you can copy the skill into any skill folder.
+Copyright (c) 2026 Mert Duzgun. So they put no term of the license of the
+app on your own agent configuration, and you can copy the skill into any
+skill folder.
 
 ## Facts and ideas from other projects
 

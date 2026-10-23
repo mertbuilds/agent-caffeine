@@ -329,13 +329,12 @@ struct AboutPreferences: View {
                     Button(PanelText.quit, action: quit)
                 }
             }
-            Section(PanelText.freeAndOpenSource) {
-                Text(PanelText.licenseExplained)
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
-                row(PanelText.sourceCode) { Link(PanelText.openOnGitHub, destination: AppLinks.sourceCode) }
-                row(PanelText.supportTheProject) { Link(PanelText.gitHubSponsors, destination: AppLinks.support) }
-                row(PanelText.acknowledgements) { Link(PanelText.thirdPartyNotices, destination: AppLinks.acknowledgements) }
+            if let notices = AppLinks.acknowledgements {
+                Section(PanelText.acknowledgements) {
+                    row(PanelText.thirdPartyNotices) {
+                        Button(PanelText.openNotices) { NSWorkspace.shared.open(notices) }
+                    }
+                }
             }
             Section("Help") {
                 row("Questions and answers") { Link("Open help", destination: AppLinks.help) }

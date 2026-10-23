@@ -31,7 +31,7 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>
-	<string>Copyright © 2026 Mert Duzgun</string>
+	<string>Copyright © 2026 Mert Düzgün. All rights reserved.</string>
 	<key>NSLocationUsageDescription</key>
 	<string>Agent Caffeine needs this to find your iPhone hotspot by its name. It does not read or keep your location.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
