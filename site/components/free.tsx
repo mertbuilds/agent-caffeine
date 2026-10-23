@@ -1,5 +1,4 @@
 import Image from "next/image";
-import Link from "next/link";
 import { DownloadButton, DownloadForMac, DownloadNotReady } from "@/components/download-button";
 import { BRAND_VARIANTS } from "@/components/pill";
 import { getLatestRelease } from "@/lib/release";
@@ -59,9 +58,6 @@ export async function Free() {
                   Source code
                 </a>
               </div>
-              <Link href="/#support" className="text-sm focus-visible:outline-white">
-                Support the project
-              </Link>
             </div>
           </div>
         </div>

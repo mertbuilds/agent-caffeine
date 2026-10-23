@@ -17,11 +17,6 @@ export const REPO_URL = "https://github.com/mertbuilds/agent-caffeine";
 
 export const LICENSE_URL = "https://www.gnu.org/licenses/agpl-3.0.html";
 
-const supportUrl = process.env.NEXT_PUBLIC_SUPPORT_URL ?? "";
-
-/** The GitHub Sponsors page that the support button opens, or null while none is set. */
-export const SUPPORT_URL = supportUrl.startsWith("https://") && URL.canParse(supportUrl) ? supportUrl : null;
-
 export const CONTACT_EMAIL = "hi@caffeinagent.com";
 
 export const PRIVACY_UPDATED = "2026-10-19";

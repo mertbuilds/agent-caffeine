@@ -10,7 +10,6 @@ import { Hero } from "@/components/hero";
 import { JsonLd } from "@/components/json-ld";
 import { SleepScenes } from "@/components/sleep-scenes";
 import { SmallThings } from "@/components/small-things";
-import { Support } from "@/components/support";
 import { agentsMoreThan } from "@/lib/agents";
 import { answerText, faqItems } from "@/lib/faq";
 import { LICENSE_URL, ORGANIZATION, REPO_URL, SITE_URL } from "@/lib/site";
@@ -70,7 +69,6 @@ export default function Home() {
       <Free />
       <Faq />
       <Guides />
-      <Support />
       <Footer />
       <JsonLd data={structuredData} />
     </main>

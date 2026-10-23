@@ -13,12 +13,6 @@ export function onLiveHost(): boolean {
 
 export type Placement = "header" | "hero" | "pricing" | "blog" | "footer";
 
-/** Where a support link sits: the header's link to the section, or the section's own button. */
-export type SupportPlacement = "header" | "section";
-
-/** Where a GitHub link sits: the header's button, the phone menu's row, or the footer's links. */
-export type GitHubPlacement = "header" | "menu" | "footer";
-
 /** Every event the site counts, with what it carries. None carries anything about the visitor. */
 export type TrackEvents = {
   download_click: { placement: Placement };
@@ -28,10 +22,6 @@ export type TrackEvents = {
   simulator_use: { control: string };
   /** A question of the home page opened, by its `id` in `lib/faq.tsx`. */
   faq_open: { id: string };
-  /** A support link pressed: the header's link to the section, or the section's button to GitHub Sponsors. */
-  support_click: { placement: SupportPlacement };
-  /** A link to the code on GitHub pressed, with where it sits. */
-  github_clicked: { placement: GitHubPlacement };
 };
 
 /** Counts an event. Does nothing off the live site, or while OpenPanel is not there. */
