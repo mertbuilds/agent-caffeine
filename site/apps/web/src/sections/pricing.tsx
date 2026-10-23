@@ -171,6 +171,11 @@ const styles = create({
 function Price() {
   return (
     <div {...props(styles.column, styles.gap3)}>
+      {LAUNCH_PRICE_ACTIVE ? (
+        <p aria-hidden="true" {...props(styles.badge)}>
+          {m.pricing_launch_badge()}
+        </p>
+      ) : null}
       <p {...props(styles.price)}>
         {LAUNCH_PRICE_ACTIVE ? (
           <s {...props(styles.struck)}>
@@ -185,11 +190,6 @@ function Price() {
           {PRICE}
         </span>
       </p>
-      {LAUNCH_PRICE_ACTIVE ? (
-        <p aria-hidden="true" {...props(styles.badge)}>
-          {m.pricing_launch_badge()}
-        </p>
-      ) : null}
     </div>
   );
 }
