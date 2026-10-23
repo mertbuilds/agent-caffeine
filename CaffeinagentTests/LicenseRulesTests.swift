@@ -21,6 +21,18 @@ final class LicenseRulesTests: XCTestCase {
         XCTAssertEqual(entitlement, .trial(daysLeft: 7))
     }
 
+    /// A record of the paid builds up to 1.0.3 keeps its key, and its
+    /// trial does not count: the trial starts again.
+    func testTheTrialOfTheOldPaidBuildsDoesNotCount() throws {
+        let old = #"{"key":"AGENTCAF-1","activationID":"a","trialStart":0,"latestSeen":0}"#
+        let record = try JSONDecoder().decode(LicenseRecord.self, from: Data(old.utf8))
+        XCTAssertEqual(record.key, "AGENTCAF-1")
+        XCTAssertEqual(record.activationID, "a")
+        XCTAssertNil(record.trialStart)
+        let saved = try JSONEncoder().encode(LicenseRecord(trialStart: start))
+        XCTAssertEqual(try JSONDecoder().decode(LicenseRecord.self, from: saved).trialStart, start)
+    }
+
     func testClockSetBackCountsNoTimeBackwards() {
         let seen = start + 8 * day
         XCTAssertEqual(LicenseRules.effectiveNow(start, latestSeen: seen), seen)

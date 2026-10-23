@@ -2,8 +2,11 @@ import Foundation
 
 /// Where license keys are sold and checked.
 ///
-/// A key costs $19 for one Mac or $29 for three Macs on Polar: the license key benefit
-/// behind each product sets the number of activations. A Debug build talks to Polar's sandbox, so
+/// One product on Polar: a key for life that runs on 3 Macs and covers the
+/// builds released in its first year (`UpdateWindow`). The license key
+/// benefit sets the number of activations, and the price is on the site. The
+/// keys of the earlier products (1 Mac and 3 Macs) are of the same
+/// organization and keep working. A Debug build talks to Polar's sandbox, so
 /// a test purchase never touches real money or real keys; a Release build
 /// talks to Polar itself. The two are separate organizations with separate ids.
 struct LicenseConfig: Equatable, Sendable {
@@ -12,8 +15,7 @@ struct LicenseConfig: Equatable, Sendable {
     /// The Polar organization the keys belong to. Every call names it, because
     /// a key string is only unique inside one organization.
     let organizationID: String
-    /// Where a key is bought. In production this is the pricing section of the
-    /// site, which offers both plans (1 Mac and 3 Macs).
+    /// Where a key is bought: the checkout link of the product.
     let checkoutURL: URL
     /// Where a buyer sees their keys and frees an activation.
     let customerPortalURL: URL
@@ -28,7 +30,7 @@ struct LicenseConfig: Equatable, Sendable {
     static let production = LicenseConfig(
         apiBase: URL(string: "https://api.polar.sh")!,
         organizationID: "6fd87dcb-ab66-439b-8c83-5b2eb5836da6",
-        checkoutURL: URL(string: "https://caffeinagent.com/?utm_source=agent-caffeine-app&utm_medium=app&utm_campaign=buy#pricing")!,
+        checkoutURL: URL(string: "https://buy.polar.sh/polar_cl_uVXeh4hiiZ6r8meBrBlGm6ZIP7BXKMQrN7eoR0nsbht")!,
         customerPortalURL: URL(string: "https://polar.sh/mertbuilds/portal")!
     )
 

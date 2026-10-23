@@ -24,7 +24,9 @@ enum TrialNotice: String, CaseIterable {
 /// Which trial notices were told, in UserDefaults, so a restart of the
 /// app tells none of them again.
 enum TrialNoticeStore {
-    static let key = "TrialNotice.told"
+    /// Not "TrialNotice.told", which the paid builds up to 1.0.3 wrote: the
+    /// new trial tells both again.
+    static let key = "TrialNotice.told2"
 
     static func load(from defaults: UserDefaults) -> Set<TrialNotice> {
         Set((defaults.stringArray(forKey: key) ?? []).compactMap(TrialNotice.init(rawValue:)))

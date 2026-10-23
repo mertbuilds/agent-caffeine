@@ -50,7 +50,8 @@ final class LicenseManager: ObservableObject {
     private var timer: Timer?
     private var wakeObserver: NSObjectProtocol?
 
-    private static let trialStartKey = "License.trialStart"
+    // Not "License.trialStart", which the paid builds up to 1.0.3 wrote.
+    private static let trialStartKey = "License.trialStart2"
     private static let latestSeenKey = "License.latestSeen"
     private static let lastValidatedKey = "License.lastValidated"
 

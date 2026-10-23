@@ -41,7 +41,10 @@ struct LicenseRecord: Codable, Equatable {
     var activationID: String?
     /// When Polar last said the activation is good.
     var lastValidated: Date?
-    /// The first launch of a build with licensing.
+    /// The first launch of a paid build after the free 1.1 builds. Stored
+    /// under a name of its own: the trial of the paid builds up to 1.0.3
+    /// does not count, so whoever comes from them or from the free builds
+    /// gets a full trial.
     var trialStart: Date?
     /// The latest time the app has seen, so a clock set back counts no time
     /// backwards, and time the app measured itself still counts forward.
@@ -50,6 +53,15 @@ struct LicenseRecord: Codable, Equatable {
     /// activation. Nil when it did not say, and for a key that was
     /// activated by an older build.
     var macLimit: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case key
+        case activationID
+        case lastValidated
+        case trialStart = "trialStart2"
+        case latestSeen
+        case macLimit
+    }
 }
 
 enum LicenseRules {

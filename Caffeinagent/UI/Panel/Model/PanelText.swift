@@ -469,7 +469,7 @@ enum PanelText {
         switch action {
         case .openLoginItems: return "Open System Settings"
         case .tryHelperAgain: return "Try again"
-        case .buy: return "Buy from $19"
+        case .buy: return "Buy a key"
         case .enterKey: return "Enter license key…"
         case .checkLicense: return "Check now"
         case .activateAgain: return "Activate again"
@@ -684,7 +684,7 @@ enum PanelText {
 
     static let modePicker = "Keep your Mac awake"
     static let preferences = "Settings…"
-    static let buyInMenu = "Buy Agent Caffeine from $19"
+    static let buyInMenu = "Buy Agent Caffeine…"
     static let help = "Help…"
     static let quit = "Quit Agent Caffeine"
     static let gearMenu = "Settings and more"
