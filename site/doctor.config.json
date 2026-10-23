@@ -1,0 +1,14 @@
+{
+  "ignore": {
+    "overrides": [
+      {
+        "files": ["src/lib/morph.ts"],
+        "rules": ["react-doctor/no-layout-property-animation"]
+      },
+      {
+        "files": ["src/components/agents-panel.tsx"],
+        "rules": ["react-doctor/no-layout-property-animation"]
+      }
+    ]
+  }
+}

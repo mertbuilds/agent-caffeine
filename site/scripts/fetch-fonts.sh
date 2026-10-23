@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Fetches the licensed Suisse Intl woff2 files from a private Cloudflare R2
-# bucket into app/fonts/, which git ignores, over the R2 S3 API. It never stops
-# a build: without the four variables, or when a download fails, it warns and
-# exits 0, and the site is built with its fallback face.
+# bucket into packages/ui/fonts/, which git ignores, over the R2 S3 API with a
+# key pair that may only read that bucket (docs/adr/0002 at the repository
+# root). It never stops a build: without the four variables, or when a
+# download fails, it warns and exits 0, and the site is built with Inter.
 #   FONT_BUCKET            the name of the bucket that holds the two files at its root
 #   CLOUDFLARE_ACCOUNT_ID  the account the bucket is in
 #   R2_ACCESS_KEY_ID       an R2 S3 access key that may read objects in that bucket
@@ -12,7 +13,7 @@ set -uo pipefail
 
 cd "$(dirname "$0")/.."
 
-DEST="app/fonts"
+DEST="packages/ui/fonts"
 FILES=(SuisseIntl-Regular.woff2 SuisseIntl-Medium.woff2)
 
 missing=()
@@ -26,7 +27,7 @@ if [[ ${#missing[@]} -eq 0 ]]; then
 fi
 
 if [[ -z "${FONT_BUCKET:-}" || -z "${CLOUDFLARE_ACCOUNT_ID:-}" || -z "${R2_ACCESS_KEY_ID:-}" || -z "${R2_SECRET_ACCESS_KEY:-}" ]]; then
-  echo "fonts: FONT_BUCKET, CLOUDFLARE_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are not all set. Suisse Intl is not fetched, and the fallback face is used."
+  echo "fonts: FONT_BUCKET, CLOUDFLARE_ACCOUNT_ID, R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY are not all set. Suisse Intl is not fetched, and Inter is used."
   exit 0
 fi
 
@@ -40,7 +41,7 @@ for file in "${missing[@]}"; do
     echo "fonts: fetched $file."
   else
     rm -f "$DEST/$file.part"
-    echo "fonts: could not fetch $file. The fallback face is used."
+    echo "fonts: could not fetch $file. Inter is used."
   fi
 done
 exit 0

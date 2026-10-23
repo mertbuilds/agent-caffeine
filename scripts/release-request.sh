@@ -6,8 +6,8 @@
 #
 # The workflow mac-release.yml runs it, in a job that holds no secret, before
 # the job that waits for the owner's approval. It needs curl, signs nothing and
-# uploads nothing. It reads the appcast from the bucket's public address and
-# never from caffeinagent.com: see the header of scripts/release.sh for why.
+# uploads nothing. It reads the appcast where the app reads it, from
+# caffeinagent.com, whose Worker serves it from the private bucket.
 #
 # It prints what it decided and, on a runner, writes to $GITHUB_OUTPUT:
 #   version, build   from project.yml
@@ -30,7 +30,7 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 
-APPCAST_URL="https://files.caffeinagent.com/mac/appcast.xml"
+APPCAST_URL="https://caffeinagent.com/mac/appcast.xml"
 PROJECT_YML="${PROJECT_YML:-project.yml}"
 # The last build that was sold before the feed existed: see release.sh.
 LAST_BUILD_BEFORE_FEED=13

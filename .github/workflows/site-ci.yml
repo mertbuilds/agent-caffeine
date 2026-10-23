@@ -1,0 +1,106 @@
+name: Site CI
+
+# Checks the website in site/, a pnpm workspace of its own: the cleanstarter
+# CI gates (typecheck, build, lint, format, skills, knip, react-doctor, web
+# tests, Storybook story tests in Chromium) and the smoke test of the build.
+# Nothing here deploys and no secret is needed.
+
+on:
+  pull_request:
+    paths:
+      - site/**
+      - .github/workflows/site-ci.yml
+  push:
+    branches: [main]
+    paths:
+      - site/**
+      - .github/workflows/site-ci.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+
+defaults:
+  run:
+    working-directory: site
+
+jobs:
+  checks:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: site/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: site/.nvmrc
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run typecheck build
+      # Root oxlint (no workspace has a lint script, so turbo lint runs nothing).
+      # Type-aware, so it needs routeTree.gen.ts and paraglide from the web build.
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm skills:check
+      # Unused files, deps and exports. After the build, so generated files exist.
+      - run: pnpm knip
+      - name: react-doctor
+        run: npx -y react-doctor@0.9.13 --yes --no-telemetry --no-supply-chain --project apps/web,packages/ui .
+      # Serves the build with vite preview; each page in PAGES must answer 200 with the title.
+      - run: bash scripts/smoke-web.sh
+
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: site/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: site/.nvmrc
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec turbo run test --filter='!@caffeinagent/ui'
+        env:
+          # Turbo groups task output in CI, so a hang prints nothing at all.
+          TURBO_LOG_ORDER: stream
+
+  test-ui:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+        with:
+          package_json_file: site/package.json
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: site/.nvmrc
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # Storybook story tests run in real Chromium (vitest browser mode).
+      - run: pnpm --filter @caffeinagent/ui exec playwright install chromium --with-deps
+      - run: pnpm exec turbo run test --filter=@caffeinagent/ui
+        env:
+          # Turbo groups task output in CI, so a hang prints nothing at all.
+          TURBO_LOG_ORDER: stream

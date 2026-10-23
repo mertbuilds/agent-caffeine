@@ -1,0 +1,38 @@
+/*
+ * The site's fonts, for a page that preloads them (`./fonts.ts`): Suisse
+ * Intl, or Inter, the fallback, in a checkout without the Suisse files.
+ * `optional`: the text is drawn in the preloaded face when it is in by the
+ * first paint, and in the metric-matched fallback for the whole visit when it
+ * is not, so it never changes face on screen. A page that does not preload
+ * them would get the fallback on every cold load, which is why Storybook
+ * keeps `./fonts.css`. Inter is fontsource's latin file under a face of our
+ * own, because fontsource's stylesheet uses `swap`.
+ */
+@import './fonts-fallback.css';
+
+@font-face {
+  font-display: optional;
+  font-family: 'Suisse Intl';
+  font-style: normal;
+  font-weight: 400;
+  src: url('../fonts/SuisseIntl-Regular.woff2') format('woff2');
+}
+
+@font-face {
+  font-display: optional;
+  font-family: 'Suisse Intl';
+  font-style: normal;
+  font-weight: 500;
+  src: url('../fonts/SuisseIntl-Medium.woff2') format('woff2');
+}
+
+@font-face {
+  font-display: optional;
+  font-family: 'Inter Variable';
+  font-style: normal;
+  font-weight: 100 900;
+  src: url('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2') format('woff2');
+  unicode-range:
+    U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329,
+    U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}

@@ -1,0 +1,7 @@
+procs:
+  web:
+    # https://caffeinagent.localhost
+    shell: pnpm exec portless caffeinagent pnpm --filter @caffeinagent/web dev
+  storybook:
+    # https://storybook.caffeinagent.localhost: storybook respects --port only, so pass PORT through.
+    shell: pnpm exec portless storybook.caffeinagent sh -c 'pnpm --filter @caffeinagent/ui exec storybook dev --port "$PORT" --no-open'

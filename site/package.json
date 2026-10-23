@@ -1,32 +1,35 @@
 {
-  "name": "caffeinagent-site",
-  "version": "0.0.1",
+  "name": "caffeinagent",
   "private": true,
-  "license": "AGPL-3.0-only",
+  "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "bad-day": "bash scripts/bad-day.sh",
+    "build": "turbo run build",
+    "dev": "mprocs",
     "fonts": "bash scripts/fetch-fonts.sh",
-    "build": "bash scripts/fetch-fonts.sh && next build",
-    "start": "next start"
-  },
-  "dependencies": {
-    "@number-flow/react": "0.6.2",
-    "@openpanel/nextjs": "^1.5.1",
-    "gray-matter": "^4.0.3",
-    "marked": "^18.0.14",
-    "motion": "^14.0.0",
-    "next": "^16.2.6",
-    "react": "19.0.0",
-    "react-dom": "19.0.0"
+    "format": "oxfmt .",
+    "format:check": "oxfmt --check .",
+    "knip": "knip",
+    "lint": "oxlint --type-aware --type-check",
+    "skills:check": "node scripts/skills-check.ts --strict",
+    "storybook": "pnpm --filter @caffeinagent/ui storybook",
+    "test": "turbo run test",
+    "typecheck": "tsc -p scripts && turbo run typecheck"
   },
   "devDependencies": {
-    "@types/node": "22.9.0",
-    "@types/react": "19.0.0",
-    "@types/react-dom": "19.0.0",
-    "autoprefixer": "10.4.20",
-    "devknobs": "0.1.1",
-    "postcss": "8.4.49",
-    "tailwindcss": "3.4.15",
-    "typescript": "5.6.3"
-  }
+    "@nkzw/oxlint-config": "^2.0.1",
+    "@types/node": "^24.10.1",
+    "knip": "^6.39.0",
+    "mprocs": "0.9.6",
+    "oxfmt": "^0.66.0",
+    "oxlint": "^1.81.0",
+    "oxlint-tsgolint": "^7.0.2001",
+    "portless": "0.15.6",
+    "turbo": "^2.10.12",
+    "typescript": "^7.0.2"
+  },
+  "engines": {
+    "node": ">=24"
+  },
+  "packageManager": "pnpm@11.25.0"
 }

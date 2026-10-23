@@ -1,0 +1,48 @@
+{
+  "name": "@caffeinagent/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "NODE_ENV=production vite build",
+    "cf-typegen": "cf workers types",
+    "cf:deploy": ": \"${MAC_FILES_BUCKET:?is not set, so the Worker has no bucket for /mac/}\" && pnpm build && cf deploy --prebuilt",
+    "dev": "vite dev",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json"
+  },
+  "dependencies": {
+    "@caffeinagent/ui": "workspace:*",
+    "@number-flow/react": "0.6.2",
+    "@stylexjs/stylex": "^0.19.0",
+    "@tanstack/react-router": "^1.170.32",
+    "@tanstack/react-start": "^1.168.49",
+    "evlog": "^2.28.0",
+    "motion": "14.0.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  },
+  "devDependencies": {
+    "@caffeinagent/config": "workspace:*",
+    "@cloudflare/vite-plugin": "2.0.0-beta.sha-ad79608dd",
+    "@inlang/paraglide-js": "^2.25.0",
+    "@inlang/plugin-message-format": "4.4.4",
+    "@stylexjs/unplugin": "^0.19.0",
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "^24.10.1",
+    "@types/react": "^19.2.18",
+    "@types/react-dom": "^19.2.5",
+    "@vitejs/plugin-react": "^6.1.1",
+    "cf": "1.0.0-beta.5",
+    "devknobs": "0.2.0",
+    "gray-matter": "4.0.3",
+    "jsdom": "30.0.1",
+    "marked": "18.0.14",
+    "oxc-transform-react": "^0.148.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "4.1.11"
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "_comment": "Maps deps to their agent-skill sources. scripts/skills-check.ts warns when a mapped dep's installed major version drifts from checkedMajor (re-run `npx skills update` and bump) or when a dep listed here has no installed skill. Deps with source null have no worthwhile skill yet. Re-check occasionally with `npx skills find <dep>`.",
+  "deps": {
+    "@tanstack/react-start": {
+      "source": "deckardger/tanstack-agent-skills",
+      "skills": ["tanstack-start-best-practices"],
+      "checkedMajor": 1
+    },
+    "@stylexjs/stylex": {
+      "source": "local",
+      "skills": ["stylex"],
+      "checkedMajor": 0
+    }
+  }
+}

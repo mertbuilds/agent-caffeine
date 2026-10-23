@@ -1,0 +1,24 @@
+diff --git a/lib/core.js b/lib/core.js
+index 96e685e7c3a51dd4e8e18b4e869576f95131017a..f2f33e5f2d91a7212b958b11461d96cf39c38926 100644
+--- a/lib/core.js
++++ b/lib/core.js
+@@ -238,6 +238,7 @@ const unpluginFactory = (userOptions = {}, metaOptions) => {
+     const result = await (0, _core.transformAsync)(inputCode, {
+       babelrc: false,
+       filename,
++      sourceMaps: true,
+       presets,
+       plugins: [...plugins, /\.jsx?/.test(_nodePath.default.extname(filename)) ? _pluginSyntaxFlow.default : [_pluginSyntaxTypescript.default, {
+         isTSX: true
+diff --git a/lib/es/core.mjs b/lib/es/core.mjs
+index ab666ee586474155be07c94d6839f30fbf7bc194..06c7de2919d4d1d9862ac327e9845ba652916b91 100644
+--- a/lib/es/core.mjs
++++ b/lib/es/core.mjs
+@@ -229,6 +229,7 @@ export const unpluginFactory = (userOptions = {}, metaOptions) => {
+     const result = await transformAsync(inputCode, {
+       babelrc: false,
+       filename,
++      sourceMaps: true,
+       presets,
+       plugins: [...plugins, /\.jsx?/.test(path.extname(filename)) ? flowSyntaxPlugin : [typescriptSyntaxPlugin, {
+         isTSX: true

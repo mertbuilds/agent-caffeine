@@ -3,23 +3,23 @@
 #
 # This script is the only way to publish a release. The dmg, the appcast
 # Sparkle reads and the latest.json the download page reads go to the R2
-# bucket named by R2_BUCKET in ~/.config/agent-caffeine/release.env, under
-# mac/. The bucket is public to read at https://files.caffeinagent.com, and
-# the site serves the files at https://caffeinagent.com/mac/<file>. The
+# private bucket named by R2_BUCKET in ~/.config/agent-caffeine/release.env,
+# under mac/, and the site's Worker serves the files at
+# https://caffeinagent.com/mac/<file> (site/apps/web/src/lib/mac-files.ts). The
 # dmg goes up first, so a feed never points at a file that is not there yet. An
 # upload is live at once: there is no site deploy in between.
 #
-# Every check of a file that may not be uploaded yet, and every check after the
-# upload, reads the bucket and never the site. Cloudflare caches a 404 on the
-# site for hours, so one request for the new dmg before the upload makes the
-# site serve that 404 page in place of the dmg.
+# Every check of a file that may not be uploaded yet asks the bucket first, and
+# the site only when the bucket cannot be read. The checks after the upload read
+# the site, since that is what the app and the browsers ask.
 #
 # Sparkle offers an update only when its build number is above every one in the
 # published appcast, so the script stops before it builds when
 # CURRENT_PROJECT_VERSION in project.yml is not. The dmg is stored as
 # agent-caffeine-<version>-<build>.dmg and the script stops when the bucket
-# already holds that name. People download it as agent-caffeine-<version>.dmg:
-# latest.json carries that name as `filename`.
+# already holds that name. /download redirects to it, and the Worker serves it
+# with a Content-Disposition that saves it as agent-caffeine-<version>.dmg, the
+# `filename` that latest.json names too.
 #
 # Run it from a local Terminal on the Mac. Sparkle signs with the private key in
 # the login keychain, and the keychain refuses SSH and scripted sessions.
@@ -53,8 +53,8 @@
 #      project.yml. Every Sparkle tool call here passes --account agent-caffeine,
 #      never Sparkle's default account, which holds another product's key.
 #      Without the key no shipped copy of the app accepts an update.
-#   4. `cf auth login` with the Cloudflare account that holds the bucket. cf is
-#      Cloudflare's cf cli, and it makes every R2 call here.
+#   4. `cf auth login` with the Cloudflare account that holds the bucket, or the
+#      S3 key pair below in release.env. cf is Cloudflare's cf cli.
 #   5. Put the bucket name in ~/.config/agent-caffeine/release.env (mode 600),
 #      as R2_BUCKET=<bucket>.
 #
@@ -92,7 +92,6 @@ TEAM_ID="3HGP3W3TLD"
 NOTARY_PROFILE="caffeinagent-notary"
 RELEASE_ENV="$HOME/.config/agent-caffeine/release.env"
 SITE_URL="https://caffeinagent.com/mac"
-BUCKET_URL="https://files.caffeinagent.com/mac"
 SPARKLE_ACCOUNT="agent-caffeine"
 KEY_PLACEHOLDER="REPLACE_WITH_AGENT_CAFFEINE_SPARKLE_PUBLIC_KEY"
 BUILD_DIR="build/release"
@@ -319,8 +318,8 @@ mkdir -p "$BUILD_DIR"
 
 # The published appcast is the input, so older versions keep their entry in the
 # feed instead of being dropped on every release. The bucket is read first,
-# since it is what the site serves; its public URL is the fallback for a bucket
-# this login cannot read or that holds no feed yet. Only a 404 there starts a
+# since it is what the site serves; the site is the fallback for a bucket this
+# login cannot read or that holds no feed yet. Only a 404 there starts a
 # new feed: any other failure stops the release rather than lose the history.
 echo "==> fetch the published appcast"
 PUBLISHED_APPCAST="$BUILD_DIR/appcast.published.xml"
@@ -329,15 +328,15 @@ if [ -n "${R2_BUCKET:-}" ] \
   && [ -s "$PUBLISHED_APPCAST" ]; then
   echo "    from the bucket: mac/appcast.xml"
 else
-  STATUS=$(curl -sS -o "$PUBLISHED_APPCAST" -w '%{http_code}' "$BUCKET_URL/appcast.xml") || STATUS="no response"
+  STATUS=$(curl -sS -o "$PUBLISHED_APPCAST" -w '%{http_code}' "$SITE_URL/appcast.xml") || STATUS="no response"
   case "$STATUS" in
-    200) echo "    from $BUCKET_URL/appcast.xml" ;;
+    200) echo "    from $SITE_URL/appcast.xml" ;;
     404)
       rm -f "$PUBLISHED_APPCAST"
       echo "    none published yet, the feed starts with this release"
       ;;
     *)
-      echo "error: could not read $BUCKET_URL/appcast.xml ($STATUS)." >&2
+      echo "error: could not read $SITE_URL/appcast.xml ($STATUS)." >&2
       echo "       without it every older version would drop out of the feed." >&2
       exit 1
       ;;
@@ -359,10 +358,9 @@ dmg_name() {
   echo "agent-caffeine-$1-$2.dmg"
 }
 
-# The name a person should get on disk: the version alone. The build number in
-# the stored name only keeps every url new. `cf r2 objects put` cannot store a
-# Content-Disposition, so the name travels in latest.json as `filename` and the
-# download link on the site hands it to the browser.
+# The version alone, as `filename` in latest.json. It is also the name on disk:
+# the Worker serves a dmg with a Content-Disposition that drops the build
+# number. The build number in the stored name keeps every url new.
 download_name() {
   echo "agent-caffeine-$1.dmg"
 }
@@ -393,9 +391,20 @@ check_new_release() {
     echo "       CURRENT_PROJECT_VERSION in project.yml." >&2
     exit 1
   fi
-  url="$BUCKET_URL/$(dmg_name "$version" "$build")"
-  if curl -sfI "$url" > /dev/null; then
-    echo "error: the bucket already holds $url" >&2
+  name=$(dmg_name "$version" "$build")
+  # Over S3 r2_get fails only on a 404, so its answer is final. Through cf a
+  # failure may be a login that cannot read the bucket, so the site is asked too.
+  held=0
+  if [ "$R2_TRANSPORT" = s3 ]; then
+    if r2_get "mac/$name" /dev/null; then
+      held=1
+    fi
+  elif { [ -n "${R2_BUCKET:-}" ] && r2_get "mac/$name" /dev/null; } \
+    || curl -sfI "$SITE_URL/$name" > /dev/null; then
+    held=1
+  fi
+  if [ "$held" = 1 ]; then
+    echo "error: the bucket already holds mac/$name" >&2
     echo "       raise CURRENT_PROJECT_VERSION in project.yml." >&2
     exit 1
   fi
@@ -797,29 +806,29 @@ r2_put "mac/$DMG_NAME" "$SITE_DMG" "application/x-apple-diskimage"
 r2_put "mac/latest.json" "$SITE_DIR/latest.json" "application/json"
 r2_put "mac/appcast.xml" "$SITE_DIR/appcast.xml" "application/xml"
 
-# What the bucket holds now is what the site serves. The query string keeps an
-# older appcast that a cache may hold out of the check.
+# The site serves what the bucket holds now. The query string keeps an older
+# appcast that a cache may hold out of the check.
 if [ "$DRY_RUN" = 0 ]; then
-  echo "==> verify the upload on the bucket"
+  echo "==> verify the upload on the site"
   UPLOADED_DMG="$BUILD_DIR/uploaded.dmg"
-  curl -sSf -o "$UPLOADED_DMG" "$BUCKET_URL/$DMG_NAME"
+  curl -sSf -o "$UPLOADED_DMG" "$SITE_URL/$DMG_NAME"
   UPLOADED_SIZE=$(/usr/bin/stat -f%z "$UPLOADED_DMG")
   UPLOADED_SHA=$(/usr/bin/shasum -a 256 "$UPLOADED_DMG" | cut -d' ' -f1)
   rm -f "$UPLOADED_DMG"
   if [ "$UPLOADED_SIZE" != "$DMG_SIZE" ] || [ "$UPLOADED_SHA" != "$DMG_SHA" ]; then
-    echo "error: $BUCKET_URL/$DMG_NAME is not this dmg:" >&2
+    echo "error: $SITE_URL/$DMG_NAME is not this dmg:" >&2
     echo "       $UPLOADED_SIZE bytes, sha256 $UPLOADED_SHA" >&2
     echo "       expected $DMG_SIZE bytes, sha256 $DMG_SHA" >&2
     exit 1
   fi
-  echo "    $BUCKET_URL/$DMG_NAME: $DMG_SIZE bytes, sha256 matches"
-  UPLOADED_APPCAST=$(curl -sSf "$BUCKET_URL/appcast.xml?build=$BUILD-$(date +%s)")
+  echo "    $SITE_URL/$DMG_NAME: $DMG_SIZE bytes, sha256 matches"
+  UPLOADED_APPCAST=$(curl -sSf "$SITE_URL/appcast.xml?build=$BUILD-$(date +%s)")
   if ! grep -qF "<sparkle:version>$BUILD</sparkle:version>" <<< "$UPLOADED_APPCAST" \
     || ! grep -qF "url=\"$DMG_URL\"" <<< "$UPLOADED_APPCAST"; then
-    echo "error: $BUCKET_URL/appcast.xml does not list build $BUILD at $DMG_URL." >&2
+    echo "error: $SITE_URL/appcast.xml does not list build $BUILD at $DMG_URL." >&2
     exit 1
   fi
-  echo "    $BUCKET_URL/appcast.xml: lists build $BUILD"
+  echo "    $SITE_URL/appcast.xml: lists build $BUILD"
 fi
 
 echo ""
@@ -852,5 +861,4 @@ else
   echo ""
   echo "  next: create the GitHub release v$VERSION from this commit, with"
   echo "  $SITE_DMG"
-  echo "  then, after a minute, run curl -sI $DMG_URL and purge that one url in Cloudflare if it serves html."
 fi
