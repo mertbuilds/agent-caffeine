@@ -1,0 +1,10 @@
+{
+  "ignore": {
+    "overrides": [
+      {
+        "files": ["src/lib/morph.ts"],
+        "rules": ["react-doctor/no-layout-property-animation"]
+      }
+    ]
+  }
+}
