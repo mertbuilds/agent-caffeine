@@ -52,28 +52,33 @@ function Cta({ release }: { release: Release | null }) {
           <TryFree />
         </DownloadButton>
       )}
-      <ul className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-sm text-muted lg:justify-start">
-        <li className="flex items-center gap-1.5">
-          <svg {...GLYPH} height="10.5" viewBox="0 0 12 10.5">
-            <path d="M.75 3h10.5v2.5H.75zM1.75 5.5v4.25h8.5V5.5M6 3v6.75M6 3C4.6 3 3.4 2.6 3.4 1.7c0-.6.45-.95.95-.95C5.5.75 6 2 6 3Zm0 0c1.4 0 2.6-.4 2.6-1.3 0-.6-.45-.95-.95-.95C6.5.75 6 2 6 3Z" />
-          </svg>
-          Free for 7 days
-        </li>
-        <li aria-hidden="true" className="-translate-y-[0.09em]">
-          ·
-        </li>
-        <li>Then {PRICE} once</li>
-        <li aria-hidden="true" className="hidden -translate-y-[0.09em] sm:block">
-          ·
-        </li>
-        <li className="flex basis-full items-center justify-center gap-1.5 sm:basis-auto">
-          <svg {...GLYPH} height="10" viewBox="0 0 13.5 10">
-            <rect height="8.5" rx="1.5" width="12" x=".75" y=".75" />
-            <path d="M.75 3.6h12M3.25 6.6h2" />
-          </svg>
-          No account, no card
-        </li>
-      </ul>
+      {/* With no download there is no trial to start, so the line names only the price. */}
+      {release === null ? (
+        <p className="text-sm text-muted">{PRICE} once</p>
+      ) : (
+        <ul className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1.5 text-sm text-muted lg:justify-start">
+          <li className="flex items-center gap-1.5">
+            <svg {...GLYPH} height="10.5" viewBox="0 0 12 10.5">
+              <path d="M.75 3h10.5v2.5H.75zM1.75 5.5v4.25h8.5V5.5M6 3v6.75M6 3C4.6 3 3.4 2.6 3.4 1.7c0-.6.45-.95.95-.95C5.5.75 6 2 6 3Zm0 0c1.4 0 2.6-.4 2.6-1.3 0-.6-.45-.95-.95-.95C6.5.75 6 2 6 3Z" />
+            </svg>
+            Free for 7 days
+          </li>
+          <li aria-hidden="true" className="-translate-y-[0.09em]">
+            ·
+          </li>
+          <li>Then {PRICE} once</li>
+          <li aria-hidden="true" className="hidden -translate-y-[0.09em] sm:block">
+            ·
+          </li>
+          <li className="flex basis-full items-center justify-center gap-1.5 sm:basis-auto">
+            <svg {...GLYPH} height="10" viewBox="0 0 13.5 10">
+              <rect height="8.5" rx="1.5" width="12" x=".75" y=".75" />
+              <path d="M.75 3.6h12M3.25 6.6h2" />
+            </svg>
+            No account, no card
+          </li>
+        </ul>
+      )}
     </div>
   );
 }
