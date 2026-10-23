@@ -85,7 +85,6 @@ enum Main {
             FileHandle.standardError.write(Data("Agent Caffeine is already running.\n".utf8))
             exit(0)
         case .start:
-            PaidLeftovers.remove()
             CaffeinagentApp.main()
         }
     }
