@@ -1,3 +1,4 @@
+import { colors } from '@caffeinagent/ui/tokens.stylex';
 import { create, props, type StyleXStyles } from '@stylexjs/stylex';
 import { rootRouteId, useLoaderData } from '@tanstack/react-router';
 import { useSyncExternalStore, type ReactNode } from 'react';
@@ -26,6 +27,9 @@ const styles = create({
     height: '0.84em',
     transform: 'translateY(-0.15em)',
     width: 'auto',
+  },
+  notReady: {
+    color: colors.muted,
   },
   // The small text size puts the middle of the capitals a little higher in its line.
   markSmall: {
@@ -65,6 +69,11 @@ export function WithAppleMark({
 /** The words of a button that starts the free trial. */
 export function TryFree({ small = false }: { small?: boolean }) {
   return <WithAppleMark small={small}>{m.download_try_free()}</WithAppleMark>;
+}
+
+/** What stands in the place of a download button while no release can be read. It never names a price. */
+export function DownloadNotReady() {
+  return <p {...props(styles.notReady)}>{m.download_not_ready()}</p>;
 }
 
 /**

@@ -3,7 +3,7 @@ import type { AgentIconName } from '../components/agent-icons.tsx';
 type Agent = { icon?: AgentIconName; name: string };
 
 /** Every agent Agent Caffeine knows, those with a mark first. */
-const agents: ReadonlyArray<Agent> = [
+export const agents: ReadonlyArray<Agent> = [
   { icon: 'claudecode', name: 'Claude Code' },
   { icon: 'codex', name: 'Codex' },
   { icon: 'opencode', name: 'opencode' },

@@ -387,5 +387,19 @@
   "og_headline_start": "Close your lid",
   "og_headline_middle": "Come back to",
   "og_headline_end": "finished work",
-  "og_offer": "Free for 7 days, then {price} once"
+  "og_offer": "Free for 7 days, then {price} once",
+  "hero_title_lead": "Close your lid",
+  "hero_title_rest": "Come back to finished work",
+  "hero_lead": "Agent Caffeine keeps your Mac awake while your agents work, also with the lid closed. Then it lets your Mac sleep",
+  "hero_works_with": "Works with",
+  "hero_works_with_more": "and {count} more",
+  "hero_price_once": "{price} once",
+  "hero_free_days": "Free for 7 days",
+  "hero_then_price": "Then {price} once",
+  "hero_no_card": "No account, no card",
+  "hero_scene_label": "A laptop shows the Agent Caffeine menu on its display, with three AI coding agents at work. The lid closes, and the menu stays in a dashed outline of the display: the agents keep working and finish one by one. Two minutes after the last one the menu says that the Mac can sleep",
+  "hero_scene_menu_label": "The Agent Caffeine menu",
+  "hero_scene_agent": "{name} · {folder}",
+  "hero_scene_finished": "Finished",
+  "download_not_ready": "The download is not ready yet"
 }

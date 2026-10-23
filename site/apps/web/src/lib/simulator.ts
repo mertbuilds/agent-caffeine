@@ -993,7 +993,7 @@ function groups(state: SimState): Array<Group> {
 export type Pose = 'awake' | 'reachable' | 'attentive' | 'asleep' | 'paused' | 'off' | 'trouble';
 
 /** `MenuModel.pose(for:)`. */
-function pose(line: Headline): Pose {
+export function pose(line: Headline): Pose {
   switch (line.kind) {
     case 'working':
     case 'finishedRecently':
@@ -1018,7 +1018,7 @@ function pose(line: Headline): Pose {
 }
 
 /** How much of itself the icon in the menu bar shows while Agent Caffeine keeps nothing awake: off, paused, or all agents done. */
-const ICON_AT_REST = 0.45;
+export const ICON_AT_REST = 0.45;
 
 /** `MenuBarLook`: what the robot in the menu bar is drawn from, and the pose it stands for. */
 export type IconLook = { eyes: 'happy' | 'open' | 'closed' | 'dead'; opacity: number; pose: Pose };

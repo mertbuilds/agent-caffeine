@@ -499,7 +499,7 @@ const styles = create({
 });
 
 /** Text whose numbers roll when they change, as the app's do. A group of digits keeps its length, so "06:00" keeps its zeros. With `still` a change shows at once. */
-function Flow({ children, still = false }: { children: string; still?: boolean }) {
+export function Flow({ children, still = false }: { children: string; still?: boolean }) {
   return (
     <>
       {children

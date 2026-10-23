@@ -226,14 +226,14 @@ function shown(on: boolean) {
 
 type RobotProps = {
   /** Holds every loop where it is, while nobody sees the robot. */
-  paused?: boolean;
+  paused?: boolean | undefined;
   pose: Pose;
   /** How far the pose's tone has come in, from 0 (the full colour of the robot awake) to 1, as a CSS number such as `var(--rest)`. With it the tone follows that number and does not fade by itself. */
-  rest?: string;
+  rest?: string | undefined;
   /** The side of the tile, in pixels. */
-  size?: number;
+  size?: number | undefined;
   /** A still picture of the pose, as the app shows it with Reduce Motion. */
-  still?: boolean;
+  still?: boolean | undefined;
 };
 
 export const Robot = memo(function Robot({
