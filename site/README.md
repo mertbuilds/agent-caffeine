@@ -62,13 +62,13 @@ The site is set in Suisse Intl, a licensed typeface. Its files are not in this r
 
 ## Mac files and the download
 
-The Worker answers `/mac/<file>` from a private R2 bucket (binding `MAC_FILES` in `apps/web/cloudflare.config.ts`, bucket `caffeinagent-mac`, key = the path without its leading slash) through `apps/web/src/lib/mac-files.ts`, and `/download` with a 302 to the dmg that `mac/latest.json` names, or to `/` while there is none (`apps/web/src/lib/download.ts`). Pages read the newest release with `getLatestRelease` (`apps/web/src/lib/latest-release.functions.ts`). `scripts/release.sh` at the repository root uploads the files. Why: `../docs/adr/0003-site-on-workers-from-cleanstarter.md`.
+The Worker answers `/mac/<file>` from a private R2 bucket (binding `MAC_FILES` in `apps/web/cloudflare.config.ts`, key = the path without its leading slash) through `apps/web/src/lib/mac-files.ts`, and `/download` with a 302 to the dmg that `mac/latest.json` names, or to `/` while there is none (`apps/web/src/lib/download.ts`). Pages read the newest release with `getLatestRelease` (`apps/web/src/lib/latest-release.functions.ts`). `scripts/release.sh` at the repository root uploads the files. The bucket name stays out of git, like `R2_BUCKET` for `release.sh` and the secret `MAC_R2_BUCKET` for the release workflow, which name the same bucket: a deploy reads it from `MAC_FILES_BUCKET`, and `cf:deploy` stops when that is not set. Without it the binding is a local bucket named `mac-files`. Why: `../docs/adr/0003-site-on-workers-from-cleanstarter.md`.
 
 `vite dev` reads a simulated bucket under `apps/web/.cloudflare/state`, empty at first, so `/download` goes home. To try a release locally, seed it from `apps/web`:
 
 ```sh
-pnpm exec cf r2 objects put mac/agent-caffeine-0.3.0-20.dmg --bucket-name caffeinagent-mac --file <any file> --content-type application/x-apple-diskimage --local --persist-to .cloudflare/state
-pnpm exec cf r2 objects put mac/latest.json --bucket-name caffeinagent-mac --file latest.json --content-type application/json --local --persist-to .cloudflare/state
+pnpm exec cf r2 objects put mac/agent-caffeine-0.3.0-20.dmg --bucket-name mac-files --file <any file> --content-type application/x-apple-diskimage --local --persist-to .cloudflare/state
+pnpm exec cf r2 objects put mac/latest.json --bucket-name mac-files --file latest.json --content-type application/json --local --persist-to .cloudflare/state
 ```
 
 `latest.json` as `release.sh` writes it: `{"version": "0.3.0", "build": "20", "url": "https://caffeinagent.com/mac/agent-caffeine-0.3.0-20.dmg", "filename": "agent-caffeine-0.3.0.dmg", "size": 4096}`. Without `--persist-to`, cf writes to `~/.config/cloudflare/state`, which `vite dev` never reads. `rm -rf apps/web/.cloudflare/state` empties it again.
@@ -85,7 +85,7 @@ The articles are `apps/web/content/blog/*.md`, with frontmatter (`title`, `descr
 
 Not set up yet. Local dev needs none of these. Production needs:
 
-- [ ] **Cloudflare**: the Worker `caffeinagent-web`; the private R2 bucket `caffeinagent-mac` (binding `MAC_FILES`) with the release files copied over from the public one, then `files.caffeinagent.com` removed; secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` in GitHub, and for the fonts `FONT_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (a read-only key for the fonts bucket); deploys ship only after `scripts/smoke-web.sh` sees the built site render
+- [ ] **Cloudflare**: the Worker `caffeinagent-web`; the private R2 bucket (binding `MAC_FILES`) with the release files copied over from the public one, then `files.caffeinagent.com` removed; its name in `MAC_FILES_BUCKET` in the deploy environment, a secret like `MAC_R2_BUCKET`; secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` in GitHub, and for the fonts `FONT_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (a read-only key for the fonts bucket); deploys ship only after `scripts/smoke-web.sh` sees the built site render
 - [ ] **OpenPanel**: the variable `OPENPANEL_CLIENT_ID`, passed to the build as `VITE_OPENPANEL_CLIENT_ID`, and the Worker secret `OPENPANEL_CLIENT_SECRET` for the download count
 - [ ] **Axiom** (optional): dataset + token for evlog drain, then turn Workers `observability` off in `apps/web/cloudflare.config.ts`
 - [ ] **Turbo remote cache** (optional): `TURBO_TOKEN` secret + `TURBO_TEAM` var

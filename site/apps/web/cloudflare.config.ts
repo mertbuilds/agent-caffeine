@@ -17,9 +17,12 @@ export default defineConfig({
       // dmgs) in the private bucket, answered by `macFileResponse` in
       // src/lib/mac-files.ts and read by `readLatestRelease` in
       // src/lib/latest-release.ts. The key is the URL path without its leading
-      // slash: /mac/appcast.xml is `mac/appcast.xml`. `vite dev` reads a local
-      // simulation under .cloudflare/state instead (README.md).
-      MAC_FILES: bindings.r2({ name: 'caffeinagent-mac' }),
+      // slash: /mac/appcast.xml is `mac/appcast.xml`. The bucket name is a
+      // secret (docs/adr/0002 at the repository root): a deploy reads it from
+      // MAC_FILES_BUCKET, which `cf:deploy` requires. Without it, as in `vite
+      // dev`, the tests and CI builds, the binding is a local simulation named
+      // `mac-files` under .cloudflare/state (README.md).
+      MAC_FILES: bindings.r2({ name: process.env.MAC_FILES_BUCKET || 'mac-files' }),
     },
     name: 'caffeinagent-web',
     // With no evlog drain bound, evlog only logs to the console and this keeps those

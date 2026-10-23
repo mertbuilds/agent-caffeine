@@ -6,7 +6,7 @@
   "scripts": {
     "build": "NODE_ENV=production vite build",
     "cf-typegen": "cf workers types",
-    "cf:deploy": "pnpm build && cf deploy --prebuilt",
+    "cf:deploy": ": \"${MAC_FILES_BUCKET:?is not set, so the Worker has no bucket for /mac/}\" && pnpm build && cf deploy --prebuilt",
     "dev": "vite dev",
     "preview": "vite preview",
     "test": "vitest run",
