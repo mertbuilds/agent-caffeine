@@ -18,8 +18,8 @@ import {
 import { GridTexture } from '../components/grid-texture.tsx';
 import { HeroScene } from '../components/hero/hero-scene.tsx';
 import { agents, markedAgents } from '../lib/agents.ts';
-import { PRICE } from '../lib/pricing.ts';
 import type { Release } from '../lib/latest-release.ts';
+import { PRICE } from '../lib/pricing.ts';
 import { m } from '../paraglide/messages.js';
 
 const SHOWN = markedAgents.slice(0, 7);

@@ -339,7 +339,12 @@ describe('downloadRedirect', () => {
     await ask(bucketWith(LATEST), get, '/download?from=pricing', count);
     await ask(bucketWith(LATEST), { ...get, method: 'HEAD' }, '/download', count);
     await ask(bucketWith(LATEST), { headers: { 'user-agent': 'curl/8.7.1' } }, '/download', count);
-    await ask(bucketWith(LATEST), { headers: { 'user-agent': NOT_A_MAC[3] ?? '' } }, '/download', count);
+    await ask(
+      bucketWith(LATEST),
+      { headers: { 'user-agent': NOT_A_MAC[3] ?? '' } },
+      '/download',
+      count,
+    );
     expect(counted.map((event) => event.properties)).toEqual([
       { build: '2', placement: 'pricing', version: '0.1.0' },
     ]);

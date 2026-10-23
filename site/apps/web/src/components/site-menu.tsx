@@ -9,8 +9,8 @@ import {
 import { create, props } from '@stylexjs/stylex';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useId, useRef, useState, type FocusEvent, type RefObject } from 'react';
-import { distance, duration, easing, scale } from '../lib/motion.ts';
 import type { Release } from '../lib/latest-release.ts';
+import { distance, duration, easing, scale } from '../lib/motion.ts';
 import { useLessMotion } from '../lib/use-less-motion.ts';
 import { m } from '../paraglide/messages.js';
 import { DownloadLink, TryFree } from './download-button.tsx';
