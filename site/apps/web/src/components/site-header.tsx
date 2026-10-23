@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { morph } from '../lib/morph.ts';
 import { m } from '../paraglide/messages.js';
+import { DownloadButton, useRelease, WithAppleMark } from './download-button.tsx';
 import { SiteMenu } from './site-menu.tsx';
 
 /**
@@ -150,6 +151,9 @@ const styles = create({
     gap: spacing.s6,
     position: 'relative',
   },
+  primary: {
+    display: 'inline-flex',
+  },
   // The ground behind the row: nothing while the header is open, and the pill once it gathers.
   surface: {
     backdropFilter: { default: 'blur(16px) saturate(1.4)', [LESS_TRANSPARENCY]: 'none' },
@@ -176,7 +180,7 @@ const styles = create({
 
 /**
  * The name and the way home at the left, the home page's sections in the
- * middle, and the actions at the right. The link of the section in view takes
+ * middle, and the download at the right. The link of the section in view takes
  * the text's own colour. Once the page has run a little way under it, the
  * items gather into a pill in the middle, the mark alone for the name, and
  * open back out near the top (lib/morph.ts). A window too narrow for the links
@@ -192,6 +196,7 @@ export function SiteHeader() {
   const mark = useRef<HTMLSpanElement>(null);
   const [inView, setInView] = useState<string | null>(null);
   const pathname = useLocation({ select: (location) => location.pathname });
+  const release = useRelease();
   const links = SECTIONS.map((section) => ({
     current: pathname === '/' && section.hash === inView,
     href: `/${section.hash}`,
@@ -309,8 +314,16 @@ export function SiteHeader() {
             </a>
           ))}
         </nav>
-        <span {...props(styles.end)} />
-        <SiteMenu anchor={bar} links={links} morph="header-menu" />
+        <span {...props(styles.end)}>
+          {release === null ? null : (
+            <span {...props(styles.primary)} {...morphName('header-primary')}>
+              <DownloadButton placement="header" release={release} size="compact">
+                <WithAppleMark>{m.header_download()}</WithAppleMark>
+              </DownloadButton>
+            </span>
+          )}
+        </span>
+        <SiteMenu anchor={bar} links={links} morph="header-menu" release={release} />
       </div>
     </header>
   );

@@ -6,8 +6,10 @@ import { useEffect, type ReactNode } from 'react';
 import { Analytics } from '../components/analytics.tsx';
 import { HashScroll } from '../components/hash-scroll.tsx';
 import { NotFound } from '../components/not-found.tsx';
+import { SendToMacPopup } from '../components/send-to-mac-popup.tsx';
 import { SiteHeader } from '../components/site-header.tsx';
 import { PRICE } from '../lib/pricing.ts';
+import { getLatestRelease } from '../lib/release.ts';
 import { THEME_SCRIPT } from '../lib/theme.ts';
 import { m } from '../paraglide/messages.js';
 import { getLocale } from '../paraglide/runtime.js';
@@ -89,7 +91,10 @@ export const Route = createRootRoute({
       ],
     };
   },
+  // The download buttons of every page read it (components/download-button.tsx).
+  loader: () => getLatestRelease(),
   notFoundComponent: NotFound,
+  staleTime: Infinity,
 });
 
 const styles = create({
@@ -145,6 +150,7 @@ function RootDocument({ children }: { children: ReactNode }) {
         <SiteHeader />
         {children}
         <HashScroll />
+        <SendToMacPopup />
         <Analytics />
         <Scripts />
       </body>

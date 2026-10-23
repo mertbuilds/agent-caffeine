@@ -79,6 +79,18 @@
 
 .popup-in::backdrop {
   animation: popup-dim-in 250ms cubic-bezier(0.22, 1, 0.36, 1);
+  background-color: light-dark(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.6));
+}
+
+/*
+ * The pricing card (sections/pricing.tsx): a blue shadow under it on the light page, a thin light
+ * edge on the dark one. Here and not in StyleX, whose build turns light-dark() into variables
+ * this site never sets.
+ */
+.pricing-card {
+  box-shadow:
+    0 32px 64px -32px light-dark(rgba(27, 85, 194, 0.55), transparent),
+    0 0 0 1px light-dark(transparent, rgba(255, 255, 255, 0.16));
 }
 
 @media (prefers-reduced-motion: reduce) {

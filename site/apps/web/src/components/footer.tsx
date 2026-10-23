@@ -12,6 +12,7 @@ import type { ReactNode } from 'react';
 import { PORTAL_URL } from '../lib/pricing.ts';
 import { CONTACT_EMAIL, MERTBUILDS_URL } from '../lib/site.ts';
 import { m } from '../paraglide/messages.js';
+import { DownloadLink, useRelease } from './download-button.tsx';
 import { ThemeSwitch } from './theme-switch.tsx';
 
 // Up to the md breakpoint only, so it never competes with an md value: StyleX does not order overlapping min-width queries.
@@ -144,6 +145,7 @@ function FooterLink({ children, href }: { children: ReactNode; href: string }) {
 
 /** The name and what it does, three columns of links, and the maker with the theme switch under them. */
 export function Footer() {
+  const release = useRelease();
   return (
     <footer {...props(styles.footer)}>
       <div {...props(styles.columns)}>
@@ -159,6 +161,13 @@ export function Footer() {
           <FooterLink href="/#agents">{m.header_agents()}</FooterLink>
           <FooterLink href="/#features">{m.header_features()}</FooterLink>
           <FooterLink href="/#demo">{m.header_demo()}</FooterLink>
+          {release === null ? null : (
+            <li>
+              <DownloadLink placement="footer" release={release} style={styles.link}>
+                {m.download_try_free()}
+              </DownloadLink>
+            </li>
+          )}
           <FooterLink href="/#pricing">{m.header_pricing()}</FooterLink>
           <FooterLink href="/#faq">{m.header_faq()}</FooterLink>
           <FooterLink href="/compare">{m.footer_compare()}</FooterLink>

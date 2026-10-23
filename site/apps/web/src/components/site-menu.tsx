@@ -10,8 +10,10 @@ import { create, props } from '@stylexjs/stylex';
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useId, useRef, useState, type FocusEvent, type RefObject } from 'react';
 import { distance, duration, easing, scale } from '../lib/motion.ts';
+import type { Release } from '../lib/release.ts';
 import { useLessMotion } from '../lib/use-less-motion.ts';
 import { m } from '../paraglide/messages.js';
+import { DownloadLink, TryFree } from './download-button.tsx';
 
 export type MenuLink = { current: boolean; href: string; label: string };
 
@@ -50,6 +52,11 @@ const styles = create({
   },
   buttonOpen: {
     color: colors.fg,
+  },
+  divider: {
+    backgroundColor: colors.border,
+    height: '1px',
+    marginBlock: spacing.s2,
   },
   // The two lines of the button: apart while closed, crossed while open.
   line: {
@@ -132,12 +139,15 @@ export function SiteMenu({
   anchor,
   links,
   morph,
+  release,
 }: {
   /** The header's row, which the panel hangs under. */
   anchor: RefObject<HTMLElement | null>;
   links: ReadonlyArray<MenuLink>;
   /** The name the header's morph carries the button by. */
   morph: string;
+  /** The release the menu's last row downloads. Without one the menu has only its links. */
+  release: Release | null;
 }) {
   const [top, setTop] = useState<number | null>(null);
   const open = top !== null;
@@ -279,6 +289,20 @@ export function SiteMenu({
                 </a>
               ))}
             </nav>
+            {release === null ? null : (
+              <>
+                <div aria-hidden="true" {...props(styles.divider)} />
+                <div
+                  className="menu-item-in"
+                  onClick={() => close(false)}
+                  style={{ animationDelay: `${links.length * duration.stagger}s` }}
+                >
+                  <DownloadLink placement="header" release={release} style={styles.row}>
+                    <TryFree />
+                  </DownloadLink>
+                </div>
+              </>
+            )}
           </motion.div>
         )}
       </AnimatePresence>

@@ -2,6 +2,7 @@ import { breakpoints, spacing } from '@caffeinagent/ui/tokens.stylex';
 import { create, props } from '@stylexjs/stylex';
 import { createFileRoute } from '@tanstack/react-router';
 import { Footer } from '../components/footer.tsx';
+import { faqPage } from '../lib/faq.tsx';
 import { Agents } from '../sections/agents.tsx';
 import { Compare } from '../sections/compare.tsx';
 import { Demo } from '../sections/demo.tsx';
@@ -18,6 +19,16 @@ export const Route = createFileRoute('/')({
   head: () => ({
     links: [{ href: 'https://caffeinagent.com/', rel: 'canonical' }],
     meta: [{ content: 'https://caffeinagent.com/', property: 'og:url' }],
+    scripts: [
+      {
+        // `<` escaped, so the JSON cannot close the tag.
+        children: JSON.stringify({
+          '@context': 'https://schema.org',
+          '@graph': [faqPage()],
+        }).replaceAll('<', String.raw`\u003c`),
+        type: 'application/ld+json',
+      },
+    ],
   }),
 });
 

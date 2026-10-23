@@ -11,7 +11,7 @@ export function onLiveHost(): boolean {
   return typeof window !== 'undefined' && isLiveHost(window.location.hostname);
 }
 
-type Placement = 'header' | 'hero' | 'pricing' | 'blog' | 'footer';
+export type Placement = 'header' | 'hero' | 'pricing' | 'blog' | 'footer';
 
 /** Every event the site counts, with what it carries. None carries anything about the visitor. */
 type TrackEvents = {
