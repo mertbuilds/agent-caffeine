@@ -1,10 +1,32 @@
+# dependencies
 node_modules/
-.next/
-out/
-.env*.local
-.vercel
-.DS_Store
+
+# build output
+dist/
+.output/
+.vite/
+storybook-static/
+
+# caches
+.turbo/
+.cloudflare/
+.wrangler/
+coverage/
 *.tsbuildinfo
-next-env.d.ts
-# Licensed fonts: fetched by scripts/fetch-fonts.sh, never committed
-app/fonts/
+
+# env — only the example is committed
+.env*
+!.env.example
+
+# generated code (rebuilt by dev:setup / build)
+apps/web/src/paraglide/
+apps/web/src/routeTree.gen.ts
+
+# os
+.DS_Store
+
+# mprocs writes its log next to mprocs.yaml
+mprocs.log
+
+# licensed fonts: fetched by scripts/fetch-fonts.sh, never committed
+packages/ui/fonts/*.woff2

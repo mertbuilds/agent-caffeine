@@ -1,0 +1,32 @@
+/*
+ * Arial reshaped to Suisse Intl's measure, for text drawn in neither Suisse
+ * nor Inter: before they land, or for a whole visit where they come too
+ * late. Same line height, same baseline, about the same width,
+ * so the text breaks into the same lines in either face. Arial is on macOS,
+ * iOS and Windows; elsewhere the stack goes on to the next family. The
+ * widths are a generic English sample set in each face with fontkit; the
+ * vertical metrics are Suisse's own (ascent 1174, descent 556, no line gap,
+ * on 1000 units), divided by the size adjustment the browser multiplies them
+ * by. Medium is wider than Regular, so it has a face of its own.
+ */
+@font-face {
+  ascent-override: 112.64%;
+  descent-override: 53.34%;
+  font-family: 'Suisse Intl Fallback';
+  font-style: normal;
+  font-weight: 400;
+  line-gap-override: 0%;
+  size-adjust: 104.23%;
+  src: local('Arial'), local('ArialMT');
+}
+
+@font-face {
+  ascent-override: 109.29%;
+  descent-override: 51.76%;
+  font-family: 'Suisse Intl Fallback';
+  font-style: normal;
+  font-weight: 500;
+  line-gap-override: 0%;
+  size-adjust: 107.42%;
+  src: local('Arial'), local('ArialMT');
+}

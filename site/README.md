@@ -2,74 +2,72 @@
 
 The website of Agent Caffeine at [caffeinagent.com](https://caffeinagent.com). Agent Caffeine is a macOS menu bar app that keeps a Mac awake while AI coding agents work. It has a 7-day free trial, and a license key is paid once.
 
-The site is a Next.js app with Tailwind CSS.
+A pnpm workspace in `site/`, started from mertbuilds/cleanstarter (renamed to caffeinagent, backend trimmed), on Cloudflare Workers. The Mac app lives at the repository root and does not depend on it. Agent rules and workflow live in [AGENTS.md](AGENTS.md); founding decisions of the starter in [docs/adr/](docs/adr/); product facts in [docs/product.md](docs/product.md).
 
-## Run it
+## Stack
 
-You need [Bun](https://bun.sh).
+| Layer       | Choice                                                                 |
+| ----------- | ---------------------------------------------------------------------- |
+| Monorepo    | pnpm workspaces + Turborepo, Node 24, TypeScript 7                     |
+| Web         | TanStack Start (React 19 + Compiler) on Cloudflare Workers             |
+| Styling     | StyleX tokens + Base UI components + Storybook                         |
+| i18n        | Paraglide v2 (en only)                                                 |
+| Analytics   | OpenPanel, on the live host only, through the site's `/api/op` proxy   |
+| Logging     | evlog wide events, Axiom drain when bound                              |
+| Lint/format | oxlint (`@nkzw/oxlint-config`, type-aware) + oxfmt, no ESLint/Prettier |
+| Tests       | Vitest (jsdom units, Storybook stories as tests)                       |
+| Dev tools   | devknobs preference panel (`⇧K`) and element grab (`⇧G`), dev only     |
+
+## Quickstart
+
+Prereqs: Node 24 (`nvm use`), pnpm 11 (corepack). Run from `site/`, or add `-C site` from the repository root.
 
 ```sh
-bun install
-bun run dev
+pnpm install
+sudo pnpm exec portless proxy start --https   # one-time: local HTTPS proxy on 443 + trusted CA
+pnpm dev        # mprocs: one pane per service
 ```
 
-- `bunx tsc --noEmit` checks the types.
-- `bun test` runs the tests.
-- `bun run build` builds the site. It needs no variable and no font file.
+Open https://caffeinagent.localhost. Storybook is at https://storybook.caffeinagent.localhost.
 
-## Variables
+## Commands
 
-All of them are optional. None has a value in this repository.
-
-| Variable | What it does |
-| --- | --- |
-| `MAC_FILES_ORIGIN` | The origin that serves the app's release files under `/mac/` (see Downloads). |
-| `NEXT_PUBLIC_FAKE_RELEASE` | `1` makes the dev server show a sample release. A production build ignores it. |
-| `NEXT_PUBLIC_OPENPANEL_CLIENT_ID` | The OpenPanel project that counts page views and downloads. |
-| `OPENPANEL_CLIENT_SECRET` | Lets the server count a download. Server only: never give it a `NEXT_PUBLIC_` name. |
-| `FONT_BUCKET`, `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Where `scripts/fetch-fonts.sh` gets the licensed fonts from (see Fonts). |
-
-## Downloads
-
-The app's release files (the dmg, `appcast.xml` and `latest.json`) are in a storage bucket that is public to read, and the site serves them at `https://caffeinagent.com/mac/<file>`.
-
-The site reads them over HTTPS with no credentials. Set `MAC_FILES_ORIGIN` to an origin that answers a GET for `/mac/<file>` without a login, written without a trailing slash (for example `https://<files-domain>`).
-
-- Set it for the build. `next.config.js` reads it when the site is built and rewrites `/mac/*` to `${MAC_FILES_ORIGIN}/mac/*`. A build without it has no `/mac/` route.
-- Set it for the running site too. The server reads `${MAC_FILES_ORIGIN}/mac/latest.json` (revalidated every hour) to decide whether the page shows the download button.
-
-Without it the page says that the download is not ready yet, and the buy buttons stay. The same happens while `latest.json` cannot be read, and the server log then says why.
-
-To see the page with a download while none is published, put `NEXT_PUBLIC_FAKE_RELEASE=1` in `.env.development.local`. The dev server then shows a sample release whose link goes nowhere.
+| Command                                        | What it does                                                       |
+| ---------------------------------------------- | ------------------------------------------------------------------ |
+| `pnpm dev`                                     | Everything, in mprocs panes                                        |
+| `pnpm test`                                    | Every Vitest suite (turbo)                                         |
+| `pnpm lint` / `pnpm format` / `pnpm typecheck` | Quality gates (same as CI)                                         |
+| `pnpm storybook`                               | Component workshop (standalone, :6006)                             |
+| `pnpm fonts`                                   | Fetch the licensed Suisse Intl files (see Fonts)                   |
+| `pnpm bad-day`                                 | Nuke node_modules + all caches, reinstall (`DRY_RUN=1` to preview) |
+| `pnpm skills:check`                            | Fail on skill drift: dep majors or `skills-lock.json` hashes       |
+| `pnpm knip`                                    | Fail on unused files, deps and exports (after a build)             |
+| `bash scripts/smoke-web.sh`                    | Serve the build and check each page renders (after a build)        |
 
 ## Price
 
-Every price on the site comes from `lib/pricing.ts`: the full price, the launch price, the number of Macs, the Polar checkout link and the link to a buyer's purchases.
+Every price on the site comes from `apps/web/src/lib/pricing.ts`: the full price, the launch price, the number of Macs, the Polar checkout link and the link to a buyer's purchases. `LAUNCH_PRICE_ACTIVE` switches the launch price. The discount itself lives on the Polar checkout link, so end it in Polar at the same time. `/support`, where older versions of the app link, redirects to the price on the home page.
 
-- `LAUNCH_PRICE_ACTIVE` switches the launch price. While it is `true`, the site shows the full price struck through and the launch price next to it. Set it to `false` to show the full price alone. The discount itself lives on the Polar checkout link, so end it in Polar at the same time.
-- `/support`, where older versions of the app link, redirects to the price on the home page.
-- A buy button is counted as `buy_click`, with the price it showed and where it sits. On the live site the checkout link carries the visitor's `utm_` tags to Polar, or `utm_source=caffeinagent.com` when there are none.
+## Analytics
 
-## Download count
-
-Every download button links to `/download?from=<placement>`. The route (`app/download/route.ts`) counts the download on the server and answers with a redirect to the dmg under `/mac/`. It needs no script in the browser, so a content blocker does not hide it.
-
-- What is counted: one event named `download`, with the version, the build, the placement (`header`, `menu`, `hero`, `pricing`, `blog`, `footer`, else `other`) and `utm_source`, `utm_medium` and `utm_campaign` when the link carries them. OpenPanel takes the country and the device from the visitor's IP address and user agent, which the route sends on. The site stores nothing and sets no cookie.
-- What is not counted: requests off `caffeinagent.com` and `www.caffeinagent.com`, bots, prefetches and `HEAD` requests. They still get the redirect. `robots.txt` keeps crawlers away from `/download`.
-- Off a Mac (a phone, a tablet, Windows, Linux), a click on a download button starts no download. The browser opens a popup that gives the site's link to copy or share on to a Mac, and counts the event `download_blocked_not_mac` with the placement. The link itself is the same for everyone, and `/download` still answers every request.
-- Without `OPENPANEL_CLIENT_SECRET` and `NEXT_PUBLIC_OPENPANEL_CLIENT_ID` the route only redirects.
+OpenPanel counts page views on `caffeinagent.com` and `www.caffeinagent.com` only. A local run or a preview loads no script and sends nothing. The OpenPanel project is `VITE_OPENPANEL_CLIENT_ID`, read at build time; without it nothing loads. The browser reaches OpenPanel through `/api/op` on the site itself, so a content blocker does not drop it.
 
 ## Fonts
 
-The site is set in Suisse Intl, a licensed typeface. Its files are not in this repository, and git ignores `app/fonts/`.
+The site is set in Suisse Intl, a licensed typeface. Its files are not in this repository, and git ignores `packages/ui/fonts/*.woff2`.
 
-- Without the files the site builds and runs. The text is then set in Arial with the measures of Suisse Intl, or in the system's face.
-- `bun run fonts` (`scripts/fetch-fonts.sh`) fetches `SuisseIntl-Regular.woff2` and `SuisseIntl-Medium.woff2` from a private Cloudflare R2 bucket into `app/fonts/`, over the R2 S3 API. It needs `FONT_BUCKET`, `CLOUDFLARE_ACCOUNT_ID`, and an R2 S3 access key that may read that bucket in `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY`. `bun run build` runs it first. It never stops a build.
-- If you have your own license for Suisse Intl, put the two files in `app/fonts/` yourself.
+- Without the files the site builds and runs, set in Inter, or in Arial with the measures of Suisse Intl.
+- `pnpm fonts` (`scripts/fetch-fonts.sh`) fetches `SuisseIntl-Regular.woff2` and `SuisseIntl-Medium.woff2` from a private Cloudflare R2 bucket into `packages/ui/fonts/`, over the R2 S3 API. It needs `FONT_BUCKET`, `CLOUDFLARE_ACCOUNT_ID`, and an R2 S3 access key that may only read that bucket in `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` (one key per job, `../docs/adr/0002-release-keys-scoped-per-job.md`). It never stops a build.
+- If you have your own license for Suisse Intl, put the two files in `packages/ui/fonts/` yourself.
 
-## Link preview picture
+## Going to production
 
-`public/og.png` (1200 by 630) is a picture of the page at `/og-image`, which only the dev server draws; a production build answers "not found" there. The page takes the price from `lib/pricing.ts`. After a change to the price, the headline or the icon, run `scripts/og-image.sh` with the dev server up and commit the new `public/og.png`. The script needs the `ego-browser` CLI. `OG_URL` names another address for the page.
+Not set up yet. Local dev needs none of these. Production needs:
+
+- [ ] **Cloudflare**: the Worker `caffeinagent-web`; secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` in GitHub, and for the fonts `FONT_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (a read-only key for the fonts bucket); deploys ship only after `scripts/smoke-web.sh` sees the built site render
+- [ ] **OpenPanel**: the variable `OPENPANEL_CLIENT_ID`, passed to the build as `VITE_OPENPANEL_CLIENT_ID`
+- [ ] **Axiom** (optional): dataset + token for evlog drain, then turn Workers `observability` off in `apps/web/cloudflare.config.ts`
+- [ ] **Turbo remote cache** (optional): `TURBO_TOKEN` secret + `TURBO_TEAM` var
 
 ## License
 

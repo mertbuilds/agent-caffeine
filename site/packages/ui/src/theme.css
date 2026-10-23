@@ -1,0 +1,35 @@
+/*
+ * shadcn-style CSS variables consumed by src/lib/tokens.stylex.ts (the
+ * registry components). They hold no colour of their own: each points at the
+ * site's palette in src/tokens.css, so dark mode follows it. `--border`,
+ * `--muted` and `--accent` are the palette's own names (`--accent` there is
+ * the blue of links and selection), so the lib tokens read the palette for
+ * those directly. Radius: 8px surfaces (cards, dialogs, popovers); pill
+ * controls (buttons, inputs) use radius.full.
+ */
+:root {
+  --background: var(--bg);
+  --foreground: var(--fg);
+  --card: var(--bg);
+  --card-foreground: var(--fg);
+  --popover: var(--bg);
+  --popover-foreground: var(--fg);
+  --primary: var(--fg);
+  --primary-foreground: var(--bg);
+  --secondary: var(--surface);
+  --secondary-foreground: var(--fg);
+  --muted-foreground: var(--muted);
+  --accent-foreground: var(--fg);
+  --destructive: light-dark(#d92d20, #f97066);
+  --input: var(--border);
+  --ring: var(--muted);
+  --sidebar: var(--bg);
+  --sidebar-foreground: var(--fg);
+  --sidebar-primary: var(--fg);
+  --sidebar-primary-foreground: var(--bg);
+  --sidebar-accent: var(--surface);
+  --sidebar-accent-foreground: var(--fg);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--muted);
+  --radius: 8px;
+}

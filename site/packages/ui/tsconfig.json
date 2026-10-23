@@ -1,0 +1,9 @@
+{
+  "extends": "@caffeinagent/config/tsconfig.base.json",
+  "compilerOptions": {
+    "jsx": "react-jsx",
+    "lib": ["es2024", "dom", "dom.iterable"],
+    "types": ["vite/client"]
+  },
+  "include": ["src", ".storybook", "vitest.config.ts"]
+}

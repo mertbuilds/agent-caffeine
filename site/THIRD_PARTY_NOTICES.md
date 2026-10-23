@@ -2,11 +2,11 @@
 
 The code of this site is Copyright (C) 2026 Mert Duzgun. All rights reserved.
 
-The packages the site is built with are listed in `package.json`. Each is installed from npm under its own license and is not in this repository.
+The packages the site is built with are listed in its `package.json` files. Each is installed from npm under its own license and is not in this repository.
 
 ## lobe-icons
 
-Most of the agent marks in `components/agent-icons.tsx` are drawings from [lobe-icons](https://github.com/lobehub/lobe-icons), under the MIT license below. The marks themselves are trademarks of their owners (see [TRADEMARKS.md](TRADEMARKS.md)).
+Most of the agent marks in `apps/web/src/components/agent-icons.tsx` are drawings from [lobe-icons](https://github.com/lobehub/lobe-icons), under the MIT license below. The marks themselves are trademarks of their owners (see [TRADEMARKS.md](TRADEMARKS.md)).
 
 ```
 MIT License

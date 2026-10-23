@@ -1,0 +1,27 @@
+{
+  "$schema": "https://turborepo.com/schema.json",
+  "tasks": {
+    "build": {
+      "dependsOn": ["^build"],
+      "outputs": ["dist/**", ".output/**", "storybook-static/**"]
+    },
+    "dev": {
+      "cache": false,
+      "persistent": true
+    },
+    "lint": {},
+    "test": {
+      "dependsOn": ["^build"]
+    },
+    "typecheck": {
+      "dependsOn": ["^build"]
+    },
+    "@caffeinagent/web#build": {
+      "dependsOn": ["^build"],
+      "outputs": [".cloudflare/output/**", "src/routeTree.gen.ts", "src/paraglide/**"]
+    },
+    "@caffeinagent/web#typecheck": {
+      "dependsOn": ["@caffeinagent/web#build"]
+    }
+  }
+}
