@@ -1,9 +1,10 @@
 import { LegalPage, legalMetadata } from "@/components/legal-page";
-import { CONTACT_EMAIL, LICENSE_URL, REPO_URL, TERMS_UPDATED } from "@/lib/site";
+import { FULL_PRICE, LAUNCH_PRICE_ACTIVE, MACS, PRICE, dollars } from "@/lib/pricing";
+import { CONTACT_EMAIL, TERMS_UPDATED } from "@/lib/site";
 
 export const metadata = legalMetadata(
   "Terms",
-  "The terms for Agent Caffeine: free and open source under the AGPL-3.0, voluntary support through GitHub Sponsors, and what the app does and does not promise.",
+  `The terms for Agent Caffeine: what a license key covers, a 7-day free trial, ${PRICE} once for up to ${MACS} Macs through Polar, and what the app does and does not promise.`,
   "/terms"
 );
 
@@ -11,32 +12,44 @@ export default function Terms() {
   return (
     <LegalPage title="Terms" updated={TERMS_UPDATED}>
       <p>
-        These terms cover Agent Caffeine, a macOS app made by me, Mert Duzgun, an individual based
-        in Antalya, Türkiye. By using the app you agree to them.
+        These terms cover Agent Caffeine, a macOS app made and sold by me, Mert Duzgun, an
+        individual based in Antalya, Türkiye. By buying or using the app you agree to them.
       </p>
 
-      <h2>License</h2>
+      <h2>What you get</h2>
       <p>
-        Agent Caffeine is free and open source. Its source code is{" "}
-        <a href={REPO_URL}>on GitHub</a> under the{" "}
-        <a href={LICENSE_URL}>GNU Affero General Public License, version 3</a>. That license says
-        what you may do with the code. The name Agent Caffeine, the app icon and the robot art are
-        not under that license.
+        A license key lets you use Agent Caffeine on up to {MACS} Macs at a time. To move it to
+        another Mac, deactivate it on a Mac you no longer use, in the app or in your Polar
+        purchases, then enter it on the new one.
+      </p>
+      <p>
+        Your key includes 1 year of updates from the day you buy. After that year, the versions you
+        have keep working with your key, with no end date. A version that comes out after that year
+        needs a new key. I do not promise any future features.
       </p>
 
-      <h2>Support</h2>
+      <h2>Free trial</h2>
       <p>
-        You can support the project with a payment of an amount you choose, in the{" "}
-        <a href="/#support">support section</a> of the home page. It is voluntary and gives you nothing extra: the app is
-        the same for everyone. <a href="https://github.com/sponsors/mertbuilds">GitHub Sponsors</a>{" "}
-        handles it, one-time or monthly.
+        You can try the app for 7 days with every feature. After that it stops keeping your Mac
+        awake until you enter a license key.
       </p>
 
-      <h2>Earlier purchases</h2>
+      <h2>Price and payment</h2>
       <p>
-        Versions before 1.1.0 were sold and needed a key. Every purchase is refunded, and you do
-        not have to do anything. From version 1.1.0 the app needs no key.
+        A key costs {LAUNCH_PRICE_ACTIVE ? `${PRICE} at the launch price, and ${dollars(FULL_PRICE)} after it ends` : PRICE},
+        paid once. <a href="https://polar.sh">Polar</a> sells it as the merchant of record: Polar
+        takes the payment, adds taxes where they apply and sends the invoice.
       </p>
+
+      <h2>Refunds</h2>
+      <p>
+        All sales are final, and there are no refunds after purchase, because the full app is free
+        to try for 7 days first. This does not limit any right that consumer law in your country
+        gives you and that cannot be waived.
+      </p>
+
+      <h2>Fair use</h2>
+      <p>Do not resell or share your key. I may turn off a key that I find shared.</p>
 
       <h2>No warranty</h2>
       <p>
@@ -46,7 +59,8 @@ export default function Terms() {
 
       <h2>Liability</h2>
       <p>
-        To the extent the law allows, I am not liable for damage that comes from the use of the app.
+        To the extent the law allows, my liability for anything to do with the app is limited to the
+        amount you paid for it.
       </p>
 
       <h2>Changes</h2>

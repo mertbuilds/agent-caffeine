@@ -6,9 +6,10 @@ import { HashScroll } from "@/components/hash-scroll";
 import { Header } from "@/components/header";
 import { SendToMacPopup } from "@/components/send-to-mac-popup";
 import { suisse } from "@/lib/fonts";
+import { PRICE } from "@/lib/pricing";
 import { THEME_SCRIPT } from "@/lib/theme";
 
-const offer = "Free and open source.";
+const offer = `Free for 7 days, then ${PRICE} once.`;
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://caffeinagent.com"),

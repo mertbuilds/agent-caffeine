@@ -1,6 +1,6 @@
 # Third-party notices
 
-The code of this site is under the GNU Affero General Public License, version 3 (SPDX `AGPL-3.0-only`), Copyright (C) 2026 Mert Duzgun: see [LICENSE](../LICENSE).
+The code of this site is Copyright (C) 2026 Mert Duzgun. All rights reserved.
 
 The packages the site is built with are listed in `package.json`. Each is installed from npm under its own license and is not in this repository.
 

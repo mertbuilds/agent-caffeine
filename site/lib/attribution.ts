@@ -1,7 +1,10 @@
-/** The campaign tags a visitor arrived with. */
+/** The campaign tags a visitor arrived with. Polar's checkout links take the same names. */
 export const UTM_KEYS = ["utm_source", "utm_medium", "utm_campaign", "utm_content", "utm_term"] as const;
 
 export type Utm = Partial<Record<(typeof UTM_KEYS)[number], string>>;
+
+/** The source an order gets when the visitor arrived with no tags. */
+export const DEFAULT_SOURCE = "caffeinagent.com";
 
 const MAX_LENGTH = 100;
 
@@ -31,4 +34,23 @@ export function parseUtm(stored: string | null): Utm | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * A Polar checkout link that carries the visitor's source, so the order can be tied to it.
+ * Polar stores these query parameters on the checkout's metadata. A link that cannot be read comes back as it is.
+ */
+export function checkoutUrlWith(checkoutUrl: string, utm: Utm): string {
+  let url: URL;
+  try {
+    url = new URL(checkoutUrl);
+  } catch {
+    return checkoutUrl;
+  }
+  const tags: Utm = utm.utm_source ? utm : { utm_source: DEFAULT_SOURCE };
+  for (const key of UTM_KEYS) {
+    const value = tags[key];
+    if (value) url.searchParams.set(key, value);
+  }
+  return url.toString();
 }

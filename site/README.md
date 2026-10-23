@@ -1,6 +1,6 @@
 # Agent Caffeine website
 
-The website of Agent Caffeine at [caffeinagent.com](https://caffeinagent.com). Agent Caffeine is a free and open source macOS menu bar app that keeps a Mac awake while AI coding agents work. The app's own code is at [github.com/mertbuilds/agent-caffeine](https://github.com/mertbuilds/agent-caffeine).
+The website of Agent Caffeine at [caffeinagent.com](https://caffeinagent.com). Agent Caffeine is a macOS menu bar app that keeps a Mac awake while AI coding agents work. It has a 7-day free trial, and a license key is paid once.
 
 The site is a Next.js app with Tailwind CSS.
 
@@ -25,7 +25,6 @@ All of them are optional. None has a value in this repository.
 | --- | --- |
 | `MAC_FILES_ORIGIN` | The origin that serves the app's release files under `/mac/` (see Downloads). |
 | `NEXT_PUBLIC_FAKE_RELEASE` | `1` makes the dev server show a sample release. A production build ignores it. |
-| `NEXT_PUBLIC_SUPPORT_URL` | The GitHub Sponsors page that the button of the support section on the home page opens (`/support` redirects there). Without it the section says that support is not set up yet. |
 | `NEXT_PUBLIC_OPENPANEL_CLIENT_ID` | The OpenPanel project that counts page views and downloads. |
 | `OPENPANEL_CLIENT_SECRET` | Lets the server count a download. Server only: never give it a `NEXT_PUBLIC_` name. |
 | `FONT_BUCKET`, `CLOUDFLARE_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` | Where `scripts/fetch-fonts.sh` gets the licensed fonts from (see Fonts). |
@@ -39,9 +38,17 @@ The site reads them over HTTPS with no credentials. Set `MAC_FILES_ORIGIN` to an
 - Set it for the build. `next.config.js` reads it when the site is built and rewrites `/mac/*` to `${MAC_FILES_ORIGIN}/mac/*`. A build without it has no `/mac/` route.
 - Set it for the running site too. The server reads `${MAC_FILES_ORIGIN}/mac/latest.json` (revalidated every hour) to decide whether the page shows the download button.
 
-Without it the page says that the download is not ready yet, and the header links to the source code. The same happens while `latest.json` cannot be read, and the server log then says why. The page never shows a price.
+Without it the page says that the download is not ready yet, and the buy buttons stay. The same happens while `latest.json` cannot be read, and the server log then says why.
 
 To see the page with a download while none is published, put `NEXT_PUBLIC_FAKE_RELEASE=1` in `.env.development.local`. The dev server then shows a sample release whose link goes nowhere.
+
+## Price
+
+Every price on the site comes from `lib/pricing.ts`: the full price, the launch price, the number of Macs, the Polar checkout link and the link to a buyer's purchases.
+
+- `LAUNCH_PRICE_ACTIVE` switches the launch price. While it is `true`, the site shows the full price struck through and the launch price next to it. Set it to `false` to show the full price alone. The discount itself lives on the Polar checkout link, so end it in Polar at the same time.
+- `/support`, where older versions of the app link, redirects to the price on the home page.
+- A buy button is counted as `buy_click`, with the price it showed and where it sits. On the live site the checkout link carries the visitor's `utm_` tags to Polar, or `utm_source=caffeinagent.com` when there are none.
 
 ## Download count
 
@@ -62,18 +69,10 @@ The site is set in Suisse Intl, a licensed typeface. Its files are not in this r
 
 ## Link preview picture
 
-`public/og.png` (1200 by 630) is a picture of the page at `/og-image`, which only the dev server draws; a production build answers "not found" there. After a change to the headline or the icon, run `scripts/og-image.sh` with the dev server up and commit the new `public/og.png`. The script needs the `ego-browser` CLI. `OG_URL` names another address for the page.
+`public/og.png` (1200 by 630) is a picture of the page at `/og-image`, which only the dev server draws; a production build answers "not found" there. The page takes the price from `lib/pricing.ts`. After a change to the price, the headline or the icon, run `scripts/og-image.sh` with the dev server up and commit the new `public/og.png`. The script needs the `ego-browser` CLI. `OG_URL` names another address for the page.
 
 ## License
 
-Copyright (C) 2026 Mert Duzgun.
-
-The code of this site is under the GNU Affero General Public License, version 3 (`AGPL-3.0-only`). See [LICENSE](../LICENSE).
-
-Three things are not under that license:
-
-- The name Agent Caffeine.
-- The app icon and the robot art (`app/icon.png`, `public/icon-1024.png`, `public/robot/`, `public/og.png`, and the robot drawn in `components/robot.tsx`).
-- The Suisse Intl fonts, which are not in this repository.
+Copyright (C) 2026 Mert Duzgun. All rights reserved.
 
 See [TRADEMARKS.md](TRADEMARKS.md). The licenses of other people's work in this repository are in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

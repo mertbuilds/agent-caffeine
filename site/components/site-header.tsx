@@ -6,12 +6,9 @@ import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import { DownloadButton, WithAppleMark } from "@/components/download-button";
-import { GitHubMark } from "@/components/github-mark";
 import { SiteMenu } from "@/components/site-menu";
-import { GitHubCta } from "@/components/track";
 import { morph } from "@/lib/morph";
 import type { Release } from "@/lib/release";
-import { track } from "@/lib/track";
 
 /**
  * How far down the page the pill takes over, and how far back up the open
@@ -27,8 +24,8 @@ const SECTIONS = [
   { hash: "#agents", ids: ["agents"], label: "Agents", name: "header-agents" },
   { hash: "#features", ids: ["features", "small-things"], label: "Features", name: "header-features" },
   { hash: "#demo", ids: ["demo"], label: "Demo", name: "header-demo" },
+  { hash: "#pricing", ids: ["pricing"], label: "Pricing", name: "header-pricing" },
   { hash: "#faq", ids: ["faq"], label: "FAQ", name: "header-faq" },
-  { hash: "#support", ids: ["support"], label: "Support", name: "header-support" },
 ] as const;
 
 /** The line across the window that a section must lie on to be the one in view: 30% of the way down. */
@@ -41,12 +38,12 @@ function morphName(name: string) {
 
 /**
  * The name and the way home at the left, the home page's sections in the
- * middle, and GitHub's button and the download at the right. The link of the section in
+ * middle, and the download at the right. The link of the section in
  * view takes the text's own colour. Once the page has
  * run a little way under it, the items gather into a pill in the middle, the
  * mark alone for the name, and open back out near the top. A window too
  * narrow for the links keeps the name and the download, and has the
- * menu's button at the far edge with the links and GitHub in the menu it opens.
+ * menu's button at the far edge with the links in the menu it opens.
  *
  * The blur sits on a ground of its own behind the items, never on the header
  * or anything around the page, which Safari on iOS can draw wrong.
@@ -63,7 +60,6 @@ export function SiteHeader({ release }: { release: Release | null }) {
     href: `/${section.hash}`,
     label: section.label,
     name: section.name,
-    onClick: section.hash === "#support" ? () => track("support_click", { placement: "header" }) : undefined,
   }));
 
   // One observer for every section. Between two sections the last one stays
@@ -165,7 +161,6 @@ export function SiteHeader({ release }: { release: Release | null }) {
               key={link.name}
               href={link.href}
               aria-current={link.current ? "location" : undefined}
-              onClick={link.onClick}
               {...morphName(link.name)}
               className="whitespace-nowrap text-sm text-muted no-underline transition-colors duration-quick ease-[ease-out] hover:text-fg aria-[current=location]:text-fg motion-reduce:transition-none"
             >
@@ -174,16 +169,6 @@ export function SiteHeader({ release }: { release: Release | null }) {
           ))}
         </nav>
         <span className="inline-flex items-center gap-2 justify-self-end">
-          {/* A narrow window has no room for it: its menu has the link instead. */}
-          <span {...morphName("header-github")} className="hidden md:inline-flex">
-            <GitHubCta
-              placement="header"
-              aria-label="GitHub"
-              className="flex size-7 items-center justify-center rounded-full border border-border text-fg no-underline transition-colors duration-quick ease-smooth-out [@media(hover:hover)]:hover:bg-surface motion-reduce:transition-none"
-            >
-              <GitHubMark size={14} />
-            </GitHubCta>
-          </span>
           {release === null ? null : (
             <span {...morphName("header-primary")} className="inline-flex">
               <DownloadButton release={release} placement="header" size="compact">
