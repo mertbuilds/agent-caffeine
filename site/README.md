@@ -86,6 +86,7 @@ The articles are `apps/web/content/blog/*.md`, with frontmatter (`title`, `descr
 Not set up yet. Local dev needs none of these. Production needs:
 
 - [ ] **Cloudflare**: the Worker `caffeinagent-web`; the private R2 bucket (binding `MAC_FILES`) with the release files copied over from the public one, then `files.caffeinagent.com` removed; its name in `MAC_FILES_BUCKET` in the deploy environment, a secret like `MAC_R2_BUCKET`; secrets `CLOUDFLARE_API_TOKEN`, `CLOUDFLARE_ACCOUNT_ID` in GitHub, and for the fonts `FONT_BUCKET`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY` (a read-only key for the fonts bucket); deploys ship only after `scripts/smoke-web.sh` sees the built site render
+- [ ] **Releases**: no release between the merge of this site and the moment the Worker serves caffeinagent.com, or merge only after that cutover. `scripts/release.sh` reads the new bucket and checks its upload at `caffeinagent.com/mac/`, which only the Worker answers from that bucket
 - [ ] **OpenPanel**: the variable `OPENPANEL_CLIENT_ID`, passed to the build as `VITE_OPENPANEL_CLIENT_ID`, and the Worker secret `OPENPANEL_CLIENT_SECRET` for the download count
 - [ ] **Axiom** (optional): dataset + token for evlog drain, then turn Workers `observability` off in `apps/web/cloudflare.config.ts`
 - [ ] **Turbo remote cache** (optional): `TURBO_TOKEN` secret + `TURBO_TEAM` var

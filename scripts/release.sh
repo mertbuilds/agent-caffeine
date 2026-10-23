@@ -392,8 +392,18 @@ check_new_release() {
     exit 1
   fi
   name=$(dmg_name "$version" "$build")
-  if { [ -n "${R2_BUCKET:-}" ] && r2_get "mac/$name" /dev/null; } \
+  # Over S3 r2_get fails only on a 404, so its answer is final. Through cf a
+  # failure may be a login that cannot read the bucket, so the site is asked too.
+  held=0
+  if [ "$R2_TRANSPORT" = s3 ]; then
+    if r2_get "mac/$name" /dev/null; then
+      held=1
+    fi
+  elif { [ -n "${R2_BUCKET:-}" ] && r2_get "mac/$name" /dev/null; } \
     || curl -sfI "$SITE_URL/$name" > /dev/null; then
+    held=1
+  fi
+  if [ "$held" = 1 ]; then
     echo "error: the bucket already holds mac/$name" >&2
     echo "       raise CURRENT_PROJECT_VERSION in project.yml." >&2
     exit 1
