@@ -118,7 +118,7 @@ final class LicenseManagerTests: XCTestCase {
         await manager.validate()
         XCTAssertEqual(manager.entitlement, .expired(.unverified))
         XCTAssertEqual(store.record?.activationID, "act-1", "Could not ask never forgets the activation")
-        api.validation = .valid
+        api.validation = .valid()
         await manager.validate()
         XCTAssertEqual(manager.entitlement, .licensed)
         XCTAssertEqual(store.record?.lastValidated, t0 + 31 * day)
@@ -145,7 +145,7 @@ final class LicenseManagerTests: XCTestCase {
         store.record = LicenseRecord(key: key, activationID: "act-1", lastValidated: t0 - 40 * day, trialStart: t0 - 40 * day)
         let manager = makeManager()
         XCTAssertEqual(manager.entitlement, .expired(.unverified))
-        api.validation = .valid
+        api.validation = .valid()
         await manager.activate(key: key)
         XCTAssertEqual(manager.entitlement, .licensed)
         XCTAssertTrue(api.activateLabels.isEmpty)
@@ -253,7 +253,7 @@ final class LicenseManagerTests: XCTestCase {
     // MARK: Answers that arrive late
 
     func testLateAnswerAfterDeactivatingIsIgnored() async {
-        for late in [LicenseValidation.valid, .notFound] {
+        for late in [LicenseValidation.valid(), .notFound] {
             store.record = LicenseRecord(key: key, activationID: "act-1", lastValidated: t0 - 40 * day, trialStart: t0 - 40 * day)
             let manager = makeManager()
             let gate = ValidationGate()
@@ -275,7 +275,7 @@ final class LicenseManagerTests: XCTestCase {
 
     func testLateAnswerAfterActivatingAnotherKeyIsIgnored() async {
         let otherKey = "AGENTCAF-00000000-0000-4000-8000-000000000002"
-        for late in [LicenseValidation.valid, .notFound] {
+        for late in [LicenseValidation.valid(), .notFound] {
             store.record = LicenseRecord(key: key, activationID: "act-1", lastValidated: t0 - 40 * day, trialStart: t0 - 40 * day)
             now = t0
             let manager = makeManager()
@@ -306,7 +306,7 @@ final class LicenseManagerTests: XCTestCase {
         let manager = makeManager()
         let gate = ValidationGate()
         api.validateGate = gate
-        api.validation = .valid
+        api.validation = .valid()
         let first = manager.tick()
         XCTAssertNotNil(first)
         for _ in 0..<10 {
@@ -323,7 +323,7 @@ final class LicenseManagerTests: XCTestCase {
         await gate.open()
         let result = await first?.value
         await joined.value
-        XCTAssertEqual(result, .valid)
+        XCTAssertEqual(result, .valid())
         XCTAssertEqual(api.validateIDs, ["act-1"])
         XCTAssertEqual(manager.entitlement, .licensed)
     }
@@ -333,7 +333,7 @@ final class LicenseManagerTests: XCTestCase {
         let manager = makeManager()
         XCTAssertTrue(manager.validationDue, "Nothing asked yet")
 
-        api.validation = .valid
+        api.validation = .valid()
         await manager.validate()
         now = t0 + 3600
         XCTAssertFalse(manager.validationDue, "Not an hour after a valid answer")
@@ -351,7 +351,7 @@ final class LicenseManagerTests: XCTestCase {
         XCTAssertTrue(manager.validationDue, "An hour after could not ask")
 
         now = t0
-        api.validation = .valid
+        api.validation = .valid()
         await manager.validate()
         now = t0 - 1
         XCTAssertTrue(manager.validationDue, "The clock went back")
@@ -367,7 +367,7 @@ final class LicenseManagerTests: XCTestCase {
         await manager.checkNow()
         XCTAssertEqual(manager.message, .unavailable)
         XCTAssertFalse(manager.busy)
-        api.validation = .valid
+        api.validation = .valid()
         await manager.checkNow()
         XCTAssertNil(manager.message)
         XCTAssertEqual(manager.entitlement, .licensed)

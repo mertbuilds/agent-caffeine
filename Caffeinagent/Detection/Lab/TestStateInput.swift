@@ -153,6 +153,7 @@ extension ExpiredReason {
         case .trialOver: return "trialOver"
         case .unverified: return "unverified"
         case .activationRemoved: return "activationRemoved"
+        case .updatesEnded: return "updatesEnded"
         }
     }
 }

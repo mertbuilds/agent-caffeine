@@ -36,6 +36,9 @@ final class LicenseManager: ObservableObject {
     @Published private(set) var storageError: String?
 
     let config: LicenseConfig
+    /// When this build was released. Nil for a build made without the
+    /// release script.
+    let release: Date?
     private let client: LicenseAPI
     private let store: LicenseStore
     private let defaults: UserDefaults
@@ -61,6 +64,7 @@ final class LicenseManager: ObservableObject {
         defaults: UserDefaults = .standard,
         config: LicenseConfig = .current,
         label: String = LicenseManager.deviceLabel,
+        release: Date? = LicenseManager.buildRelease,
         now: @escaping () -> Date = Date.init,
         uptime: @escaping () -> TimeInterval = LicenseManager.monotonicNow
     ) {
@@ -69,6 +73,7 @@ final class LicenseManager: ObservableObject {
         self.defaults = defaults
         self.config = config
         self.label = label
+        self.release = release
         self.now = now
         self.uptime = uptime
 
@@ -87,6 +92,11 @@ final class LicenseManager: ObservableObject {
         record = loaded
         storageError = loadError
         refresh()
+    }
+
+    /// The release date that `scripts/release.sh` put into Info.plist.
+    nonisolated static var buildRelease: Date? {
+        UpdateWindow.releaseDate(Bundle.main.object(forInfoDictionaryKey: UpdateWindow.releaseDateKey))
     }
 
     /// The Mac's model identifier, such as `MacBookPro18,3`. Never the
@@ -161,10 +171,11 @@ final class LicenseManager: ObservableObject {
         }
 
         switch await client.activate(key: key, label: label) {
-        case .activated(let id, let macs):
+        case .activated(let id, let macs, let purchased):
             record.key = key
             record.activationID = id
             record.macLimit = macs
+            record.purchased = purchased
             record.lastValidated = currentTime
             message = nil
         case .limitReached:
@@ -211,8 +222,9 @@ final class LicenseManager: ObservableObject {
         guard record.activationID == id else { return nil }
         lastAttemptFailed = result == .unavailable
         switch result {
-        case .valid:
+        case .valid(let purchased):
             record.lastValidated = currentTime
+            if let purchased { record.purchased = purchased }
             message = nil
         case .notFound:
             forgetActivation()
@@ -262,6 +274,20 @@ final class LicenseManager: ObservableObject {
         record.trialStart.map { $0.addingTimeInterval(LicenseRules.trialLength) }
     }
 
+    /// The end of the year of updates of the key that is activated here.
+    /// Nil without an activation or before Polar said when it was bought.
+    var updatesEnd: Date? {
+        guard record.activationID != nil, let purchased = record.purchased else { return nil }
+        return UpdateWindow.end(purchased: purchased)
+    }
+
+    /// The key that is activated here does not run this build: it was
+    /// released after the year of updates of the key.
+    var keyTooOldForThisBuild: Bool {
+        guard record.activationID != nil else { return false }
+        return !UpdateWindow.covers(release: release, purchased: record.purchased)
+    }
+
     private var currentTime: Date {
         LicenseRules.effectiveNow(now(), latestSeen: record.latestSeen)
     }
@@ -287,7 +313,7 @@ final class LicenseManager: ObservableObject {
         // While the stored activation cannot be read, the mirrored validation
         // date stands in for it.
         let activationKnown = record.activationID != nil || !storeReadable
-        let value = LicenseRules.entitlement(record: record, activationKnown: activationKnown, now: now())
+        let value = LicenseRules.entitlement(record: record, activationKnown: activationKnown, release: release, now: now())
         if entitlement != value { entitlement = value }
     }
 

@@ -17,6 +17,7 @@ enum HiddenNotice: Equatable {
         case .licenseExpired(.trialOver): return "Agent Caffeine cannot keep your Mac awake because your trial has ended"
         case .licenseExpired(.unverified): return "Agent Caffeine cannot keep your Mac awake because your license was not checked for 30 days"
         case .licenseExpired(.activationRemoved): return "Agent Caffeine cannot keep your Mac awake because this Mac is no longer activated"
+        case .licenseExpired(.updatesEnded): return "Agent Caffeine cannot keep your Mac awake because your key does not cover this version"
         }
     }
 
@@ -26,7 +27,11 @@ enum HiddenNotice: Equatable {
     static func current(flagLeftOn: Bool, helperNotResponding: Bool, entitlement: Entitlement) -> HiddenNotice? {
         if flagLeftOn { return .helperSwitchedOff }
         if helperNotResponding { return .helperNotResponding }
-        if case .expired(let reason) = entitlement, reason != .trialOver { return .licenseExpired(reason) }
+        switch entitlement {
+        case .expired(.trialOver), .expired(.updatesEnded): break
+        case .expired(let reason): return .licenseExpired(reason)
+        case .licensed, .trial: break
+        }
         return nil
     }
 

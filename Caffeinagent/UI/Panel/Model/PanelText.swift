@@ -100,6 +100,8 @@ enum PanelText {
             return (stoppedTitle, "Your license was not checked for 30 days")
         case .notEntitled(.activationRemoved):
             return (stoppedTitle, "This Mac is no longer activated")
+        case .notEntitled(.updatesEnded):
+            return (stoppedTitle, keyDoesNotCoverThisVersion)
         }
     }
 
@@ -315,6 +317,7 @@ enum PanelText {
         case .notEntitled(.trialOver): return "your trial has ended"
         case .notEntitled(.unverified): return "your license was not checked for 30 days"
         case .notEntitled(.activationRemoved): return "this Mac is no longer activated"
+        case .notEntitled(.updatesEnded): return "your key does not cover this version"
         case .waitedTooLong(let subject, let hold):
             let length = HumaneDuration.length(seconds: hold) ?? "a moment"
             return "\(phrase(subject, one: "waited", many: "waited")) for you longer than \(length)"
@@ -428,6 +431,17 @@ enum PanelText {
     static let buyToKeepAwake = "Buy a key to keep your Mac awake"
     static let connectAndCheck = "Connect to the internet, then check again"
     static let activateAgain = "Activate this Mac again to keep it awake"
+    static let keyDoesNotCoverThisVersion = "Your key does not cover this version"
+    static let olderVersionsKeepWorking = "Older versions keep working with your key. This version needs a new key."
+    static let buyNewKey = "Buy a new key"
+
+    /// In Settings > License, below a key that runs this version: "Updates
+    /// until October 23, 2027.", and quietly once they ended.
+    static func updates(until end: Date, now: Date) -> String {
+        let day = end.formatted(date: .long, time: .omitted)
+        guard end < now else { return "Updates until \(day)." }
+        return "Updates ended on \(day). This version keeps working with your key."
+    }
     static let helperNotResponding = "Agent Caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery."
     static let helperRepairing = "Setting up the helper again…"
     static let helperLost = "Agent Caffeine has to set up its helper again"

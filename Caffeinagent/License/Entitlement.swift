@@ -22,12 +22,16 @@ enum ExpiredReason: Equatable {
     case unverified
     /// A key is stored, but this Mac no longer holds an activation of it.
     case activationRemoved
+    /// The key is good, and this build was released after the year of
+    /// updates of the key ended. Older builds keep running with it.
+    case updatesEnded(coveredUntil: Date)
 
     var text: String {
         switch self {
         case .trialOver: return "Your trial has ended. Agent Caffeine is not keeping your Mac awake."
         case .unverified: return "Your license was not checked for 30 days. Connect to the internet to keep your Mac awake."
         case .activationRemoved: return "This Mac is no longer activated for this key."
+        case .updatesEnded(let until): return LicenseRules.coveredUntil(until)
         }
     }
 }
@@ -53,6 +57,9 @@ struct LicenseRecord: Codable, Equatable {
     /// activation. Nil when it did not say, and for a key that was
     /// activated by an older build.
     var macLimit: Int?
+    /// When the key was bought, from Polar's answers. It starts the year of
+    /// updates (`UpdateWindow`). Nil until Polar was asked about the key.
+    var purchased: Date?
 
     enum CodingKeys: String, CodingKey {
         case key
@@ -61,6 +68,7 @@ struct LicenseRecord: Codable, Equatable {
         case trialStart = "trialStart2"
         case latestSeen
         case macLimit
+        case purchased
     }
 }
 
@@ -100,16 +108,27 @@ enum LicenseRules {
     /// - Parameter activationKnown: whether there is an activation to count
     ///   on. True without an activation id only while the stored activation
     ///   cannot be read, so the mirrored validation date still counts.
-    static func entitlement(record: LicenseRecord, activationKnown: Bool, now: Date) -> Entitlement {
+    /// - Parameter release: when this build was released. A key whose year
+    ///   of updates ended before it counts as no key, and the trial runs.
+    static func entitlement(record: LicenseRecord, activationKnown: Bool, release: Date? = nil, now: Date) -> Entitlement {
         let now = effectiveNow(now, latestSeen: record.latestSeen)
+        var windowEnded: Date?
         if activationKnown, let lastValidated = record.lastValidated,
            now.timeIntervalSince(lastValidated) <= offlineGrace {
-            return .licensed
+            guard !UpdateWindow.covers(release: release, purchased: record.purchased),
+                  let purchased = record.purchased else { return .licensed }
+            windowEnded = UpdateWindow.end(purchased: purchased)
         }
         guard let days = trialDaysLeft(start: record.trialStart ?? now, now: now) else {
+            if let windowEnded { return .expired(.updatesEnded(coveredUntil: windowEnded)) }
             if activationKnown, record.lastValidated != nil { return .expired(.unverified) }
             return .expired(record.key == nil ? .trialOver : .activationRemoved)
         }
         return .trial(daysLeft: days)
+    }
+
+    /// "Your key covers versions released until October 23, 2027."
+    static func coveredUntil(_ end: Date) -> String {
+        "Your key covers versions released until \(end.formatted(date: .long, time: .omitted))."
     }
 }

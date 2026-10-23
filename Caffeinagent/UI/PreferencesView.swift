@@ -94,7 +94,7 @@ struct PreferencesView: View {
                 helperRegistered: aggregator.sleepFlag.helperStatus != .notRegistered,
                 agentSetupOn: aggregator.agentSetup.isSetUp,
                 hotspotSaved: aggregator.hotspot.somethingSaved,
-                licensed: aggregator.entitlement == .licensed && license.record.activationID != nil,
+                licensed: license.record.activationID != nil,
                 busy: license.busy,
                 checkForUpdates: updater.checkForUpdates,
                 showSetup: { OnboardingWindow.show(aggregator: aggregator) },
@@ -153,6 +153,11 @@ struct PreferencesView: View {
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
+                if let end = license.updatesEnd {
+                    Text(PanelText.updates(until: end, now: Date()))
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
                 HStack {
                     Button("Deactivate this Mac…") { confirmingDeactivate = true }
                         .disabled(license.busy)
@@ -173,6 +178,30 @@ struct PreferencesView: View {
                     }
                     Spacer()
                     Button("Manage in Polar") { NSWorkspace.shared.open(license.config.customerPortalURL) }
+                }
+            } else if license.keyTooOldForThisBuild, let end = license.updatesEnd {
+                Text(LicenseRules.coveredUntil(end))
+                    .foregroundStyle(.orange)
+                Text(PanelText.olderVersionsKeepWorking)
+                    .font(.callout)
+                    .foregroundStyle(.secondary)
+                if case .trial = aggregator.entitlement {
+                    Text(licenseStatus)
+                        .font(.callout)
+                        .foregroundStyle(.secondary)
+                }
+                TextField("New license key", text: $licenseKey, prompt: Text("AGENTCAF-…"))
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(.body, design: .monospaced))
+                    .onSubmit(activate)
+                HStack {
+                    Button("Activate", action: activate)
+                        .disabled(LicenseClient.cleaned(licenseKey).isEmpty || license.busy)
+                    if license.busy {
+                        ProgressView().controlSize(.small)
+                    }
+                    Spacer()
+                    Button(PanelText.buyNewKey) { NSWorkspace.shared.open(license.config.checkoutURL) }
                 }
             } else {
                 Text(licenseStatus)

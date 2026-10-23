@@ -178,6 +178,8 @@ enum MenuModel {
             return PanelAttention(kind: .license, text: PanelText.connectAndCheck, actions: [.checkLicense])
         case .expired(.activationRemoved):
             return PanelAttention(kind: .license, text: PanelText.activateAgain, actions: [.activateAgain, .enterKey])
+        case .expired(.updatesEnded(let until)):
+            return PanelAttention(kind: .license, text: LicenseRules.coveredUntil(until), actions: [.buy, .enterKey])
         case .trial(let daysLeft) where daysLeft <= trialWarningDays:
             return PanelAttention(
                 kind: .license,
@@ -259,6 +261,8 @@ enum MenuModel {
     private static func licenseActions(_ input: PanelInput) -> [PanelAction] {
         switch input.entitlement {
         case .licensed: return []
+        // A new key is bought for a version the old one does not cover.
+        case .expired(.updatesEnded): return [.buy, .enterKey]
         case .trial, .expired: return input.hasLicenseKey ? [.enterKey] : [.buy, .enterKey]
         }
     }

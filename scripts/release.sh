@@ -421,6 +421,11 @@ else
   rm -rf "$TESTS_DIR"
 fi
 
+# One time for the build and the appcast: a key runs the builds released
+# within a year of its purchase, and Sparkle offers a key no update dated
+# after that year. The app reads ACReleaseDate, Sparkle the pubDate.
+RELEASE_DATE=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
+
 echo "==> xcodebuild ($CONFIG)"
 xcodebuild \
   -project "${PROJECT}.xcodeproj" \
@@ -434,9 +439,16 @@ xcodebuild \
   CODE_SIGN_IDENTITY="Developer ID Application" \
   PROVISIONING_PROFILE_SPECIFIER="" \
   CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
-  OTHER_CODE_SIGN_FLAGS="--timestamp --options runtime"
+  OTHER_CODE_SIGN_FLAGS="--timestamp --options runtime" \
+  AC_RELEASE_DATE="$RELEASE_DATE"
 
 APP="$BUILD_DIR/Build/Products/$CONFIG/caffeinagent.app"
+
+if [ "$(/usr/libexec/PlistBuddy -c "Print :ACReleaseDate" "$APP/Contents/Info.plist" 2>/dev/null)" != "$RELEASE_DATE" ]; then
+  echo "error: the built app does not carry the release date $RELEASE_DATE in ACReleaseDate." >&2
+  exit 1
+fi
+echo "    release date: $RELEASE_DATE"
 
 # Sparkle's command line tools come down with the Swift package, so they always
 # match the framework inside the app.
@@ -697,10 +709,12 @@ rm -rf "$SITE_DIR"
 mkdir -p "$SITE_DIR"
 cp "$RELEASE_DMG" "$SITE_DIR/"
 SITE_DMG="$SITE_DIR/$DMG_NAME"
+# generate_appcast dates the item from the file, so the pubDate is the
+# release date the app carries.
+TZ=UTC touch -t "$(TZ=UTC date -j -f "%Y-%m-%dT%H:%M:%SZ" "$RELEASE_DATE" "+%Y%m%d%H%M.%S")" "$SITE_DMG"
 
 DMG_SIZE=$(/usr/bin/stat -f%z "$SITE_DMG")
 DMG_SHA=$(/usr/bin/shasum -a 256 "$SITE_DMG" | cut -d' ' -f1)
-RELEASE_DATE=$(date -u "+%Y-%m-%dT%H:%M:%SZ")
 
 if [ -f "$PUBLISHED_APPCAST" ]; then
   cp "$PUBLISHED_APPCAST" "$SITE_DIR/appcast.xml"

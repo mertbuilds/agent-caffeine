@@ -4,7 +4,9 @@ import Foundation
 enum LicenseActivation: Equatable, Sendable {
     /// Polar counted this Mac against the key, under this activation id.
     /// - Parameter macs: on how many Macs the key runs, when Polar says so.
-    case activated(id: String, macs: Int? = nil)
+    /// - Parameter purchased: when the key was made, which is when it was
+    ///   bought, when Polar says so.
+    case activated(id: String, macs: Int? = nil, purchased: Date? = nil)
     /// Every activation of the key is held by another Mac.
     case limitReached
     /// Polar does not know the key.
@@ -19,7 +21,9 @@ enum LicenseActivation: Equatable, Sendable {
 /// What Polar says about this Mac's activation of a key.
 enum LicenseValidation: Equatable, Sendable {
     /// The key is granted and the activation is this Mac's.
-    case valid
+    /// - Parameter purchased: when the key was made, which is when it was
+    ///   bought, when Polar says so.
+    case valid(purchased: Date? = nil)
     /// The activation is gone (freed from another Mac or the portal), or the
     /// key is unknown.
     case notFound
@@ -82,7 +86,10 @@ struct LicenseClient: LicenseAPI {
                 return .unavailable
             }
             guard activated.licenseKey.status == "granted" else { return .revoked }
-            return .activated(id: activated.id, macs: activated.licenseKey.limitActivations)
+            return .activated(
+                id: activated.id, macs: activated.licenseKey.limitActivations,
+                purchased: activated.licenseKey.createdAt.flatMap(UpdateWindow.polarDate)
+            )
         case .forbidden(let detail):
             return detail.contains("limit") ? .limitReached : .revoked
         case .notFound(let detail):
@@ -105,7 +112,7 @@ struct LicenseClient: LicenseAPI {
             // Only an answer about this Mac's own activation proves a license,
             // and an answer about none says nothing either way.
             guard validated.activation?.id == activationID else { return .unavailable }
-            return .valid
+            return .valid(purchased: validated.createdAt.flatMap(UpdateWindow.polarDate))
         case .forbidden:
             // Polar answers an inactive key with a 404 or a status, never a
             // 403, so a 403 here says nothing about the key.
@@ -212,10 +219,12 @@ struct LicenseClient: LicenseAPI {
         struct Key: Decodable {
             let status: String
             let limitActivations: Int?
+            let createdAt: String?
 
             enum CodingKeys: String, CodingKey {
                 case status
                 case limitActivations = "limit_activations"
+                case createdAt = "created_at"
             }
         }
 
@@ -235,6 +244,14 @@ struct LicenseClient: LicenseAPI {
 
         let status: String
         let activation: Activation?
+        /// When the key was made.
+        let createdAt: String?
+
+        enum CodingKeys: String, CodingKey {
+            case status
+            case activation
+            case createdAt = "created_at"
+        }
     }
 
     private struct ErrorBody: Decodable {

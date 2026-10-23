@@ -11,6 +11,8 @@ final class LicenseClientTests: XCTestCase {
     )
     private static let key = "AGENTCAF-3F2C1D0E-8B7A-4C6D-9E5F-1A2B3C4D5E6F"
     private static let activationID = "a1b2c3d4-0000-4000-8000-000000000001"
+    /// The `created_at` of the key in the answers, without its microseconds.
+    private static let purchased = ISO8601DateFormatter().date(from: "2025-11-02T08:15:30Z")!
 
     private var client: LicenseClient!
 
@@ -97,7 +99,7 @@ final class LicenseClientTests: XCTestCase {
     func testActivateAnswers() async {
         PolarStubURLProtocol.answerWith(Self.activated())
         var result = await client.activate(key: Self.key, label: "Mac")
-        XCTAssertEqual(result, .activated(id: Self.activationID, macs: 1))
+        XCTAssertEqual(result, .activated(id: Self.activationID, macs: 1, purchased: Self.purchased))
 
         PolarStubURLProtocol.answerWith(#"{"error":"NotPermitted","detail":"License key activation limit already reached"}"#, status: 403)
         result = await client.activate(key: Self.key, label: "Mac")
@@ -132,7 +134,12 @@ final class LicenseClientTests: XCTestCase {
     func testValidateAnswers() async {
         PolarStubURLProtocol.answerWith(Self.validated(status: "granted", activationID: Self.activationID))
         var result = await client.validate(key: Self.key, activationID: Self.activationID)
-        XCTAssertEqual(result, .valid)
+        XCTAssertEqual(result, .valid(purchased: Self.purchased))
+
+        // An answer without the date is still a good key.
+        PolarStubURLProtocol.answerWith(Self.validated(status: "granted", activationID: Self.activationID, created: nil))
+        result = await client.validate(key: Self.key, activationID: Self.activationID)
+        XCTAssertEqual(result, .valid(purchased: nil))
 
         for status in ["revoked", "disabled"] {
             PolarStubURLProtocol.answerWith(Self.validated(status: status, activationID: Self.activationID))
@@ -231,6 +238,7 @@ final class LicenseClientTests: XCTestCase {
           "license_key": {
             "id": "0b6a1c2e-5f3d-4e8a-9b7c-1d2e3f4a5b6c",
             "status": "\(status)",
+            "created_at": "2025-11-02T08:15:30.123456Z",
             "limit_activations": 1,
             "usage": 0,
             "limit_usage": null,
@@ -240,11 +248,15 @@ final class LicenseClientTests: XCTestCase {
         """
     }
 
-    private static func validated(status: String, activationID: String?) -> String {
+    private static func validated(
+        status: String, activationID: String?, created: String? = "2025-11-02T08:15:30.123456Z"
+    ) -> String {
         let activation = activationID.map { #"{"id":"\#($0)","label":"MacBookPro18,3","meta":{}}"# } ?? "null"
+        let createdAt = created.map { #""\#($0)""# } ?? "null"
         return """
         {
           "id": "0b6a1c2e-5f3d-4e8a-9b7c-1d2e3f4a5b6c",
+          "created_at": \(createdAt),
           "organization_id": "\(config.organizationID)",
           "key": "\(key)",
           "display_key": "****-5E6F",

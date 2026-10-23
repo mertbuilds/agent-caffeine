@@ -12,7 +12,7 @@ enum TrialNotice: String, CaseIterable {
     static func due(entitlement: Entitlement, told: Set<TrialNotice>) -> TrialNotice? {
         switch entitlement {
         case .trial(let daysLeft) where daysLeft <= 1: return told.contains(.endsSoon) ? nil : .endsSoon
-        case .expired(.trialOver): return told.contains(.ended) ? nil : .ended
+        case .expired(.trialOver), .expired(.updatesEnded): return told.contains(.ended) ? nil : .ended
         case .trial, .licensed, .expired: return nil
         }
     }
