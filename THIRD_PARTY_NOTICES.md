@@ -42,7 +42,7 @@ The menu shows a mark beside each agent. The drawings are path data on a 24 by
 
 The agent names and logos are trademarks of their owners and are used only to
 identify those products. Agent Caffeine is not affiliated with or endorsed by
-any of them. See `TRADEMARKS.md`.
+any of them.
 
 ## The files Agent Caffeine writes into the folders of your agents
 

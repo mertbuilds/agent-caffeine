@@ -21,7 +21,7 @@ Every job gets its own key, limited to the one thing it needs:
 | Notarization | App Store Connect API key | Developer role |
 | Update the Homebrew cask | fine-grained GitHub token | Contents read and write, `mertbuilds/homebrew-tap` only |
 
-- GitHub Actions secrets live in the `mac-release` environment, which only `main` can use. Names are listed in CONTRIBUTING.md. The bucket name is a secret too, so it stays out of public logs.
+- GitHub Actions secrets live in the `mac-release` environment, which only `main` can use. Names are listed in README.md, "Release". The bucket name is a secret too, so it stays out of public logs.
 - On the Mac, `~/.config/agent-caffeine/release.env` (mode 600) holds the Mac's keys and points to the Sparkle and notary key files next to it. `release.sh` reads it before it picks its modes, so a local release needs no `cf` login and no keychain item.
 - Uploads go through `curl --aws-sigv4`, with the key pair on stdin. Checks of a new file go to the bucket URL, never to caffeinagent.com, because Cloudflare caches a 404 there for hours.
 

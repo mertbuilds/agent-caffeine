@@ -1,6 +1,6 @@
 # 1. Support through GitHub Sponsors
 
-Date: 2026-10-21. Status: accepted.
+Date: 2026-10-21. Status: superseded by [3. Paid again](0003-paid-again.md).
 
 ## Context
 

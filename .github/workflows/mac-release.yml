@@ -4,7 +4,7 @@ run-name: "${{ github.event_name == 'push' && format('Release request at {0}', g
 # Builds, signs, notarizes and uploads the Mac app with scripts/release.sh, the
 # same script the owner runs on the Mac. The uploads are live at once. Every
 # secret is a secret of the environment mac-release, whose required reviewer
-# approves each run. Setup and the list of secrets: CONTRIBUTING.md, "Release".
+# approves each run. Setup and the list of secrets: README.md, "Release".
 #
 # A release is asked for by a push to main that raises CURRENT_PROJECT_VERSION
 # in project.yml above the highest build in the published appcast. No tag
