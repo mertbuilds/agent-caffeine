@@ -1,11 +1,16 @@
 import handler from '@tanstack/react-start/server-entry';
 import { initWorkersLogger } from 'evlog/workers';
+import { canonicalRedirect } from './lib/canonical.ts';
+import { downloadRedirect } from './lib/download.ts';
+import { macFileResponse } from './lib/mac-files.ts';
+import type { MacFilesBucket } from './lib/mac-files.ts';
 import { movedRedirect } from './lib/redirects.ts';
 import { paraglideMiddleware } from './paraglide/server.js';
 
 interface WorkerEnv {
   AXIOM_DATASET?: string;
   AXIOM_TOKEN?: string;
+  MAC_FILES: MacFilesBucket;
 }
 
 interface ExecutionContextLike {
@@ -42,7 +47,11 @@ export default {
     log.set({ method: request.method, path: url.pathname });
     try {
       const response =
-        movedRedirect(url) ?? (await paraglideMiddleware(request, () => handler.fetch(request)));
+        canonicalRedirect(url) ??
+        movedRedirect(url) ??
+        (await macFileResponse(request, url, env.MAC_FILES)) ??
+        (await downloadRedirect(request, url, env.MAC_FILES)) ??
+        (await paraglideMiddleware(request, () => handler.fetch(request)));
       log.set({ status: response.status });
       return response;
     } catch (error) {

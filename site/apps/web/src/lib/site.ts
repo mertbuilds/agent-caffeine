@@ -1,3 +1,6 @@
+/** The one origin the site answers on. `www` and plain http are sent here. */
+export const SITE_URL = 'https://caffeinagent.com';
+
 /** The OpenPanel server that counts for this site. The browser reaches it through `/api/op`. */
 export const OPENPANEL_API_URL = 'https://analytics.vinena.studio/api';
 
