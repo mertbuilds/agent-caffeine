@@ -1,13 +1,13 @@
 ---
 name: stylex
-description: StyleX authoring guide — writing/applying/merging styles, pseudo-classes, media queries, defineVars/defineConsts, themes, dynamic styles, TypeScript types, and common antipatterns. Use when writing or reviewing any StyleX styles in this repo.
+description: StyleX authoring guide: writing/applying/merging styles, pseudo-classes, media queries, defineVars/defineConsts, themes, dynamic styles, TypeScript types, and common antipatterns. Use when writing or reviewing any StyleX styles in this repo.
 ---
 
 # StyleX Authoring Guide
 
 This document provides guidance on authoring styles with StyleX.
 
-> **Repo note (sealclip):** oxlint bans namespace imports (`import/no-namespace`). Use named imports instead of the `import * as stylex` shown in the examples below: `import { create, props as stylexProps, defineVars, defineConsts, createTheme, keyframes } from '@stylexjs/stylex';`. The compiler handles aliases fine — see `packages/ui` for the established pattern. All other guidance applies as written.
+> **Repo note (sealclip):** oxlint bans namespace imports (`import/no-namespace`). Use named imports instead of the `import * as stylex` shown in the examples below: `import { create, props as stylexProps, defineVars, defineConsts, createTheme, keyframes } from '@stylexjs/stylex';`. The compiler handles aliases fine. See `packages/ui` for the established pattern. All other guidance applies as written.
 
 ## Writing styles
 

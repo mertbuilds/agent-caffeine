@@ -99,7 +99,7 @@ for (const [dep, entry] of Object.entries(map.deps)) {
   const version = versions.get(dep);
   if (version == null) {
     warn(
-      `'${dep}' is mapped in skills.versions.json but not installed — remove it or reinstall the dep.`,
+      `'${dep}' is mapped in skills.versions.json but not installed: remove it or reinstall the dep.`,
     );
     continue;
   }
@@ -109,13 +109,13 @@ for (const [dep, entry] of Object.entries(map.deps)) {
   }
   if (major !== entry.checkedMajor) {
     warn(
-      `'${dep}' is at v${version} but skills were last checked against major ${entry.checkedMajor} — run 'npx skills update', re-verify, and bump checkedMajor.`,
+      `'${dep}' is at v${version} but skills were last checked against major ${entry.checkedMajor}: run 'npx skills update', re-verify, and bump checkedMajor.`,
     );
   }
   for (const skill of entry.skills) {
     if (!existsSync(path.join(skillsDir, skill))) {
       warn(
-        `skill '${skill}' for '${dep}' missing from .claude/skills — run 'npx skills add ${entry.source}'.`,
+        `skill '${skill}' for '${dep}' missing from .claude/skills: run 'npx skills add ${entry.source}'.`,
       );
     }
   }

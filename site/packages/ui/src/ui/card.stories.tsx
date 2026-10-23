@@ -36,7 +36,7 @@ export const Default: Story = {
           <Badge>Active</Badge>
         </CardAction>
       </CardHeader>
-      <CardContent>Pro — $20 / month</CardContent>
+      <CardContent>Pro, $20 / month</CardContent>
       <CardFooter>
         <Button variant="outline">Manage</Button>
       </CardFooter>

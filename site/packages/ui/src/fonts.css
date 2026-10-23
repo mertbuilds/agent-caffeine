@@ -1,5 +1,5 @@
 /*
- * Suisse Intl is licensed — the woff2 files are gitignored and fetched via
+ * Suisse Intl is licensed: the woff2 files are gitignored and fetched via
  * `pnpm fonts` (scripts/fetch-fonts.sh). Here they load when the text asks
  * for them and swap in when they land, and so does Inter, the fallback, in a
  * checkout without them. The site preloads its fonts and links

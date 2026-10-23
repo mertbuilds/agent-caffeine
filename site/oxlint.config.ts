@@ -57,7 +57,7 @@ export default defineConfig({
     'react/jsx-no-literals': [
       'error',
       {
-        allowedStrings: ['•', '·', '—', '/', '%', '×', '+'],
+        allowedStrings: ['•', '·', '/', '%', '×', '+'],
         restrictedAttributes: [
           'label',
           'placeholder',

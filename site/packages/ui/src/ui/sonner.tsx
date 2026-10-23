@@ -4,7 +4,7 @@ import type { CSSProperties } from 'react';
 import { Toaster as Sonner } from 'sonner';
 import type { ToasterProps } from 'sonner';
 
-// Adapted from shadcn-cssinjs: next-themes dropped — this design system themes
+// Adapted from shadcn-cssinjs: next-themes dropped. This design system themes
 // via prefers-color-scheme only, which sonner's "system" theme already follows.
 const Toaster = (props: ToasterProps) => {
   return (

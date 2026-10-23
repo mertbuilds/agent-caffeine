@@ -58,7 +58,7 @@ const styles = create({
       default: null,
     },
     position: 'relative',
-    // Buttons often render as <a> via the `render` prop — kill the anchor underline.
+    // Buttons often render as <a> via the `render` prop, so kill the anchor underline.
     textDecorationLine: 'none',
     // Tactile press feedback: 0.96 per interface-polish rules; CSS transition
     // stays interruptible mid-animation.
@@ -67,7 +67,7 @@ const styles = create({
       default: '1',
     },
     transitionDuration: '150ms',
-    // Never `all` — list only what actually animates.
+    // Never `all`: list only what actually animates.
     transitionProperty: 'scale, background-color, border-color, color, box-shadow, opacity',
     transitionTimingFunction: 'cubic-bezier(0.2, 0, 0, 1)',
     userSelect: 'none',

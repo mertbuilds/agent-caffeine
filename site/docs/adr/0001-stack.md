@@ -38,11 +38,11 @@ Full decision record from the founding grill session. One product = one copy of 
 
 ## Drift during implementation (2026-09-02)
 
-Deviations from the plan above, discovered while building — these are the current truth:
+Deviations from the plan above, discovered while building. These are the current truth:
 
 - **Prisma 7.10, not 8**: npm `latest` was 8.0.0-rc; RC skipped deliberately. Datasource URL lives in `prisma.config.ts` (Prisma 7 moved it out of the schema); runtime adapter (`@prisma/adapter-pg`) is constructed in `createDb`.
 - **evlog on web uses `evlog/workers`**, not a `tanstack-start` adapter (doesn't exist in evlog 2.28); the custom `src/server.ts` Worker entry wraps the Start handler with paraglide + evlog. Axiom drain export is `createAxiomDrain`.
-- **React Compiler via `@vitejs/plugin-react` v6 `compiler: true`** (oxc-transform-react) — v6 removed the `babel` option, so no babel preset.
+- **React Compiler via `@vitejs/plugin-react` v6 `compiler: true`** (oxc-transform-react): v6 removed the `babel` option, so no babel preset.
 - **`/dashboard` is `ssr: false`**: the session cookie belongs to the api origin and isn't forwarded during SSR; an SSR auth check bounced logged-in users (found by e2e).
 - **CORS is load-bearing**: web and api are always cross-origin (ports locally, subdomains in prod). `@fastify/cors` with `credentials: true`, origin from `WEB_URL`. Removing it hangs every browser auth call (found by e2e).
 - **Pre-hydration guard**: root sets `data-hydrated` on `<html>`; e2e waits for it. Submitting a form before hydration triggers a native GET submit (credentials in URL).
