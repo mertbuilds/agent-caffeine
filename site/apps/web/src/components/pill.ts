@@ -5,7 +5,9 @@ const LESS_MOTION = '@media (prefers-reduced-motion: reduce)';
 
 /**
  * The pill of the site's actions. Apply `pill.base` with one size and a look,
- * such as `pill.ink` for the main action on the page's ground.
+ * such as `pill.ink` for the main action on the page's ground. On the blue
+ * pricing card, `pill.onBrand` takes the place of `pill.base`, with
+ * `pill.brand` or `pill.brandOutline`.
  */
 export const pill = create({
   base: {
@@ -18,6 +20,21 @@ export const pill = create({
     transitionDuration: motion.durationQuick,
     transitionProperty: { default: 'opacity', [LESS_MOTION]: 'none' },
     transitionTimingFunction: motion.easeSmoothOut,
+  },
+  brand: {
+    backgroundColor: 'white',
+    boxShadow: {
+      ':hover': '0 6px 16px -4px rgba(8, 30, 90, 0.45)',
+      default: '0 1px 2px rgba(8, 30, 90, 0.25)',
+    },
+    color: colors.brandDeep,
+  },
+  brandOutline: {
+    boxShadow: {
+      ':hover': 'inset 0 0 0 1px #ffffff',
+      default: 'inset 0 0 0 1px rgba(255, 255, 255, 0.55)',
+    },
+    color: 'white',
   },
   compact: {
     fontSize: '0.8rem',
@@ -34,6 +51,18 @@ export const pill = create({
     lineHeight: text.baseLeading,
     paddingBlock: spacing.s3,
     paddingInline: spacing.s6,
+  },
+  onBrand: {
+    borderRadius: radius.full,
+    display: 'inline-block',
+    flexShrink: 0,
+    fontWeight: fontWeight.medium,
+    outlineColor: { ':focus-visible': 'white', default: null },
+    textDecorationLine: 'none',
+    transform: { ':hover': { default: 'translateY(-1px)', [LESS_MOTION]: 'none' }, default: null },
+    transitionDuration: motion.durationQuick,
+    transitionProperty: { default: 'transform, box-shadow', [LESS_MOTION]: 'none' },
+    transitionTimingFunction: motion.easeSmoothOut,
   },
   small: {
     fontSize: text.sm,

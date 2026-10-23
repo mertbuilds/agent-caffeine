@@ -10,8 +10,9 @@ export default {
     'apps/web': {
       // Generated src/paraglide and routeTree.gen.ts need no ignore: knip skips gitignored files.
       entry: ['src/routes/**/*.{ts,tsx}', 'cloudflare.config.ts'],
-      // project.inlang/settings.json loads it from node_modules by path.
-      ignoreDependencies: ['@inlang/plugin-message-format'],
+      // project.inlang/settings.json loads it from node_modules by path. `cloudflare:workers`
+      // is the Workers runtime's own module, not a package.
+      ignoreDependencies: ['@inlang/plugin-message-format', 'cloudflare'],
       // The plugin calls the config with command "build" and mode "development", which
       // vite.config.ts refuses on purpose. It stays an entry via tsconfig.node.json.
       vite: false,
