@@ -354,7 +354,7 @@
   "privacy_site_download": "When you download the app, the site also counts the download on the server, with no cookie: the version, where on the page the button was, the source of the link that brought you here, and the country and the kind of browser, taken from your IP address and user agent.",
   "privacy_site_source": "If the link that brought you here names its source (for example `utm_source`), your browser keeps that source until you close the tab. The page view and the download count carry it, and the checkout link passes it to Polar, so I can see which link led to a download or an order.",
   "privacy_site_theme": "If you pick a light or dark theme, the choice is kept in your browser's local storage. It never leaves your browser.",
-  "privacy_site_hosts": "Vercel serves this site, and Cloudflare sits in front of it and stores the app downloads. Both see the IP address of each request, as any host does.",
+  "privacy_site_hosts": "Cloudflare serves this site and stores the app downloads. It sees the IP address of each request, as any host does.",
   "privacy_email_heading": "Email",
   "privacy_email": "If you write to me, I keep the conversation so I can answer you.",
   "privacy_rights_heading": "How long I keep it, and your rights",
