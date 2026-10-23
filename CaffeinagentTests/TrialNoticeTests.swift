@@ -16,6 +16,10 @@ final class TrialNoticeTests: XCTestCase {
             (.licensed, [], nil),
             (.expired(.unverified), [], nil),
             (.expired(.activationRemoved), [], nil),
+            // A key that does not cover this version is told once, and
+            // never as the end of a trial.
+            (.expired(.updatesEnded(coveredUntil: Date(timeIntervalSince1970: 0))), [.endsSoon, .ended], .updatesEnded),
+            (.expired(.updatesEnded(coveredUntil: Date(timeIntervalSince1970: 0))), [.updatesEnded], nil),
         ]
         for (entitlement, told, want) in cases {
             XCTAssertEqual(TrialNotice.due(entitlement: entitlement, told: told), want, "\(entitlement) \(told)")
@@ -50,6 +54,10 @@ final class TrialNoticeTests: XCTestCase {
         XCTAssertEqual(
             PanelText.notification(.ended, end: today, now: now, calendar: calendar),
             "Your Agent Caffeine trial has ended. Agent Caffeine does not keep your Mac awake until you enter a license key."
+        )
+        XCTAssertEqual(
+            PanelText.notification(.updatesEnded, end: today, now: now, calendar: calendar),
+            "\(LicenseRules.coveredUntil(today)) Older versions keep working with your key. This version needs a new key."
         )
     }
 

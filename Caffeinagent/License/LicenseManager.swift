@@ -276,17 +276,11 @@ final class LicenseManager: ObservableObject {
 
     /// The end of the year of updates of the key that is activated here.
     /// Nil without an activation or before Polar said when it was bought.
-    var updatesEnd: Date? {
-        guard record.activationID != nil, let purchased = record.purchased else { return nil }
-        return UpdateWindow.end(purchased: purchased)
-    }
+    var updatesEnd: Date? { UpdateWindow.end(of: record) }
 
     /// The key that is activated here does not run this build: it was
     /// released after the year of updates of the key.
-    var keyTooOldForThisBuild: Bool {
-        guard record.activationID != nil else { return false }
-        return !UpdateWindow.covers(release: release, purchased: record.purchased)
-    }
+    var keyTooOldForThisBuild: Bool { UpdateWindow.keyTooOld(record, release: release) }
 
     private var currentTime: Date {
         LicenseRules.effectiveNow(now(), latestSeen: record.latestSeen)
@@ -345,6 +339,8 @@ final class LicenseManager: ObservableObject {
             record.key = loaded.key ?? record.key
             record.activationID = loaded.activationID
             record.lastValidated = loaded.lastValidated
+            record.purchased = loaded.purchased
+            record.macLimit = loaded.macLimit
         }
         record.trialStart = Self.earliest(record.trialStart, loaded.trialStart)
         record.latestSeen = Self.latest(record.latestSeen, loaded.latestSeen)

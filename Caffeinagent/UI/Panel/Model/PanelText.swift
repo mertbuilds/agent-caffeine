@@ -390,12 +390,17 @@ enum PanelText {
         return "tomorrow"
     }
 
+    /// - Parameter end: the end of the trial, and for `.updatesEnded` the
+    ///   end of the year of updates of the key.
     static func notification(_ notice: TrialNotice, end: Date?, now: Date, calendar: Calendar = .current) -> String {
         switch notice {
         case .endsSoon:
             return "Your Agent Caffeine trial ends \(trialEndDay(end, now: now, calendar: calendar)). After that it does not keep your Mac awake without a license key."
         case .ended:
             return "Your Agent Caffeine trial has ended. Agent Caffeine does not keep your Mac awake until you enter a license key."
+        case .updatesEnded:
+            guard let end else { return "\(keyDoesNotCoverThisVersion). \(olderVersionsKeepWorking)" }
+            return "\(LicenseRules.coveredUntil(end)) \(olderVersionsKeepWorking)"
         }
     }
 

@@ -1,18 +1,23 @@
 import Foundation
 
-/// The two notifications about the trial. Like the ones about a safety
-/// stop they have no switch: nobody should find out from a Mac that slept.
+/// The notifications about the trial, and the one about a key that does
+/// not cover this version. Like the ones about a safety stop they have no
+/// switch: nobody should find out from a Mac that slept.
 enum TrialNotice: String, CaseIterable {
     /// The last 24 hours of the trial began.
     case endsSoon
     case ended
+    /// The trial ended, and the key bought before does not cover this
+    /// version. Told in place of `ended`: the user paid.
+    case updatesEnded
 
     /// The notice to tell the user about, nil for none. Each is told
     /// once, and the caller remembers which.
     static func due(entitlement: Entitlement, told: Set<TrialNotice>) -> TrialNotice? {
         switch entitlement {
         case .trial(let daysLeft) where daysLeft <= 1: return told.contains(.endsSoon) ? nil : .endsSoon
-        case .expired(.trialOver), .expired(.updatesEnded): return told.contains(.ended) ? nil : .ended
+        case .expired(.trialOver): return told.contains(.ended) ? nil : .ended
+        case .expired(.updatesEnded): return told.contains(.updatesEnded) ? nil : .updatesEnded
         case .trial, .licensed, .expired: return nil
         }
     }

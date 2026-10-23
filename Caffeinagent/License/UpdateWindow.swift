@@ -30,11 +30,26 @@ enum UpdateWindow {
         return date <= windowEnd
     }
 
-    /// The end Sparkle filters by: the year of updates of the key that runs
-    /// this Mac. Nil, so every update is offered, in the trial and without
-    /// a license: a key bought later decides.
-    static func sparkleWindowEnd(entitlement: Entitlement, updatesEnd: Date?) -> Date? {
-        entitlement == .licensed ? updatesEnd : nil
+    /// The end of the year of updates of the key that is activated here.
+    /// Nil without an activation or before Polar said when it was bought.
+    static func end(of record: LicenseRecord) -> Date? {
+        guard record.activationID != nil, let purchased = record.purchased else { return nil }
+        return end(purchased: purchased)
+    }
+
+    /// The key that is activated here does not run a build released then.
+    static func keyTooOld(_ record: LicenseRecord, release: Date?) -> Bool {
+        guard record.activationID != nil else { return false }
+        return !covers(release: release, purchased: record.purchased)
+    }
+
+    /// The end Sparkle filters by: the year of updates of the key that is
+    /// activated here, also while a check is late or the trial runs. Nil,
+    /// so every update is offered, without an activation, and with a key
+    /// that does not cover this build: a new key decides.
+    static func sparkleWindowEnd(record: LicenseRecord, release: Date?) -> Date? {
+        guard !keyTooOld(record, release: release) else { return nil }
+        return end(of: record)
     }
 
     /// The release date of a build from its Info.plist value. Nil when it

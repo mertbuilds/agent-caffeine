@@ -195,6 +195,23 @@ final class LicenseManagerTests: XCTestCase {
         XCTAssertEqual(manager.record.activationID, "act-1")
     }
 
+    /// The purchase date and the number of Macs come back with the record
+    /// that could not be read at launch, and the next save keeps them.
+    func testAKeychainThatComesBackKeepsThePurchaseDate() async {
+        var stored = LicenseRecord(key: key, activationID: "act-1", lastValidated: t0, trialStart: t0 - 20 * day, macLimit: 3)
+        stored.purchased = t0 - 100 * day
+        store.record = stored
+        store.failLoad = true
+        let manager = makeManager()
+        XCTAssertNil(manager.record.purchased)
+
+        store.failLoad = false
+        _ = await manager.tick()?.value
+        XCTAssertEqual(manager.record.purchased, t0 - 100 * day)
+        XCTAssertEqual(store.record?.purchased, t0 - 100 * day)
+        XCTAssertEqual(store.record?.macLimit, 3)
+    }
+
     // MARK: Clock set back while the app runs
 
     /// Advances the measured clock a day at a time, with the wall clock

@@ -149,11 +149,20 @@ final class UpdateWindowTests: XCTestCase {
         XCTAssertTrue(UpdateWindow.offers(updateDated: end + 900 * day, windowEnd: nil), "No window: every update")
     }
 
-    func testOnlyALicensedMacHasAWindowForSparkle() {
-        XCTAssertEqual(UpdateWindow.sparkleWindowEnd(entitlement: .licensed, updatesEnd: end), end)
-        XCTAssertNil(UpdateWindow.sparkleWindowEnd(entitlement: .licensed, updatesEnd: nil))
-        XCTAssertNil(UpdateWindow.sparkleWindowEnd(entitlement: .trial(daysLeft: 3), updatesEnd: end), "The trial gets every update")
-        XCTAssertNil(UpdateWindow.sparkleWindowEnd(entitlement: .expired(.trialOver), updatesEnd: nil))
-        XCTAssertNil(UpdateWindow.sparkleWindowEnd(entitlement: .expired(.updatesEnded(coveredUntil: end)), updatesEnd: end))
+    /// The window comes from the key, not from the entitlement of the
+    /// moment: a late check or the trial does not open it.
+    func testTheWindowForSparkleComesFromTheActivatedKey() {
+        var record = LicenseRecord(key: "k", activationID: "a", lastValidated: bought)
+        record.purchased = bought
+        XCTAssertEqual(UpdateWindow.sparkleWindowEnd(record: record, release: bought + day), end)
+        XCTAssertEqual(UpdateWindow.sparkleWindowEnd(record: record, release: nil), end)
+        record.lastValidated = nil
+        XCTAssertEqual(UpdateWindow.sparkleWindowEnd(record: record, release: bought + day), end, "A check that is late")
+        XCTAssertNil(UpdateWindow.sparkleWindowEnd(record: record, release: end + day), "A key that does not cover this build")
+        record.purchased = nil
+        XCTAssertNil(UpdateWindow.sparkleWindowEnd(record: record, release: bought + day), "No purchase date yet")
+        record.purchased = bought
+        record.activationID = nil
+        XCTAssertNil(UpdateWindow.sparkleWindowEnd(record: record, release: bought + day), "No activation: every update")
     }
 }

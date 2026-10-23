@@ -982,7 +982,9 @@ final class StateAggregator: ObservableObject {
         TrialNoticeStore.save(trialNoticesTold, to: defaults)
         Notifier.log.notice("\(notice.logLine, privacy: .public)")
         testNotices.note(.trial, at: now)
-        notify(PanelText.notification(notice, end: license.trialEnd, now: now))
+        var end = license.trialEnd
+        if case .expired(.updatesEnded(let until)) = entitlement { end = until }
+        notify(PanelText.notification(notice, end: end, now: now))
     }
 
     /// An agent that waits for the user or finished, as a notification.

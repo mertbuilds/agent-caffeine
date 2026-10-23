@@ -40,11 +40,12 @@ final class Updater: ObservableObject {
         controller.updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
         if let license {
-            license.$entitlement.combineLatest(license.$record)
-                .sink { [updaterDelegate] entitlement, _ in
-                    updaterDelegate.windowEnd = UpdateWindow.sparkleWindowEnd(
-                        entitlement: entitlement, updatesEnd: license.updatesEnd
-                    )
+            // From the record that is sent: in the sink the property still
+            // holds the one before.
+            let release = license.release
+            license.$record
+                .sink { [updaterDelegate] record in
+                    updaterDelegate.windowEnd = UpdateWindow.sparkleWindowEnd(record: record, release: release)
                 }
                 .store(in: &cancellables)
         }
