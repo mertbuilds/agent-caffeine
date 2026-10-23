@@ -26,6 +26,7 @@ enum NoAlarmReason: Equatable {
     case safetyStop
     case switchedOff
     case paused
+    case notEntitled
     /// On battery, with "only on power" on.
     case onBattery
     /// On battery with the battery floor off: nothing would stop a Mac
@@ -61,6 +62,7 @@ struct JobPlanContext: Equatable {
     /// The main switch of Agent Caffeine.
     var enabled = true
     var pausedUntil: Date?
+    var entitlement: Entitlement?
     var safety: SafetyStop?
     var onBattery = false
     /// Nil on a Mac without a battery, and when it could not be read.
@@ -135,6 +137,7 @@ enum JobPlanner {
         if context.safety != nil { return .safetyStop }
         guard context.enabled else { return .switchedOff }
         if let pausedUntil = context.pausedUntil, now < pausedUntil { return .paused }
+        if case .expired? = context.entitlement { return .notEntitled }
         if let reason = batteryStop(settings: settings, context: context) { return reason }
         if context.wakesInLastDay >= settings.maxWakesPerDay { return .dailyLimit }
         return nil

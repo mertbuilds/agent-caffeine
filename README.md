@@ -2,16 +2,22 @@
 
 Agent Caffeine is a macOS menu bar app that keeps your Mac awake while AI coding agents work, and lets it sleep when they are done. Start a long task in Claude Code, Codex, Cursor or another agent, close the lid, and come back to finished work.
 
-It is free and open source. There is no license key, no account and no price. If it helps you, you can [support the project](https://caffeinagent.com/support?utm_source=github&utm_medium=readme) with an amount you choose.
+This private repository holds the app and its website, [caffeinagent.com](https://caffeinagent.com/). The website is in [`site/`](site/). This file is for whoever builds, tests and releases the app: what it does, how it is built and tested, how a release is made, and how the license works.
 
-This repository holds the app and its website, [caffeinagent.com](https://caffeinagent.com/?utm_source=github&utm_medium=readme). The website is in [`site/`](site/).
+The app is sold: a lifetime key with one year of updates, after a 7-day trial (see Licensing). It ships as a disk image from caffeinagent.com and through the Homebrew cask `mertbuilds/tap/agent-caffeine`. It needs macOS 13 or later, on Apple silicon or Intel, and updates itself from caffeinagent.com.
 
-## Install
+## Licensing
 
-- Download the disk image from [caffeinagent.com](https://caffeinagent.com/?utm_source=github&utm_medium=readme), open it and drag Agent Caffeine to Applications.
-- Or with Homebrew: `brew install --cask mertbuilds/tap/agent-caffeine`
+The decision and its reasons are in [`docs/adr/0003-paid-again.md`](docs/adr/0003-paid-again.md). The code is in `Caffeinagent/License/`.
 
-It needs macOS 13 or later, on Apple silicon or Intel. The app updates itself from caffeinagent.com.
+- One product on Polar, organization `mertbuilds`: a lifetime key that runs on 3 Macs. The price is on the site, and the app only opens the checkout link (`LicenseConfig`). Keys have the prefix `AGENTCAF`. Keys of the earlier products (1 Mac and 3 Macs) keep working. The product has only the license key benefit and no file to download: buyers download the app from caffeinagent.com, and a release publishes nothing to Polar.
+- The trial runs 7 days from the first launch of a paid build. Its start is kept in the login Keychain with the key, and mirrored in the settings, so a reinstall does not restart it, and a clock set back gives no time back. Someone who comes from a free 1.1.x build or a paid 1.0.x build gets a full trial: the trial of the paid builds is stored under new names (`trialStart2`, `License.trialStart2`, `TrialNotice.told2`). A notification comes on the last day of the trial and at its end, with or without the icon in the menu bar.
+- A key is activated on a Mac through Polar's customer portal endpoints, which need no token. The app sends the key, the organization id and the model of the Mac (`MacBookPro18,3`), never its name. It checks the activation once a day. A Mac whose check fails stays licensed for 30 days, then stops until the check works again.
+- Year of updates: a key runs every build released within 365 days of its purchase, for ever. The purchase date is the `created_at` of the key in Polar's answers to the activation and to each check. The release date is `ACReleaseDate` in Info.plist, which `scripts/release.sh` sets (see Releases). A later build counts the key as none: the trial runs, then the app stops, and the menu and Settings > License say until when the key covers and offer a new key. Older builds keep working with the key. A key with no purchase date yet, or a build with no release date (a build made without the release script), counts as covered.
+- Sparkle offers a licensed Mac no update with a `pubDate` after the end of its year (`UpdateWindowDelegate` in `Caffeinagent/Updater.swift`). Settings > License says until when the updates come, and quietly that they ended. In the trial and without a key every update is offered. The rules are `Caffeinagent/License/UpdateWindow.swift`.
+- Without a license, Agent Caffeine holds nothing: the switch, a pause and the safety stops come first, then the license. The menu says why, with "Buy a key" and "Enter license key…", and the gear menu has the license items.
+- A Debug build talks to Polar's sandbox and keeps its record in a Keychain item of its own, so a test never touches a real key.
+- `scripts/actest` checks the license before a run, and its manual rows for the trial, the key and the year of updates are in `scripts/actest/LAYER2.md`.
 
 ## What it does
 
@@ -178,11 +184,11 @@ Builds before the helper used a sudoers entry for `pmset -b disablesleep`. The a
 
 ## Privacy
 
-Agent Caffeine makes one kind of network request: it asks caffeinagent.com for updates, once a day and when you press "Check for updates…". It sends nothing about you or your agents, and it has no analytics. What it reads of an agent (its state, the name of its session for the menu) stays on the Mac.
+Agent Caffeine makes two kinds of network request: it asks caffeinagent.com for updates, once a day and when you press "Check for updates…", and it activates and checks the license key with Polar, once a day. It sends the key and the model of the Mac, and nothing about you or your agents. It has no analytics. What it reads of an agent (its state, the name of its session for the menu) stays on the Mac.
 
 "Join your iPhone hotspot" asks for Location Services only because macOS shows the names of Wi-Fi networks with it. Agent Caffeine reads no location and keeps none. The name of your hotspot is in the settings of the app and its password in your login Keychain. No network name and no password is logged, recorded or sent, and the state for the tests has neither.
 
-## Build from source
+## Build
 
 You need Xcode 16 or later and [XcodeGen](https://github.com/yonaskolb/XcodeGen). The deployment target is macOS 13.
 
@@ -195,11 +201,11 @@ open build/Build/Products/Debug/caffeinagent.app
 
 Xcode names the build product `caffeinagent.app`. `scripts/release.sh` copies it to `Agent Caffeine.app` for the disk image, and that is the name of a new install.
 
-A Debug build is signed ad hoc and needs no Apple account. Two things do not work in it, by design: the helper refuses it, so a closed lid on battery and "Wake for jobs" do not work, and the updater never starts. A fork that wants them needs its own Developer ID, bundle ids and update key: [CONTRIBUTING.md](CONTRIBUTING.md) lists every value to change.
+A Debug build is signed ad hoc and needs no Apple account. Two things do not work in it, by design: the helper refuses it, so a closed lid on battery and "Wake for jobs" do not work, and the updater never starts. Its license talks to Polar's sandbox.
 
 ## Tests
 
-- The unit tests: `xcodebuild test -project Caffeinagent.xcodeproj -scheme Caffeinagent -destination 'platform=macOS'`. They compile the logic files directly and never start the app, so they touch no power setting, no helper and no Keychain.
+- The unit tests: `xcodebuild test -project Caffeinagent.xcodeproj -scheme Caffeinagent -destination 'platform=macOS'`. They compile the logic files directly and never start the app, so they touch no power setting, no helper, no Keychain and no Polar.
 - The smoke test: `scripts/smoke-test.sh`. The unit tests pass on a build that hangs at launch, so no release is made without it. It builds the app and starts it for 14 seconds as `caffeinagent --smoke-test 14`: the real scenes, the real aggregator and the real engine, with no power assertion, helper, Keychain, Sparkle or notification behind them, and with settings of its own, so it is safe next to the copy you use. It hides and shows the icon and opens Settings once in its first seconds, takes no click, and fails when the main thread stalls, the app uses 15% of a core or more in the median steady second (the seconds after the first 2, without the ones of those two steps) or 40% or more over the steady seconds, the scenes are worked out more than 50 times per second, the menu bar has no icon or the engine takes no sample. For its last 6 seconds it shows the views of the menu in a window that is on no screen, with a robot that floats and agents at work, and fails when the app uses 12% of a core or more in the median of those seconds: the motion of the menu runs in Core Animation and costs the app next to nothing, and a motion that the app works out for each frame takes 20% or more. It prints what it measured as one line of JSON, then PASS or FAIL. `scripts/smoke-test.sh --app <path>` tests a bundle that is built already, and `scripts/release.sh` runs it on the signed app and stops when it fails, also with `--dry-run`.
 - The test runner for the real app: `scripts/actest`. It guides a person through tests on a real Mac (close the lid, pull the charger, send a prompt to an agent), sees what it can by itself, records, judges and cleans up. It uses no sudo and never changes a power setting. See [scripts/actest/README.md](scripts/actest/README.md). Its own tests run with `cd scripts/actest && python3 -m unittest discover -s selftest -t .`.
 
@@ -207,35 +213,66 @@ A Debug build is signed ad hoc and needs no Apple account. Two things do not wor
 
 The app updates itself with [Sparkle](https://sparkle-project.org). It reads the feed at `https://caffeinagent.com/mac/appcast.xml` once a day, and from "Check for updates…" in Settings. Debug builds never check.
 
-- `scripts/release.sh` is the only way to publish a release. It builds, signs, notarizes, writes the dmg, signs it for Sparkle, adds it to the appcast, uploads the dmg, `appcast.xml` and `latest.json` to `mac/` in the R2 bucket the site serves (named in `~/.config/agent-caffeine/release.env`, public to read at `https://files.caffeinagent.com`). `--dry-run` does everything local and uploads and notarizes nothing. A release stops at the start when the working tree has changes that are not committed (`--dry-run --allow-dirty` builds them all the same, and `scripts/build-on-request.sh` uses that), runs the unit tests before it builds, and asks Gatekeeper (`spctl`) about the notarized app and the dmg before the first upload. The header of the script lists the one-time setup.
-- The workflow `.github/workflows/mac-release.yml` runs the same script on GitHub Actions when a push to `main` raises the build number, after the owner approves the run. "Run workflow" starts a dry run by hand. See "Release" in [CONTRIBUTING.md](CONTRIBUTING.md).
+- `scripts/release.sh` is the only way to publish a release. It takes the time of the release once, in UTC, builds the app with it as `ACReleaseDate` in Info.plist (the build setting `AC_RELEASE_DATE`) and stops when the built app does not carry it, and gives the dmg the same time, so the `pubDate` that `generate_appcast` writes is the same date. It builds, signs, notarizes, writes the dmg, signs it for Sparkle, adds it to the appcast, uploads the dmg, `appcast.xml` and `latest.json` to `mac/` in the R2 bucket the site serves (named in `~/.config/agent-caffeine/release.env`, public to read at `https://files.caffeinagent.com`). `--dry-run` does everything local and uploads and notarizes nothing. A release stops at the start when the working tree has changes that are not committed (`--dry-run --allow-dirty` builds them all the same, and `scripts/build-on-request.sh` uses that), runs the unit tests before it builds, and asks Gatekeeper (`spctl`) about the notarized app and the dmg before the first upload. The header of the script lists the one-time setup.
+- The workflow `.github/workflows/mac-release.yml` runs the same script on GitHub Actions when a push to `main` raises the build number, after the owner approves the run. "Run workflow" starts a dry run by hand. See "Release" below.
 - Updates are signed with the EdDSA key in the login keychain under the account `agent-caffeine`. Its public half is `SUPublicEDKey` in `project.yml`. Every Sparkle tool call passes `--account agent-caffeine`, or, in the workflow, the same key as a file.
 - On the Mac, run the script from a local Terminal: the keychain refuses SSH and scripted sessions.
 - The app and its helper are signed with the Developer ID of the owner (team `3HGP3W3TLD`) and notarized by Apple. The helper takes calls only from an app that this team signed.
 - Each release is built from one commit of this repository, and that commit has the tag of the version (`v1.1.0`). The GitHub release of the tag links the dmg on the site and gives its sha256.
-- The license of the app, `THIRD_PARTY_NOTICES.md` and the texts in `Resources/Licenses/` are bundled into the app.
+- `THIRD_PARTY_NOTICES.md` and the texts in `Resources/Licenses/` are bundled into the app. Settings > About opens the notices.
 
 ## Names
 
 The brand is Agent Caffeine, with both words capitalised, in every text people read. The app bundle is `Agent Caffeine.app` from 1.0.2. It was `agent caffeine.app` in 1.0.0 and 1.0.1, and an update keeps the name of the bundle it replaces, so both names are installed and both are supported: see `AppInstall`. `caffeinagent` is the name of the binary, the bundle id and the domain, and the Xcode target and source folder are `Caffeinagent`.
 
+## Style
+
+- Plain, simple English in comments, commit messages and every text people read. No em dashes.
+- The brand is written "Agent Caffeine".
+- A change of behaviour comes with a test.
+- A change of the text of the skill (`skills/agent-caffeine/SKILL.md`) needs a new `SkillCatalog.version` and its digest in `SkillTextTests`. The texts of released plugin files in `HookPluginHistory` never change.
+
+## Release
+
+Only the owner releases. `scripts/release.sh` is the one release path. It builds, signs, notarizes and staples the app, makes the dmg, signs the update for Sparkle and writes `appcast.xml` and `latest.json`. Then it uploads the dmg first and the two feeds last to the bucket, under `mac/`, and checks on `https://files.caffeinagent.com/mac/` that the dmg has the same size and sha256 and that the appcast lists the build. Each upload is live at once.
+
+The workflow `.github/workflows/mac-release.yml` runs the same script on GitHub Actions:
+
+1. Write the notes in `release-notes/<version>.md`.
+2. Raise `CURRENT_PROJECT_VERSION` in `project.yml` (and `MARKETING_VERSION` for a new version), and push to `main`.
+3. The job `detect` compares the build with the highest build in `https://files.caffeinagent.com/mac/appcast.xml`. When it is higher, the job `release` waits for the approval of the environment `mac-release`.
+4. Before you approve, you can start a dry run: Actions, "Mac release", "Run workflow" on `main`, with "dry run" on (the default). It does everything but the uploads, notarization included, and keeps the dmg, `appcast.xml` and `latest.json` as an artifact of the run for 7 days.
+5. Approve the real run. After the upload it writes the tag `v<version>` and a GitHub release with the notes, the link to the dmg and its sha256. A new build of a version that already has its tag leaves the tag where it is and shows a warning. With `HOMEBREW_TAP_TOKEN` set it also bumps the cask in `mertbuilds/homebrew-tap` with that repository's `scripts/bump-cask.sh`.
+
+"Run workflow" with "dry run" off is a real release, started by hand. Both kinds of run start only from `main`. A build that is not above the published one is never released.
+
+The workflow sets `SMOKE_TIMING=warn`: the smoke test prints its timing problems (run loop ticks, main thread stalls) as warnings, because a shared runner is too slow for them, and still fails on every part that does not work. Local runs stay `strict`.
+
+The environment `mac-release` needs a required reviewer, so that no run gets the keys without the owner's approval. It holds these secrets:
+
+| Secret | What |
+| --- | --- |
+| `MAC_DEVELOPER_ID_P12_BASE64` | The Developer ID Application certificate and its private key, as a .p12 file in base64 |
+| `MAC_DEVELOPER_ID_P12_PASSWORD` | The password of that .p12 file |
+| `MAC_NOTARY_API_KEY_P8_BASE64` | An App Store Connect API key for the notary service, the .p8 file in base64 |
+| `MAC_NOTARY_API_KEY_ID` | The id of that key |
+| `MAC_NOTARY_API_ISSUER_ID` | The issuer id of that key |
+| `MAC_SPARKLE_ED25519_PRIVATE_KEY` | The Sparkle private key of the account `agent-caffeine`, the text of the file that `generate_keys --account agent-caffeine -x <file>` writes |
+| `MAC_R2_S3_ACCESS_KEY_ID` | The S3 access key id of an R2 API token that can read and write the bucket |
+| `MAC_R2_S3_SECRET_ACCESS_KEY` | The S3 secret access key of that token |
+| `MAC_CLOUDFLARE_ACCOUNT_ID` | The Cloudflare account that holds the bucket |
+| `MAC_R2_BUCKET` | The name of the bucket. A secret, so that the log does not show it |
+| `HOMEBREW_TAP_TOKEN` | Optional. A token that can push to `mertbuilds/homebrew-tap`. Without it the cask is not bumped |
+
+A dry run never gets the R2 secrets or the tap token.
+
+On the Mac, `scripts/release.sh` works as before, with the keys in the login keychain, `cf` for the bucket and the bucket name in `~/.config/agent-caffeine/release.env`. `scripts/release.sh --dry-run` builds and signs but notarizes and uploads nothing. The header of the script lists the environment variables the workflow sets in their place. `release.env` can also hold `R2_S3_ACCESS_KEY_ID`, `R2_S3_SECRET_ACCESS_KEY`, `R2_S3_ENDPOINT`, `SPARKLE_ED_KEY_FILE` and `NOTARY_API_KEY_FILE`, `NOTARY_API_KEY_ID`, `NOTARY_API_ISSUER_ID`. With them a local release needs neither the `cf` login nor the keychain items. A variable set in the environment wins over the same one in the file.
+
 ## License
 
-Copyright (C) 2026 Mert Duzgun
+Copyright (c) 2026 Mert Düzgün. All rights reserved. See [LICENSE](LICENSE).
 
-This program is free software: you can redistribute it and/or modify it under the terms of the GNU Affero General Public License as published by the Free Software Foundation, version 3.
-
-This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more details.
-
-The full text is in [LICENSE](LICENSE). The SPDX identifier is `AGPL-3.0-only`. The app links to this source code from Settings > About.
-
-- The small files that Agent Caffeine writes into the folders of your agents (the hook lines, the opencode plugin, the Pi extension and the skill) may also be used under the MIT license, so they put no term of the AGPL on your agent configuration.
+- Versions up to 1.1.2 were released under the GNU Affero General Public License, version 3. They stay under it for whoever has them. Later versions are proprietary.
+- The small files that Agent Caffeine writes into the folders of your agents (the hook lines, the opencode plugin, the Pi extension and the skill) may also be used under the MIT license, so they put no term of the license of the app on your agent configuration.
 - What the app carries from other people, and under which licenses, is in [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).
-
-### Name and icon
-
-The source code is under the AGPL. The name Agent Caffeine, the app icon and the robot are not. A changed version that you give to other people must have another name and another icon. See [TRADEMARKS.md](TRADEMARKS.md).
-
-The agent names and logos are trademarks of their owners and are used only to identify those products.
-
-Contributions: [CONTRIBUTING.md](CONTRIBUTING.md). Security reports: [SECURITY.md](SECURITY.md).
+- The agent names and logos are trademarks of their owners and are used only to identify those products.

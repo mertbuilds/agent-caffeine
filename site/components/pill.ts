@@ -10,7 +10,7 @@ export const PILL =
 const ON_BRAND =
   "inline-block shrink-0 rounded-full font-medium no-underline transition-[transform,box-shadow] duration-quick ease-smooth-out focus-visible:outline-white hover:-translate-y-px motion-reduce:transition-none motion-reduce:hover:translate-y-0";
 
-/** Pills for the blue card. */
+/** Pills for the blue pricing card. */
 export const BRAND_VARIANTS = {
   brand: (size: keyof typeof SIZES) =>
     `${ON_BRAND} bg-white text-brand-deep shadow-[0_1px_2px_rgba(8,30,90,0.25)] hover:shadow-[0_6px_16px_-4px_rgba(8,30,90,0.45)] ${SIZES[size]}`,

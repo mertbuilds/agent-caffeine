@@ -19,6 +19,12 @@ final class PanelBatteryTests: XCTestCase {
         var paused = input(.paused(until: Date(timeIntervalSince1970: 2_000_000)))
         paused.pausedUntil = Date(timeIntervalSince1970: 2_000_000)
         XCTAssertNil(MenuModel.battery(paused))
+        var expired = input(.notEntitled(.trialOver))
+        expired.entitlement = .expired(.trialOver)
+        XCTAssertNil(MenuModel.battery(expired))
+        var trial = input()
+        trial.entitlement = .trial(daysLeft: 3)
+        XCTAssertNotNil(MenuModel.battery(trial))
         // The state of the menu carries it.
         XCTAssertEqual(MenuModel.state(input(), now: Date()).battery, MenuModel.battery(input()))
         XCTAssertNil(MenuModel.state(input(onBattery: false), now: Date()).battery)

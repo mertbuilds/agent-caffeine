@@ -21,12 +21,12 @@ final class JobHoldPolicyTests: XCTestCase {
 
     private func decide(
         _ jobs: [JobHold], holds: [ManualHold] = [], readings: [AgentReading] = [], at seconds: TimeInterval = 0, enabled: Bool = true,
-        pausedUntil: Date? = nil, safety: SafetyStop? = nil,
+        pausedUntil: Date? = nil, entitlement: Entitlement? = .licensed, safety: SafetyStop? = nil,
         settings: DetectionSettings = DetectionSettings(), mayHold: Bool = true, jobsMayHold: Bool? = nil
     ) -> HoldDecision {
         HoldPolicy.decide(
             readings: readings, memory: PolicyMemory(), mode: .agentWorking, enabled: enabled, pausedUntil: pausedUntil, holds: holds,
-            jobHolds: jobs, safety: safety, settings: settings, context: FrameContext(), mayHold: mayHold,
+            jobHolds: jobs, entitlement: entitlement, safety: safety, settings: settings, context: FrameContext(), mayHold: mayHold,
             jobsMayHold: jobsMayHold, now: at(seconds)
         ).0
     }
@@ -51,6 +51,7 @@ final class JobHoldPolicyTests: XCTestCase {
             (decide(jobs, safety: .tooHot), .safetyStop(.tooHot)),
             (decide(jobs, enabled: false), .switchedOff),
             (decide(jobs, pausedUntil: at(3600)), .paused(until: at(3600))),
+            (decide(jobs, entitlement: .expired(.trialOver)), .notEntitled(.trialOver)),
         ]
         for (decision, headline) in stops {
             XCTAssertFalse(decision.hold, "\(headline)")

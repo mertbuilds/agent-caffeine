@@ -2,7 +2,7 @@
 title: "Keep your Mac awake while a command runs"
 description: "Keep a Mac awake until a build, a render or a backup ends: caffeinate -i in front of the command, its limit with the lid closed, and agent-caffeine hold."
 date: "2026-10-09"
-updated: "2026-10-12"
+updated: "2026-10-23"
 faq:
   - q: "How do I keep my Mac awake until a command finishes?"
     a: "Put `caffeinate -i` in front of it, for example `caffeinate -i npm run build`. The Mac does not idle sleep while the command runs, and normal sleep comes back when the command ends."
@@ -117,7 +117,7 @@ For one long command, the form `agent-caffeine hold -- <command>` is the better 
 - A closed lid on battery, or a job you leave alone for hours: `agent-caffeine hold -- <command>`, because it stops at a low battery and for heat.
 - A coding agent that runs long commands: the skill, so the agent asks by itself.
 
-Agent Caffeine is free and open source, and needs macOS 13 or later. The command line tool, the skill and the MCP server are in version 1.0.1 and later. If caffeinate covers your case, use caffeinate.
+Agent Caffeine has a 7-day free trial, then costs {{price}} once, and needs macOS 13 or later. The command line tool, the skill and the MCP server are in version 1.0.1 and later. If caffeinate covers your case, use caffeinate.
 
 <!-- faq -->
 

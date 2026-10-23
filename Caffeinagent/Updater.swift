@@ -10,10 +10,14 @@ final class Updater: ObservableObject {
 
     /// Nil in the smoke test, which runs the app without Sparkle.
     private let controller: SPUStandardUpdaterController?
-    // Sparkle holds its user driver delegate weakly.
+    // Sparkle holds its delegates weakly.
     private let userDriverDelegate: DockIconUserDriverDelegate
+    private let updaterDelegate = UpdateWindowDelegate()
+    private var cancellables: Set<AnyCancellable> = []
 
-    init() {
+    /// - Parameter license: its key's year of updates limits what Sparkle
+    ///   offers. Nil offers every update.
+    init(license: LicenseManager? = nil) {
         // A Debug build has no feed of its own, so it never starts the updater
         // and never checks.
         #if DEBUG
@@ -29,12 +33,22 @@ final class Updater: ObservableObject {
         }
         let controller = SPUStandardUpdaterController(
             startingUpdater: startUpdater,
-            updaterDelegate: nil,
+            updaterDelegate: updaterDelegate,
             userDriverDelegate: userDriverDelegate
         )
         self.controller = controller
         controller.updater.publisher(for: \.canCheckForUpdates)
             .assign(to: &$canCheckForUpdates)
+        if let license {
+            // From the record that is sent: in the sink the property still
+            // holds the one before.
+            let release = license.release
+            license.$record
+                .sink { [updaterDelegate] record in
+                    updaterDelegate.windowEnd = UpdateWindow.sparkleWindowEnd(record: record, release: release)
+                }
+                .store(in: &cancellables)
+        }
     }
 
     /// The app is usually not active when the button is clicked, and Sparkle's
@@ -42,6 +56,27 @@ final class Updater: ObservableObject {
     func checkForUpdates() {
         NSApp.activate(ignoringOtherApps: true)
         controller?.checkForUpdates(nil)
+    }
+}
+
+/// Offers only the updates released within the year of updates of the
+/// key: a later build would not run with it. Sparkle calls it on the main
+/// thread, where `windowEnd` is set.
+private final class UpdateWindowDelegate: NSObject, SPUUpdaterDelegate {
+    var windowEnd: Date?
+
+    /// Nil leaves the choice to Sparkle. Otherwise the newest item of the
+    /// window, or none when that is not newer than this build.
+    func bestValidUpdate(in appcast: SUAppcast, for updater: SPUUpdater) -> SUAppcastItem? {
+        guard let windowEnd else { return nil }
+        let comparator = SUStandardVersionComparator.default
+        let allowed = appcast.items.filter { UpdateWindow.offers(updateDated: $0.date, windowEnd: windowEnd) }
+        let best = allowed.max { comparator.compareVersion($0.versionString, toVersion: $1.versionString) == .orderedAscending }
+        let current = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+        guard let best, comparator.compareVersion(best.versionString, toVersion: current) == .orderedDescending else {
+            return .empty()
+        }
+        return best
     }
 }
 

@@ -1,62 +1,36 @@
 "use client";
 
+import Link from "next/link";
 import { useSyncExternalStore, type ReactNode } from "react";
+import { checkoutUrlWith } from "@/lib/attribution";
 import { downloadLink } from "@/lib/download";
+import { CHECKOUT_URL, PRICE_NOW } from "@/lib/pricing";
 import { isMacDevice, openSendToMac } from "@/lib/send-to-mac";
-import { REPO_URL } from "@/lib/site";
-import { rememberedUtm, track, type GitHubPlacement, type Placement, type SupportPlacement } from "@/lib/track";
+import { rememberedUtm, track, type Placement } from "@/lib/track";
 
 export type { Placement };
-
-/** The support section's link to GitHub Sponsors, counted in the browser with where it sits. */
-export function SupportCta({
-  href,
-  placement,
-  className,
-  children,
-}: {
-  href: string;
-  placement: SupportPlacement;
-  className?: string;
-  children: ReactNode;
-}) {
-  return (
-    <a href={href} onClick={() => track("support_click", { placement })} className={className}>
-      {children}
-    </a>
-  );
-}
-
-/** A link to the code on GitHub, in a tab of its own, counted in the browser with where it sits. */
-export function GitHubCta({
-  placement,
-  className,
-  "aria-label": label,
-  children,
-}: {
-  placement: GitHubPlacement;
-  className?: string;
-  "aria-label"?: string;
-  children: ReactNode;
-}) {
-  return (
-    <a
-      href={REPO_URL}
-      target="_blank"
-      rel="noreferrer"
-      aria-label={label}
-      onClick={() => track("github_clicked", { placement })}
-      className={className}
-    >
-      {children}
-    </a>
-  );
-}
 
 const subscribe = () => () => {};
 
 function onServer(): null {
   return null;
+}
+
+/**
+ * A link to the checkout. The click is counted with the price and where the link sits.
+ * The server's link is the plain checkout link. On the live site the browser then adds the visitor's source to it.
+ */
+export function BuyCta({ placement, className, children }: { placement: Placement; className?: string; children: ReactNode }) {
+  const utm = useSyncExternalStore(subscribe, rememberedUtm, onServer);
+  return (
+    <Link
+      href={utm === null ? CHECKOUT_URL : checkoutUrlWith(CHECKOUT_URL, utm)}
+      onClick={() => track("buy_click", { price: PRICE_NOW, placement })}
+      className={className}
+    >
+      {children}
+    </Link>
+  );
 }
 
 /**

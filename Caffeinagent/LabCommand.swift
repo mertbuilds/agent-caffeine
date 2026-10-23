@@ -2,7 +2,8 @@ import Darwin
 import Foundation
 
 /// The detection lab from the command line, until the app has a window for
-/// it. None of these starts the menu bar app or takes a power assertion.
+/// it. None of these starts the menu bar app, takes a power assertion or
+/// checks the license.
 ///
 ///     caffeinagent --lab-record <label>                 record until SIGINT or SIGTERM
 ///     caffeinagent --lab-mark <agent> <truth> [note]    mark the running recording

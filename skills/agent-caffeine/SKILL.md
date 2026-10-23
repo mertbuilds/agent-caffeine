@@ -56,7 +56,7 @@ agent-caffeine status --json
 
 ## Rules
 
-- A hold is a request. Agent Caffeine still lets the Mac sleep at a low battery, when the Mac gets too hot, and when the user paused it or switched it off. The tool then says so on stderr, and the hold counts when the stop ends. Read `status` if the answer matters. Do not try to work around a stop.
+- A hold is a request. Agent Caffeine still lets the Mac sleep at a low battery, when the Mac gets too hot, when the user paused it or switched it off, and when it has no license (its trial ended). The tool then says so on stderr, and the hold counts when the stop ends. Read `status` if the answer matters. Do not try to work around a stop.
 - With the lid closed on battery, the Mac stays awake only when the user has set up the helper of Agent Caffeine. Do not promise it.
 - If `hold --for` says that Agent Caffeine is not running, it made no hold. Tell the user. Do not start the app yourself, and do not use `caffeinate` or `pmset` in its place unless the user asks.
 - Give a short reason in plain words (for example "Test suite", "Video render"). The user sees it in the menu, cut to 80 characters. Do not put secrets, paths with private names or long text in it.

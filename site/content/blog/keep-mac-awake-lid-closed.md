@@ -2,7 +2,7 @@
 title: "How to keep a Mac awake with the lid closed, monitor or not"
 description: "Keep a MacBook awake with the lid closed: clamshell mode with a monitor, caffeinate on power, pmset disablesleep on battery, and how to turn each one off."
 date: "2026-10-08"
-updated: "2026-10-12"
+updated: "2026-10-23"
 faq:
   - q: "Can a MacBook stay awake with the lid closed without a monitor?"
     a: "Yes. On the power adapter, run `caffeinate -s` in Terminal before you close the lid. On battery, `sudo pmset -a disablesleep 1` is the only command that does it. Turn it off again with `sudo pmset -a disablesleep 0`."
@@ -156,7 +156,7 @@ A line for every minute means that the Mac stayed awake. A gap of several minute
 - On the power adapter a closed lid works from the start. On battery it needs a small helper that you allow once in System Settings.
 - It stops at a battery level, 20% by default, and when the Mac gets too hot. Then it lets the Mac sleep and tells you why in a notification.
 
-It is free and open source, and needs macOS 13 or later. If you do not run coding agents, the free methods above are the right ones. Our [guide on how to stop a Mac from sleeping](/blog/stop-mac-from-sleeping) covers the settings for an open lid.
+It has a 7-day free trial, then costs {{price}} once, and needs macOS 13 or later. If you do not run coding agents, the free methods above are the right ones. Our [guide on how to stop a Mac from sleeping](/blog/stop-mac-from-sleeping) covers the settings for an open lid.
 
 <!-- faq -->
 

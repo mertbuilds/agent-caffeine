@@ -85,19 +85,20 @@ enum HoldHeadline: Equatable {
     case switchedOff
     /// The user paused Agent Caffeine until this time.
     case paused(until: Date)
+    case notEntitled(ExpiredReason)
 
     var keepsAwake: Bool {
         switch self {
         case .working, .waitingHeld, .finishedRecently, .open, .alwaysOn, .remoteAccess, .reachable, .manualHold, .scheduledJob: return true
-        case .idle, .waitingReleased, .noAgents, .agentsStopped, .safetyStop, .switchedOff, .paused: return false
+        case .idle, .waitingReleased, .noAgents, .agentsStopped, .safetyStop, .switchedOff, .paused, .notEntitled: return false
         }
     }
 
-    /// A safety stop, the switch or a pause: the Mac can sleep whatever
-    /// asks for a hold.
+    /// A safety stop, the switch, a pause or the license: the Mac can
+    /// sleep whatever asks for a hold.
     var isStop: Bool {
         switch self {
-        case .safetyStop, .switchedOff, .paused: return true
+        case .safetyStop, .switchedOff, .paused, .notEntitled: return true
         default: return false
         }
     }
@@ -119,7 +120,7 @@ enum HoldHeadline: Equatable {
         // assertions of macOS and in the lab log.
         case .scheduledJob(.one): return "a scheduled job"
         case .scheduledJob(.many(let count)): return "\(count) scheduled jobs"
-        case .idle, .waitingReleased, .noAgents, .agentsStopped, .safetyStop, .switchedOff, .paused: return nil
+        case .idle, .waitingReleased, .noAgents, .agentsStopped, .safetyStop, .switchedOff, .paused, .notEntitled: return nil
         }
     }
 
@@ -138,6 +139,7 @@ enum HoldHeadline: Equatable {
         case .safetyStop(.tooHot): return "Sleeping allowed: the Mac is too hot"
         case .switchedOff: return "Mac can sleep: Agent Caffeine is off"
         case .paused: return "Mac can sleep: Agent Caffeine is paused"
+        case .notEntitled(let reason): return reason.text
         }
     }
 
@@ -197,7 +199,7 @@ enum HoldPolicy {
     static func decide(
         readings: [AgentReading], memory: PolicyMemory, mode: AwakeMode, enabled: Bool, pausedUntil: Date? = nil,
         reachableUntil: Date? = nil, holds: [ManualHold] = [], jobHolds: [JobHold] = [],
-        safety: SafetyStop?, settings: DetectionSettings, context: FrameContext, mayHold: Bool = true,
+        entitlement: Entitlement? = nil, safety: SafetyStop?, settings: DetectionSettings, context: FrameContext, mayHold: Bool = true,
         jobsMayHold: Bool? = nil, agentStop: AgentStop? = nil, now: Date
     ) -> (HoldDecision, PolicyMemory) {
         let memory = remember(readings, memory: memory, settings: settings, agentStop: agentStop, now: now)
@@ -212,7 +214,7 @@ enum HoldPolicy {
             let stopped = cause == nil ? nil : agentStop.flatMap { stops($0, reading) ? $0 : nil }
             return AgentHold(reading: reading, cause: stopped == nil ? cause : nil, stopped: stopped)
         }
-        if let stop = stopHeadline(enabled: enabled, pausedUntil: pausedUntil, safety: safety, now: now) {
+        if let stop = stopHeadline(enabled: enabled, pausedUntil: pausedUntil, entitlement: entitlement, safety: safety, now: now) {
             let released = perAgent.map { AgentHold(reading: $0.reading, cause: nil) }
             return (HoldDecision(hold: false, lidClosedFlag: false, headline: stop, perAgent: released, manualHolds: manual, jobHolds: jobs), memory)
         }
@@ -288,14 +290,19 @@ enum HoldPolicy {
         }.max()
     }
 
-    /// Safety comes first, then the switch, then a pause. A pause comes
-    /// after the switch, because a pause of an app that is off means
-    /// nothing. Every stop gives a decision without the sleep flag, so a
-    /// pause never leaves SleepDisabled on.
-    private static func stopHeadline(enabled: Bool, pausedUntil: Date?, safety: SafetyStop?, now: Date) -> HoldHeadline? {
+    /// Safety comes first, then the switch, then a pause, then the
+    /// license. A pause is the user's own word like the switch, so it is
+    /// named before a license that ran out. It comes after the switch,
+    /// because a pause of an app that is off means nothing. Every stop
+    /// gives a decision without the sleep flag, so a pause never leaves
+    /// SleepDisabled on. No entitlement means there is none to check.
+    private static func stopHeadline(
+        enabled: Bool, pausedUntil: Date?, entitlement: Entitlement?, safety: SafetyStop?, now: Date
+    ) -> HoldHeadline? {
         if let safety { return .safetyStop(safety) }
         guard enabled else { return .switchedOff }
         if let pausedUntil, now < pausedUntil { return .paused(until: pausedUntil) }
+        if case .expired(let reason)? = entitlement { return .notEntitled(reason) }
         return nil
     }
 

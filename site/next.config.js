@@ -14,9 +14,9 @@ module.exports = {
   // The portless dev URLs; without them Next refuses the dev client and the page never hydrates.
   allowedDevOrigins: ["caffeinagent.local", "caffeinagent.localhost"],
   turbopack: hasFonts ? {} : { resolveAlias: { "@/lib/fonts": "./lib/fonts-fallback.ts" } },
-  // The app, the README and old links open `/support`, which is now a section of the home page.
+  // The app, the README and old links open `/support`. Support is gone, so it goes to the price.
   async redirects() {
-    return [{ source: "/support", destination: "/#support", permanent: true }];
+    return [{ source: "/support", destination: "/#pricing", permanent: true }];
   },
   async rewrites() {
     if (!macFilesOrigin) return [];

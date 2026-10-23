@@ -2,7 +2,7 @@ import { isValidElement } from "react";
 import type { ReactNode } from "react";
 import { agentsMoreThan } from "@/lib/agents";
 import { BATTERY_FLOOR } from "@/lib/simulator";
-import { REPO_URL } from "@/lib/site";
+import { FULL_PRICE, LAUNCH_PRICE_ACTIVE, MACS, PORTAL_URL, PRICE, dollars } from "@/lib/pricing";
 
 /** `id` names the question where it is counted, and stays when the list is put in another order. `open` is for an answer the page shows from the start. */
 type FaqItem = { id: string; question: string; answer: ReactNode; open?: boolean };
@@ -94,40 +94,46 @@ const questions: FaqItem[] = [
     question: "Does it send my data anywhere?",
     answer: (
       <>
-        No. The app has no telemetry, no analytics and no account. It only checks for updates.
-        The <a href="/privacy">privacy page</a> has the details.
+        No. The app has no telemetry, no analytics and no account. It only checks for updates and
+        checks your license key. The <a href="/privacy">privacy page</a> has the details.
       </>
     ),
   },
   {
-    id: "free",
-    question: "Is it really free?",
+    id: "price",
+    question: "What does it cost?",
     answer: (
       <>
-        Yes. Agent Caffeine is free and open source under the AGPL-3.0 license. Every feature is in
-        it, with no account and no card. <a href={REPO_URL}>The source code is on GitHub</a>.
+        {LAUNCH_PRICE_ACTIVE ? `${PRICE} once at the launch price. The full price is ${dollars(FULL_PRICE)}.` : `${PRICE} once.`} One
+        key works on up to {MACS} Macs and includes 1 year of updates. Every feature is free to try
+        for 7 days first, with no account and no card.
       </>
     ),
   },
   {
-    id: "paid",
-    question: "I paid for it. What now?",
+    id: "updates",
+    question: "What happens after a year?",
     answer: (
       <>
-        You get your money back. Every purchase is refunded, and you do not have to do anything.
-        The app keeps working, and from version 1.1.0 it needs no key.
+        The app keeps working, with no end date. Your key gets every update for 1 year after you
+        buy. A version that comes out after that needs a new key.
       </>
     ),
   },
   {
-    id: "support",
-    question: "How can I support it?",
+    id: "key",
+    question: "I lost my key, or I have a new Mac. What now?",
     answer: (
       <>
-        In the <a href="/#support">support section</a> of this page you can pay an amount you
-        choose. It is voluntary, and the app is the same for everyone.
+        Your key is in <a href={PORTAL_URL}>your purchases on Polar</a>. To move it to another Mac,
+        deactivate it on the old one, in the app or in your purchases, then enter it on the new one.
       </>
     ),
+  },
+  {
+    id: "refund",
+    question: "Can I get a refund?",
+    answer: <>No. All sales are final, because the full app is free to try for 7 days first.</>,
   },
 ];
 

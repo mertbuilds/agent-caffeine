@@ -62,6 +62,7 @@ final class SkillTextTests: XCTestCase {
             1: "ff96577727c2073f4a708bbcc944b4a060c8e742dc892ebb456332f133467246",
             2: "be59ed02c040a13cb7a346e66eeed5316576a100a90e8b2ae7b13994301e730b",
             3: "dd47711c235d268ee9fdf123926a896fdc194c911a2b9d986f2429714d81202b",
+            4: "8d4a037f1b9d38ff34eceb4a325a46d8a2e248726271977acc8d9ecd0a9fd1cc",
         ]
         let digest = SHA256.hash(data: Data(skill.utf8)).map { String(format: "%02x", $0) }.joined()
         XCTAssertEqual(digests[SkillCatalog.version], digest)

@@ -3,7 +3,7 @@ import { CompareSources, CompareTable } from "@/components/compare-table";
 import { SectionHeading } from "@/components/section-heading";
 
 export const COMPARE_LEAD =
-  "Agent Caffeine follows what each agent is doing, and stops for a low battery or heat. It is free and open source, and some of the other tools here are free too";
+  "Agent Caffeine follows what each agent is doing, and stops for a low battery or heat. Some of the other tools here are free";
 
 export function Compare() {
   return (

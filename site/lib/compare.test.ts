@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { agentsMoreThan } from "./agents";
 import { CHECKED_ON, OURS, ROWS, TOOLS, isText } from "./compare";
+import { MACS, PRICE } from "./pricing";
 import { BATTERY_FLOOR } from "./simulator";
 
 test("the day of the check is a real day", () => {
@@ -31,8 +32,7 @@ test("our cells say what the rest of the site says", () => {
   assert.equal(ROWS[0].id, "price");
   const price = cell("price");
   assert.ok(isText(price));
-  assert.equal(price.text, "Free, open source");
-  assert.deepEqual(cell("open-source"), { value: "yes", note: "AGPL-3.0" });
+  assert.equal(price.text, `${PRICE} once for ${MACS} Macs`);
   assert.ok(cell("works").note?.includes(`more than ${agentsMoreThan} agents`));
   assert.ok(cell("battery-stop").note?.includes(`${BATTERY_FLOOR}%`));
 });

@@ -2,17 +2,14 @@ import Image from "next/image";
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { ThemeSwitch } from "@/components/theme-switch";
-import { GitHubMark } from "@/components/github-mark";
-import { DownloadCta, GitHubCta } from "@/components/track";
+import { DownloadCta } from "@/components/track";
 import { getPosts } from "@/lib/blog";
 import { getLatestRelease } from "@/lib/release";
+import { PORTAL_URL } from "@/lib/pricing";
 import { CONTACT_EMAIL } from "@/lib/site";
 
 const LINK =
   "text-muted no-underline transition-colors duration-quick ease-smooth-out hover:text-fg motion-reduce:transition-none";
-
-/** A five-pointed star on a 16-unit grid. */
-const STAR = "M8 1.5l1.9 4.1 4.5.5-3.35 3 .95 4.4L8 11.25 4 13.5l.95-4.4-3.35-3 4.5-.5z";
 
 function Column({ title, className = "", children }: { title: string; className?: string; children: ReactNode }) {
   return (
@@ -35,38 +32,6 @@ export async function Footer() {
             <span>Agent Caffeine</span>
           </Link>
           <p className="text-pretty text-muted">Keeps your Mac awake while your agents work</p>
-          <ul className="flex flex-col gap-3 pt-1">
-            <li>
-              <GitHubCta placement="footer" className={`${LINK} inline-flex items-center gap-2`}>
-                <GitHubMark size={14} />
-                GitHub
-              </GitHubCta>
-            </li>
-            <li>
-              <GitHubCta placement="footer" className={`${LINK} group inline-flex items-center gap-2`}>
-                {/* The star fills in while the link is pointed at, where a pointer can point. */}
-                <span className="relative flex shrink-0">
-                  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.25" strokeLinejoin="round">
-                    <path d={STAR} />
-                  </svg>
-                  <svg
-                    aria-hidden="true"
-                    width="14"
-                    height="14"
-                    viewBox="0 0 16 16"
-                    fill="currentColor"
-                    stroke="currentColor"
-                    strokeWidth="1.25"
-                    strokeLinejoin="round"
-                    className="absolute inset-0 opacity-0 transition-opacity duration-quick ease-smooth-out motion-reduce:transition-none [@media(hover:hover)]:group-hover:opacity-100"
-                  >
-                    <path d={STAR} />
-                  </svg>
-                </span>
-                Give us a star
-              </GitHubCta>
-            </li>
-          </ul>
         </div>
         <Column title="Product">
           <li>
@@ -92,10 +57,15 @@ export async function Footer() {
           {release === null ? null : (
             <li>
               <DownloadCta href={release.href} filename={release.filename} placement="footer" className={LINK}>
-                Download for macOS
+                Try free for macOS
               </DownloadCta>
             </li>
           )}
+          <li>
+            <Link href="/#pricing" className={LINK}>
+              Pricing
+            </Link>
+          </li>
           <li>
             <Link href="/#faq" className={LINK}>
               FAQ
@@ -107,9 +77,13 @@ export async function Footer() {
             </Link>
           </li>
           <li>
-            <Link href="/#support" className={LINK}>
-              Support
-            </Link>
+            <a href={PORTAL_URL} target="_blank" rel="noreferrer" className={`${LINK} inline-flex items-center gap-1`}>
+              Your purchases
+              <svg width="8" height="8" viewBox="0 0 8 8" fill="none" stroke="currentColor" strokeWidth="1" aria-hidden>
+                <path d="M1.5 6.5l5-5M2.5 1.5h4v4" />
+              </svg>
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
           </li>
         </Column>
         <Column title="Read" className="col-span-2 sm:col-span-1">

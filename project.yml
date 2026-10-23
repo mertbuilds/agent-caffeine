@@ -76,7 +76,7 @@ targets:
         CFBundleIconName: AppIcon
         LSMinimumSystemVersion: $(MACOSX_DEPLOYMENT_TARGET)
         LSUIElement: true
-        NSHumanReadableCopyright: "Copyright © 2026 Mert Duzgun"
+        NSHumanReadableCopyright: "Copyright © 2026 Mert Düzgün. All rights reserved."
         NSSupportsAutomaticTermination: false
         NSSupportsSuddenTermination: false
         # "Join your iPhone hotspot": from macOS 14 on, macOS shows the
@@ -93,10 +93,16 @@ targets:
         SUPublicEDKey: 5Q7Ek65kUpr2mdD+E8nQibAj7cYGf2/gK9ImD3PqVLY=
         SUEnableAutomaticChecks: true
         SUScheduledCheckInterval: 86400
+        # The time of the release, in UTC, set by scripts/release.sh. A key
+        # runs the builds released within a year of its purchase
+        # (UpdateWindow.swift). Empty in a build made without the script,
+        # which then counts as covered by every key.
+        ACReleaseDate: $(AC_RELEASE_DATE)
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.caffeinagent.app
         PRODUCT_NAME: caffeinagent
+        AC_RELEASE_DATE: ""
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         # The brand blue of `Color.brand`, for the controls AppKit draws itself.
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
@@ -233,12 +239,17 @@ targets:
       - Caffeinagent/Models/AwakeMode.swift
       - Caffeinagent/Models/AppVersion.swift
       - Caffeinagent/Models/PublishedOnChange.swift
+      - Caffeinagent/License/Entitlement.swift
+      - Caffeinagent/License/LicenseClient.swift
+      - Caffeinagent/License/LicenseConfig.swift
+      - Caffeinagent/License/LicenseManager.swift
+      - Caffeinagent/License/LicenseStore.swift
+      - Caffeinagent/License/TrialNotice.swift
+      - Caffeinagent/License/UpdateWindow.swift
       # The state of "open at login", without SMAppService.
       - Caffeinagent/LoginItem.swift
       # Where the app runs from. The alerts are never shown by a test.
       - Caffeinagent/AppRelocator.swift
-      # What the paid versions left. Without the call to the Keychain.
-      - Caffeinagent/PaidLeftovers.swift
       # Optional, so the project still generates on a branch without the folder.
       - path: Caffeinagent/Detection
         optional: true

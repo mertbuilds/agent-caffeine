@@ -31,7 +31,7 @@ final class SleepOutlookTests: XCTestCase {
         return steps.map { step in
             let (decision, next) = HoldPolicy.decide(
                 readings: step.readings, memory: memory, mode: mode, enabled: true, pausedUntil: pausedUntil, reachableUntil: reachableUntil,
-                safety: nil, settings: settings, context: context, mayHold: mayHold, now: at(step.seconds)
+                entitlement: .licensed, safety: nil, settings: settings, context: context, mayHold: mayHold, now: at(step.seconds)
             )
             memory = next
             return (step.seconds, decision)

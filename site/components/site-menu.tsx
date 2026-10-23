@@ -3,14 +3,13 @@
 import { AnimatePresence, motion } from "motion/react";
 import Link from "next/link";
 import { useEffect, useId, useRef, useState, type FocusEvent, type RefObject } from "react";
-import { DownloadForMac } from "@/components/download-button";
-import { GitHubMark } from "@/components/github-mark";
-import { DownloadCta, GitHubCta } from "@/components/track";
+import { TryFree } from "@/components/download-button";
+import { DownloadCta } from "@/components/track";
 import { distance, duration, easing, scale } from "@/lib/motion";
 import type { Release } from "@/lib/release";
 import { useLessMotion } from "@/lib/use-less-motion";
 
-export type MenuLink = { current: boolean; href: string; label: string; onClick?: () => void };
+export type MenuLink = { current: boolean; href: string; label: string };
 
 /** How far the page may run under an open menu before the menu closes, in pixels. */
 const SCROLL_CLOSE = 24;
@@ -42,7 +41,7 @@ export function SiteMenu({
   links: ReadonlyArray<MenuLink>;
   /** The name the header's morph carries the button by. */
   morph: string;
-  /** The release the menu's last row downloads. Without one the menu has only its links and GitHub. */
+  /** The release the menu's last row downloads. Without one the menu has only its links. */
   release: Release | null;
 }) {
   const [top, setTop] = useState<number | null>(null);
@@ -148,26 +147,13 @@ export function SiteMenu({
                   key={link.href}
                   href={link.href}
                   aria-current={link.current ? "location" : undefined}
-                  onClick={() => {
-                    link.onClick?.();
-                    close(true);
-                  }}
+                  onClick={() => close(true)}
                   className={`menu-item-in ${ROW}`}
                   style={{ animationDelay: `${place * duration.stagger}s` }}
                 >
                   {link.label}
                 </Link>
               ))}
-              <div
-                className="menu-item-in"
-                onClick={() => close(false)}
-                style={{ animationDelay: `${links.length * duration.stagger}s` }}
-              >
-                <GitHubCta placement="menu" className={ROW}>
-                  <GitHubMark size={16} />
-                  GitHub
-                </GitHubCta>
-              </div>
             </nav>
             {release !== null ? (
               <>
@@ -175,10 +161,10 @@ export function SiteMenu({
                 <div
                   className="menu-item-in"
                   onClick={() => close(false)}
-                  style={{ animationDelay: `${(links.length + 1) * duration.stagger}s` }}
+                  style={{ animationDelay: `${links.length * duration.stagger}s` }}
                 >
                   <DownloadCta href={release.href} filename={release.filename} placement="header" className={ROW}>
-                    <DownloadForMac />
+                    <TryFree />
                   </DownloadCta>
                 </div>
               </>

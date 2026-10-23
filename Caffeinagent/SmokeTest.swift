@@ -12,8 +12,8 @@ import SwiftUI
 /// unit tests never start the app, so they pass on a build that hangs.
 ///
 /// It runs next to a copy that is installed and touches nothing of it. It
-/// takes no power assertion, registers no keyboard shortcut, takes no click, leaves the displays alone, never reaches or registers the helper,
-/// never reaches the Keychain, starts no Sparkle,
+/// takes no power assertion, registers no keyboard shortcut, takes no click, leaves the displays alone, never reaches or registers the helper, reads
+/// no license from the Keychain and never calls Polar, starts no Sparkle,
 /// shows no setup window and no offer to move, sends no notification, plays
 /// no sound, and
 /// keeps its settings, and those AppKit writes for it, under a bundle
@@ -48,6 +48,7 @@ enum SmokeTest {
         let defaults = ownSettings()
         parts = AggregatorParts(
             defaults: defaults,
+            license: LicenseManager(client: NoLicenseAPI(), store: MemoryStore(), defaults: defaults),
             sleepFlag: SleepFlagController(service: NoHelperService(), helper: NoHelper(), sudoers: NoSudoers(), defaults: defaults),
             power: NoPower(),
             hotKeys: NoHotKeys(),
@@ -463,6 +464,20 @@ private final class Meter: @unchecked Sendable {
 }
 
 // MARK: Parts that do nothing
+
+private struct NoLicenseAPI: LicenseAPI {
+    func activate(key: String, label: String) async -> LicenseActivation { .unavailable }
+    func validate(key: String, activationID: String) async -> LicenseValidation { .unavailable }
+    func deactivate(key: String, activationID: String) async -> LicenseDeactivation { .unavailable }
+}
+
+/// Starts empty, so the run is the first day of a trial.
+private final class MemoryStore: LicenseStore {
+    private var record: LicenseRecord?
+
+    func load() throws -> LicenseRecord? { record }
+    func save(_ record: LicenseRecord) throws { self.record = record }
+}
 
 private struct NoHelperService: HelperServiceManaging {
     var status: HelperStatus { .notRegistered }

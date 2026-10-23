@@ -175,6 +175,9 @@ final class JobWakeTests: XCTestCase {
         changed.context.pausedUntil = noon.addingTimeInterval(600)
         stops.append(("paused", changed, .noAlarm(.paused)))
         changed = input()
+        changed.context.entitlement = .expired(.trialOver)
+        stops.append(("not entitled", changed, .noAlarm(.notEntitled)))
+        changed = input()
         changed.context.safety = .tooHot
         stops.append(("a safety stop", changed, .noAlarm(.safetyStop)))
         changed = input()

@@ -28,7 +28,7 @@ _APP = {
     "hold": ("decision", "hold"), "headline": ("decision", "headline"), "reason": ("decision", "reason"),
     "stop": ("decision", "stop"), "assertion": ("decision", "assertion"), "on": ("on",), "mode": ("mode",),
     "flag": ("flag", "set"), "wanted": ("flag", "wanted"), "helper": ("flag", "helper"), "setup": ("flag", "setup"),
-    "gate": ("gate",), "safety": ("safety",), "lid": ("lid", "closed"),
+    "gate": ("gate",), "safety": ("safety",), "entitlement": ("entitlement",), "lid": ("lid", "closed"),
     "power": ("power", "source"), "charge": ("power", "percent"), "pid": ("app", "pid"),
     "version": ("app", "version"), "build": ("app", "build"),
 }

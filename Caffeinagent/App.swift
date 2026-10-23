@@ -85,7 +85,6 @@ enum Main {
             FileHandle.standardError.write(Data("Agent Caffeine is already running.\n".utf8))
             exit(0)
         case .start:
-            PaidLeftovers.remove()
             CaffeinagentApp.main()
         }
     }
@@ -101,7 +100,7 @@ enum Main {
 
 struct CaffeinagentApp: App {
     @ObservedObject private var aggregator = StateAggregator.shared
-    @StateObject private var updater = Updater()
+    @StateObject private var updater = Updater(license: StateAggregator.shared.license)
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     /// `MenuBarExtra` must not get `$aggregator.showMenuBarIcon`. On macOS 26

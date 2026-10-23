@@ -1,4 +1,5 @@
 import { agentsMoreThan } from "@/lib/agents";
+import { FULL_PRICE, LAUNCH_PRICE_ACTIVE, MACS, PRICE, dollars } from "@/lib/pricing";
 import { BATTERY_FLOOR } from "@/lib/simulator";
 
 /** The day every cell about another tool was read on that tool's own page. */
@@ -82,30 +83,21 @@ const partly = (note: string): Cell => ({ value: "partly", note });
 const unstated = (note?: string): Cell => ({ value: "unstated", note });
 const text = (words: string, note?: string): Cell => ({ text: words, note });
 
-/** The rows in the order a reader asks: the price and the source first, then the lid, the agents, the stops and the notifications. */
+/** The rows in the order a buyer asks: the price first, then the lid, the agents, the stops and the notifications. */
 export const ROWS: readonly Row[] = [
   {
     id: "price",
     label: "Price",
     cells: {
-      ours: text("Free, open source"),
-      adrafinil: text("Free"),
+      ours: text(
+        `${PRICE} once for ${MACS} Macs`,
+        LAUNCH_PRICE_ACTIVE ? `Launch price, then ${dollars(FULL_PRICE)}. 7-day free trial` : "7-day free trial",
+      ),
+      adrafinil: text("Free", "Open source (MIT)"),
       holdmylid: text("$9.99 once for 3 Macs", "Early price, then $14.99. Free trial"),
       lidrun: text("Free with the lid open", "Lid closed: a few free runs, then $9.90 once for 1 Mac, $19.90 for 3 Macs"),
       clamshell: text("$9.99 once for 1 Mac, $19.99 for 3 Macs", "7-day free trial"),
       amphetamine: text("Free", "Mac App Store"),
-    },
-  },
-  {
-    id: "open-source",
-    label: "Open source",
-    cells: {
-      ours: yes("AGPL-3.0"),
-      adrafinil: yes("MIT"),
-      holdmylid: unstated(),
-      lidrun: unstated(),
-      clamshell: unstated(),
-      amphetamine: unstated(),
     },
   },
   {

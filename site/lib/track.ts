@@ -13,25 +13,17 @@ export function onLiveHost(): boolean {
 
 export type Placement = "header" | "hero" | "pricing" | "blog" | "footer";
 
-/** Where a support link sits: the header's link to the section, or the section's own button. */
-export type SupportPlacement = "header" | "section";
-
-/** Where a GitHub link sits: the header's button, the phone menu's row, or the footer's links. */
-export type GitHubPlacement = "header" | "menu" | "footer";
-
 /** Every event the site counts, with what it carries. None carries anything about the visitor. */
 export type TrackEvents = {
   download_click: { placement: Placement };
   /** A download button pressed off a Mac: the popup opened and no download started. */
   download_blocked_not_mac: { placement: Placement };
+  /** A buy button pressed, with the price it showed and where it sits. */
+  buy_click: { price: number; placement: Placement };
   /** The first time in a page view that a visitor touches the menu bar simulator. */
   simulator_use: { control: string };
   /** A question of the home page opened, by its `id` in `lib/faq.tsx`. */
   faq_open: { id: string };
-  /** A support link pressed: the header's link to the section, or the section's button to GitHub Sponsors. */
-  support_click: { placement: SupportPlacement };
-  /** A link to the code on GitHub pressed, with where it sits. */
-  github_clicked: { placement: GitHubPlacement };
 };
 
 /** Counts an event. Does nothing off the live site, or while OpenPanel is not there. */
@@ -50,7 +42,7 @@ export function rememberUtm() {
       sessionStorage.setItem(UTM_STORE, JSON.stringify(utmFrom(window.location.search)));
     }
   } catch {
-    // No storage, as in some private windows: the tags are then read from the address of each page.
+    // No storage, as in some private windows: the tags are then read from the address of each page, and the checkout link names the site as the source when there are none.
   }
 }
 

@@ -198,8 +198,8 @@ struct HoldStore {
         /// The headline of the menu on one line: "Your Mac stays awake:
         /// ffmpeg asked for it".
         var line: String
-        /// A safety stop, the switch or a pause lets the Mac sleep
-        /// whatever asks for a hold.
+        /// A safety stop, the switch, a pause or the license lets the Mac
+        /// sleep whatever asks for a hold.
         var stopped: Bool
     }
 

@@ -126,6 +126,7 @@ extension PanelText {
         case .safetyStop: return "No wake is set while Agent Caffeine has stopped to protect your Mac."
         case .switchedOff: return "No wake is set while Agent Caffeine is off."
         case .paused: return "No wake is set while Agent Caffeine is paused."
+        case .notEntitled: return "No wake is set without a license key."
         case .onBattery: return "No wake is set while your Mac is on battery."
         case .batteryFloorOff: return "No wake is set on battery while the battery limit is off."
         case .batteryUnknown: return "No wake is set on battery: the charge could not be read."
