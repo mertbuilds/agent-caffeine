@@ -1,26 +1,24 @@
-import { breakpoints, colors, motion, radius, spacing, text } from '@caffeinagent/ui/tokens.stylex';
+import { breakpoints, colors, radius, spacing, text } from '@caffeinagent/ui/tokens.stylex';
 import { create, props } from '@stylexjs/stylex';
 import { createFileRoute, Link, notFound } from '@tanstack/react-router';
+import { BuyButton } from '../../components/buy-button.tsx';
+import { DownloadButton, TryFree, useRelease } from '../../components/download-button.tsx';
 import { Footer } from '../../components/footer.tsx';
 import { page } from '../../components/page.ts';
-import { pill } from '../../components/pill.ts';
 import { formatDate, getPost } from '../../lib/blog.ts';
-import { DOWNLOAD_PATH } from '../../lib/download.ts';
-import { getLatestRelease } from '../../lib/latest-release.functions.ts';
-import { CHECKOUT_URL, MACS, PRICE, PRICE_NOW } from '../../lib/pricing.ts';
+import { MACS, PRICE } from '../../lib/pricing.ts';
 import { AUTHOR, ORGANIZATION, pageHead } from '../../lib/seo.ts';
 import { ownLink, SITE_URL } from '../../lib/site.ts';
-import { track } from '../../lib/track.ts';
 import { m } from '../../paraglide/messages.js';
 
 export const Route = createFileRoute('/blog/$slug')({
   component: BlogPost,
   loader: async ({ params }) => {
-    const [post, release] = await Promise.all([getPost(params.slug), getLatestRelease()]);
+    const post = await getPost(params.slug);
     if (post === undefined) {
       throw notFound();
     }
-    return { post, release };
+    return { post };
   },
   // oxlint-disable-next-line perfectionist/sort-objects -- head after loader, or TypeScript cannot infer loaderData for head
   head: ({ loaderData }) => {
@@ -76,10 +74,6 @@ export const Route = createFileRoute('/blog/$slug')({
 
 const AUTHOR_LINK = ownLink('https://mertbuilds.com/', 'blog');
 
-function trackBuy() {
-  track('buy_click', { placement: 'blog', price: PRICE_NOW });
-}
-
 const styles = create({
   actions: {
     alignItems: 'center',
@@ -112,20 +106,11 @@ const styles = create({
     textDecorationLine: 'none',
     width: 'fit-content',
   },
-  textLink: {
-    color: { ':hover': colors.fg, default: colors.muted },
-    flexShrink: 0,
-    fontSize: text.sm,
-    lineHeight: text.smLeading,
-    textDecorationLine: 'none',
-    transitionDuration: motion.durationQuick,
-    transitionProperty: { '@media (prefers-reduced-motion: reduce)': 'none', default: 'color' },
-    transitionTimingFunction: motion.easeSmoothOut,
-  },
 });
 
 function BlogPost() {
-  const { post, release } = Route.useLoaderData();
+  const { post } = Route.useLoaderData();
+  const release = useRelease();
   return (
     <main id="main" {...props(page.main)}>
       <article {...props(page.column)}>
@@ -162,21 +147,17 @@ function BlogPost() {
               : m.blog_aside_trial({ price: PRICE })}
           </p>
           {release === null ? (
-            <a href={CHECKOUT_URL} onClick={trackBuy} {...props(pill.base, pill.ink, pill.small)}>
+            <BuyButton placement="blog" size="small">
               {m.blog_buy({ price: PRICE })}
-            </a>
+            </BuyButton>
           ) : (
             <div {...props(styles.actions)}>
-              <a
-                href={DOWNLOAD_PATH}
-                onClick={() => track('download_click', { placement: 'blog' })}
-                {...props(pill.base, pill.ink, pill.small)}
-              >
-                {m.blog_try_free()}
-              </a>
-              <a href={CHECKOUT_URL} onClick={trackBuy} {...props(styles.textLink)}>
+              <DownloadButton placement="blog" release={release} size="small">
+                <TryFree small />
+              </DownloadButton>
+              <BuyButton placement="blog" variant="text">
                 {m.blog_buy({ price: PRICE })}
-              </a>
+              </BuyButton>
             </div>
           )}
         </aside>
