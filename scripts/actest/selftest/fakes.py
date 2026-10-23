@@ -196,7 +196,7 @@ class FakeEnv:
 def state(hold=False, flag=False, wanted=None, agents=(), holds=(), on=True, helper="enabled", jobs_on=False, **more):
     """A state of the app as `.state.json` has it."""
     return dict({
-        "v": 1, "on": on, "mode": "agentWorking",
+        "v": 1, "on": on, "mode": "agentWorking", "entitlement": "licensed",
         "decision": {"hold": hold, "headline": "working" if hold else "noAgents", "stop": not on, "assertion": hold},
         "flag": {"wanted": flag if wanted is None else wanted, "helper": helper, "setup": "ready", "set": flag},
         "gate": "open", "agents": [dict(row) for row in agents], "holds": [{"id": hold_id, "kind": "timed"} for hold_id in holds],

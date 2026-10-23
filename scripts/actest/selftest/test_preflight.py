@@ -93,10 +93,11 @@ class PreflightTests(unittest.TestCase):
         self.assertEqual(found["power"]["status"], "pass")
         self.assertEqual(len(preflight.blocked(list(found.values()))), 3)
 
-    def test_a_paused_app_fails(self):
-        env = fakes.FakeEnv(lambda t: {"state": fakes.state(pausedUntil=1.0)}, build=self.expected)
+    def test_a_paused_app_and_an_ended_licence_fail(self):
+        env = fakes.FakeEnv(lambda t: {"state": fakes.state(pausedUntil=1.0, entitlement="expired")}, build=self.expected)
         found = items(env)
         self.assertEqual(found["on"]["status"], "fail")
+        self.assertEqual(found["licence"]["status"], "fail")
 
     def test_a_test_that_needs_a_quiet_mac_waits_for_the_agents(self):
         env = fakes.FakeEnv(lambda t: {"flag": 1, "awake": True, "state": fakes.state(hold=True, flag=True)}, build=self.expected)
