@@ -1,14 +1,8 @@
 import { describe, expect, it } from 'vitest';
-import {
-  BATTERY_FLOOR,
-  CHECKED_ON,
-  OURS,
-  AGENTS_MORE_THAN,
-  isText,
-  rows,
-  tools,
-} from './compare.ts';
+import { agentsMoreThan } from './agents.ts';
+import { CHECKED_ON, OURS, isText, rows, tools } from './compare.ts';
 import { MACS, PRICE } from './pricing.ts';
+import { BATTERY_FLOOR } from './simulator.ts';
 
 function ours(id: string) {
   return rows().find((row) => row.id === id)?.cells[OURS];
@@ -47,7 +41,7 @@ describe('the comparison', () => {
     expect(price !== undefined && isText(price) ? price.text : null).toBe(
       `${PRICE} once for ${MACS} Macs`,
     );
-    expect(ours('works')?.note).toContain(`more than ${AGENTS_MORE_THAN} agents`);
+    expect(ours('works')?.note).toContain(`more than ${agentsMoreThan} agents`);
     expect(ours('battery-stop')?.note).toContain(`${BATTERY_FLOOR}%`);
   });
 

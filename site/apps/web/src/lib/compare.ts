@@ -1,14 +1,10 @@
 import { m } from '../paraglide/messages.js';
+import { agentsMoreThan } from './agents.ts';
 import { FULL_PRICE, LAUNCH_PRICE_ACTIVE, MACS, PRICE, dollars } from './pricing.ts';
+import { BATTERY_FLOOR } from './simulator.ts';
 
 /** The day every cell about another tool was read on that tool's own page. */
 export const CHECKED_ON = '2026-10-08';
-
-/** The largest round ten below the number of agents the app finds, for copy that says "more than". */
-export const AGENTS_MORE_THAN = 40;
-
-/** The battery level, in percent, at which the app lets the Mac sleep by default. */
-export const BATTERY_FLOOR = 20;
 
 export type ToolId = 'ours' | 'adrafinil' | 'holdmylid' | 'lidrun' | 'clamshell' | 'amphetamine';
 
@@ -165,7 +161,7 @@ export function rows(): ReadonlyArray<Row> {
         clamshell: no(m.compare_works_clamshell_note()),
         holdmylid: yes(m.compare_works_holdmylid_note()),
         lidrun: partly(m.compare_works_lidrun_note()),
-        ours: yes(m.compare_works_ours_note({ count: AGENTS_MORE_THAN })),
+        ours: yes(m.compare_works_ours_note({ count: agentsMoreThan })),
       },
       id: 'works',
       label: m.compare_row_works(),

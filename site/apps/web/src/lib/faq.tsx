@@ -1,12 +1,8 @@
 import { isValidElement, type ReactNode } from 'react';
 import { m } from '../paraglide/messages.js';
+import { agentsMoreThan } from './agents.ts';
 import { dollars, FULL_PRICE, LAUNCH_PRICE_ACTIVE, MACS, PORTAL_URL, PRICE } from './pricing.ts';
-
-/** `SafetyMonitor.defaultBatteryFloorPercent`: on battery the app stops at this level. */
-const BATTERY_FLOOR = 20;
-
-/** The largest round ten below the number of agents the app knows, for copy that says "more than". */
-const AGENTS_MORE_THAN = 40;
+import { BATTERY_FLOOR } from './simulator.ts';
 
 /** `id` names the question where it is counted, and stays when the list is put in another order. `open` is for an answer the page shows from the start. */
 type FaqItem = { answer: ReactNode; id: string; open?: boolean; question: string };
@@ -31,7 +27,7 @@ export function faqItems(): ReadonlyArray<FaqItem> {
       answer: (
         <>
           {m.faq_detection_answer()}
-          <a href="#agents">{m.faq_detection_link({ count: AGENTS_MORE_THAN })}</a>
+          <a href="#agents">{m.faq_detection_link({ count: agentsMoreThan })}</a>
           {m.faq_detection_after()}
         </>
       ),
