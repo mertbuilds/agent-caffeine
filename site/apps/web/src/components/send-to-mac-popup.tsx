@@ -110,6 +110,19 @@ function onServer(): null {
   return null;
 }
 
+/** The share sheet is there or not for the whole visit, so there is nothing to subscribe to. */
+function subscribeNever(): () => void {
+  return () => {};
+}
+
+function hasShareSheet(): boolean {
+  return typeof navigator.share === 'function';
+}
+
+function noShareSheetOnServer(): boolean {
+  return false;
+}
+
 /**
  * What a download button opens off a Mac, where the app cannot run: it says
  * so, and gives the site's link to copy or share on to a Mac. One of it stands
@@ -129,7 +142,7 @@ function Popup({ opener }: { opener: Opener }) {
   const [copied, setCopied] = useState(false);
   const title = useId();
   // A browser without a share sheet has the copy alone.
-  const canShare = typeof navigator.share === 'function';
+  const canShare = useSyncExternalStore(subscribeNever, hasShareSheet, noShareSheetOnServer);
 
   useEffect(() => {
     const node = dialog.current;

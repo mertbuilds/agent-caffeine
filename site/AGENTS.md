@@ -98,7 +98,7 @@ Conventions:
 ## CI/CD
 
 - **CI** (`.github/workflows/site-ci.yml` at the repo root, PRs and main, on changes under `site/`; every step runs in `site/`). Turbo remote cache activates when `TURBO_TOKEN`/`TURBO_TEAM` are configured.
-  - `checks` job: turbo typecheck/build, then root `pnpm lint` (type-aware, so it runs after the build generates `routeTree.gen.ts`) + `format:check` + `skills:check` + `knip` + react-doctor (warnings shown, errors fail; `doctor.config.json` lets `src/lib/morph.ts` animate the pill ground's edges, since a scale would stretch its corners) + `scripts/smoke-web.sh`.
+  - `checks` job: turbo typecheck/build, then root `pnpm lint` (type-aware, so it runs after the build generates `routeTree.gen.ts`) + `format:check` + `skills:check` + `knip` + react-doctor (warnings shown, errors fail; `doctor.config.json` lets `src/lib/morph.ts` animate the pill ground's edges, since a scale would stretch its corners, and `src/components/agents-panel.tsx` animate the menu's height, since the rows under a section move with it and a transform moves nothing else) + `scripts/smoke-web.sh`.
   - `test` job: `turbo run test` minus `@caffeinagent/ui` (web jsdom).
   - `test-ui` job: the Chromium story tests alone.
 - **Deploy and previews**: not set up yet. `scripts/smoke-web.sh` serves the build with `vite preview` and requires each page in its `PAGES` to answer 200 with the app title.

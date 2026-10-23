@@ -39,6 +39,9 @@ if (import.meta.env.DEV && typeof window !== 'undefined') {
 
 export const Route = createRootRoute({
   component: RootComponent,
+  // The download buttons of every page read it (components/download-button.tsx).
+  loader: () => getLatestRelease(),
+  // oxlint-disable-next-line perfectionist/sort-objects -- head after loader, the order TanStack Router infers route types in
   head: ({ matches }) => {
     const shareDescription = m.meta_share_description({ price: PRICE });
     return {
@@ -91,8 +94,6 @@ export const Route = createRootRoute({
       ],
     };
   },
-  // The download buttons of every page read it (components/download-button.tsx).
-  loader: () => getLatestRelease(),
   notFoundComponent: NotFound,
   staleTime: Infinity,
 });
