@@ -32,3 +32,32 @@ export const scale = {
   // A menu closing.
   tiny: 0.99,
 } as const;
+
+/** The looping drawings, in seconds. Every loop winds back over `back` before it plays again. */
+export const drawing = {
+  back: 0.4,
+} as const;
+
+/**
+ * The hero, in seconds into its loop: the app shows on the open display, the
+ * lid closes, and the clock runs while the agents finish one by one. Two
+ * minutes after the last one the Mac can sleep, and the menu dims. `clock`
+ * pairs a time of the loop with the minutes that have passed by then: the
+ * clock stands for a moment after each agent finishes.
+ */
+export const heroScene = {
+  clock: [
+    [2.3, 0],
+    [3, 9],
+    [3.4, 9.9],
+    [4, 18],
+    [4.4, 18.9],
+    [5, 27],
+    [5.4, 27.9],
+    [5.8, 29],
+  ],
+  close: [1.3, 2.3],
+  dim: [7.3, 8],
+  loop: 8.4,
+  rest: 0.5,
+} as const;
