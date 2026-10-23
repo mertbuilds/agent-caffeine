@@ -22,7 +22,8 @@ enum PanelText {
     static let canSleepTitle = "Your Mac can sleep"
     static let offTitle = "Agent Caffeine is off"
     static let pausedTitle = "Agent Caffeine is paused"
-    /// A safety stop: the reason stands below it.
+    /// A safety stop or a license that does not allow a hold: the reason
+    /// stands below it.
     static let stoppedTitle = "Agent Caffeine has stopped"
     static let helperOffTitle = "Your Mac cannot sleep"
     static let helperOffReason = "The helper of Agent Caffeine was turned off in Login Items"
@@ -93,6 +94,12 @@ enum PanelText {
             return (offTitle, "Your Mac sleeps as usual")
         case .paused(let until):
             return (pausedTitle, startsAgain(at: until, now: now, calendar: calendar, locale: locale))
+        case .notEntitled(.trialOver):
+            return (stoppedTitle, "Your trial has ended")
+        case .notEntitled(.unverified):
+            return (stoppedTitle, "Your license was not checked for 30 days")
+        case .notEntitled(.activationRemoved):
+            return (stoppedTitle, "This Mac is no longer activated")
         }
     }
 
@@ -305,6 +312,9 @@ enum PanelText {
         case .offline(let limit, let working):
             let reason = offlineReason(limit: limit)
             return working.map { "\(reason), and \(stillWorking($0))" } ?? reason
+        case .notEntitled(.trialOver): return "your trial has ended"
+        case .notEntitled(.unverified): return "your license was not checked for 30 days"
+        case .notEntitled(.activationRemoved): return "this Mac is no longer activated"
         case .waitedTooLong(let subject, let hold):
             let length = HumaneDuration.length(seconds: hold) ?? "a moment"
             return "\(phrase(subject, one: "waited", many: "waited")) for you longer than \(length)"
@@ -340,6 +350,11 @@ enum PanelText {
     static let moveToApplicationsToSetUp = "Move Agent Caffeine to Applications to set this up"
     static let moveToApplicationsToUse = "Move Agent Caffeine to Applications to use this."
 
+    /// In Settings > License, from what Polar said at the activation.
+    static func keyRunsOn(macs: Int) -> String {
+        "This key runs on \(HumaneDuration.counted(macs, "Mac"))."
+    }
+
     static let openAtLogin = "Open at login"
     static let openAtLoginInSetup = "Open Agent Caffeine when you log in"
 
@@ -354,6 +369,37 @@ enum PanelText {
     static let gitHubSponsors = "GitHub Sponsors"
     static let acknowledgements = "Acknowledgements"
     static let thirdPartyNotices = "Third-party notices"
+
+    // MARK: Trial
+
+    /// The whole days of the trial, from the rule of the license.
+    static let trialDays = Int(LicenseRules.trialLength / LicenseRules.day)
+
+    /// On the last page of the setup window.
+    static let trialIntro = "Your free trial runs for \(HumaneDuration.counted(trialDays, "day")). \(trialThen)"
+    static let trialThen = "After that, Agent Caffeine needs a license key to keep your Mac awake."
+
+    /// In Settings > License: "Your free trial has 5 days left.", and in
+    /// the last 24 hours the day it ends on.
+    static func trialStatus(daysLeft: Int, end: Date?, now: Date, calendar: Calendar = .current) -> String {
+        guard daysLeft <= 1 else { return "Your free trial has \(HumaneDuration.counted(daysLeft, "day")) left." }
+        return "Your free trial ends \(trialEndDay(end, now: now, calendar: calendar))."
+    }
+
+    /// The last 24 hours of a trial end today or tomorrow.
+    private static func trialEndDay(_ end: Date?, now: Date, calendar: Calendar) -> String {
+        guard let end, !calendar.isDate(end, inSameDayAs: now) else { return "today" }
+        return "tomorrow"
+    }
+
+    static func notification(_ notice: TrialNotice, end: Date?, now: Date, calendar: Calendar = .current) -> String {
+        switch notice {
+        case .endsSoon:
+            return "Your Agent Caffeine trial ends \(trialEndDay(end, now: now, calendar: calendar)). After that it does not keep your Mac awake without a license key."
+        case .ended:
+            return "Your Agent Caffeine trial has ended. Agent Caffeine does not keep your Mac awake until you enter a license key."
+        }
+    }
 
     /// Below the choices, on battery.
     static let reachableCost = "Uses about \(percent(Reachable.batteryPercentPerHour)) of battery per hour"
@@ -379,10 +425,17 @@ enum PanelText {
     static let startsAgainWhenCool = "Agent Caffeine starts again when your Mac is cool"
     static let agentsAgainWhenLidOpens = "Agents keep your Mac awake again when you open the lid or connect power"
     static let allowHelperAgain = "Allow Agent Caffeine again in Login Items, and your Mac sleeps as usual"
+    static let buyToKeepAwake = "Buy a key to keep your Mac awake"
+    static let connectAndCheck = "Connect to the internet, then check again"
+    static let activateAgain = "Activate this Mac again to keep it awake"
     static let helperNotResponding = "Agent Caffeine cannot reach its helper. Your Mac will sleep when you close the lid on battery."
     static let helperRepairing = "Setting up the helper again…"
     static let helperLost = "Agent Caffeine has to set up its helper again"
     static let lidClosedNotSetUp = "Your Mac still sleeps with the lid closed on battery"
+
+    static func trialEnds(inDays days: Int) -> String {
+        "Your trial ends in \(HumaneDuration.counted(days, "day"))"
+    }
 
     // MARK: Battery
 
@@ -416,6 +469,10 @@ enum PanelText {
         switch action {
         case .openLoginItems: return "Open System Settings"
         case .tryHelperAgain: return "Try again"
+        case .buy: return "Buy from $19"
+        case .enterKey: return "Enter license key…"
+        case .checkLicense: return "Check now"
+        case .activateAgain: return "Activate again"
         case .setUpLidClosed: return "Set up…"
         case .dismissLidClosedHint: return "Dismiss"
         case .pause(.thirtyMinutes): return "Pause for 30 minutes"
@@ -627,6 +684,7 @@ enum PanelText {
 
     static let modePicker = "Keep your Mac awake"
     static let preferences = "Settings…"
+    static let buyInMenu = "Buy Agent Caffeine from $19"
     static let help = "Help…"
     static let quit = "Quit Agent Caffeine"
     static let gearMenu = "Settings and more"

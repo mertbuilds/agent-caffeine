@@ -82,8 +82,8 @@ final class LidChimeTests: XCTestCase {
         XCTAssertEqual(closing(onBattery), .played)
     }
 
-    /// No hold: nothing works, a pause, off, a safety stop. The decision
-    /// has no hold and no flag in all of them.
+    /// No hold: nothing works, a pause, off, a safety stop, a license that
+    /// ended. The decision has no hold and no flag in all of them.
     func testNoChimeWhenTheMacWillSleep() {
         XCTAssertEqual(closing(onBattery) { $0.holding = false; $0.flagWanted = false; $0.flagConfirmed = false }, .silent(.notHolding))
         XCTAssertEqual(closing(onPower) { $0.holding = false }, .silent(.notHolding))

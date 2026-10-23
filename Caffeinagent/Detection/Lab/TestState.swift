@@ -172,6 +172,9 @@ struct TestState: Codable, Equatable {
     var reachableUntil: TimeInterval?
     /// `AwakeMode.rawValue`.
     var mode: String
+    /// "licensed", "trial" or "expired".
+    var entitlement: String
+    var trialDaysLeft: Int?
     var decision: Decision
     var flag: Flag
     /// Nil until the first sample.
@@ -208,6 +211,7 @@ enum TestNoticeKind: String, CaseIterable {
     case finished
     case safetyStop
     case batteryWarning
+    case trial
     case hidden
     /// The offline rule ended a hold.
     case offline

@@ -13,6 +13,9 @@ final class SleepReasonTests: XCTestCase {
             (.safetyStop(.weakCharger(percent: 20)), .battery(percent: 20)),
             (.safetyStop(.tooHot), .tooHot),
             (.paused(until: at.addingTimeInterval(600)), .paused),
+            (.notEntitled(.trialOver), .notEntitled(.trialOver)),
+            (.notEntitled(.unverified), .notEntitled(.unverified)),
+            (.notEntitled(.activationRemoved), .notEntitled(.activationRemoved)),
             (.waitingReleased(.one("Claude Code")), .waitedTooLong(.one("Claude Code"), hold: 300)),
             // The user's own word, and nothing to explain.
             (.switchedOff, nil),

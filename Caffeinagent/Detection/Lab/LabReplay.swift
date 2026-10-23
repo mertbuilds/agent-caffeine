@@ -92,7 +92,7 @@ struct LabScore: Equatable {
 /// the result against the owner's marks. Pure.
 enum LabReplay {
     /// The settings and the mode are the recorded ones unless given. The
-    /// replay runs switched on, with no safety stop. The closed lid limit
+    /// replay runs switched on, with no license and no safety stop. The closed lid limit
     /// and the offline rule run from what each frame says. The hidden
     /// defaults of the tests do not count here.
     static func steps(of recording: LabRecording, settings: DetectionSettings? = nil, mode: AwakeMode? = nil) -> [LabStep] {

@@ -3,6 +3,7 @@ import SwiftUI
 /// The one thing that needs the user, below the headline.
 struct AttentionLine: View {
     let attention: PanelAttention
+    var busy = false
     let perform: (PanelAction) -> Void
 
     var body: some View {
@@ -65,6 +66,7 @@ struct AttentionLine: View {
                     } else {
                         Button(action.title) { perform(action) }
                             .buttonStyle(.link)
+                            .disabled(busy && (action == .checkLicense || action == .activateAgain))
                     }
                 }
             }
@@ -74,6 +76,7 @@ struct AttentionLine: View {
     private var symbol: String {
         switch attention.kind {
         case .safetyStop, .helperSwitchedOff, .helperNotResponding, .helperLost, .closedLidLimit: return "exclamationmark.triangle.fill"
+        case .license: return "key.fill"
         case .lidClosedNotSetUp, .reachableNeedsLidClosed: return "laptopcomputer"
         case .sleptAnyway: return "moon.zzz"
         case .agentsOffline: return "wifi.slash"
@@ -82,7 +85,7 @@ struct AttentionLine: View {
 
     private var tint: Color {
         switch attention.kind {
-        case .safetyStop, .helperNotResponding, .helperLost, .reachableNeedsLidClosed, .closedLidLimit: return .orange
+        case .safetyStop, .helperNotResponding, .helperLost, .license, .reachableNeedsLidClosed, .closedLidLimit: return .orange
         case .helperSwitchedOff: return .red
         case .lidClosedNotSetUp, .sleptAnyway, .agentsOffline: return .secondary
         }

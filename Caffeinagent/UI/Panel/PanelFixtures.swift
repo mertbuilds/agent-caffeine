@@ -294,6 +294,18 @@ enum PanelFixtures {
         return state(input)
     }()
 
+    static let trialEnding: PanelState = {
+        var input = Self.input(.finishedRecently(.one("Claude Code")), [Agent(id: "claude", name: "Claude Code", minutes: 1)])
+        input.entitlement = .trial(daysLeft: 2)
+        return state(input)
+    }()
+
+    static let trialOver: PanelState = {
+        var input = Self.input(.notEntitled(.trialOver), [Agent(id: "claude", name: "Claude Code", state: .working, reason: .reportsBusy, minutes: 5, label: "wiki")])
+        input.entitlement = .expired(.trialOver)
+        return state(input)
+    }()
+
     /// The Mac slept under an agent, and the menu says why.
     static let sleptAnyway: PanelState = {
         var calendar = Calendar(identifier: .gregorian)
@@ -380,7 +392,7 @@ enum PanelFixtures {
         ("off", off), ("paused", paused), ("safety-stop", safetyStop), ("too-hot", tooHot),
         ("on-battery", onBattery), ("on-battery-near-floor", onBatteryNearFloor), ("on-battery-stopped", onBatteryStopped), ("on-battery-no-limit", onBatteryNoLimit),
         ("reachable", reachable), ("reachable-no-helper", reachableNoHelper), ("lid-closed", lidClosedNotSetUp),
-        ("helper-off", helperSwitchedOff), ("helper-silent", helperNotResponding),
+        ("helper-off", helperSwitchedOff), ("helper-silent", helperNotResponding), ("trial-ending", trialEnding), ("trial-over", trialOver),
         ("slept-anyway", sleptAnyway), ("manual-holds", manualHolds), ("job-hold", jobHold), ("wake-set", wakeSet),
         ("closed-lid-stopped", closedLidStopped), ("closed-lid-with-hold", closedLidWithHold), ("slept-closed-lid", sleptClosedLid),
         ("offline", offline), ("offline-with-hold", offlineWithHold), ("on-hotspot", onHotspot),

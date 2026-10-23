@@ -8,13 +8,13 @@ final class HoldPolicyTests: XCTestCase {
     private func at(_ seconds: TimeInterval) -> Date { Self.start.addingTimeInterval(seconds) }
 
     private func run(
-        _ steps: [Step], mode: AwakeMode = .agentWorking, enabled: Bool = true,
+        _ steps: [Step], mode: AwakeMode = .agentWorking, enabled: Bool = true, entitlement: Entitlement? = .licensed,
         safety: SafetyStop? = nil, settings: DetectionSettings = DetectionSettings(), context: FrameContext = FrameContext()
     ) -> [(seconds: TimeInterval, decision: HoldDecision)] {
         var memory = PolicyMemory()
         return steps.map { step in
             let (decision, next) = HoldPolicy.decide(
-                readings: step.readings, memory: memory, mode: mode, enabled: enabled,
+                readings: step.readings, memory: memory, mode: mode, enabled: enabled, entitlement: entitlement,
                 safety: safety, settings: settings, context: context, now: at(step.seconds)
             )
             memory = next
@@ -47,9 +47,9 @@ final class HoldPolicyTests: XCTestCase {
         reading("codex-desktop", "Codex", .state, state, pid: 4, kind: .desktop, live: live)
     }
 
-    private func decide(_ readings: [AgentReading], mode: AwakeMode = .agentWorking, enabled: Bool = true,
+    private func decide(_ readings: [AgentReading], mode: AwakeMode = .agentWorking, enabled: Bool = true, entitlement: Entitlement? = .licensed,
                         safety: SafetyStop? = nil, settings: DetectionSettings = DetectionSettings(), context: FrameContext = FrameContext()) -> HoldDecision {
-        run([(0, readings)], mode: mode, enabled: enabled, safety: safety, settings: settings, context: context)[0].decision
+        run([(0, readings)], mode: mode, enabled: enabled, entitlement: entitlement, safety: safety, settings: settings, context: context)[0].decision
     }
 
     // MARK: Background commands after the turn
@@ -86,10 +86,10 @@ final class HoldPolicyTests: XCTestCase {
 
     private func paused(
         _ readings: [AgentReading], until: TimeInterval, at seconds: TimeInterval = 0, mode: AwakeMode = .agentWorking, enabled: Bool = true,
-        safety: SafetyStop? = nil
+        entitlement: Entitlement? = .licensed, safety: SafetyStop? = nil
     ) -> HoldDecision {
         HoldPolicy.decide(
-            readings: readings, memory: PolicyMemory(), mode: mode, enabled: enabled, pausedUntil: at(until),
+            readings: readings, memory: PolicyMemory(), mode: mode, enabled: enabled, pausedUntil: at(until), entitlement: entitlement,
             safety: safety, settings: DetectionSettings(), context: FrameContext(), now: at(seconds)
         ).0
     }
@@ -114,11 +114,13 @@ final class HoldPolicyTests: XCTestCase {
         XCTAssertTrue(after.lidClosedFlag)
     }
 
-    /// Safety, then the switch, then the pause.
+    /// Safety, then the switch, then the pause, then the license.
     func testTheOrderOfTheStops() {
         let agents = [claude(.working)]
         XCTAssertEqual(paused(agents, until: 1800, safety: .tooHot).headline, .safetyStop(.tooHot))
         XCTAssertEqual(paused(agents, until: 1800, enabled: false).headline, .switchedOff)
+        XCTAssertEqual(paused(agents, until: 1800, entitlement: .expired(.trialOver)).headline, .paused(until: at(1800)))
+        XCTAssertEqual(paused(agents, until: 1800, at: 1800, entitlement: .expired(.trialOver)).headline, .notEntitled(.trialOver))
         for decision in [paused(agents, until: 1800, safety: .tooHot), paused(agents, until: 1800, enabled: false)] {
             XCTAssertFalse(decision.hold)
             XCTAssertFalse(decision.lidClosedFlag)
@@ -129,12 +131,12 @@ final class HoldPolicyTests: XCTestCase {
 
     private func reachable(
         _ readings: [AgentReading], until: TimeInterval = 3600, at seconds: TimeInterval = 0, mode: AwakeMode = .agentWorking, enabled: Bool = true,
-        pausedUntil: TimeInterval? = nil, safety: SafetyStop? = nil,
+        pausedUntil: TimeInterval? = nil, entitlement: Entitlement? = .licensed, safety: SafetyStop? = nil,
         settings: DetectionSettings = DetectionSettings(), context: FrameContext = FrameContext()
     ) -> HoldDecision {
         HoldPolicy.decide(
             readings: readings, memory: PolicyMemory(), mode: mode, enabled: enabled, pausedUntil: pausedUntil.map(at), reachableUntil: at(until),
-            safety: safety, settings: settings, context: context, now: at(seconds)
+            entitlement: entitlement, safety: safety, settings: settings, context: context, now: at(seconds)
         ).0
     }
 
@@ -174,7 +176,7 @@ final class HoldPolicyTests: XCTestCase {
         for seconds in stride(from: 0.0, through: 400, by: 100) {
             let (decision, next) = HoldPolicy.decide(
                 readings: [codex(.waitingForUser)], memory: memory, mode: .agentWorking, enabled: true, reachableUntil: at(3600),
-                safety: nil, settings: DetectionSettings(), context: FrameContext(), now: at(seconds)
+                entitlement: .licensed, safety: nil, settings: DetectionSettings(), context: FrameContext(), now: at(seconds)
             )
             (memory, last) = (next, decision)
         }
@@ -196,12 +198,14 @@ final class HoldPolicyTests: XCTestCase {
             (reachable([], safety: .tooHot), .safetyStop(.tooHot)),
             (reachable([], enabled: false), .switchedOff),
             (reachable([], pausedUntil: 1800), .paused(until: at(1800))),
+            (reachable([], entitlement: .expired(.trialOver)), .notEntitled(.trialOver)),
         ]
         for (decision, headline) in stops {
             XCTAssertEqual(decision.headline, headline)
             XCTAssertFalse(decision.hold, "\(headline)")
             XCTAssertFalse(decision.lidClosedFlag, "\(headline)")
         }
+        XCTAssertTrue(reachable([], entitlement: .trial(daysLeft: 3)).hold)
     }
 
     func testWithoutStayReachableNothingChanges() {
@@ -296,7 +300,7 @@ final class HoldPolicyTests: XCTestCase {
     func testProcessGone() {
         var memory = PolicyMemory()
         func step(_ seconds: TimeInterval, _ readings: [AgentReading]) -> HoldDecision {
-            let (decision, next) = HoldPolicy.decide(readings: readings, memory: memory, mode: .agentWorking, enabled: true,
+            let (decision, next) = HoldPolicy.decide(readings: readings, memory: memory, mode: .agentWorking, enabled: true, entitlement: .licensed,
                                                      safety: nil, settings: DetectionSettings(), context: FrameContext(), now: at(seconds))
             memory = next
             return decision
@@ -349,6 +353,30 @@ final class HoldPolicyTests: XCTestCase {
         }
     }
 
+    /// A trial holds as a license does, an expired one never holds, and the
+    /// switch comes before both.
+    func testEntitlement() {
+        let lists: [[AgentReading]] = [[], [opencode(.idle)], [opencode(.working)]]
+        let holds: [AwakeMode: [Bool]] = [
+            .always: [true, true, true],
+            .agentOpen: [false, true, true],
+            .agentWorking: [false, false, true],
+        ]
+        let entitlements: [Entitlement] = [.licensed, .trial(daysLeft: 7), .trial(daysLeft: 1), .expired(.trialOver), .expired(.unverified), .expired(.activationRemoved)]
+        for mode in AwakeMode.allCases {
+            for entitlement in entitlements {
+                for enabled in [true, false] {
+                    for (index, list) in lists.enumerated() {
+                        let want = enabled && entitlement.allowsHolding && holds[mode]![index]
+                        XCTAssertEqual(decide(list, mode: mode, enabled: enabled, entitlement: entitlement).hold, want, "\(mode) \(entitlement) \(enabled) \(index)")
+                    }
+                }
+            }
+        }
+        XCTAssertEqual(decide([claude(.working)], entitlement: .expired(.trialOver)).headline.text, "Your trial has ended. Agent Caffeine is not keeping your Mac awake.")
+        XCTAssertTrue(decide([claude(.working)], entitlement: nil).hold)
+    }
+
     // MARK: Safety, remote access, lid
 
     func testSafetyStop() {
@@ -372,7 +400,7 @@ final class HoldPolicyTests: XCTestCase {
     func testSafetyStopEnds() {
         var memory = PolicyMemory()
         func step(_ seconds: TimeInterval, _ state: WorkState, safety: SafetyStop?) -> Bool {
-            let (decision, next) = HoldPolicy.decide(readings: [claude(state)], memory: memory, mode: .agentWorking, enabled: true,
+            let (decision, next) = HoldPolicy.decide(readings: [claude(state)], memory: memory, mode: .agentWorking, enabled: true, entitlement: .licensed,
                                                      safety: safety, settings: DetectionSettings(), context: FrameContext(), now: at(seconds))
             memory = next
             return decision.hold
@@ -456,7 +484,7 @@ final class HoldPolicyTests: XCTestCase {
             func decide(mayHold: Bool) -> HoldDecision {
                 HoldPolicy.decide(
                     readings: c.readings, memory: PolicyMemory(), mode: c.mode, enabled: true, reachableUntil: c.reachable,
-                    safety: nil, settings: DetectionSettings(), context: FrameContext(), mayHold: mayHold, now: at(0)
+                    entitlement: .licensed, safety: nil, settings: DetectionSettings(), context: FrameContext(), mayHold: mayHold, now: at(0)
                 ).0
             }
             XCTAssertTrue(decide(mayHold: true).hold, c.name)
@@ -470,7 +498,7 @@ final class HoldPolicyTests: XCTestCase {
         // A stop is still named.
         let stopped = HoldPolicy.decide(
             readings: [claude(.working)], memory: PolicyMemory(), mode: .agentWorking, enabled: true, pausedUntil: at(60),
-            safety: nil, settings: DetectionSettings(), context: FrameContext(), mayHold: false, now: at(0)
+            entitlement: .licensed, safety: nil, settings: DetectionSettings(), context: FrameContext(), mayHold: false, now: at(0)
         ).0
         XCTAssertEqual(stopped.headline, .paused(until: at(60)))
     }
@@ -510,7 +538,7 @@ final class HoldPolicyTests: XCTestCase {
         var texts: [String] = []
         for frame in frames {
             let (readings, nextAgents) = VerdictRules.readings(for: frame, memory: agentMemory, settings: settings)
-            let (decision, nextPolicy) = HoldPolicy.decide(readings: readings, memory: policyMemory, mode: .agentWorking, enabled: true,
+            let (decision, nextPolicy) = HoldPolicy.decide(readings: readings, memory: policyMemory, mode: .agentWorking, enabled: true, entitlement: .trial(daysLeft: 3),
                                                            safety: nil, settings: settings, context: frame.context, now: frame.at)
             agentMemory = nextAgents
             policyMemory = nextPolicy
@@ -544,6 +572,7 @@ final class HoldPolicyTests: XCTestCase {
             (.safetyStop(.tooHot), "Sleeping allowed: the Mac is too hot"),
             (.switchedOff, "Mac can sleep: Agent Caffeine is off"),
             (.paused(until: Self.start), "Mac can sleep: Agent Caffeine is paused"),
+            (.notEntitled(.unverified), "Your license was not checked for 30 days. Connect to the internet to keep your Mac awake."),
         ]
         for c in cases {
             XCTAssertEqual(c.headline.text, c.text)

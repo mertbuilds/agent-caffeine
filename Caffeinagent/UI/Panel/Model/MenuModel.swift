@@ -7,6 +7,8 @@ enum MenuModel {
     static let idleGroupsInView = 4
     /// Idle sessions that an opened group lists before "and 4 more".
     static let idleChildrenInView = 6
+    /// The trial is named in the menu from this many days left.
+    static let trialWarningDays = 2
     /// The line of the battery turns amber this many points above the floor.
     static let batteryWarningPoints = 10
 
@@ -38,6 +40,7 @@ enum MenuModel {
             moreIdle: moreIdle,
             emptyText: isEmpty ? PanelText.empty(invites: invites) : nil,
             emptyAction: isEmpty && invites ? .agentNotListed : nil,
+            licenseActions: bar.licenseActions,
             pausedLabel: bar.pausedLabel,
             reachableLabel: bar.reachableLabel,
             reachableActions: bar.reachableActions,
@@ -57,7 +60,8 @@ enum MenuModel {
             pausedLabel: input.pausedUntil.map { PanelText.pausedUntil($0, calendar: input.calendar, locale: input.locale) },
             reachableLabel: reachableLabel(input),
             reachableActions: canStayReachable(input) ? ReachableChoice.allCases.map(PanelAction.stayReachable) : [],
-            reachableCost: input.onBattery && input.batteryPercent != nil ? PanelText.reachableCost : nil
+            reachableCost: input.onBattery && input.batteryPercent != nil ? PanelText.reachableCost : nil,
+            licenseActions: licenseActions(input)
         )
     }
 
@@ -80,7 +84,7 @@ enum MenuModel {
         case .idle, .waitingReleased, .noAgents, .agentsStopped: return .asleep
         case .safetyStop(.batteryLow), .safetyStop(.weakCharger): return .safetyStop(.battery)
         case .safetyStop(.tooHot): return .safetyStop(.heat)
-        case .switchedOff: return .off
+        case .switchedOff, .notEntitled: return .off
         case .paused: return .paused
         }
     }
@@ -96,7 +100,7 @@ enum MenuModel {
 
     /// Offered while Agent Caffeine could keep the Mac awake.
     static func canStayReachable(_ input: PanelInput) -> Bool {
-        guard input.enabled else { return false }
+        guard input.enabled, input.entitlement.allowsHolding else { return false }
         if case .safetyStop = input.decision.headline { return false }
         return true
     }
@@ -106,6 +110,10 @@ enum MenuModel {
         let pose = pose(input)
         if pose == .reachable, case .reachable(let until) = input.decision.headline {
             return PanelText.menuBarReachable(until, calendar: input.calendar, locale: input.locale)
+        }
+        // Drawn like "off", and the app is on.
+        if pose == .off, case .notEntitled = input.decision.headline {
+            return PanelText.menuBar(PanelText.headline(input.decision.headline).subtitle)
         }
         return nil
     }
@@ -163,6 +171,22 @@ enum MenuModel {
         if input.helperLost {
             return PanelAttention(kind: .helperLost, text: PanelText.helperLost, actions: [.setUpLidClosed])
         }
+        switch input.entitlement {
+        case .expired(.trialOver):
+            return PanelAttention(kind: .license, text: PanelText.buyToKeepAwake, actions: [.buy, .enterKey])
+        case .expired(.unverified):
+            return PanelAttention(kind: .license, text: PanelText.connectAndCheck, actions: [.checkLicense])
+        case .expired(.activationRemoved):
+            return PanelAttention(kind: .license, text: PanelText.activateAgain, actions: [.activateAgain, .enterKey])
+        case .trial(let daysLeft) where daysLeft <= trialWarningDays:
+            return PanelAttention(
+                kind: .license,
+                text: PanelText.trialEnds(inDays: daysLeft),
+                actions: input.hasLicenseKey ? [.enterKey] : [.buy]
+            )
+        case .trial, .licensed:
+            break
+        }
         if let line = agentsStopped(input) { return line }
         // Not to be dismissed: the user asked for what the lid takes away.
         if input.reachableUntil != nil, input.pausedUntil == nil, input.onBattery, input.lidClosedNeedsSetup {
@@ -185,7 +209,7 @@ enum MenuModel {
     /// battery, with or without the helper for a closed lid.
     static func battery(_ input: PanelInput) -> PanelBattery? {
         guard input.onBattery, let percent = input.batteryPercent,
-              input.enabled, input.pausedUntil == nil else { return nil }
+              input.enabled, input.pausedUntil == nil, input.entitlement.allowsHolding else { return nil }
         let shown = min(max(percent, 0), 100)
         // With no floor the line still shows the end coming.
         guard input.settings.batteryFloorEnabled else {
@@ -230,6 +254,13 @@ enum MenuModel {
 
     static func helperNotResponding(notResponding: Bool, wanted: Bool, hasBattery: Bool) -> Bool {
         hasBattery && wanted && notResponding
+    }
+
+    private static func licenseActions(_ input: PanelInput) -> [PanelAction] {
+        switch input.entitlement {
+        case .licensed: return []
+        case .trial, .expired: return input.hasLicenseKey ? [.enterKey] : [.buy, .enterKey]
+        }
     }
 
     // MARK: Groups
