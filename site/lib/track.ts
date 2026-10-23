@@ -18,6 +18,8 @@ export type TrackEvents = {
   download_click: { placement: Placement };
   /** A download button pressed off a Mac: the popup opened and no download started. */
   download_blocked_not_mac: { placement: Placement };
+  /** A buy button pressed, with the price it showed and where it sits. */
+  buy_click: { price: number; placement: Placement };
   /** The first time in a page view that a visitor touches the menu bar simulator. */
   simulator_use: { control: string };
   /** A question of the home page opened, by its `id` in `lib/faq.tsx`. */
@@ -40,7 +42,7 @@ export function rememberUtm() {
       sessionStorage.setItem(UTM_STORE, JSON.stringify(utmFrom(window.location.search)));
     }
   } catch {
-    // No storage, as in some private windows: the tags are then read from the address of each page.
+    // No storage, as in some private windows: the tags are then read from the address of each page, and the checkout link names the site as the source when there are none.
   }
 }
 

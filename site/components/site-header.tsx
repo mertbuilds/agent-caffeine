@@ -24,6 +24,7 @@ const SECTIONS = [
   { hash: "#agents", ids: ["agents"], label: "Agents", name: "header-agents" },
   { hash: "#features", ids: ["features", "small-things"], label: "Features", name: "header-features" },
   { hash: "#demo", ids: ["demo"], label: "Demo", name: "header-demo" },
+  { hash: "#pricing", ids: ["pricing"], label: "Pricing", name: "header-pricing" },
   { hash: "#faq", ids: ["faq"], label: "FAQ", name: "header-faq" },
 ] as const;
 

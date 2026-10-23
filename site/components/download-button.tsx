@@ -16,14 +16,14 @@ export function WithAppleMark({ small = false, children }: { small?: boolean; ch
   );
 }
 
-/** The words of a download button that has room for them. */
-export function DownloadForMac({ small = false }: { small?: boolean }) {
-  return <WithAppleMark small={small}>Download for macOS</WithAppleMark>;
+/** The words of a button that starts the free trial. */
+export function TryFree({ small = false }: { small?: boolean }) {
+  return <WithAppleMark small={small}>Try free for macOS</WithAppleMark>;
 }
 
 /** What stands in the place of a download button while no release can be read. It never names a price. */
-export function DownloadNotReady({ className = "text-muted" }: { className?: string }) {
-  return <p className={className}>The download is not ready yet</p>;
+export function DownloadNotReady() {
+  return <p className="text-muted">The download is not ready yet</p>;
 }
 
 export function DownloadButton({

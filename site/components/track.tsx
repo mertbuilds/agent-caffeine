@@ -1,7 +1,10 @@
 "use client";
 
+import Link from "next/link";
 import { useSyncExternalStore, type ReactNode } from "react";
+import { checkoutUrlWith } from "@/lib/attribution";
 import { downloadLink } from "@/lib/download";
+import { CHECKOUT_URL, PRICE_NOW } from "@/lib/pricing";
 import { isMacDevice, openSendToMac } from "@/lib/send-to-mac";
 import { rememberedUtm, track, type Placement } from "@/lib/track";
 
@@ -11,6 +14,23 @@ const subscribe = () => () => {};
 
 function onServer(): null {
   return null;
+}
+
+/**
+ * A link to the checkout. The click is counted with the price and where the link sits.
+ * The server's link is the plain checkout link. On the live site the browser then adds the visitor's source to it.
+ */
+export function BuyCta({ placement, className, children }: { placement: Placement; className?: string; children: ReactNode }) {
+  const utm = useSyncExternalStore(subscribe, rememberedUtm, onServer);
+  return (
+    <Link
+      href={utm === null ? CHECKOUT_URL : checkoutUrlWith(CHECKOUT_URL, utm)}
+      onClick={() => track("buy_click", { price: PRICE_NOW, placement })}
+      className={className}
+    >
+      {children}
+    </Link>
+  );
 }
 
 /**
